@@ -57,6 +57,10 @@ locals {
         value       = local.placeholder_value
         description = "GitHub token or GitHub App installation token used by CI to read the private run4w4y/cv-content repository."
       }
+      PUBLIC_CV_FULL_ACCESS_EMAIL = {
+        value       = local.placeholder_value
+        description = "Public contact email shown in redaction notices for full CV access requests."
+      }
     }
 
     (local.deploy_path) = {

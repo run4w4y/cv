@@ -93,6 +93,8 @@ Each stack uses its own HCP Terraform workspace:
    Required under `/cv/content`:
    - `CONTENT_REPO_TOKEN`, a token or GitHub App installation token that can
      read `run4w4y/cv-content` during CI.
+   - `PUBLIC_CV_FULL_ACCESS_EMAIL`, the public contact email shown in redaction
+     notices for full CV access requests.
 
    Required under `/cv/grafana`:
    - `GRAFANA_AUTH`

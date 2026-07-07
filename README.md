@@ -40,7 +40,8 @@ through the same `/en/a/<audience-id>/?p=<token>` flow as
 production, not through public profile preview routes.
 
 Set `PUBLIC_CV_FULL_ACCESS_EMAIL` to change the contact address shown in public
-redaction notices. It defaults to `access@run4w4y.dev`.
+redaction notices. It defaults to `access@run4w4y.dev` for local builds and is
+required for production deploys.
 
 The workspace is split into:
 
@@ -232,6 +233,7 @@ Required Infisical values:
   Terraform generates the production value; local dev uses the dummy value from
   `.envrc` unless overridden.
 - `/cv/content:CONTENT_REPO_TOKEN`
+- `/cv/content:PUBLIC_CV_FULL_ACCESS_EMAIL`
 - `/cv/content:PRIVATE_CONTENT_AUDIENCE_KEY` for reversible encrypted audience ids.
   Terraform generates the production value; local dev uses the dummy value from
   `.envrc` unless overridden. CI also uploads this value as an analytics Worker

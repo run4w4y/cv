@@ -134,6 +134,7 @@ jobs:
             test -n "$CONTENT_ID_SALT"
             test -n "$PRIVATE_CONTENT_AUDIENCE_KEY"
             test -n "$PRIVATE_CONTENT_ROOT_KEY"
+            test -n "$PUBLIC_CV_FULL_ACCESS_EMAIL"
             test -n "$CV_WEB_HOST"
             test -n "$GRAFANA_CONNECTOR_TOKEN"
           fi
