@@ -1,0 +1,141 @@
+{
+  "audiences": [
+    {
+      "audienceId": "frontend-alpha",
+      "firstSeen": "2026-06-16",
+      "lastSeen": "2026-06-16",
+      "locale": "en",
+      "path": "/en/a/frontend-alpha/",
+      "series": [
+        {
+          "at": "2026-06-16",
+          "pageViews": 12,
+          "visits": 7,
+          "visitors": 5
+        }
+      ],
+      "totals": {
+        "pageViews": 12,
+        "visits": 7,
+        "visitors": 5
+      }
+    },
+    {
+      "audienceId": "platform-ru",
+      "firstSeen": "2026-06-17",
+      "lastSeen": "2026-06-17",
+      "locale": "ru",
+      "path": "/ru/a/platform-ru/",
+      "series": [
+        {
+          "at": "2026-06-17",
+          "pageViews": 4,
+          "visits": 2,
+          "visitors": 2
+        }
+      ],
+      "totals": {
+        "pageViews": 4,
+        "visits": 2,
+        "visitors": 2
+      }
+    }
+  ],
+  "generatedAt": "1970-01-01T00:00:00.000Z",
+  "paths": [
+    {
+      "audienceId": "frontend-alpha",
+      "countries": {
+        "Germany": 7
+      },
+      "devices": {
+        "desktop": 7
+      },
+      "kind": "audience",
+      "locale": "en",
+      "path": "/en/a/frontend-alpha/",
+      "referrers": {},
+      "series": [
+        {
+          "at": "2026-06-16",
+          "pageViews": 12,
+          "visits": 7,
+          "visitors": 5
+        }
+      ],
+      "totals": {
+        "pageViews": 12,
+        "visits": 7,
+        "visitors": 5
+      }
+    },
+    {
+      "countries": {
+        "Netherlands": 13
+      },
+      "devices": {
+        "desktop": 13
+      },
+      "kind": "public",
+      "locale": "en",
+      "path": "/en/",
+      "referrers": {
+        "github.com": 13
+      },
+      "series": [
+        {
+          "at": "2026-06-18",
+          "pageViews": 21,
+          "visits": 13,
+          "visitors": 10
+        }
+      ],
+      "totals": {
+        "pageViews": 21,
+        "visits": 13,
+        "visitors": 10
+      }
+    },
+    {
+      "audienceId": "platform-ru",
+      "countries": {
+        "Serbia": 2
+      },
+      "devices": {
+        "mobile": 2
+      },
+      "kind": "audience",
+      "locale": "ru",
+      "path": "/ru/a/platform-ru/",
+      "referrers": {
+        "mail.google.com": 2
+      },
+      "series": [
+        {
+          "at": "2026-06-17",
+          "pageViews": 4,
+          "visits": 2,
+          "visitors": 2
+        }
+      ],
+      "totals": {
+        "pageViews": 4,
+        "visits": 2,
+        "visitors": 2
+      }
+    }
+  ],
+  "range": {
+    "from": "2026-06-16",
+    "granularity": "day",
+    "to": "2026-06-18"
+  },
+  "schema": "analytics.dashboard.v1",
+  "summary": {
+    "activeAudiences": 2,
+    "audienceViews": 16,
+    "publicViews": 21,
+    "zeroVisitAudiences": 0
+  },
+  "version": 1
+}

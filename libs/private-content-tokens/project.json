@@ -1,0 +1,113 @@
+{
+  "name": "private-content-tokens",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/private-content-tokens/src",
+  "projectType": "library",
+  "tags": ["scope:cv", "type:core"],
+  "targets": {
+    "build": {
+      "executor": "nx:noop",
+      "outputs": ["{projectRoot}/dist"],
+      "dependsOn": [
+        {
+          "projects": "self",
+          "target": "build:js"
+        }
+      ]
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun test ./libs/private-content-tokens/src",
+        "color": true
+      },
+      "outputs": []
+    },
+    "test": {
+      "executor": "nx:noop",
+      "dependsOn": [
+        {
+          "projects": "self",
+          "target": "test:all"
+        }
+      ],
+      "outputs": []
+    },
+    "test:all": {
+      "executor": "nx:noop",
+      "dependsOn": [
+        {
+          "projects": "self",
+          "target": "test:unit"
+        }
+      ],
+      "outputs": []
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check libs/private-content-tokens"
+      }
+    },
+    "lint:fix": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check --write libs/private-content-tokens"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "command": "tsc --pretty --noEmit --project libs/private-content-tokens/tsconfig.json"
+      }
+    },
+    "build:tsc": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/private-content-tokens/src/index.ts",
+        "outputPath": "libs/private-content-tokens/dist",
+        "rootDir": "libs/private-content-tokens/src",
+        "tsConfig": "libs/private-content-tokens/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "build:js": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": "self",
+          "target": "build:tsc"
+        }
+      ],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "color": true,
+        "command": "vite build --config libs/private-content-tokens/vite.lib.config.ts"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome format --write libs/private-content-tokens"
+      }
+    },
+    "format:check": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome format libs/private-content-tokens"
+      }
+    }
+  }
+}

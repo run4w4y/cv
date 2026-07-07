@@ -1,0 +1,103 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "content-composer",
+  "projectType": "library",
+  "sourceRoot": "libs/content-composer/src",
+  "tags": ["scope:cv", "type:build"],
+  "targets": {
+    "build": {
+      "executor": "nx:noop",
+      "outputs": ["{projectRoot}/dist"],
+      "dependsOn": [
+        {
+          "projects": "self",
+          "target": "build:js"
+        }
+      ]
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check libs/content-composer"
+      }
+    },
+    "lint:fix": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check --write libs/content-composer"
+      }
+    },
+    "test": {
+      "executor": "nx:noop",
+      "dependsOn": [
+        {
+          "projects": "self",
+          "target": "test:unit"
+        }
+      ],
+      "outputs": []
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "bun test libs/content-composer/src"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "command": "tsc --pretty --noEmit --project libs/content-composer/tsconfig.json"
+      }
+    },
+    "build:tsc": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/content-composer/src/index.ts",
+        "outputPath": "libs/content-composer/dist",
+        "rootDir": "libs/content-composer/src",
+        "tsConfig": "libs/content-composer/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "build:js": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": "self",
+          "target": "build:tsc"
+        }
+      ],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "color": true,
+        "command": "vite build --config libs/content-composer/vite.lib.config.ts"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome format --write libs/content-composer"
+      }
+    },
+    "format:check": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome format libs/content-composer"
+      }
+    }
+  }
+}

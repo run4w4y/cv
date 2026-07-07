@@ -1,0 +1,79 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "browser-stream-save",
+  "projectType": "library",
+  "sourceRoot": "libs/browser-stream-save/src",
+  "tags": ["scope:browser", "type:runtime"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/browser-stream-save/src/index.ts",
+        "outputPath": "libs/browser-stream-save/dist",
+        "rootDir": "libs/browser-stream-save/src",
+        "tsConfig": "libs/browser-stream-save/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "test": {
+      "executor": "nx:noop",
+      "dependsOn": [
+        {
+          "projects": "self",
+          "target": "test:unit"
+        }
+      ],
+      "outputs": []
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "bun test libs/browser-stream-save/src"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check libs/browser-stream-save"
+      }
+    },
+    "lint:fix": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check --write libs/browser-stream-save"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "command": "tsc --pretty --noEmit --project libs/browser-stream-save/tsconfig.json"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome format --write libs/browser-stream-save"
+      }
+    },
+    "format:check": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome format libs/browser-stream-save"
+      }
+    }
+  }
+}

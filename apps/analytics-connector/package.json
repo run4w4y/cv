@@ -1,0 +1,22 @@
+{
+  "name": "@cv/analytics-connector",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nx run analytics-connector:build",
+    "dev": "nx run analytics-connector:dev",
+    "deploy": "nx run analytics-connector:deploy"
+  },
+  "dependencies": {
+    "@cv/cloudflare-analytics-client": "workspace:*",
+    "@cv/analytics-core": "workspace:*",
+    "@cv/analytics-grafana": "workspace:*",
+    "@cv/private-content-crypto": "workspace:*",
+    "@cv/private-content-tokens": "workspace:*",
+    "effect": "4.0.0-beta.91",
+    "es-toolkit": "^1.43.0"
+  },
+  "devDependencies": {
+    "@effect/platform-bun": "4.0.0-beta.91"
+  }
+}

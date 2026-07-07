@@ -1,0 +1,4 @@
+public/files/
+public/_content/
+src/i18n/locales/**/messages.js
+src/i18n/locales/**/messages.mjs

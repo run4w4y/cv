@@ -1,0 +1,15 @@
+.astro/
+.generated/
+.nx/
+.direnv/
+.playwright-mcp/
+.external/
+.env
+.env.local
+.privacy-denylist.local
+.private-campaigns.json
+.cv-work/
+storybook-static/
+.DS_Store
+dist/
+node_modules/

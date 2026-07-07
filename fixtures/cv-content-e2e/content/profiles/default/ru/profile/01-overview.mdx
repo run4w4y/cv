@@ -1,0 +1,38 @@
+import {
+  DetailRow,
+  RedactedSection,
+  RowTitle,
+  VariableLookup,
+} from 'virtual:content'
+
+# Fixture Overview
+
+This profile is a committed synthetic fixture for the CV app e2e suite.
+
+<RowTitle>Fixture Details</RowTitle>
+
+<DetailRow label="Public contact" href="mailto:public.fixture@example.invalid">
+  public.fixture@example.invalid
+</DetailRow>
+
+<DetailRow label="Private detail">
+  <VariableLookup
+    fallback="private detail hidden"
+    label="Private detail"
+    variable="fixture-private-detail"
+  />
+</DetailRow>
+
+<RedactedSection
+  fallback="This synthetic detail is hidden in the redacted public version"
+  title="Synthetic Private Scope"
+  variable="fixture-private-section"
+>
+  <DetailRow label="Internal scope">
+    <VariableLookup
+      fallback="fixture private scope hidden"
+      label="Internal scope"
+      variable="fixture-private-section"
+    />
+  </DetailRow>
+</RedactedSection>

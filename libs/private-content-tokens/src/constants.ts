@@ -1,0 +1,1 @@
+export const PRIVATE_CAPABILITY_TOKEN_VERSION = 1 as const

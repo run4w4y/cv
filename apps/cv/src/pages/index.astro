@@ -1,0 +1,38 @@
+---
+import SocialMeta from '@/components/social-meta.astro'
+import { cvMessages } from '@/i18n/messages'
+import { translateCvMessage } from '@/i18n/runtime'
+import { loadCv } from '@/lib/cv-content'
+import { defaultLocale, localePath } from '@/lib/i18n'
+import { faviconPath } from '@/lib/site-assets'
+import { getWebCvUrl } from '@/lib/web-cv'
+
+const { content } = await loadCv(defaultLocale)
+const webUrl = getWebCvUrl(defaultLocale)
+---
+
+<!doctype html>
+<html lang={defaultLocale}>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      content={`0; url=${localePath(defaultLocale)}`}
+      http-equiv="refresh"
+    />
+    <meta content="width=device-width, initial-scale=1" name="viewport" />
+    <meta content={content.document.meta.description} name="description" />
+    <link href={faviconPath} rel="icon" type="image/svg+xml" />
+    <link href={webUrl} rel="canonical" />
+    <SocialMeta
+      description={content.document.meta.description}
+      title={content.document.meta.title}
+      url={webUrl}
+    />
+    <title>{content.document.meta.title}</title>
+  </head>
+  <body>
+    <a href={localePath(defaultLocale)}>
+      {translateCvMessage(defaultLocale, cvMessages.app.openCv)}
+    </a>
+  </body>
+</html>

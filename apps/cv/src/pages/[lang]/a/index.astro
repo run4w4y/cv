@@ -1,0 +1,25 @@
+---
+import { getLocales } from 'virtual:content/generated'
+import CvLayout from '@/layouts/cv-layout.astro'
+import { isLocale } from '@/lib/i18n'
+
+export const getStaticPaths = () =>
+  getLocales().flatMap((lang) =>
+    isLocale(lang)
+      ? [
+          {
+            params: { lang },
+          },
+        ]
+      : []
+  )
+
+const lang = Astro.params?.lang
+const privateRoute = isLocale(lang) ? { lang } : null
+---
+
+{
+  privateRoute ? (
+    <CvLayout lang={privateRoute.lang} privateAccess={true} />
+  ) : null
+}

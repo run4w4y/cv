@@ -1,0 +1,227 @@
+name: Build
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  repository_dispatch:
+    types:
+      - content-updated
+  workflow_dispatch:
+    inputs:
+      content_ref:
+        description: Git ref or SHA from run4w4y/cv-content.
+        required: false
+        type: string
+
+env:
+  ASTRO_TELEMETRY_DISABLED: "1"
+  CLOUDFLARE_PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+  CV_WEB_BASE_URL: ${{ vars.CV_WEB_BASE_URL || 'https://run4w4y.github.io/cv' }}
+  CONTENT_REF: ${{ github.event.client_payload.content_ref || inputs.content_ref || 'main' }}
+  CONTENT_ROOT: ${{ github.workspace }}/.external/cv-content
+  INFISICAL_ENV: ${{ vars.INFISICAL_ENV || 'prod' }}
+  INFISICAL_HOST: ${{ vars.INFISICAL_HOST || 'https://app.infisical.com' }}
+  INFISICAL_IDENTITY_ID: ${{ secrets.INFISICAL_IDENTITY_ID }}
+  INFISICAL_PROJECT_SLUG: ${{ secrets.INFISICAL_PROJECT_SLUG }}
+
+jobs:
+  build:
+    name: Check and build
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      actions: read
+      contents: write
+      deployments: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          filter: tree:0
+
+      - name: Derive Nx affected SHAs
+        if: ${{ !env.ACT && (github.event_name == 'push' || github.event_name == 'pull_request') }}
+        uses: nrwl/nx-set-shas@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Validate Infisical OIDC configuration
+        if: ${{ !env.ACT }}
+        run: |
+          missing=()
+          for name in INFISICAL_IDENTITY_ID INFISICAL_PROJECT_SLUG; do
+            if [[ -z "${!name:-}" ]]; then
+              missing+=("$name")
+            fi
+          done
+
+          if (( ${#missing[@]} > 0 )); then
+            printf '::error title=Missing Infisical GitHub secrets::Set these GitHub repository or production environment secrets: %s\n' "${missing[*]}"
+            exit 1
+          fi
+
+      - name: Fetch Infisical secrets
+        if: ${{ !env.ACT }}
+        uses: Infisical/secrets-action@v1.0.16
+        with:
+          method: oidc
+          identity-id: ${{ env.INFISICAL_IDENTITY_ID }}
+          domain: ${{ env.INFISICAL_HOST }}
+          env-slug: ${{ env.INFISICAL_ENV }}
+          project-slug: ${{ env.INFISICAL_PROJECT_SLUG }}
+          secret-path: /cv
+          recursive: true
+
+      - name: Checkout private content
+        run: |
+          if [[ -z "${CONTENT_REPO_TOKEN:-}" ]]; then
+            if [[ -d ../cv-content/content ]]; then
+              mkdir -p .external
+              cp -a ../cv-content .external/cv-content
+              exit 0
+            fi
+
+            echo "::error title=Missing CONTENT_REPO_TOKEN::Infisical did not export CONTENT_REPO_TOKEN. Check /cv/content and the machine identity access policy."
+            exit 1
+          fi
+
+          mkdir -p .external
+          export GH_TOKEN="$CONTENT_REPO_TOKEN"
+          export GIT_TERMINAL_PROMPT=0
+
+          gh auth setup-git --hostname github.com --force
+          git clone --no-tags --depth 1 https://github.com/run4w4y/cv-content.git .external/cv-content
+          cd .external/cv-content
+          if [[ "$CONTENT_REF" != "main" ]]; then
+            git fetch --no-tags --depth 1 origin "$CONTENT_REF"
+            git checkout --detach FETCH_HEAD
+          fi
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.13"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: bunx playwright install --with-deps chromium
+
+      - name: Validate deployment configuration
+        run: |
+          if [[ -z "${ACT:-}" ]]; then
+            test -n "$CV_WEB_BASE_URL"
+          fi
+          if [[ -z "${ACT:-}" && "${{ github.event_name }}" != "pull_request" ]]; then
+            test -n "$CLOUDFLARE_PAGES_PROJECT"
+            test -n "$CLOUDFLARE_API_TOKEN"
+            test -n "$CLOUDFLARE_ACCOUNT_ID"
+            test -n "$CLOUDFLARE_ANALYTICS_API_TOKEN"
+            test -n "$CLOUDFLARE_ZONE_ID"
+            test -n "$CONTENT_ID_SALT"
+            test -n "$PRIVATE_CONTENT_AUDIENCE_KEY"
+            test -n "$PRIVATE_CONTENT_ROOT_KEY"
+            test -n "$CV_WEB_HOST"
+            test -n "$GRAFANA_CONNECTOR_TOKEN"
+          fi
+
+      - name: Run checks
+        run: |
+          if [[ "${{ github.event_name }}" == "push" || "${{ github.event_name }}" == "pull_request" ]]; then
+            ./node_modules/.bin/nx affected -t format:check lint typecheck test:unit --parallel=6
+          else
+            ./node_modules/.bin/nx run-many -t format:check lint typecheck test:unit --parallel=6
+          fi
+
+      - name: Build analytics connector
+        run: ./node_modules/.bin/nx run analytics-connector:build
+
+      - name: Run browser e2e tests
+        run: ./node_modules/.bin/nx run cv:test:e2e
+
+      - name: Build static site
+        run: ./node_modules/.bin/nx run cv:build --skip-nx-cache
+
+      - name: Validate static site content
+        run: |
+          if grep -R --line-number --fixed-strings \
+            -e 'Example CV Fixture' \
+            -e 'public.fixture@example.invalid' \
+            -e 'fixtures/cv-content-e2e' \
+            apps/cv/dist; then
+            echo "::error title=Fixture content in deploy artifact::apps/cv/dist contains e2e fixture content. Rebuild with private CONTENT_ROOT before deploy."
+            exit 1
+          fi
+
+      - name: Generate public PDF exports
+        run: ./node_modules/.bin/nx run pdf-export:public
+
+      - name: Generate analytics connector Wrangler config
+        if: ${{ github.event_name != 'pull_request' && !env.ACT }}
+        env:
+          ANALYTICS_CONNECTOR_COMPATIBILITY_DATE: ${{ vars.ANALYTICS_CONNECTOR_COMPATIBILITY_DATE }}
+          ANALYTICS_CONNECTOR_WORKER_NAME: ${{ vars.ANALYTICS_CONNECTOR_WORKER_NAME || 'cv-analytics-connector' }}
+        run: bun apps/analytics-connector/scripts/write-wrangler-config.ts apps/analytics-connector/wrangler.deploy.jsonc
+
+      - name: Deploy analytics connector Worker
+        if: ${{ github.event_name != 'pull_request' && !env.ACT }}
+        run: |
+          printf '%s' "$CLOUDFLARE_ANALYTICS_API_TOKEN" \
+            | bunx wrangler secret put CLOUDFLARE_ANALYTICS_API_TOKEN --config wrangler.deploy.jsonc
+          printf '%s' "$GRAFANA_CONNECTOR_TOKEN" \
+            | bunx wrangler secret put GRAFANA_CONNECTOR_TOKEN --config wrangler.deploy.jsonc
+          printf '%s' "$PRIVATE_CONTENT_AUDIENCE_KEY" \
+            | bunx wrangler secret put PRIVATE_CONTENT_AUDIENCE_KEY --config wrangler.deploy.jsonc
+          bunx wrangler deploy --config wrangler.deploy.jsonc
+        working-directory: apps/analytics-connector
+
+      - name: Publish PDF release assets
+        if: ${{ github.event_name != 'pull_request' && !env.ACT }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: cv-pdf-latest
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" \
+              --title "Latest CV PDFs" \
+              --notes "Latest generated CV PDF exports from ${GITHUB_SHA}."
+            gh release upload "$RELEASE_TAG" \
+              apps/cv/dist/pdf/cv-en.pdf \
+              apps/cv/dist/pdf/cv-ru.pdf \
+              --clobber
+          else
+            gh release create "$RELEASE_TAG" \
+              apps/cv/dist/pdf/cv-en.pdf \
+              apps/cv/dist/pdf/cv-ru.pdf \
+              --title "Latest CV PDFs" \
+              --notes "Latest generated CV PDF exports from ${GITHUB_SHA}." \
+              --target "$GITHUB_SHA"
+          fi
+
+      - name: Remove PDF exports from static site artifact
+        run: rm -rf apps/cv/dist/pdf
+
+      - name: Upload static artifact
+        if: ${{ !env.ACT }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cv-dist
+          path: apps/cv/dist
+          if-no-files-found: error
+
+      - name: Deploy to Cloudflare Pages
+        if: ${{ github.event_name != 'pull_request' && !env.ACT }}
+        run: bunx wrangler pages deploy apps/cv/dist --project-name="$CLOUDFLARE_PAGES_PROJECT"

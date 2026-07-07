@@ -1,0 +1,115 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "content-astro",
+  "projectType": "library",
+  "sourceRoot": "libs/content-astro/src",
+  "tags": ["scope:cv", "type:build"],
+  "targets": {
+    "build": {
+      "executor": "nx:noop",
+      "outputs": ["{projectRoot}/dist"],
+      "dependsOn": [
+        {
+          "projects": "self",
+          "target": "build:js"
+        }
+      ]
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check libs/content-astro"
+      }
+    },
+    "lint:fix": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check --write libs/content-astro"
+      }
+    },
+    "test": {
+      "executor": "nx:noop",
+      "dependsOn": [
+        {
+          "projects": "self",
+          "target": "test:unit"
+        }
+      ],
+      "outputs": []
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "bun test libs/content-astro/src --pass-with-no-tests"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "command": "tsc --pretty --noEmit --project libs/content-astro/tsconfig.json"
+      }
+    },
+    "build:tsc": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/content-astro/src/index.ts",
+        "outputPath": "libs/content-astro/dist",
+        "rootDir": "libs/content-astro/src",
+        "tsConfig": "libs/content-astro/tsconfig.build.json",
+        "generatePackageJson": false,
+        "assets": [
+          {
+            "input": "libs/content-astro/templates",
+            "glob": "**/*",
+            "output": "templates"
+          },
+          {
+            "input": "libs/content-astro/src",
+            "glob": "virtual.d.ts",
+            "output": "."
+          }
+        ]
+      }
+    },
+    "build:js": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": "self",
+          "target": "build:tsc"
+        }
+      ],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "color": true,
+        "command": "vite build --config libs/content-astro/vite.lib.config.ts"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome format --write libs/content-astro"
+      }
+    },
+    "format:check": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome format libs/content-astro"
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "name": "@cv/handlebars-css-template",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./plugin": {
+      "types": "./dist/plugin/index.d.ts",
+      "default": "./dist/plugin/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime/index.d.ts",
+      "default": "./dist/runtime/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "cssesc": "^3.0.0",
+    "handlebars": "^4.7.9",
+    "tslib": "^2.8.1"
+  },
+  "peerDependencies": {
+    "vite": "^5.2.0 || ^6 || ^7 || ^8"
+  }
+}

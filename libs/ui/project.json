@@ -1,0 +1,87 @@
+{
+  "name": "ui",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/ui/src",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/ui/src/index.ts",
+        "outputPath": "libs/ui/dist",
+        "rootDir": "libs/ui/src",
+        "tsConfig": "libs/ui/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check libs/ui"
+      }
+    },
+    "lint:fix": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check --write libs/ui"
+      }
+    },
+    "test:unit": {
+      "executor": "nx:noop",
+      "outputs": []
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "command": "tsc --pretty --noEmit --project libs/ui/tsconfig.json"
+      }
+    },
+    "storybook:dev": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "storybook dev --config-dir libs/ui/.storybook --port 4400"
+      }
+    },
+    "storybook:build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{projectRoot}/storybook-static"],
+      "options": {
+        "command": "storybook build --config-dir libs/ui/.storybook --output-dir libs/ui/storybook-static"
+      }
+    },
+    "storybook:static": {
+      "executor": "@nx/web:file-server",
+      "dependsOn": ["storybook:build"],
+      "options": {
+        "buildTarget": "ui:storybook:build",
+        "staticFilePath": "libs/ui/storybook-static",
+        "spa": true
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome format --write libs/ui"
+      }
+    },
+    "format:check": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome format libs/ui"
+      }
+    }
+  }
+}

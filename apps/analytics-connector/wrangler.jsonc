@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cv-analytics-connector",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-22",
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "CACHE_TTL_SECONDS": "600"
+  }
+
+  // Production deploys use scripts/write-wrangler-config.ts to generate
+  // wrangler.deploy.jsonc with runtime vars.
+}

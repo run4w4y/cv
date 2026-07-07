@@ -1,0 +1,14 @@
+import { normalizeModules } from '@cv/content-composer'
+{{{moduleImports}}}
+{{{mdxImports}}}
+
+const contentRoot = {{{json contentRoot}}}
+
+export const registry = {
+  mdxModules: normalizeModules({
+    {{{mdxEntries}}}
+  }, { contentRoot }),
+  modules: normalizeModules({
+    {{{moduleEntries}}}
+  }, { contentRoot }),
+}

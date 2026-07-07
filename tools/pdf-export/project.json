@@ -1,0 +1,76 @@
+{
+  "name": "pdf-export",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "tools/pdf-export/src",
+  "tags": ["scope:cv", "type:tool"],
+  "targets": {
+    "public": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^build"],
+      "outputs": ["{workspaceRoot}/apps/cv/dist/pdf"],
+      "options": {
+        "command": "bun run tools/pdf-export/src/export-pdf.ts",
+        "color": true
+      }
+    },
+    "profile": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^build"],
+      "outputs": ["{workspaceRoot}/apps/cv/dist/private-pdf"],
+      "options": {
+        "command": "bun run tools/pdf-export/src/export-profile-pdf.ts",
+        "color": true
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check tools/pdf-export"
+      }
+    },
+    "lint:fix": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check --write tools/pdf-export"
+      }
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "command": "bun test tools/pdf-export/src",
+        "color": true
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "command": "tsc --pretty --noEmit --project tools/pdf-export/tsconfig.json"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome format --write tools/pdf-export"
+      }
+    },
+    "format:check": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome format tools/pdf-export"
+      }
+    }
+  }
+}

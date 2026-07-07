@@ -1,0 +1,116 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "color-scheme",
+  "projectType": "library",
+  "sourceRoot": "libs/color-scheme/src",
+  "tags": ["scope:shared", "type:runtime"],
+  "targets": {
+    "build": {
+      "executor": "nx:noop",
+      "outputs": ["{projectRoot}/dist"],
+      "dependsOn": [
+        {
+          "projects": "self",
+          "target": "build:browser"
+        }
+      ]
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check libs/color-scheme"
+      }
+    },
+    "lint:fix": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check --write libs/color-scheme"
+      }
+    },
+    "test": {
+      "executor": "nx:noop",
+      "dependsOn": [
+        {
+          "projects": "self",
+          "target": "test:unit"
+        }
+      ],
+      "outputs": []
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": "self",
+          "target": "build"
+        }
+      ],
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "bun test libs/color-scheme/src"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "command": "tsc --pretty --noEmit --project libs/color-scheme/tsconfig.json"
+      }
+    },
+    "build:tsc": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/color-scheme/src/index.ts",
+        "outputPath": "libs/color-scheme/dist",
+        "rootDir": "libs/color-scheme/src",
+        "tsConfig": "libs/color-scheme/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "build:browser": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": "self",
+          "target": "build:tsc"
+        }
+      ],
+      "outputs": [
+        "{projectRoot}/dist/browser/boot.js",
+        "{projectRoot}/dist/browser/runtime.js"
+      ],
+      "options": {
+        "color": true,
+        "commands": [
+          "vite build --config libs/color-scheme/vite.browser.config.ts --mode boot",
+          "vite build --config libs/color-scheme/vite.browser.config.ts --mode runtime"
+        ],
+        "parallel": false
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome format --write libs/color-scheme"
+      }
+    },
+    "format:check": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome format libs/color-scheme"
+      }
+    }
+  }
+}

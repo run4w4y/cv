@@ -1,0 +1,11 @@
+{
+  "name": "@cv/pdf-export",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@effect/platform-bun": "4.0.0-beta.91",
+    "effect": "4.0.0-beta.91",
+    "playwright": "^1.49.1"
+  }
+}

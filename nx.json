@@ -1,0 +1,87 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "targetDefaults": {
+    "build": {
+      "cache": true,
+      "dependsOn": ["^build"]
+    },
+    "build:tsc": {
+      "cache": true,
+      "dependsOn": ["^build"]
+    },
+    "build:js": {
+      "cache": true
+    },
+    "dev": {
+      "dependsOn": ["^build"]
+    },
+    "format": {
+      "cache": false,
+      "inputs": ["default"],
+      "outputs": []
+    },
+    "format:check": {
+      "cache": true,
+      "inputs": ["default"],
+      "outputs": []
+    },
+    "lint": {
+      "cache": true,
+      "inputs": ["default", "^default"],
+      "outputs": []
+    },
+    "lint:fix": {
+      "cache": false,
+      "inputs": ["default", "^default"],
+      "outputs": []
+    },
+    "test:unit": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "inputs": ["default", "^production"],
+      "outputs": ["{projectRoot}/coverage"]
+    },
+    "test:e2e": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "inputs": ["default", "^production"],
+      "outputs": ["{projectRoot}/coverage"]
+    },
+    "typecheck": {
+      "cache": true,
+      "dependsOn": ["^build", "^typecheck"],
+      "inputs": ["production", "^production"]
+    }
+  },
+  "namedInputs": {
+    "default": [
+      "{projectRoot}/**/*",
+      "!{projectRoot}/dist/**/*",
+      "!{projectRoot}/coverage/**/*",
+      "sharedGlobals"
+    ],
+    "production": [
+      "default",
+      "!{projectRoot}/**/?(*.)+(spec|test).[jt]s?(x)",
+      "!{projectRoot}/**/*.stories.@(js|jsx|ts|tsx|mdx)",
+      "!{projectRoot}/e2e/**/*",
+      "!{projectRoot}/playwright.config.ts",
+      "!{projectRoot}/bunfig.toml"
+    ],
+    "sharedGlobals": [
+      "{workspaceRoot}/package.json",
+      "{workspaceRoot}/bun.lock",
+      "{workspaceRoot}/nx.json",
+      "{workspaceRoot}/tsconfig.base.json",
+      "{workspaceRoot}/tsconfig.json",
+      "{workspaceRoot}/biome.json"
+    ]
+  },
+  "pluginsConfig": {
+    "@nx/js": {
+      "analyzeLockfile": true,
+      "analyzePackageJson": true,
+      "analyzeSourceFiles": false
+    }
+  }
+}

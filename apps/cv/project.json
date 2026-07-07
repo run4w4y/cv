@@ -1,0 +1,139 @@
+{
+  "name": "cv",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/cv/src",
+  "targets": {
+    "dev": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "../../node_modules/.bin/astro dev --host 0.0.0.0",
+        "cwd": "apps/cv",
+        "color": true
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "command": "cd apps/cv && ../../node_modules/.bin/tsc --pretty --noEmit --project tsconfig.config.json && ../../node_modules/.bin/astro check && ../../node_modules/.bin/astro build",
+        "cwd": ".",
+        "color": true
+      }
+    },
+    "i18n:compile": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "command": "../../node_modules/.bin/lingui compile --strict --namespace es --config lingui.config.ts",
+        "cwd": "apps/cv",
+        "color": true
+      }
+    },
+    "i18n:extract": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "command": "../../node_modules/.bin/lingui extract --config lingui.config.ts",
+        "cwd": "apps/cv",
+        "color": true
+      }
+    },
+    "preview": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "../../node_modules/.bin/astro preview",
+        "cwd": "apps/cv",
+        "color": true
+      }
+    },
+    "preview:pdf": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "../../node_modules/.bin/astro preview --host 127.0.0.1 --port 4322",
+        "cwd": "apps/cv",
+        "color": true
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check apps/cv"
+      }
+    },
+    "lint:fix": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check --write apps/cv"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "command": "../../node_modules/.bin/tsc --pretty --noEmit --project tsconfig.config.json && ../../node_modules/.bin/astro check",
+        "cwd": "apps/cv",
+        "color": true
+      }
+    },
+    "test:e2e": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "command": "playwright test -c apps/cv/playwright.config.ts",
+        "cwd": ".",
+        "color": true
+      }
+    },
+    "test:unit": {
+      "executor": "nx:noop",
+      "outputs": []
+    },
+    "test": {
+      "executor": "nx:noop",
+      "dependsOn": [
+        {
+          "projects": "self",
+          "target": "test:all"
+        }
+      ],
+      "outputs": []
+    },
+    "test:all": {
+      "executor": "nx:noop",
+      "dependsOn": [
+        {
+          "projects": "self",
+          "target": "test:e2e"
+        },
+        {
+          "projects": "self",
+          "target": "typecheck"
+        }
+      ],
+      "outputs": []
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome format --write apps/cv"
+      }
+    },
+    "format:check": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome format apps/cv"
+      }
+    }
+  }
+}

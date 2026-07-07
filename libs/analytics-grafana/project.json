@@ -1,0 +1,96 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "analytics-grafana",
+  "projectType": "library",
+  "sourceRoot": "libs/analytics-grafana/src",
+  "tags": ["scope:analytics", "type:adapter", "visibility:private"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/analytics-grafana/src/index.ts",
+        "outputPath": "libs/analytics-grafana/dist",
+        "rootDir": "libs/analytics-grafana/src",
+        "tsConfig": "libs/analytics-grafana/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check libs/analytics-grafana"
+      }
+    },
+    "lint:fix": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check --write libs/analytics-grafana"
+      }
+    },
+    "test": {
+      "executor": "nx:noop",
+      "dependsOn": [
+        {
+          "projects": "self",
+          "target": "test:all"
+        }
+      ],
+      "outputs": []
+    },
+    "test:all": {
+      "executor": "nx:noop",
+      "dependsOn": [
+        {
+          "projects": "self",
+          "target": "test:unit"
+        },
+        {
+          "projects": "self",
+          "target": "typecheck"
+        }
+      ],
+      "outputs": []
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "outputs": ["{projectRoot}/coverage"],
+      "options": {
+        "color": true,
+        "command": "bun test --coverage",
+        "cwd": "libs/analytics-grafana"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "tsc --pretty --noEmit --project libs/analytics-grafana/tsconfig.json",
+        "cwd": "."
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome format --write libs/analytics-grafana"
+      }
+    },
+    "format:check": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome format libs/analytics-grafana"
+      }
+    }
+  }
+}

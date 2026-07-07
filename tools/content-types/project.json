@@ -1,0 +1,67 @@
+{
+  "name": "content-types",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "tools/content-types/src",
+  "tags": ["scope:cv", "type:tool"],
+  "targets": {
+    "generate": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "options": {
+        "command": "bun run tools/content-types/src/generate.ts --source apps/cv/src/cv-content/schema/registry.ts --authoring apps/cv/src/cv-content/authoring/components.tsx --out ${CONTENT_ROOT:-../cv-content}/types/content-authoring.d.ts",
+        "color": true
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check tools/content-types"
+      }
+    },
+    "lint:fix": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check --write tools/content-types"
+      }
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "bun test tools/content-types/src"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "command": "tsc --pretty --noEmit --project tools/content-types/tsconfig.json"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome format --write tools/content-types"
+      }
+    },
+    "format:check": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome format tools/content-types"
+      }
+    }
+  }
+}
