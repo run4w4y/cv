@@ -1,0 +1,95 @@
+name: CI
+
+permissions:
+  actions: read
+  contents: read
+
+on:
+  pull_request:
+  push:
+
+env:
+  ASTRO_TELEMETRY_DISABLED: "1"
+  CONTENT_ID_SALT: cv-ci-fixture-salt
+  CONTENT_ROOT: ${{ github.workspace }}/fixtures/cv-content-e2e
+  CV_WEB_BASE_URL: https://cv.example.invalid
+  PRIVATE_CONTENT_AUDIENCE_KEY: cv-ci-fixture-audience-key
+  PRIVATE_CONTENT_ROOT_KEY: base64url:AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA
+  PUBLIC_CV_FULL_ACCESS_EMAIL: full-access.fixture@example.invalid
+  PUBLIC_CV_WEB_BASE_URL: https://cv.example.invalid
+
+jobs:
+  quality:
+    name: Quality gates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          filter: tree:0
+
+      - name: Derive Nx affected SHAs
+        if: ${{ !env.ACT && (github.event_name == 'push' || github.event_name == 'pull_request') }}
+        uses: nrwl/nx-set-shas@v5
+
+      - name: Set up workspace runtime
+        uses: ./.github/actions/setup-runtime
+
+      - name: Run quality targets
+        run: |
+          if [[ -n "${ACT:-}" ]]; then
+            ./node_modules/.bin/nx run-many -t format:check lint typecheck test:unit --parallel=6
+          else
+            ./node_modules/.bin/nx affected -t format:check lint typecheck test:unit --parallel=6
+          fi
+
+  cv-build:
+    name: Build CV app
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          filter: tree:0
+
+      - name: Set up workspace runtime
+        uses: ./.github/actions/setup-runtime
+
+      - name: Build fixture CV app
+        run: ./node_modules/.bin/nx run cv:build --skip-nx-cache
+
+  analytics-build:
+    name: Build analytics Worker
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          filter: tree:0
+
+      - name: Set up workspace runtime
+        uses: ./.github/actions/setup-runtime
+
+      - name: Build analytics Worker
+        run: ./node_modules/.bin/nx run analytics-connector:build
+
+  cv-e2e:
+    name: Run CV e2e tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          filter: tree:0
+
+      - name: Set up workspace runtime
+        uses: ./.github/actions/setup-runtime
+        with:
+          install-playwright: "true"
+
+      - name: Run browser e2e tests
+        run: ./node_modules/.bin/nx run cv:test:e2e
