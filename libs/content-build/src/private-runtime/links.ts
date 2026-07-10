@@ -42,7 +42,7 @@ export type MintPrivateAudienceLinkError =
 
 export const privateAudienceLinkUrl = ({
   audienceId,
-  baseUrl = '',
+  baseUrl,
   locale,
   token,
 }: {
@@ -51,15 +51,14 @@ export const privateAudienceLinkUrl = ({
   locale: string
   token: string
 }) => {
-  const url = new URL(
-    `${baseUrl.replace(/\/+$/u, '') || 'http://localhost'}/${locale}/a/${encodeURIComponent(
-      audienceId
-    )}/`
-  )
+  const path = `/${locale}/a/${encodeURIComponent(audienceId)}/`
+  const url = `${path}?${new URLSearchParams({ p: token }).toString()}`
 
-  url.searchParams.set('p', token)
+  if (!baseUrl) {
+    return url
+  }
 
-  return baseUrl ? url.toString() : `${url.pathname}${url.search}`
+  return new URL(url.replace(/^\/+/u, ''), baseUrl).toString()
 }
 
 const mintPrivateAudienceLinkForProfile = ({

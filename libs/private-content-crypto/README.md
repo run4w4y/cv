@@ -1,28 +1,26 @@
-# private-content-crypto
+# @cv/private-content-crypto
 
-Effect-native crypto helpers for private content encryption. The package is
-browser and Bun compatible: payload encryption uses `globalThis.crypto.subtle`,
-and random bytes/SHA digests use Effect's platform `Crypto` service.
+Effect-native crypto helpers for static private content.
 
-The public API returns `Effect.Effect` for operations that can fail or touch
-crypto. Operations that need raw `SubtleCrypto` require the `WebCryptoApi`
-service. Browser entry points should provide `PrivateCryptoLayer`; Bun and Node
-entry points that already provide platform services can provide
-`WebCryptoApiLayer` only for raw WebCrypto operations.
+The package is browser and Bun compatible. Payload encryption uses
+`globalThis.crypto.subtle`, and random bytes/SHA digests use Effect platform
+services.
+
+## Usage
 
 ```ts
-import { Effect } from 'effect'
 import {
   deriveProfileContentKey,
   encryptAesGcmPayload,
   parsePrivateContentRootKey,
-  utf8ToBytes,
   PrivateCryptoLayer,
+  utf8ToBytes,
 } from '@cv/private-content-crypto'
+import { Effect } from 'effect'
 
 const program = parsePrivateContentRootKey('base64url:...').pipe(
   Effect.flatMap((rootKey) =>
-    deriveProfileContentKey({ profileId: 'p_frontend', rootKey })
+    deriveProfileContentKey({ profileId: 'profile-id', rootKey })
   ),
   Effect.flatMap((key) =>
     encryptAesGcmPayload(key, utf8ToBytes('private payload'))
@@ -39,57 +37,39 @@ which provides `PrivateCryptoLayer` internally.
 
 ## Threat Model
 
-The private content data is designed for static hosting where encrypted profile
-payloads may be fetched by anyone. This package protects the confidentiality and
-integrity of encrypted payload bytes against readers who do not have the
-relevant content keys. AES-GCM authentication also detects ciphertext, IV, or
-associated data tampering.
+Private content is designed for static hosting where encrypted profile payloads
+may be fetched by anyone. This package protects confidentiality and integrity of
+encrypted payload bytes against readers who do not have the relevant content
+key. AES-GCM authentication detects ciphertext, IV, or associated-data
+tampering.
 
 It does not protect plaintext after it is opened in a browser, hide access logs,
-prevent a compromised host from serving malicious JavaScript, or revoke a token
-that has already been copied.
+protect against compromised host JavaScript, or revoke copied links.
 
-## AES-GCM Payloads
+## Payloads
 
 `deriveProfileContentKey()` derives stable 256-bit profile content keys from a
-private content root key with HKDF-SHA-256. The root key remains build/operator
-secret material; tokens and browser sessions only receive the derived profile
-key they need.
+32-byte private content root key with HKDF-SHA-256. Tokens and browser sessions
+receive only the derived profile key they need.
 
-`encryptAesGcmPayload()` imports a validated 32-byte content encryption key,
-generates a 96-bit IV with Effect's platform `Crypto` service, and returns
-base64url-encoded `iv` and `ciphertext`. `decryptAesGcmPayload()` authenticates
-the same payload before returning plaintext bytes.
-
-Associated data is not encrypted, but it is authenticated. Callers should pass
-stable context strings as UTF-8 bytes so ciphertext cannot be replayed into a
-different protocol slot.
-
-## Private File Payloads
-
-`encryptPrivateFilePayload()` and `decryptPrivateFilePayload()` use the same
-AES-GCM primitive for private file bytes. The binary file container is:
+`encryptAesGcmPayload()` and `decryptAesGcmPayload()` operate on JSON/runtime
+payloads. Private file helpers use the binary container:
 
 ```text
 PCF2 | 12-byte IV | AES-GCM ciphertext+tag
 ```
 
-Malformed containers fail with `PrivateCryptoPayloadError`. Generated private
-files must be rebuilt with the current code.
+Associated data is authenticated but not encrypted. Callers should pass stable
+context strings so ciphertext cannot be replayed into another protocol slot.
 
-## Source Layout
+## Boundary
 
-- `content-key.ts`: validated 256-bit content keys and secret parsing.
-- `root-key.ts`: validated 256-bit private content root keys and profile key
-  derivation.
-- `aes-gcm/`: shared AES-GCM bytes, JSON payload, and private file payload
-  encryption/decryption.
-- `bytes.ts` and `encoding.ts`: internal byte helpers and public encoding
-  helpers.
-- `web-crypto.ts`: raw WebCrypto service and browser platform `Crypto` adapter.
+This package does not mint private profile tokens or encode audience ids. Those
+contracts live in `@cv/private-content-tokens`.
 
-## Package Boundary
+## Verification
 
-This package intentionally does not mint or decode private profile tokens.
-Compact bearer capability tokens live in `@cv/private-content-tokens`, which
-builds on these primitives.
+```bash
+bunx nx run private-content-crypto:typecheck
+bunx nx run private-content-crypto:test:unit
+```

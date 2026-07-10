@@ -1,18 +1,29 @@
 # @cv/content-core
 
-Public content contracts and schemas for the content workspace.
+Shared content vocabulary for the workspace.
 
-This package intentionally contains no authored content copy, filesystem-backed
-content compiler, React helpers, or private-runtime encryption code.
+This package defines generic runtime contracts that are reused by the content
+pipeline, private-content runtime, app code, and tools. It intentionally does
+not own the CV app's final content schema, filesystem discovery, React
+rendering, or encryption implementation.
 
-## Responsibilities
+## Provides
 
-- expose Effect Schema decoders for public content manifests
-- expose schema-derived shared runtime types for public content
-- expose variable reference/value helpers shared by public and private content
-- expose generic content overlay and file-index vocabulary used across build and
-  runtime packages
+- Effect Schema decoders for content manifests, variables, overlays, and file
+  indexes.
+- Shared `Locale`, `ProfileSlug`, JSON, variable, redaction, and overlay types.
+- `collectVariableUseDescriptors`, which lets an app-specific privacy adapter
+  discover redacted variables inside composed content.
 
-```sh
-bunx nx run content-core:typecheck --skip-nx-cache
+## Boundary
+
+`@cv/content-core` is schema infrastructure, not an app content model. The CV
+sections and entry shapes live in `apps/cv/src/cv-content/schema/*`; a forked app
+can replace those schemas while keeping this package.
+
+## Verification
+
+```bash
+bunx nx run content-core:typecheck
+bunx nx run content-core:lint
 ```

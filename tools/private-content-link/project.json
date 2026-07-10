@@ -10,8 +10,33 @@
       "dependsOn": ["^build"],
       "outputs": [],
       "options": {
-        "command": "bun run tools/private-content-link/src/link.ts",
+        "command": "bun run tools/private-content-link/src/cli/main.ts",
         "color": true
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check tools/private-content-link"
+      }
+    },
+    "lint:fix": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check --write tools/private-content-link"
+      }
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "bun test tools/private-content-link/src"
       }
     },
     "typecheck": {

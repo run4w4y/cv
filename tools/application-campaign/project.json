@@ -1,0 +1,70 @@
+{
+  "name": "application-campaign",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "tools/application-campaign/src",
+  "tags": ["scope:cv", "type:tool"],
+  "targets": {
+    "prepare": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^build"],
+      "outputs": [
+        "{workspaceRoot}/.cv-work/applications",
+        "{workspaceRoot}/.cv-work/application-pdfs"
+      ],
+      "options": {
+        "command": "bun run tools/application-campaign/src/cli/main.ts",
+        "color": true
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check tools/application-campaign"
+      }
+    },
+    "lint:fix": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome check --write tools/application-campaign"
+      }
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "bun test tools/application-campaign/src"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "command": "tsc --pretty --noEmit --project tools/application-campaign/tsconfig.json"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome format --write tools/application-campaign"
+      }
+    },
+    "format:check": {
+      "executor": "nx:run-commands",
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "biome format tools/application-campaign"
+      }
+    }
+  }
+}

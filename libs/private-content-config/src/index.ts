@@ -9,6 +9,34 @@ export const privateContentEnvNames = {
   rootKey: 'PRIVATE_CONTENT_ROOT_KEY',
 } as const
 
+const defaultEnv = (): PrivateContentEnv => process.env
+
+const trimmedEnvRecord = (env: PrivateContentEnv) =>
+  Object.fromEntries(
+    Object.entries(env).flatMap(([key, value]) => {
+      const trimmed = value?.trim()
+
+      return trimmed ? [[key, trimmed]] : []
+    })
+  )
+
+const configProviderFromEnv = (env: PrivateContentEnv = defaultEnv()) =>
+  ConfigProvider.fromEnv({
+    env: trimmedEnvRecord(env),
+  })
+
+const optionalNonEmptyStringConfig = (name: string) =>
+  Config.nonEmptyString(name).pipe(
+    Config.option,
+    Config.map(Option.getOrUndefined)
+  )
+
+const optionalStringFromEnv = (env: PrivateContentEnv, name: string) => {
+  const value = env[name]?.trim()
+
+  return value ? value : undefined
+}
+
 export class PrivateContentConfigError extends Data.TaggedError(
   'PrivateContentConfigError'
 )<{
@@ -29,33 +57,6 @@ export class PrivateContentConfigError extends Data.TaggedError(
   }
 }
 
-const defaultEnv = (): PrivateContentEnv => {
-  if (typeof process === 'undefined') {
-    return {}
-  }
-
-  return process.env
-}
-
-const privateContentEnvValue = (env: PrivateContentEnv, name: string) => {
-  const value = env[name]?.trim()
-
-  return value ? value : undefined
-}
-
-const privateContentConfigProviderFromEnv = (
-  env: PrivateContentEnv = defaultEnv()
-) =>
-  ConfigProvider.fromEnv({
-    env: Object.fromEntries(
-      Object.entries(env).flatMap(([key, value]) => {
-        const trimmed = value?.trim()
-
-        return trimmed ? [[key, trimmed]] : []
-      })
-    ),
-  })
-
 export const withPrivateContentEnv = <A, E, R>(
   effect: Effect.Effect<A, E, R>,
   env: PrivateContentEnv = defaultEnv()
@@ -63,7 +64,7 @@ export const withPrivateContentEnv = <A, E, R>(
   effect.pipe(
     Effect.provideService(
       ConfigProvider.ConfigProvider,
-      privateContentConfigProviderFromEnv(env)
+      configProviderFromEnv(env)
     )
   )
 
@@ -156,9 +157,7 @@ export const readPrivateAudienceKey: Effect.Effect<
 export const readOptionalPrivateAudienceKey: Effect.Effect<
   string | undefined,
   PrivateContentConfigError
-> = Config.nonEmptyString(privateContentEnvNames.audienceKey).pipe(
-  Config.option,
-  Effect.map(Option.getOrUndefined),
+> = optionalNonEmptyStringConfig(privateContentEnvNames.audienceKey).pipe(
   mapConfigError
 )
 
@@ -192,4 +191,4 @@ export const missingPrivateContentAccessEnv = (
     privateContentEnvNames.contentIdSalt,
     privateContentEnvNames.audienceKey,
     privateContentEnvNames.rootKey,
-  ].filter((name) => !privateContentEnvValue(env, name))
+  ].filter((name) => !optionalStringFromEnv(env, name))

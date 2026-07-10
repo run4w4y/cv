@@ -1,7 +1,6 @@
-import type { ContentFileIndex } from '@cv/content-core'
 import type { PrivateRuntimeBuildInput } from '@cv/private-content-protocol'
 
-export type { ContentFileIndex } from '@cv/content-core'
+export { type ContentFileIndex, emptyContentFileIndex } from '@cv/content-core'
 
 export type ContentFileScope = 'private' | 'public'
 
@@ -42,8 +41,3 @@ export const profileFilesDirectoryName = '_files'
 export const profileRootDirectoryName = 'profiles'
 export const privateFilesDirectoryName = 'private'
 export const publicFilesDirectoryName = 'public'
-
-export const emptyContentFileIndex = (): ContentFileIndex => ({
-  profiles: {},
-  public: [],
-})

@@ -1,11 +1,10 @@
-# private-content-tokens
+# @cv/private-content-tokens
 
-Private content audience ids and compact profile capability tokens.
+Private audience ids and compact profile capability tokens.
 
-This package owns the token contract used by the static private content
-runtime. A token is a bearer capability that grants access to one encrypted
-profile payload. It is not a session token and it is not a general user account
-credential.
+This package owns the URL/token contract used by the static private-content
+runtime. A token is a bearer capability for one encrypted profile payload. It is
+not a user account credential and it is not a revocable session.
 
 ## Capability Tokens
 
@@ -15,43 +14,36 @@ Version 1 tokens are:
 base64url(0x01 || 32-byte profile content key)
 ```
 
-The encoded token is 44 characters with no prefix, header, claims JSON, or
-signature. The first byte is the token format version (`1`). The remaining 32
-bytes are the derived profile content key. The browser derives an 11-character
-selector from that key, loads exactly one private profile chunk for the current
-locale, then opens it with the content key.
-
-Audience ids are not embedded in the token. The route audience id remains in the
-URL path for analytics attribution.
+The encoded token has no claims JSON or signature. The first byte is the format
+version. The remaining bytes are the derived profile content key. The browser
+derives a short selector from that key, loads exactly one private profile chunk
+for the current locale, and opens it with the key.
 
 ## Audience IDs
 
-Audience labels are supplied as human-readable strings at mint time. The
-package converts them into deterministic encrypted URL ids:
+Audience labels are human-readable strings at mint time. The package converts
+them into deterministic encrypted URL ids:
 
 ```text
-raw audience label -> base64url(16-byte synthetic tag || ciphertext) -> raw audience label
+raw audience label -> compact encrypted audience id -> raw audience label
 ```
 
-The codec uses `PRIVATE_CONTENT_AUDIENCE_KEY`. The same label and key always
-produce the same compact value, so Cloudflare can group requests by path. The
-codec uses a deterministic SIV-style construction: HMAC-SHA256 derives a
-synthetic tag over the audience label and AES-CTR encrypts the label under that
-tag. The analytics connector can decode the value back to the original label
-with the same key. No audience metadata table is required.
-
-The audience id is opaque to link recipients. It is reversible only for systems
-that have `PRIVATE_CONTENT_AUDIENCE_KEY`.
+The codec uses `PRIVATE_CONTENT_AUDIENCE_KEY`. The same label and key produce
+the same compact value, so Cloudflare can group requests by path. Systems with
+the key, such as the analytics connector, can decode the value back to the
+original label. Link recipients only see an opaque path segment.
 
 ## Security Model
 
-The capability token carries the profile content key. Anyone with the link can
-open that profile's private payload and private files for supported locales.
-The profile selector is derived from the key and is not an extra token field.
-Encrypted runtime payloads are emitted as locale/selector chunks rather than a
-single browser-loaded manifest. Missing chunks and AES-GCM authentication
-failures both reject invalid tokens.
+Anyone with the full private URL can open that profile's private payload and
+private files for supported locales. Creating another audience URL for an
+existing profile only mints another URL. Changing encrypted profile content or
+rotating the private content root key requires rebuilding private runtime
+chunks.
 
-Creating more audiences for an existing profile only mints more URLs. Changing
-encrypted profile content or the private content root key still requires
-rebuilding the private runtime profile chunks.
+## Verification
+
+```bash
+bunx nx run private-content-tokens:typecheck
+bunx nx run private-content-tokens:test:unit
+```

@@ -1,6 +1,6 @@
 import { createServer } from 'node:net'
 import { join } from 'node:path'
-import { Effect, Schedule, Stream } from 'effect'
+import { Effect, Schedule } from 'effect'
 import * as HttpClient from 'effect/unstable/http/HttpClient'
 import * as HttpClientResponse from 'effect/unstable/http/HttpClientResponse'
 import * as ChildProcess from 'effect/unstable/process/ChildProcess'
@@ -52,45 +52,27 @@ const findAvailablePort = (
 const getAvailablePort = (startPort: number) =>
   findAvailablePort(startPort, startPort + 50, startPort)
 
-const drainProcessStream = (
-  stream: Stream.Stream<Uint8Array, unknown>,
-  write: (chunk: Uint8Array) => boolean
-) =>
-  Stream.runForEach(stream, (chunk) =>
-    Effect.sync(() => {
-      write(chunk)
-    })
-  ).pipe(Effect.catch(() => Effect.void))
+export type StartPreviewOptions = {
+  readonly appRoot?: string
+  readonly env?: NodeJS.ProcessEnv
+  readonly output?: 'ignore' | 'inherit'
+  readonly preferredPort?: number
+  readonly rootDir?: string
+}
 
-const pipeProcessOutput = (handle: ChildProcessHandle) =>
-  Effect.all(
-    [
-      drainProcessStream(handle.stdout, (chunk) => process.stdout.write(chunk)),
-      drainProcessStream(handle.stderr, (chunk) => process.stderr.write(chunk)),
-    ],
-    { concurrency: 2 }
-  ).pipe(Effect.asVoid)
-
-const spawnLoggedProcess = (
-  command: string,
-  args: ReadonlyArray<string>,
-  options: ChildProcess.CommandOptions = {}
-) =>
-  ChildProcess.make(command, args, {
-    ...options,
-    stderr: options.stderr ?? 'pipe',
-    stdout: options.stdout ?? 'pipe',
-  }).pipe(
-    Effect.tap((handle) => pipeProcessOutput(handle).pipe(Effect.forkScoped))
-  )
-
-export const startPreview = (preferredPort = 4322) =>
+export const startPreview = ({
+  appRoot = cvAppRoot,
+  env = process.env,
+  output = 'inherit',
+  preferredPort = 4322,
+  rootDir = root,
+}: StartPreviewOptions = {}) =>
   getAvailablePort(preferredPort).pipe(
     Effect.flatMap((port) => {
       const baseUrl = `http://127.0.0.1:${port}`
 
-      return spawnLoggedProcess(
-        join(root, 'node_modules', '.bin', 'astro'),
+      return ChildProcess.make(
+        join(rootDir, 'node_modules', '.bin', 'astro'),
         [
           'preview',
           '--host',
@@ -100,13 +82,15 @@ export const startPreview = (preferredPort = 4322) =>
           '--strictPort',
         ],
         {
-          cwd: cvAppRoot,
+          cwd: appRoot,
           detached: true,
           env: {
-            ...process.env,
+            ...env,
             ASTRO_TELEMETRY_DISABLED: '1',
           },
           stdin: 'ignore',
+          stderr: output,
+          stdout: output,
         }
       ).pipe(
         Effect.mapError(

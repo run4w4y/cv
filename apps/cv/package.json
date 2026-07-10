@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./content-contract": "./src/cv-content/contract.ts",
+    "./content-model": "./src/cv-content/model.ts",
     "./i18n": "./src/lib/i18n.ts",
     "./web-cv": "./src/lib/web-cv.ts"
   },

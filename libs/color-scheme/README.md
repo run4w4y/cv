@@ -1,7 +1,20 @@
 # @cv/color-scheme
 
-Shared color-scheme preference runtime for the workspace.
+Shared light/dark/system color-scheme runtime.
 
-The package stores and applies the selected light/dark/system preference,
-supports system color-scheme detection, provides compiled Astro boot/runtime
-scripts, and exposes a React hook for color-scheme controls.
+The package stores and applies a selected color-scheme preference, observes the
+system preference, provides Astro boot/runtime scripts, and exposes React hooks
+for app controls.
+
+## Imports
+
+- `@cv/color-scheme`: framework-neutral core and DOM helpers.
+- `@cv/color-scheme/astro`: compiled Astro boot/runtime scripts.
+- `@cv/color-scheme/react`: React hook for color-scheme controls.
+
+## Verification
+
+```bash
+bunx nx run color-scheme:typecheck
+bunx nx run color-scheme:test:unit
+```

@@ -1,13 +1,12 @@
-# Handlebars CSS Template
+# @cv/handlebars-css-template
 
 Typed Vite loader and runtime helpers for importing `.css.hbs` files as CSS
 template renderers.
 
-The loader precompiles Handlebars templates at build time and emits a tiny
-JavaScript module that delegates all runtime behavior to
-`@cv/handlebars-css-template/runtime`. This keeps the generated code
-small while preserving normal TypeScript, lint, and unit-test coverage for the
-actual escaping and rendering logic.
+The loader precompiles Handlebars templates at build time and emits a small
+JavaScript module that delegates runtime behavior to
+`@cv/handlebars-css-template/runtime`. This keeps generated code small while the
+escaping and rendering logic stays covered by normal TypeScript tests.
 
 ## Usage
 
@@ -49,8 +48,8 @@ instead of pre-escaped CSS fragments.
 
 ## Verification
 
-```sh
-bunx nx run handlebars-css-template:typecheck --skip-nx-cache
-bunx nx run handlebars-css-template:test:unit --skip-nx-cache
-bunx nx run handlebars-css-template:lint --skip-nx-cache
+```bash
+bunx nx run handlebars-css-template:typecheck
+bunx nx run handlebars-css-template:test:unit
+bunx nx run handlebars-css-template:lint
 ```

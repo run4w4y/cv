@@ -1,0 +1,24 @@
+{
+  "name": "@cv/application-campaign",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@cv/content-astro": "workspace:*",
+    "@cv/content-build": "workspace:*",
+    "@cv/cv": "workspace:*",
+    "@cv/pdf-export": "workspace:*",
+    "@cv/private-content-crypto": "workspace:*",
+    "@cv/private-content-link": "workspace:*",
+    "@effect/platform-bun": "4.0.0-beta.91",
+    "@openai/codex-sdk": "^0.143.0",
+    "effect": "4.0.0-beta.91",
+    "handlebars": "^4.7.9"
+  },
+  "devDependencies": {
+    "bun-types": "^1.3.14"
+  }
+}

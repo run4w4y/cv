@@ -151,7 +151,7 @@ const variableValue = (
     const value: Record<Locale, VariableValue> = {}
 
     for (const locale of [...variable.locales].sort()) {
-      value[locale] = yield* resolveVariableValue(
+      value[locale] = yield* resolveContentVariableValue(
         variableSource,
         variable.id,
         locale,
@@ -223,11 +223,11 @@ const validateVariableSource = (
   return Effect.void
 }
 
-const resolveVariableValue = (
+export const resolveContentVariableValue = (
   variableSource: ContentVariablesSource | null,
   variable: string,
   locale: Locale,
-  variableSourcePath: string
+  variableSourcePath = defaultVariableSourcePath
 ) =>
   Effect.gen(function* () {
     const sourceValue = variableSourceValue(variableSource, variable)

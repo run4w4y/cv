@@ -27,6 +27,7 @@ export {
 export {
   type InferredPrivateProfile,
   inferPrivateProfilesWithConfig,
+  resolveContentVariableValue,
 } from './private-runtime/profiles'
 export { loadContentVariablesSource } from './private-runtime/source'
 export {

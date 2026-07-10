@@ -39,15 +39,15 @@ export type BuildContentArtifactsOptions = Pick<
   'config' | 'includeAllPublicProfiles' | 'privateSecrets' | 'strictPrivate'
 >
 
-export type ContentArtifacts = {
+export type ContentArtifacts<Content = unknown> = {
   fileIndex: ContentFileIndex
   filePlan: ContentFilePlan
   privateManifest: PrivateRuntimeManifest
-  snapshot: ContentBuildSnapshot
+  snapshot: ContentBuildSnapshot<Content>
 }
 
-const buildRuntimeManifest = (
-  snapshot: ContentBuildSnapshot
+const buildRuntimeManifest = <Content>(
+  snapshot: ContentBuildSnapshot<Content>
 ): Effect.Effect<
   PrivateRuntimeManifest,
   ContentBuildParseError | PrivateCryptoError,
@@ -66,9 +66,9 @@ const buildRuntimeManifest = (
       )
     : Effect.succeed(emptyPrivateRuntimeManifest())
 
-export const buildContentArtifacts = (
+export const buildContentArtifacts = <Content>(
   registry: ContentRegistry,
-  contract: ContentContract,
+  contract: ContentContract<Content>,
   {
     config,
     includeAllPublicProfiles = false,
@@ -76,7 +76,7 @@ export const buildContentArtifacts = (
     strictPrivate = false,
   }: BuildContentArtifactsOptions
 ): Effect.Effect<
-  ContentArtifacts,
+  ContentArtifacts<Content>,
   | ContentBuildFileSystemError
   | ContentBuildParseError
   | ContentBuildUsageError

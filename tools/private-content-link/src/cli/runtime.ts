@@ -1,14 +1,23 @@
+import { WebCryptoApiLayer } from '@cv/private-content-crypto'
 import { BunRuntime, BunServices } from '@effect/platform-bun'
 import { Console, Effect, Layer } from 'effect'
 import { CliError, Command } from 'effect/unstable/cli'
-import * as FetchHttpClient from 'effect/unstable/http/FetchHttpClient'
-import type * as HttpClient from 'effect/unstable/http/HttpClient'
+import {
+  type PrivateContentLink,
+  PrivateContentLinkLive,
+} from '../private-link'
 
-export type PdfExportRuntime = BunServices.BunServices | HttpClient.HttpClient
+export type PrivateContentLinkRuntime =
+  | BunServices.BunServices
+  | PrivateContentLink
 
-const PdfExportRuntimeLayer = Layer.mergeAll(
+const PrivateContentLinkServiceLayer = PrivateContentLinkLive.pipe(
+  Layer.provide(WebCryptoApiLayer)
+)
+
+const PrivateContentLinkRuntimeLayer = Layer.merge(
   BunServices.layer,
-  FetchHttpClient.layer
+  PrivateContentLinkServiceLayer
 )
 
 export type CliConfig = {
@@ -25,37 +34,32 @@ const formatUnknownError = (error: unknown) =>
 const formatUnknownDefect = (defect: unknown) =>
   defect instanceof Error ? (defect.stack ?? defect.message) : String(defect)
 
-export const reportError = (error: unknown) =>
+const reportUnknownError = (error: unknown) =>
   Console.error(formatUnknownError(error)).pipe(
     Effect.andThen(setFailedExitCode)
   )
 
-const reportDefect = (defect: unknown) =>
+const reportUnknownDefect = (defect: unknown) =>
   Console.error(formatUnknownDefect(defect)).pipe(
     Effect.andThen(setFailedExitCode)
   )
 
-export const runMain = <A, E>(program: Effect.Effect<A, E, PdfExportRuntime>) =>
-  program.pipe(
-    Effect.map(() => undefined),
-    Effect.provide(PdfExportRuntimeLayer),
-    Effect.catch(reportError),
-    Effect.catchDefect(reportDefect),
-    BunRuntime.runMain
-  )
-
 export const runCli = <Name extends string, Input, ContextInput, E>(
-  command: Command.Command<Name, Input, ContextInput, E, PdfExportRuntime>,
+  command: Command.Command<
+    Name,
+    Input,
+    ContextInput,
+    E,
+    PrivateContentLinkRuntime
+  >,
   config: CliConfig
 ) =>
-  Effect.suspend(() =>
-    Command.runWith(command, config)(process.argv.slice(2))
-  ).pipe(
+  Command.run(command, config).pipe(
     Effect.catch((error) =>
       CliError.isCliError(error) ? setFailedExitCode : Effect.fail(error)
     ),
-    Effect.provide(PdfExportRuntimeLayer),
-    Effect.catch(reportError),
-    Effect.catchDefect(reportDefect),
+    Effect.provide(PrivateContentLinkRuntimeLayer),
+    Effect.catch(reportUnknownError),
+    Effect.catchDefect(reportUnknownDefect),
     BunRuntime.runMain
   )

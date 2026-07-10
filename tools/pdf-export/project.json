@@ -10,7 +10,7 @@
       "dependsOn": ["^build"],
       "outputs": ["{workspaceRoot}/apps/cv/dist/pdf"],
       "options": {
-        "command": "bun run tools/pdf-export/src/export-pdf.ts",
+        "command": "bun run tools/pdf-export/src/cli/public.ts",
         "color": true
       }
     },
@@ -19,7 +19,7 @@
       "dependsOn": ["^build"],
       "outputs": ["{workspaceRoot}/apps/cv/dist/private-pdf"],
       "options": {
-        "command": "bun run tools/pdf-export/src/export-profile-pdf.ts",
+        "command": "bun run tools/pdf-export/src/cli/profile.ts",
         "color": true
       }
     },

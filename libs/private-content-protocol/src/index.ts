@@ -13,6 +13,7 @@ export { openRuntimeProfileEntry } from './manifest/open'
 export {
   decodePrivateRuntimeManifest,
   PRIVATE_RUNTIME_SCHEMA,
+  privateRuntimeEncryptedPayloadSchema,
   privateRuntimeLocaleContentSchema,
   privateRuntimeManifestSchema,
   privateRuntimeProfilePayloadSchema,

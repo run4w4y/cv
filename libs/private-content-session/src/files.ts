@@ -1,4 +1,8 @@
-import type { ContentFileIndex } from '@cv/content-core'
+import {
+  type ContentFileIndex,
+  decodeContentFileIndexDefensively,
+  emptyContentFileIndex,
+} from '@cv/content-core'
 import { decryptPrivateFilePayload } from '@cv/private-content-crypto'
 import { runtimeProfileFileAad } from '@cv/private-content-protocol'
 import { Effect } from 'effect'
@@ -28,37 +32,9 @@ export type ContentFileResolution =
       readonly scope: 'profile'
     }
 
-export const emptyContentFileIndex = (): ContentFileIndex => ({
-  profiles: {},
-  public: [],
-})
+export { emptyContentFileIndex }
 
-const isPlainRecord = (value: unknown): value is Record<PropertyKey, unknown> =>
-  Object.prototype.toString.call(value) === '[object Object]'
-
-const isStringArray = (value: unknown): value is string[] =>
-  Array.isArray(value) && value.every((item) => typeof item === 'string')
-
-export const decodeContentFileIndex = (value: unknown): ContentFileIndex => {
-  if (!isPlainRecord(value)) {
-    return emptyContentFileIndex()
-  }
-
-  const profiles: Record<string, string[]> = {}
-
-  if (isPlainRecord(value.profiles)) {
-    for (const [profile, paths] of Object.entries(value.profiles)) {
-      if (isStringArray(paths)) {
-        profiles[profile] = paths
-      }
-    }
-  }
-
-  return {
-    profiles,
-    public: isStringArray(value.public) ? value.public : [],
-  }
-}
+export const decodeContentFileIndex = decodeContentFileIndexDefensively
 
 const encodePath = (relativePath: string) =>
   relativePath.split('/').map(encodeURIComponent).join('/')

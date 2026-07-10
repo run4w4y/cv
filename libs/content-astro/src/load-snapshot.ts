@@ -19,8 +19,8 @@ import { workspaceAliases, workspaceRoot } from './vite-workspace'
 const registryModuleId = 'virtual:content-build-registry'
 const resolvedRegistryModuleId = `\0${registryModuleId}`
 
-export type ContentLoaderOptions = ContentBuildConfig & {
-  contract: ContentContract<any>
+export type ContentLoaderOptions<Content = unknown> = ContentBuildConfig & {
+  contract: ContentContract<Content>
   includeAllPublicProfiles?: boolean
   privateSecrets?: PrivateContentBuildSecrets | null
   strictPrivate?: boolean
@@ -40,10 +40,10 @@ const registryPlugin = (contentRoot: string): Plugin => ({
   },
 })
 
-const createContentServer = async ({
+const createContentServer = async <Content>({
   contentRoot,
   contract,
-}: ContentLoaderOptions) =>
+}: ContentLoaderOptions<Content>) =>
   createServer({
     appType: 'custom',
     configFile: false,
@@ -77,7 +77,9 @@ const createContentServer = async ({
     },
   })
 
-const loadRegistry = async (options: ContentLoaderOptions) => {
+const loadRegistry = async <Content>(
+  options: ContentLoaderOptions<Content>
+) => {
   const server = await createContentServer(options)
 
   try {
@@ -95,9 +97,9 @@ const loadRegistry = async (options: ContentLoaderOptions) => {
   }
 }
 
-export const loadContentSnapshot = async (
-  options: ContentLoaderOptions
-): Promise<ContentBuildSnapshot> => {
+export const loadContentSnapshot = async <Content>(
+  options: ContentLoaderOptions<Content>
+): Promise<ContentBuildSnapshot<Content>> => {
   const registry = await loadRegistry(options)
 
   return runEffectPromise(
@@ -113,9 +115,9 @@ export const loadContentSnapshot = async (
   )
 }
 
-export const loadContentSource = async (
-  options: Pick<ContentLoaderOptions, 'contentRoot' | 'contract'>
-): Promise<ContentBuildSource> => {
+export const loadContentSource = async <Content>(
+  options: Pick<ContentLoaderOptions<Content>, 'contentRoot' | 'contract'>
+): Promise<ContentBuildSource<Content>> => {
   const registry = await loadRegistry({
     contentIdSalt: '',
     contract: options.contract,
@@ -125,9 +127,9 @@ export const loadContentSource = async (
   return Effect.runPromise(buildContentSource(registry, options.contract))
 }
 
-export const loadContentArtifacts = async (
-  options: ContentLoaderOptions
-): Promise<ContentArtifacts> => {
+export const loadContentArtifacts = async <Content>(
+  options: ContentLoaderOptions<Content>
+): Promise<ContentArtifacts<Content>> => {
   const registry = await loadRegistry(options)
 
   return runEffectPromise(

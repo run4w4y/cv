@@ -30,3 +30,9 @@ export class PdfNetworkError extends Data.TaggedError('PdfNetworkError')<{
   readonly url: string
   readonly cause?: unknown
 }> {}
+
+export type PdfExportError =
+  | PdfFileSystemError
+  | PdfNetworkError
+  | PdfProcessError
+  | PdfUsageError

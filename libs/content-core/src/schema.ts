@@ -1,4 +1,4 @@
-import { Schema } from 'effect'
+import { Option, Schema } from 'effect'
 
 export const contentManifestSchemaVersion = 'content-manifest.v1' as const
 
@@ -60,6 +60,16 @@ export const contentFileIndexSchema = Schema.Struct({
   public: Schema.Array(Schema.String),
 })
 
+const contentFileIndexInputSchema = Schema.Struct({
+  profiles: Schema.optional(Schema.Unknown),
+  public: Schema.optional(Schema.Unknown),
+})
+const contentFileProfileCandidatesSchema = Schema.Record(
+  Schema.NonEmptyString,
+  Schema.Unknown
+)
+const contentFilePathListSchema = Schema.Array(Schema.String)
+
 export const contentManifestSchema = Schema.Struct({
   content: Schema.Record(
     localeSchema,
@@ -93,6 +103,49 @@ export type ContentManifest<Content = unknown> = {
   readonly locales: readonly Locale[]
   readonly profiles: readonly ProfileSlug[]
   readonly schema: string
+}
+
+const decodeContentFileIndexInput = Schema.decodeUnknownOption(
+  contentFileIndexInputSchema
+)
+const decodeContentFileProfileCandidates = Schema.decodeUnknownOption(
+  contentFileProfileCandidatesSchema
+)
+const decodeContentFilePathList = Schema.decodeUnknownOption(
+  contentFilePathListSchema
+)
+
+export const emptyContentFileIndex = (): ContentFileIndex => ({
+  profiles: {},
+  public: [],
+})
+
+export const decodeContentFileIndexDefensively = (
+  value: unknown
+): ContentFileIndex => {
+  const input = Option.getOrUndefined(decodeContentFileIndexInput(value))
+
+  if (!input) {
+    return emptyContentFileIndex()
+  }
+
+  const publicPaths = decodeContentFilePathList(input.public).pipe(
+    Option.getOrElse(() => [])
+  )
+  const profileCandidates = decodeContentFileProfileCandidates(
+    input.profiles ?? {}
+  ).pipe(Option.getOrElse(() => ({})))
+  const profiles: Record<string, readonly string[]> = {}
+
+  for (const [profile, paths] of Object.entries(profileCandidates)) {
+    const decodedPaths = Option.getOrUndefined(decodeContentFilePathList(paths))
+
+    if (decodedPaths) {
+      profiles[profile] = decodedPaths
+    }
+  }
+
+  return { profiles, public: publicPaths }
 }
 
 export const decodeContentManifest = Schema.decodeUnknownEffect(

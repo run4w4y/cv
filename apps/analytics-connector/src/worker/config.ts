@@ -18,6 +18,14 @@ export const grafanaConnectorTokenEnv = 'GRAFANA_CONNECTOR_TOKEN'
 
 export const defaultCacheTtlSeconds = 600
 
+const positiveIntegerFromStringSchema = Schema.NumberFromString.pipe(
+  Schema.check(Schema.isInt(), Schema.isGreaterThan(0))
+)
+
+const redactedNonEmptyStringSchema = Schema.RedactedFromValue(
+  Schema.NonEmptyString
+)
+
 export type AnalyticsFallback = 'empty' | 'sample'
 
 export class AnalyticsConnectorConfigError extends Data.TaggedError(
@@ -67,21 +75,12 @@ export const withConfigRecord = <A, E, R>(
   )
 
 export const withWorkerEnvConfig = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  WorkerEnv.pipe(
-    Effect.flatMap((env) =>
-      effect.pipe(
-        Effect.provideService(
-          ConfigProvider.ConfigProvider,
-          configProviderFromRecord(env)
-        )
-      )
-    )
-  )
+  WorkerEnv.pipe(Effect.flatMap((env) => withConfigRecord(effect, env)))
 
 const optionalStringConfig = (name: string) =>
   Config.nonEmptyString(name).pipe(
     Config.option,
-    Effect.map(Option.getOrUndefined),
+    Config.map(Option.getOrUndefined),
     Effect.mapError(AnalyticsConnectorConfigError.fromConfigError)
   )
 
@@ -95,9 +94,7 @@ export const readAnalyticsFallback = Config.literals(
 )
 
 export const readCacheTtlSeconds = Config.schema(
-  Schema.NumberFromString.pipe(
-    Schema.check(Schema.isInt(), Schema.isGreaterThan(0))
-  ),
+  positiveIntegerFromStringSchema,
   cacheTtlSecondsEnv
 ).pipe(
   Config.withDefault(defaultCacheTtlSeconds),
@@ -105,7 +102,7 @@ export const readCacheTtlSeconds = Config.schema(
 )
 
 export const readGrafanaConnectorToken = Config.schema(
-  Schema.RedactedFromValue(Schema.NonEmptyString),
+  redactedNonEmptyStringSchema,
   grafanaConnectorTokenEnv
 ).pipe(Effect.mapError(AnalyticsConnectorConfigError.fromConfigError))
 
@@ -114,7 +111,7 @@ export const readPrivateAudienceKey = optionalStringConfig(
 )
 
 const optionalCloudflareAnalyticsToken = Config.schema(
-  Schema.RedactedFromValue(Schema.NonEmptyString),
+  redactedNonEmptyStringSchema,
   cloudflareAnalyticsApiTokenEnv
 ).pipe(
   Config.option,

@@ -11,7 +11,8 @@ export const runCommand = (
   command: string,
   args: string[],
   env: NodeJS.ProcessEnv = process.env,
-  cwd = root
+  cwd = root,
+  output: 'ignore' | 'inherit' = 'inherit'
 ) => {
   const commandLabel = formatCommand(command, args)
 
@@ -20,9 +21,9 @@ export const runCommand = (
     const processCommand = ChildProcess.make(command, args, {
       cwd,
       env,
-      stderr: 'inherit',
-      stdin: 'inherit',
-      stdout: 'inherit',
+      stderr: output,
+      stdin: output,
+      stdout: output,
     })
     const exitCode = yield* spawner.exitCode(processCommand)
 

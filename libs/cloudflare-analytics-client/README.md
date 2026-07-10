@@ -1,6 +1,10 @@
-# CF Analytics Client
+# @cv/cloudflare-analytics-client
 
-Private Effect-based client for fetching Cloudflare GraphQL Analytics and normalizing the response into `@cv/analytics-core` dashboard data.
+Effect-based client for Cloudflare GraphQL Analytics.
+
+The client executes one bounded Cloudflare Analytics query, normalizes the
+response, and returns sanitized `@cv/analytics-core` dashboard data. It never
+returns raw GraphQL rows to application code.
 
 ## Environment
 
@@ -9,33 +13,27 @@ Private Effect-based client for fetching Cloudflare GraphQL Analytics and normal
 - `CV_WEB_HOST`: optional hostname filter, for example `cv.example.com`.
 - `CLOUDFLARE_GRAPHQL_ENDPOINT`: optional override for tests or local proxies.
 
-The API token is stored as an Effect `Redacted` value in config and is only unwrapped at the HTTP boundary.
+The API token is stored as an Effect `Redacted` value and only unwrapped at the
+HTTP boundary.
 
 ## Flow
 
 1. Parse config with `readCloudflareAnalyticsConfigFromEnv`.
-2. Build a bounded `CloudflareAnalyticsRange` from explicit `from`/`to` values or the default last 30 days.
-3. Execute the Cloudflare GraphQL request through `Effect.tryPromise`.
-4. Prefer `dailyPaths` rows from the GraphQL payload, falling back to `topPaths` only when no daily rows exist.
-5. Pass those rows through `sanitizeAnalyticsInput` from `analytics-core`.
+2. Build a bounded `CloudflareAnalyticsRange` from explicit `from`/`to` values
+   or the default last 30 days.
+3. Execute the Cloudflare GraphQL request.
+4. Prefer daily path rows, falling back to top paths when no daily rows exist.
+5. Pass rows through `sanitizeAnalyticsInput`.
 
-The package never returns raw GraphQL rows to the app. The public return shape is sanitized `AnalyticsDashboardData`.
+## Boundary
 
-## Relay Decision
+Keep this package framework-neutral. Cloudflare request construction, typed
+Effect errors, and analytics normalization live here. Grafana-specific table
+shaping lives in `@cv/analytics-grafana`.
 
-Relay is intentionally not used here. The package executes one bounded Cloudflare GraphQL Analytics query, normalizes the response, and returns a sanitized server/client data object. Adding Relay would introduce a React-oriented normalized cache, generated artifacts, and component data-layer conventions without a matching benefit for this small package.
+## Verification
 
-Keep this client framework-neutral: Cloudflare GraphQL request construction, typed Effect errors, and analytics normalization live here; Grafana-specific table shaping stays in `libs/analytics-grafana`.
-
-## Errors
-
-All expected failures are typed with `Data.TaggedError`:
-
-- `CloudflareAnalyticsConfigError`
-- `CloudflareAnalyticsRequestError`
-- `CloudflareAnalyticsHttpError`
-- `CloudflareAnalyticsGraphQLError`
-- `CloudflareAnalyticsParseError`
-- `CloudflareAnalyticsNormalizeError`
-
-Consumers can stay in Effect with `fetchCloudflareAnalyticsDashboardDataFromEnv` or use the promise wrapper at an HTTP boundary.
+```bash
+bunx nx run cloudflare-analytics-client:typecheck
+bunx nx run cloudflare-analytics-client:test:unit
+```

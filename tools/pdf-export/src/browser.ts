@@ -6,18 +6,16 @@ export const PdfBrowser = Context.Service<Browser>('@cv/pdf-export/PdfBrowser')
 
 export const PdfPage = Context.Service<Page>('@cv/pdf-export/PdfPage')
 
-const launchBrowser = Effect.tryPromise({
-  try: () =>
-    chromium.launch({
-      executablePath: process.env.CV_CHROME_PATH || process.env.CHROME_PATH,
-    }),
-  catch: (cause) =>
-    new PdfProcessError({
-      cause,
-      command: 'chromium.launch',
-      message: 'Could not launch Chromium',
-    }),
-})
+const launchBrowser = (executablePath?: string) =>
+  Effect.tryPromise({
+    try: () => chromium.launch({ executablePath }),
+    catch: (cause) =>
+      new PdfProcessError({
+        cause,
+        command: 'chromium.launch',
+        message: 'Could not launch Chromium',
+      }),
+  })
 
 const closeBrowser = (browser: Browser) =>
   Effect.tryPromise({
@@ -28,7 +26,7 @@ const closeBrowser = (browser: Browser) =>
         command: 'browser.close',
         message: 'Could not close Chromium',
       }),
-  }).pipe(Effect.catch(() => Effect.succeed(undefined)))
+  }).pipe(Effect.catch(() => Effect.void))
 
 const newPage = PdfBrowser.pipe(
   Effect.flatMap((browser) =>
@@ -82,12 +80,13 @@ const closePage = (page: Page) =>
         command: 'page.close',
         message: 'Could not close Chromium page',
       }),
-  }).pipe(Effect.catch(() => Effect.succeed(undefined)))
+  }).pipe(Effect.catch(() => Effect.void))
 
-export const PdfBrowserLayer = Layer.effect(
-  PdfBrowser,
-  Effect.acquireRelease(launchBrowser, closeBrowser)
-)
+export const makePdfBrowserLayer = (executablePath?: string) =>
+  Layer.effect(
+    PdfBrowser,
+    Effect.acquireRelease(launchBrowser(executablePath), closeBrowser)
+  )
 
 export const PdfPageLayer = Layer.effect(
   PdfPage,
