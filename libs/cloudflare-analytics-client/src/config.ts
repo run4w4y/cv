@@ -12,26 +12,35 @@ const endpointEnv = 'CLOUDFLARE_GRAPHQL_ENDPOINT'
 const hostEnv = 'CV_WEB_HOST'
 const zoneIdEnv = 'CLOUDFLARE_ZONE_ID'
 
-const defaultEnv = (): CloudflareAnalyticsEnv => {
-  if (typeof process === 'undefined') {
-    return {}
-  }
+const defaultEnv = (): CloudflareAnalyticsEnv => process.env
 
-  return process.env
+const trimmedEnvRecord = (env: CloudflareAnalyticsEnv) =>
+  Object.fromEntries(
+    Object.entries(env).flatMap(([key, value]) => {
+      const trimmed = value?.trim()
+
+      return trimmed ? [[key, trimmed]] : []
+    })
+  )
+
+const configProviderFromEnv = (env: CloudflareAnalyticsEnv = defaultEnv()) =>
+  ConfigProvider.fromEnv({
+    env: trimmedEnvRecord(env),
+  })
+
+const optionalStringFromEnv = (env: CloudflareAnalyticsEnv, name: string) => {
+  const value = env[name]?.trim()
+
+  return value ? value : undefined
 }
+
+const redactedNonEmptyStringSchema = Schema.RedactedFromValue(
+  Schema.NonEmptyString
+)
 
 export const cloudflareAnalyticsConfigProviderFromEnv = (
   env: CloudflareAnalyticsEnv
-) =>
-  ConfigProvider.fromEnv({
-    env: Object.fromEntries(
-      Object.entries(env).flatMap(([key, value]) => {
-        const trimmed = value?.trim()
-
-        return trimmed ? [[key, trimmed]] : []
-      })
-    ),
-  })
+) => configProviderFromEnv(env)
 
 export const withCloudflareAnalyticsEnv = <A, E, R>(
   effect: Effect.Effect<A, E, R>,
@@ -44,28 +53,23 @@ export const withCloudflareAnalyticsEnv = <A, E, R>(
     )
   )
 
-const optionalEnv = (
-  env: CloudflareAnalyticsEnv,
-  key: string
-): string | undefined => {
-  const value = env[key]
-
-  return value && value.trim() ? value.trim() : undefined
-}
-
 export const hasCloudflareAnalyticsEnv = (
   env: CloudflareAnalyticsEnv = defaultEnv()
-) => Boolean(optionalEnv(env, apiTokenEnv) && optionalEnv(env, zoneIdEnv))
+) =>
+  Boolean(
+    optionalStringFromEnv(env, apiTokenEnv) &&
+      optionalStringFromEnv(env, zoneIdEnv)
+  )
 
 const optionalStringConfig = (name: string) =>
   Config.nonEmptyString(name).pipe(
     Config.option,
-    Effect.map(Option.getOrUndefined),
+    Config.map(Option.getOrUndefined),
     Effect.mapError(CloudflareAnalyticsConfigError.fromConfigError)
   )
 
 const requiredTokenConfig = Config.schema(
-  Schema.RedactedFromValue(Schema.NonEmptyString),
+  redactedNonEmptyStringSchema,
   apiTokenEnv
 ).pipe(
   Config.option,
