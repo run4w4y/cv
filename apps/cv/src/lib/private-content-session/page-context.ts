@@ -8,6 +8,7 @@ import {
   locales,
   privateAudiencePath,
 } from '@/lib/i18n'
+import { getPrivateAudienceCvUrlFromBase } from '@/lib/web-cv'
 
 export type CvPageContextValue = {
   readonly audience?: string
@@ -16,6 +17,7 @@ export type CvPageContextValue = {
   readonly localeHrefs: Partial<Record<Locale, string>>
   readonly profile: ProfileSlug
   readonly profileId?: string
+  readonly webBaseUrl?: string
   readonly webUrl?: string
 }
 
@@ -66,18 +68,33 @@ const pathAudience = () => {
   }
 }
 
-const currentPrivateWebUrl = (audience: string | undefined) => {
+const currentPrivateWebUrl = ({
+  audience,
+  locale,
+  webBaseUrl,
+}: {
+  readonly audience: string | undefined
+  readonly locale: Locale
+  readonly webBaseUrl: string | undefined
+}) => {
+  if (!audience) {
+    return undefined
+  }
+
+  if (webBaseUrl) {
+    try {
+      return getPrivateAudienceCvUrlFromBase(webBaseUrl, locale, audience)
+    } catch {
+      // Fall back to the current URL below if the page data is malformed.
+    }
+  }
+
   if (typeof window === 'undefined' || !audience) {
     return undefined
   }
 
   const url = new URL(window.location.href)
-  url.pathname = privateAudiencePath(
-    isLocale(url.pathname.split('/')[1])
-      ? url.pathname.split('/')[1]
-      : defaultLocale,
-    audience
-  )
+  url.pathname = privateAudiencePath(locale, audience)
   url.searchParams.delete('p')
   url.searchParams.delete('aud')
   url.hash = ''
@@ -95,6 +112,7 @@ export const readCvPageContext = (): CvPageContextValue => {
   const contentProfile = optionalDatasetValue(dataset.cvContentProfile)
   const profile = optionalDatasetValue(dataset.cvProfile) ?? 'default'
   const profileId = optionalDatasetValue(dataset.cvProfileId)
+  const webBaseUrl = optionalDatasetValue(dataset.cvWebBaseUrl)
   const localeHrefs = Object.fromEntries(
     locales.map((hrefLocale) => [
       hrefLocale,
@@ -111,7 +129,9 @@ export const readCvPageContext = (): CvPageContextValue => {
     localeHrefs,
     profile,
     profileId,
+    webBaseUrl,
     webUrl:
-      currentPrivateWebUrl(audience) ?? optionalDatasetValue(dataset.cvWebUrl),
+      currentPrivateWebUrl({ audience, locale, webBaseUrl }) ??
+      optionalDatasetValue(dataset.cvWebUrl),
   }
 }

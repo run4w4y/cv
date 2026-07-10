@@ -9,7 +9,11 @@ import type { Locale } from '@/lib/i18n'
 import { localePath, locales, privateAudiencePath } from '@/lib/i18n'
 import type { CvPageContextValue } from '@/lib/private-content-session/page-context'
 import { faviconPath } from '@/lib/site-assets'
-import { getPrivateAudienceCvUrl, getWebCvUrl } from '@/lib/web-cv'
+import {
+  getPrivateAudienceCvUrl,
+  getWebCvBaseUrl,
+  getWebCvUrl,
+} from '@/lib/web-cv'
 import colorSchemeBootScriptSource from '../../../../libs/color-scheme/dist/browser/boot.js?raw'
 import colorSchemeRuntimeScriptSource from '../../../../libs/color-scheme/dist/browser/runtime.js?raw'
 import '@/styles/global.css'
@@ -49,6 +53,7 @@ const localeHrefs = Object.fromEntries(
 const webUrl = audience
   ? getPrivateAudienceCvUrl(lang, audience)
   : getWebCvUrl(lang)
+const webBaseUrl = getWebCvBaseUrl()
 const page = {
   audience,
   contentProfile: publicProfile,
@@ -56,6 +61,7 @@ const page = {
   localeHrefs,
   profile,
   profileId: resolvedProfileId,
+  webBaseUrl,
   webUrl,
 } satisfies CvPageContextValue
 const colorSchemeRuntimeScript = privateAccess
@@ -70,6 +76,7 @@ const colorSchemeRuntimeScript = privateAccess
   data-cv-locale={lang}
   data-cv-profile={profile}
   data-cv-profile-id={resolvedProfileId}
+  data-cv-web-base-url={webBaseUrl}
   data-cv-web-url={webUrl}
   dir={content.document.dir}
   lang={lang}

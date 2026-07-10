@@ -3,32 +3,53 @@ import { getCvWebConfig } from './config'
 
 const localePath = (locale: Locale) => `/${locale}/`
 
-const privateAudiencePath = (locale: Locale, audienceId: string) =>
-  `/${locale}/a/${encodeURIComponent(audienceId)}/`
-
 export const getWebCvBaseUrl = () => getCvWebConfig().webBaseUrl
 
-const toSiteRelativeUrl = (path: string) => path.replace(/^\/+/, '')
+const webUrlFromBase = (baseUrl: string, path: string) =>
+  new URL(path.replace(/^\/+/u, ''), baseUrl).toString()
+
+const privateAudienceUrlFromBase = ({
+  audienceId,
+  baseUrl,
+  locale,
+  token,
+}: {
+  readonly audienceId: string
+  readonly baseUrl?: string
+  readonly locale: Locale
+  readonly token?: string
+}) => {
+  const path = `/${locale}/a/${encodeURIComponent(audienceId)}/`
+  const relativeUrl = token
+    ? `${path}?${new URLSearchParams({ p: token }).toString()}`
+    : path
+
+  return baseUrl ? webUrlFromBase(baseUrl, relativeUrl) : relativeUrl
+}
 
 export const getWebCvAssetUrl = (path: string) =>
-  new URL(toSiteRelativeUrl(path), getWebCvBaseUrl()).toString()
+  webUrlFromBase(getWebCvBaseUrl(), path)
 
 export const getWebCvUrl = (locale: Locale) =>
-  new URL(toSiteRelativeUrl(localePath(locale)), getWebCvBaseUrl()).toString()
+  webUrlFromBase(getWebCvBaseUrl(), localePath(locale))
+
+export const getPrivateAudienceCvUrlFromBase = (
+  baseUrl: string,
+  locale: Locale,
+  audienceId: string,
+  token?: string
+) => {
+  return privateAudienceUrlFromBase({
+    audienceId,
+    baseUrl,
+    locale,
+    token,
+  })
+}
 
 export const getPrivateAudienceCvUrl = (
   locale: Locale,
   audienceId: string,
   token?: string
-) => {
-  const url = new URL(
-    toSiteRelativeUrl(privateAudiencePath(locale, audienceId)),
-    getWebCvBaseUrl()
-  )
-
-  if (token) {
-    url.searchParams.set('p', token)
-  }
-
-  return url.toString()
-}
+) =>
+  getPrivateAudienceCvUrlFromBase(getWebCvBaseUrl(), locale, audienceId, token)

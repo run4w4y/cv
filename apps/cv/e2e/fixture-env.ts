@@ -9,6 +9,8 @@ export const e2eDistDir = fileURLToPath(
 )
 
 export const e2eFixtureAccessEmail = 'full-access.fixture@example.invalid'
+export const e2eFixtureAudienceKey =
+  'cv-e2e-fixture-audience-key-with-at-least-32-bytes'
 export const e2eFixtureBaseUrl = 'https://cv.example.invalid'
 export const e2eFixtureContentIdSalt = 'cv-e2e-fixture-salt'
 export const e2eFixturePrivateCanaries = [
@@ -18,14 +20,14 @@ export const e2eFixturePrivateCanaries = [
   'E2E_PRIVATE_SECTION_CANARY_RU',
 ] as const
 
-const e2eFixtureRootKey =
+export const e2eFixtureRootKey =
   'base64url:AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA'
 
 export const e2eFixtureEnv = {
   CONTENT_ID_SALT: e2eFixtureContentIdSalt,
   CONTENT_ROOT: e2eFixtureRoot,
   CV_ASTRO_OUT_DIR: e2eDistDir,
-  PRIVATE_CONTENT_AUDIENCE_KEY: 'cv-e2e-fixture-audience-key',
+  PRIVATE_CONTENT_AUDIENCE_KEY: e2eFixtureAudienceKey,
   PRIVATE_CONTENT_ROOT_KEY: e2eFixtureRootKey,
   PUBLIC_CV_FULL_ACCESS_EMAIL: e2eFixtureAccessEmail,
   PUBLIC_CV_WEB_BASE_URL: e2eFixtureBaseUrl,

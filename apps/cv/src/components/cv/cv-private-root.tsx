@@ -5,7 +5,7 @@ import {
 } from '@effect/atom-react'
 import { useLingui } from '@lingui/react'
 import { LockKeyhole } from 'lucide-react'
-import { Suspense, useCallback } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
 import { CvDocumentCore } from '@/components/cv/cv-document-core'
 import { CvUnlockSkeleton } from '@/components/cv/cv-unlock-skeleton'
 import { cvMessages } from '@/i18n/messages'
@@ -32,7 +32,13 @@ export const CvPrivateRoot = ({ page }: CvPrivateRootProps) => (
 )
 
 const CvPrivateRuntimeRoot = ({ page }: CvPrivateRootProps) => {
-  if (typeof window === 'undefined') {
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
     return <CvUnlockSkeleton />
   }
 

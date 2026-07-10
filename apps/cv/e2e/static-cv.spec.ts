@@ -1,5 +1,14 @@
+import { mintPrivateAudienceLinkFromSecrets } from '@cv/content-build'
+import { runPrivateCryptoPromise } from '@cv/private-content-crypto'
 import { expect, type Page, type TestInfo, test } from '@playwright/test'
-import { e2eFixtureAccessEmail, e2eFixturePrivateCanaries } from './fixture-env'
+import {
+  e2eFixtureAccessEmail,
+  e2eFixtureAudienceKey,
+  e2eFixtureBaseUrl,
+  e2eFixtureContentIdSalt,
+  e2eFixturePrivateCanaries,
+  e2eFixtureRootKey,
+} from './fixture-env'
 
 const publicRoutes = [
   {
@@ -28,6 +37,19 @@ const privateCanaryPattern = new RegExp(
 )
 const frameworkOverlayPattern =
   /Astro encountered an error|Unhandled Runtime Error|Internal Server Error/u
+
+const privateFixtureLink = () =>
+  runPrivateCryptoPromise(
+    mintPrivateAudienceLinkFromSecrets({
+      audience: 'pdf-export-fixture',
+      audienceKey: e2eFixtureAudienceKey,
+      baseUrl: e2eFixtureBaseUrl,
+      contentIdSalt: e2eFixtureContentIdSalt,
+      locale: 'en',
+      profile: 'default',
+      secrets: { rootKey: e2eFixtureRootKey },
+    })
+  )
 
 const isInternalRequest = (baseURL: string, requestUrl: string) => {
   const request = new URL(requestUrl)
@@ -458,6 +480,44 @@ test.describe('static public CV routes', () => {
     await expect(panelText).toBeVisible()
     await expectNoVisiblePrivateLeaks(page)
 
+    await assertPageGuards()
+  })
+})
+
+test.describe('private CV printing', () => {
+  test('unlocks and prints with the configured deployed URL', async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.includes('mobile'),
+      'PDF output is covered once with the desktop browser'
+    )
+
+    const assertPageGuards = attachPageGuards(page, testInfo)
+    const link = await privateFixtureLink()
+    const hash = new URLSearchParams({
+      audience: link.audienceId,
+      p: link.token,
+    })
+
+    await page.goto(`/en/a/#${hash.toString()}`, {
+      waitUntil: 'networkidle',
+    })
+    await expect(
+      page.locator('[data-private-qr-image][data-private-qr-ready]')
+    ).toHaveCount(1)
+    await expect(page.locator('body')).toContainText(
+      e2eFixturePrivateCanaries[0]
+    )
+    await expect(page.locator('[data-print-qr-image]')).toHaveAttribute(
+      'data-print-qr-url',
+      link.url
+    )
+
+    const pdf = await page.pdf({ format: 'A4', printBackground: true })
+
+    expect(pdf.subarray(0, 4).toString()).toBe('%PDF')
+    expect(pdf.byteLength).toBeGreaterThan(10_000)
     await assertPageGuards()
   })
 })
