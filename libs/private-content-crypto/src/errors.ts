@@ -24,7 +24,7 @@ export class PrivateCryptoOperationError extends Data.TaggedError(
 export class PrivateCryptoInvalidBase64UrlError extends Data.TaggedError(
   'PrivateCryptoInvalidBase64UrlError'
 )<{
-  readonly value: string
+  readonly inputLength: number
 }> {
   override get message() {
     return 'Invalid base64url value'
@@ -34,7 +34,7 @@ export class PrivateCryptoInvalidBase64UrlError extends Data.TaggedError(
 export class PrivateCryptoInvalidBase64Error extends Data.TaggedError(
   'PrivateCryptoInvalidBase64Error'
 )<{
-  readonly value: string
+  readonly inputLength: number
 }> {
   override get message() {
     return 'Invalid base64 value'

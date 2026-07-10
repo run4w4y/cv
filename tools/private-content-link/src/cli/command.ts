@@ -1,5 +1,6 @@
 import type { MintedPrivateAudienceLink } from '@cv/content-build'
-import { Console, Effect, Option, Schema } from 'effect'
+import { webBaseUrlSchema } from '@cv/content-core'
+import { Console, Effect, Option } from 'effect'
 import { Command, Flag } from 'effect/unstable/cli'
 import { mintPrivateContentLink } from '../private-link'
 import { writePrivateContentLink } from '../write-link'
@@ -9,7 +10,7 @@ const audience = Flag.string('audience').pipe(
   Flag.withDescription('Private audience slug.')
 )
 const baseUrl = Flag.string('base-url').pipe(
-  Flag.withSchema(Schema.URLFromString),
+  Flag.withSchema(webBaseUrlSchema),
   Flag.withDescription('Deployed CV base URL.'),
   Flag.optional
 )

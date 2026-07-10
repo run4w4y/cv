@@ -1,6 +1,8 @@
 import { mintPrivateAudienceLinkFromSecrets } from '@cv/content-build'
+import { decodeWebBaseUrl } from '@cv/content-core'
 import { runPrivateCryptoPromise } from '@cv/private-content-crypto'
 import { expect, type Page, type TestInfo, test } from '@playwright/test'
+import { Redacted } from 'effect'
 import {
   e2eFixtureAccessEmail,
   e2eFixtureAudienceKey,
@@ -42,12 +44,12 @@ const privateFixtureLink = () =>
   runPrivateCryptoPromise(
     mintPrivateAudienceLinkFromSecrets({
       audience: 'pdf-export-fixture',
-      audienceKey: e2eFixtureAudienceKey,
-      baseUrl: e2eFixtureBaseUrl,
+      audienceKey: Redacted.make(e2eFixtureAudienceKey),
+      baseUrl: decodeWebBaseUrl(e2eFixtureBaseUrl),
       contentIdSalt: e2eFixtureContentIdSalt,
       locale: 'en',
       profile: 'default',
-      secrets: { rootKey: e2eFixtureRootKey },
+      secrets: { rootKey: Redacted.make(e2eFixtureRootKey) },
     })
   )
 
@@ -262,7 +264,7 @@ test.describe('static public CV routes', () => {
     await expectPublicRoute(page, publicRoutes[0])
 
     const privateFileLink = page
-      .locator('a[data-cv-file-state="private-locked"]')
+      .locator('[data-cv-file-state="private-locked"]')
       .first()
 
     await expect(privateFileLink).toBeVisible()
@@ -280,11 +282,11 @@ test.describe('static public CV routes', () => {
       page.locator('.print-only a', { hasText: 'Private case study PDF' })
     ).toHaveCount(0)
 
-    if (testInfo.project.name.includes('mobile')) {
-      await privateFileLink.focus()
-    } else {
-      await privateFileLink.hover()
-    }
+    const accessHelp = privateFileLink.locator('xpath=..')
+    const accessHelpTrigger = accessHelp.getByRole('button')
+
+    await accessHelpTrigger.focus()
+    await accessHelpTrigger.press('Enter')
 
     const visibleHoverCard = page
       .locator('[data-private-access-hover-card]:visible')
@@ -293,6 +295,8 @@ test.describe('static public CV routes', () => {
     await expect(visibleHoverCard).toContainText(
       'This detail is hidden in the redacted public version'
     )
+    await page.keyboard.press('Escape')
+    await expect(visibleHoverCard).toBeHidden()
 
     await privateFileLink.click({ force: true })
     await expect(page).toHaveURL(/\/en\/$/u)
@@ -325,19 +329,61 @@ test.describe('static public CV routes', () => {
     const assertPageGuards = attachPageGuards(page, testInfo)
 
     await expectPublicRoute(page, publicRoutes[0])
-    await page.getByRole('button', { name: 'Dark theme' }).click()
+    const darkTheme = page.getByRole('button', { name: 'Dark theme' })
+    const lightTheme = page.getByRole('button', { name: 'Light theme' })
+
+    await darkTheme.focus()
+    await darkTheme.press('Enter')
     await expect(page.locator('html')).toHaveAttribute(
       'data-color-scheme',
       'dark'
     )
     await expect(page.locator('html')).toHaveClass(/(?:^|\s)dark(?:\s|$)/u)
-    await page.getByRole('button', { name: 'Light theme' }).click()
+    await lightTheme.focus()
+    await lightTheme.press('Space')
     await expect(page.locator('html')).toHaveAttribute(
       'data-color-scheme',
       'light'
     )
     await expectNoVisiblePrivateLeaks(page)
 
+    await assertPageGuards()
+  })
+
+  test('static header runtime updates navigation and sticky actions', async ({
+    page,
+  }, testInfo) => {
+    const assertPageGuards = attachPageGuards(page, testInfo)
+
+    await expectPublicRoute(page, publicRoutes[0])
+
+    const headerActions = page.locator('[data-cv-header-actions]')
+    const experienceNav = page.locator('[data-cv-nav-section="experience"]')
+
+    await expect(headerActions).toBeHidden()
+    await page.locator('#experience').evaluate((element) => {
+      element.scrollIntoView({ block: 'start' })
+    })
+    await expect(headerActions).toBeVisible()
+    await expect(experienceNav).toHaveAttribute('aria-current', 'location')
+    await expect(experienceNav).toHaveAttribute('data-active', 'true')
+    await assertPageGuards()
+  })
+
+  test('technology icons use the bounded SVG catalog', async ({
+    page,
+  }, testInfo) => {
+    const assertPageGuards = attachPageGuards(page, testInfo)
+
+    await expectPublicRoute(page, publicRoutes[0])
+
+    const icon = page.locator('main [data-tech-icon]:visible').first()
+
+    await expect(icon).toBeVisible()
+    expect(
+      await icon.evaluate((element) => getComputedStyle(element).maskImage)
+    ).not.toBe('none')
+    await expect(page.locator('[class*="devicon-"]')).toHaveCount(0)
     await assertPageGuards()
   })
 

@@ -5,6 +5,7 @@ import {
   privateContentRootKeyByteLength,
   runPrivateCryptoPromise,
 } from '@cv/private-content-crypto'
+import { Redacted } from 'effect'
 import { runtimeProfilesFromInferredProfiles } from './profiles'
 
 const rootKey = `base64url:${base64UrlEncode(
@@ -30,13 +31,19 @@ describe('private runtime profile input', () => {
         ],
         null,
         {
-          rootKey,
+          rootKey: Redacted.make(rootKey),
         }
       )
     )
 
     expect(profiles[0]?.id).toBe('p_frontend')
     expect(profiles[0]?.contentKey.alg).toBe('PRIVATE-CONTENT-KEY')
-    expect(contentEncryptionKeyBytes(profiles[0]!.contentKey)).toHaveLength(32)
+    const profile = profiles[0]
+
+    if (!profile) {
+      throw new Error('Expected one private runtime profile')
+    }
+
+    expect(contentEncryptionKeyBytes(profile.contentKey)).toHaveLength(32)
   })
 })

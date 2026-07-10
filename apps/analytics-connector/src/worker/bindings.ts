@@ -1,4 +1,5 @@
-import { Context } from 'effect'
+import { Context, type Scope } from 'effect'
+import type { HttpServerRequest } from 'effect/unstable/http'
 
 import type { AnalyticsConnectorEnv, WorkerExecutionContext } from './types'
 
@@ -20,11 +21,15 @@ export const WorkerContext = Context.Reference<WorkerExecutionContext>(
   }
 )
 
+type WebHandlerContext = HttpServerRequest.HttpServerRequest | Scope.Scope
+
 export const makeWorkerRequestContext = (
   env: AnalyticsConnectorEnv,
   context: WorkerExecutionContext
-): Context.Context<any> =>
+): Context.Context<WebHandlerContext> =>
+  // HttpRouter injects these two services itself, but its CORS middleware
+  // signature still exposes them on the optional request context.
   Context.mergeAll(
     WorkerEnv.context(env),
     WorkerContext.context(context)
-  ) as Context.Context<any>
+  ) as Context.Context<WebHandlerContext>

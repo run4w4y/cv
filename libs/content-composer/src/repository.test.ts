@@ -13,6 +13,7 @@ const registry = ({
 })
 
 const fallback = {
+  contentDir: 'content',
   defaultLocale: 'en',
   defaultProfile: 'default',
 } as const
@@ -32,7 +33,6 @@ describe('content repository discovery', () => {
         modules: {
           'content.config.ts': {
             default: {
-              contentDir: 'content',
               locales: ['en', 'ru'],
               publicProfiles: ['default'],
             },
@@ -111,7 +111,6 @@ describe('content repository discovery', () => {
           modules: {
             'content.config.ts': {
               default: {
-                contentDir: 'content',
                 locales: ['en'],
               },
             },
@@ -131,7 +130,6 @@ describe('content repository discovery', () => {
         modules: {
           'content.config.ts': {
             default: {
-              contentDir: 'content',
               locales: ['en'],
             },
           },
@@ -169,7 +167,6 @@ describe('content repository discovery', () => {
           modules: {
             'content.config.ts': {
               default: {
-                contentDir: 'content',
                 locales: ['en'],
               },
             },

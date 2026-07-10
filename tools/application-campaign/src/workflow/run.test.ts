@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { decodeWebBaseUrl } from '@cv/content-core'
 import {
   PdfExporter,
   type PdfExporterService,
@@ -32,7 +33,7 @@ const options = {
   skipBuild: false,
   skipPdf: false,
   targets: [target],
-  webBaseUrl: new URL('https://cv.example.com'),
+  webBaseUrl: decodeWebBaseUrl('https://cv.example.com'),
 } satisfies PrepareCampaignOptions
 
 const mintedLink = {

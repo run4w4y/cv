@@ -15,48 +15,10 @@
         }
       ]
     },
-    "test": {
-      "executor": "nx:noop",
-      "dependsOn": [
-        {
-          "projects": "self",
-          "target": "test:unit"
-        }
-      ],
-      "outputs": []
-    },
-    "test:unit": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "cd libs/private-content-protocol && bun test src"
-      }
-    },
-    "lint": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check libs/private-content-protocol"
-      }
-    },
-    "lint:fix": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check --write libs/private-content-protocol"
-      }
-    },
-    "typecheck": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "command": "tsc --pretty --noEmit --project libs/private-content-protocol/tsconfig.json"
-      }
-    },
+    "test:unit": {},
+    "lint": {},
+    "lint:fix": {},
+    "typecheck": {},
     "build:tsc": {
       "executor": "@nx/js:tsc",
       "outputs": ["{projectRoot}/dist"],
@@ -82,22 +44,7 @@
         "command": "vite build --config libs/private-content-protocol/vite.lib.config.ts"
       }
     },
-    "format": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format --write libs/private-content-protocol"
-      }
-    },
-    "format:check": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format libs/private-content-protocol"
-      }
-    }
+    "format": {},
+    "format:check": {}
   }
 }

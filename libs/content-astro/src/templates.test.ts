@@ -26,6 +26,40 @@ describe('content registry template', () => {
       writeSourceFile(
         join(
           contentRoot,
+          'content',
+          'profiles',
+          'default',
+          'en',
+          'experience',
+          'acme.mdx'
+        )
+      )
+      writeSourceFile(
+        join(
+          contentRoot,
+          'content',
+          'profiles',
+          'default',
+          'en',
+          'about.test.ts'
+        )
+      )
+      writeSourceFile(
+        join(
+          contentRoot,
+          'content',
+          'profiles',
+          'default',
+          '_files',
+          'private.js'
+        )
+      )
+      writeSourceFile(
+        join(contentRoot, 'content', 'files', 'public', 'download.js')
+      )
+      writeSourceFile(
+        join(
+          contentRoot,
           'node_modules',
           '@babel',
           'code-frame',
@@ -36,7 +70,7 @@ describe('content registry template', () => {
       )
 
       const source = await runEffectPromise(
-        renderRegistryModuleTemplate({ contentRoot })
+        renderRegistryModuleTemplate({ contentDir: 'content', contentRoot })
       )
 
       expect(source).toContain(
@@ -60,7 +94,58 @@ describe('content registry template', () => {
       expect(source).not.toContain(
         viteFsPath(join(contentRoot, 'variables.ts'))
       )
+      expect(source).toContain(
+        viteFsPath(
+          join(
+            contentRoot,
+            'content',
+            'profiles',
+            'default',
+            'en',
+            'experience',
+            'acme.mdx'
+          )
+        )
+      )
+      expect(source).not.toContain('about.test.ts')
+      expect(source).not.toContain('_files')
+      expect(source).not.toContain('download.js')
       expect(source).not.toContain('node_modules')
+    } finally {
+      rmSync(contentRoot, { force: true, recursive: true })
+    }
+  })
+
+  test('uses an app-owned custom content directory', async () => {
+    const contentRoot = mkdtempSync(join(tmpdir(), 'cv-content-registry-'))
+
+    try {
+      writeSourceFile(join(contentRoot, 'content.config.ts'))
+      writeSourceFile(join(contentRoot, 'resume-data', 'variables.ts'))
+      writeSourceFile(
+        join(
+          contentRoot,
+          'resume-data',
+          'profiles',
+          'default',
+          'en',
+          'profile.ts'
+        )
+      )
+      writeSourceFile(
+        join(contentRoot, 'content', 'profiles', 'default', 'en', 'ignored.ts')
+      )
+
+      const source = await runEffectPromise(
+        renderRegistryModuleTemplate({
+          contentDir: 'resume-data',
+          contentRoot,
+        })
+      )
+
+      expect(source).toContain('resume-data/variables.ts')
+      expect(source).toContain('resume-data/profiles/default/en/profile.ts')
+      expect(source).not.toContain('content/profiles/default/en/ignored.ts')
     } finally {
       rmSync(contentRoot, { force: true, recursive: true })
     }

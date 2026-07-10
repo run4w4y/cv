@@ -1,4 +1,3 @@
-import { asyncNoop } from 'es-toolkit/function'
 import { CvDocumentCore } from '@/components/cv/cv-document-core'
 import type { CvContent } from '@/cv-content/model'
 import { CvLinguiProvider } from '@/i18n/runtime'
@@ -11,6 +10,8 @@ type CvStaticRootProps = {
   page: CvPageContextValue
 }
 
+const ignoreOpenFile = async () => undefined
+
 export const CvStaticRoot = ({ content, page }: CvStaticRootProps) => {
   const session = makePublicCvSession({
     content,
@@ -22,7 +23,7 @@ export const CvStaticRoot = ({ content, page }: CvStaticRootProps) => {
       <CvDocumentProvider
         value={{
           content,
-          openFile: asyncNoop,
+          openFile: ignoreOpenFile,
           page,
           session,
         }}

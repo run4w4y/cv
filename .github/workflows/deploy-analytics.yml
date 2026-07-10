@@ -6,10 +6,7 @@ permissions:
   id-token: write
 
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+  workflow_call:
 
 concurrency:
   group: analytics-production
@@ -21,47 +18,8 @@ env:
   INFISICAL_HOST: ${{ vars.INFISICAL_HOST || 'https://app.infisical.com' }}
 
 jobs:
-  detect-affected:
-    name: Detect affected analytics project
-    runs-on: ubuntu-latest
-    outputs:
-      analytics_affected: ${{ steps.affected.outputs.analytics_affected }}
-    permissions:
-      actions: read
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          filter: tree:0
-
-      - name: Derive Nx affected SHAs
-        if: ${{ !env.ACT && github.event_name == 'push' }}
-        uses: nrwl/nx-set-shas@v5
-
-      - name: Set up workspace runtime
-        uses: ./.github/actions/setup-runtime
-
-      - name: Detect affected analytics project
-        id: affected
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" || -n "${ACT:-}" ]]; then
-            echo "analytics_affected=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          projects="$(./node_modules/.bin/nx show projects --affected)"
-          if grep -qx 'analytics-connector' <<<"$projects"; then
-            echo "analytics_affected=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "analytics_affected=false" >> "$GITHUB_OUTPUT"
-          fi
-
   build-analytics-production:
     name: Build production analytics Worker
-    needs: detect-affected
-    if: ${{ needs.detect-affected.outputs.analytics_affected == 'true' }}
     runs-on: ubuntu-latest
     environment: production
     permissions:
@@ -123,10 +81,7 @@ jobs:
 
   deploy-analytics-worker:
     name: Deploy analytics Worker
-    needs:
-      - detect-affected
-      - build-analytics-production
-    if: ${{ needs.detect-affected.outputs.analytics_affected == 'true' }}
+    needs: build-analytics-production
     runs-on: ubuntu-latest
     environment: production
     permissions:

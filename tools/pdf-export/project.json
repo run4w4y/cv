@@ -23,54 +23,11 @@
         "color": true
       }
     },
-    "lint": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check tools/pdf-export"
-      }
-    },
-    "lint:fix": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check --write tools/pdf-export"
-      }
-    },
-    "test:unit": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "command": "bun test tools/pdf-export/src",
-        "color": true
-      }
-    },
-    "typecheck": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "command": "tsc --pretty --noEmit --project tools/pdf-export/tsconfig.json"
-      }
-    },
-    "format": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format --write tools/pdf-export"
-      }
-    },
-    "format:check": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format tools/pdf-export"
-      }
-    }
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
+    "format": {},
+    "format:check": {}
   }
 }

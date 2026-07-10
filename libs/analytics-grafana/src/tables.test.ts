@@ -16,6 +16,7 @@ describe('buildGrafanaAnalyticsTables', () => {
     expect(tables.paths.length).toBeGreaterThan(0)
     expect(tables.audiences[0]).toHaveProperty('audience_id')
     expect(tables.audienceDaily[0]).toHaveProperty('time')
+    expect(JSON.stringify(tables)).not.toContain('visitors')
   })
 
   test('rejects private tokens and raw identifiers in Grafana output', () => {

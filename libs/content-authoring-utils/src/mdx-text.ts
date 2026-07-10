@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from 'react'
 
-export type ReactNodeVisitResult = false | void
+export type ReactNodeVisitResult = false | undefined
 
 export type ReactNodeVisitor = (node: ReactNode) => ReactNodeVisitResult
 

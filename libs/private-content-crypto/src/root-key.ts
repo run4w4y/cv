@@ -1,10 +1,15 @@
 import { Effect } from 'effect'
+import type * as Redacted from 'effect/Redacted'
 import { toBufferSource } from './bytes'
 import {
   type ContentEncryptionKey,
   createContentEncryptionKey,
 } from './content-key'
-import { normalizeSecretBytes, utf8ToBytes } from './encoding'
+import {
+  normalizeRedactedSecretBytes,
+  normalizeSecretBytes,
+  utf8ToBytes,
+} from './encoding'
 import {
   type PrivateCryptoError,
   PrivateCryptoInvalidKeyError,
@@ -49,6 +54,14 @@ export const parsePrivateContentRootKey = (
   label = 'private content root key'
 ): Effect.Effect<PrivateContentRootKey, PrivateCryptoError> =>
   normalizeSecretBytes(secret).pipe(
+    Effect.flatMap((bytes) => createPrivateContentRootKey(bytes, label))
+  )
+
+export const parseRedactedPrivateContentRootKey = (
+  secret: Redacted.Redacted<string>,
+  label = 'private content root key'
+): Effect.Effect<PrivateContentRootKey, PrivateCryptoError> =>
+  normalizeRedactedSecretBytes(secret).pipe(
     Effect.flatMap((bytes) => createPrivateContentRootKey(bytes, label))
   )
 

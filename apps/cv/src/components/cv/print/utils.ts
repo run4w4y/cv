@@ -1,7 +1,4 @@
-import type { LinkItem, SkillGroup } from '@/cv-content/model'
-
-export const contactHref = (contact: readonly LinkItem[], label: string) =>
-  contact.find((item) => item.label.toLowerCase() === label.toLowerCase())?.href
+import type { SkillGroup } from '@/cv-content/model'
 
 export const stackText = (items: readonly string[]) => items.join(', ')
 

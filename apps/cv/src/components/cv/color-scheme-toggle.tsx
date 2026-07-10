@@ -1,13 +1,18 @@
 import {
   type ColorSchemePreference,
-  isColorSchemePreference,
   setColorSchemePreference,
   useColorSchemePreference,
 } from '@cv/color-scheme/react'
-import { ToggleGroup, ToggleGroupItem } from '@cv/ui/toggle-group'
+import { toggleVariants } from '@cv/ui/toggle'
+import { cn } from '@cv/ui/utils'
 import { Monitor, Moon, Sun } from 'lucide-react'
 
-type ColorSchemeLabels = Record<string, string>
+type ColorSchemeLabels = {
+  theme: string
+  themeDark: string
+  themeLight: string
+  themeSystem: string
+}
 type ColorSchemeToggleProps = {
   labels: ColorSchemeLabels
 }
@@ -27,39 +32,34 @@ const getColorSchemeOptions = (
 export const ColorSchemeToggle = ({ labels }: ColorSchemeToggleProps) => {
   const colorSchemePreference = useColorSchemePreference()
 
-  const handleValueChange = (value: string[]) => {
-    const nextPreference = value.at(0)
-
-    if (isColorSchemePreference(nextPreference)) {
-      setColorSchemePreference(nextPreference)
-    }
-  }
-
   return (
-    <ToggleGroup
-      aria-label={labels.theme}
-      className="font-mono"
+    <fieldset
+      className="m-0 inline-flex items-center border-0 p-0 font-mono"
       data-cv-color-scheme-toggle
-      onValueChange={handleValueChange}
-      size="toolbar"
-      value={[colorSchemePreference]}
-      variant="toolbar"
     >
+      <legend className="sr-only">{labels.theme}</legend>
       {getColorSchemeOptions(labels).map((item) => {
         const Icon = item.icon
+        const active = colorSchemePreference === item.value
 
         return (
-          <ToggleGroupItem
+          <button
             aria-label={item.label}
-            className="!rounded-none"
+            aria-pressed={active}
+            className={cn(
+              toggleVariants({ size: 'toolbar', variant: 'toolbar' }),
+              '-ml-px first:ml-0'
+            )}
             data-cv-color-scheme-value={item.value}
+            data-state={active ? 'on' : 'off'}
             key={item.value}
-            value={item.value}
+            onClick={() => setColorSchemePreference(item.value)}
+            type="button"
           >
             <Icon data-icon="inline-start" />
-          </ToggleGroupItem>
+          </button>
         )
       })}
-    </ToggleGroup>
+    </fieldset>
   )
 }

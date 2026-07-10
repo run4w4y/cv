@@ -1,13 +1,20 @@
+import {
+  decodeWebBaseUrl,
+  type WebBaseUrl,
+  webBaseUrlSchema,
+} from '@cv/content-core'
 import { Config, ConfigProvider, Data, Effect, Option } from 'effect'
 
 const cvWebBaseUrlEnv = 'CV_WEB_BASE_URL'
 const publicCvWebBaseUrlEnv = 'PUBLIC_CV_WEB_BASE_URL'
-export const fallbackWebCvBaseUrl = 'https://run4w4y.github.io/cv/'
+export const fallbackWebCvBaseUrl = decodeWebBaseUrl(
+  'https://run4w4y.github.io/cv/'
+)
 
 export type EnvRecord = Readonly<Record<string, string | undefined>>
 
 export type CvWebConfig = {
-  readonly webBaseUrl: string
+  readonly webBaseUrl: WebBaseUrl
 }
 
 export class CvConfigError extends Data.TaggedError('CvConfigError')<{
@@ -47,10 +54,9 @@ const withConfigEnv = <A, E, R>(
   )
 
 const optionalWebBaseUrlConfig = (name: string) =>
-  Config.url(name).pipe(
+  Config.schema(webBaseUrlSchema, name).pipe(
     Config.option,
     Effect.map(Option.getOrUndefined),
-    Effect.map((url) => url?.href),
     Effect.mapError(CvConfigError.fromConfigError)
   )
 

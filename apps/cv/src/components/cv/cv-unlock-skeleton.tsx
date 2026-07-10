@@ -33,6 +33,7 @@ const SkeletonSection = ({ index, rows = 3 }: SkeletonSectionProps) => (
         {Array.from({ length: rows }, (_, rowIndex) => (
           <div
             className="grid gap-5 border-b border-border p-6 last:border-b-0 md:p-8 lg:grid-cols-[8rem_1fr_13rem]"
+            // biome-ignore lint/suspicious/noArrayIndexKey: Static skeleton rows never reorder or hold state.
             key={rowIndex}
           >
             <div className="grid gap-2">
@@ -112,7 +113,11 @@ export const CvUnlockSkeleton = () => {
                   <SkeletonBlock className="h-3 w-16" />
                 </div>
                 {Array.from({ length: 5 }, (_, index) => (
-                  <div className="border-b border-border px-5 py-3" key={index}>
+                  <div
+                    className="border-b border-border px-5 py-3"
+                    // biome-ignore lint/suspicious/noArrayIndexKey: Static skeleton rows never reorder or hold state.
+                    key={index}
+                  >
                     <SkeletonBlock className="h-3 w-28" />
                   </div>
                 ))}

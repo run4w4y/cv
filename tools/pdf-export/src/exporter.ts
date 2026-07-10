@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { decodeWebBaseUrlFromSelf, resolveWebBaseUrl } from '@cv/content-core'
 import { Context, Effect, Layer } from 'effect'
 import { FileSystem } from 'effect/FileSystem'
 import * as HttpClient from 'effect/unstable/http/HttpClient'
@@ -56,7 +57,7 @@ export const privatePreviewPath = ({
 export const publicPreviewPath = (locale: string) => `/${locale}/`
 
 const deployedUrl = (baseUrl: URL, path: string) =>
-  new URL(path.replace(/^\/+/, ''), baseUrl)
+  resolveWebBaseUrl(decodeWebBaseUrlFromSelf(baseUrl), path)
 
 export const privatePrintUrl = ({
   audienceId,

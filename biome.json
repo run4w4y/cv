@@ -28,27 +28,27 @@
     "rules": {
       "preset": "recommended",
       "a11y": {
-        "useAriaPropsSupportedByRole": "off"
+        "useAriaPropsSupportedByRole": "error"
       },
       "complexity": {
-        "noImportantStyles": "off",
-        "noUselessFragments": "off",
-        "useOptionalChain": "off"
+        "noImportantStyles": "error",
+        "noUselessFragments": "error",
+        "useOptionalChain": "error"
       },
       "correctness": {
-        "noUnusedVariables": "off"
+        "noUnusedVariables": "error"
       },
       "security": {
-        "noGlobalEval": "off"
+        "noGlobalEval": "error"
       },
       "style": {
-        "noNonNullAssertion": "off"
+        "noNonNullAssertion": "error"
       },
       "suspicious": {
-        "noArrayIndexKey": "off",
-        "noConfusingVoidType": "off",
-        "noExplicitAny": "off",
-        "useIterableCallbackReturn": "off"
+        "noArrayIndexKey": "error",
+        "noConfusingVoidType": "error",
+        "noExplicitAny": "error",
+        "useIterableCallbackReturn": "error"
       }
     }
   },
@@ -88,6 +88,16 @@
       "includes": ["**/*.svg"],
       "linter": {
         "enabled": false
+      }
+    },
+    {
+      "includes": ["apps/cv/src/styles/global.css"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noImportantStyles": "off"
+          }
+        }
       }
     }
   ]

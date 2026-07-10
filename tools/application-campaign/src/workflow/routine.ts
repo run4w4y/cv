@@ -35,9 +35,13 @@ export type RoutineStep<Config = void> =
   | SkippedRoutineStep
 
 export type CampaignTargetRoutine = {
+  readonly fetchJob: ReadyRoutineStep
   readonly issues: readonly CampaignIssue[]
   readonly privateLink: RoutineStep<{ readonly webBaseUrl: URL }>
   readonly privatePdf: RoutineStep<{ readonly webBaseUrl: URL }>
+  readonly recommend: ReadyRoutineStep<{
+    readonly materials: PrepareCampaignOptions['materials']
+  }>
   readonly steps: readonly RoutineStep<unknown>[]
   readonly target: PrepareCampaignTarget
   readonly writeArtifacts: ReadyRoutineStep
@@ -45,6 +49,8 @@ export type CampaignTargetRoutine = {
 
 export type CampaignRoutine = {
   readonly issues: readonly CampaignIssue[]
+  readonly profiles: ReadyRoutineStep
+  readonly runArtifacts: ReadyRoutineStep
   readonly steps: readonly RoutineStep<unknown>[]
   readonly targets: readonly CampaignTargetRoutine[]
 }
@@ -203,9 +209,11 @@ const resolveTargetRoutine = (
   ]
 
   return {
+    fetchJob,
     issues: steps.flatMap((step) => step.issues),
     privateLink,
     privatePdf,
+    recommend,
     steps,
     target,
     writeArtifacts,
@@ -222,9 +230,16 @@ export const resolveCampaignRoutine = (options: PrepareCampaignOptions) =>
     const targets = options.targets.map((target) =>
       resolveTargetRoutine(options, target)
     )
+    const runArtifacts = ready({
+      config: undefined,
+      dependsOn: targets.map((target) => target.writeArtifacts.id),
+      id: 'run-artifacts',
+      label: 'Write campaign run manifest',
+    })
     const steps: readonly RoutineStep<unknown>[] = [
       profiles,
       ...targets.flatMap((target) => target.steps),
+      runArtifacts,
     ]
     const issues = targets.flatMap((target) => target.issues)
 
@@ -246,7 +261,13 @@ export const resolveCampaignRoutine = (options: PrepareCampaignOptions) =>
       { discard: true }
     )
 
-    return { issues, steps, targets } satisfies CampaignRoutine
+    return {
+      issues,
+      profiles,
+      runArtifacts,
+      steps,
+      targets,
+    } satisfies CampaignRoutine
   }).pipe(
     withTelemetrySpan('application-campaign.routine.resolve', {
       targetCount: options.targets.length,

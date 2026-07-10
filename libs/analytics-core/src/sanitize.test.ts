@@ -30,4 +30,43 @@ describe('sanitizeAnalyticsInput', () => {
       /[?&]p=|person@example|192\.0\.2\.44|DangerBrowser/u
     )
   })
+
+  test('aggregates country rows for the same path and date into one point', () => {
+    const sanitized = sanitizeAnalyticsInput([
+      {
+        count: 4,
+        dimensions: {
+          clientCountryName: 'Germany',
+          clientRequestPath: '/en/',
+          datetimeDay: '2026-06-18',
+        },
+        sum: { pageViews: 400, visits: 3 },
+      },
+      {
+        count: 5,
+        dimensions: {
+          clientCountryName: 'Netherlands',
+          clientRequestPath: '/en/',
+          datetimeDay: '2026-06-18',
+        },
+        sum: { visits: 2 },
+      },
+    ])
+
+    expect(sanitized.paths[0]?.totals).toEqual({
+      pageViews: 9,
+      visits: 5,
+    })
+    expect(sanitized.paths[0]?.series).toEqual([
+      {
+        at: '2026-06-18',
+        pageViews: 9,
+        visits: 5,
+      },
+    ])
+    expect(sanitized.paths[0]?.countries).toEqual({
+      Germany: 3,
+      Netherlands: 2,
+    })
+  })
 })

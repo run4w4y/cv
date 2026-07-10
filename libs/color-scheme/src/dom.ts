@@ -189,7 +189,9 @@ export const subscribeToColorScheme = (onStoreChange: () => void) => {
 
   if (colorSchemeSubscribers.size === 1) {
     cleanupColorSchemeSubscription = bindColorSchemeObservers(() => {
-      colorSchemeSubscribers.forEach((subscriber) => subscriber())
+      colorSchemeSubscribers.forEach((subscriber) => {
+        subscriber()
+      })
     })
   }
 

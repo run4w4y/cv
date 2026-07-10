@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { Effect } from 'effect'
+import { Effect, Redacted } from 'effect'
 import {
   missingPrivateContentAccessEnv,
   privateContentEnvNames,
@@ -29,9 +29,10 @@ describe('private content config', () => {
       PRIVATE_CONTENT_ROOT_KEY: 'base64url:root-key',
     })
 
-    expect(secrets).toEqual({
-      rootKey: 'base64url:root-key',
-    })
+    expect(secrets && Redacted.value(secrets.rootKey)).toBe(
+      'base64url:root-key'
+    )
+    expect(String(secrets?.rootKey)).not.toContain('root-key')
   })
 
   test('returns null when private build secrets are absent', () => {
@@ -54,9 +55,11 @@ describe('private content config', () => {
       })
     ).toBe('salt')
     expect(
-      readPrivateAudienceKeyFromEnv({
-        PRIVATE_CONTENT_AUDIENCE_KEY: ' audience-key ',
-      })
+      Redacted.value(
+        readPrivateAudienceKeyFromEnv({
+          PRIVATE_CONTENT_AUDIENCE_KEY: ' audience-key ',
+        })
+      )
     ).toBe('audience-key')
     expect(
       missingPrivateContentAccessEnv({

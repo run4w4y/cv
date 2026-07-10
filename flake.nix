@@ -26,9 +26,11 @@
         devShells.default = mkShell {
           buildInputs = [
             act
+            actionlint
             bun
             chromium
             infisical-cli
+            shellcheck
             terraform
             terragrunt
             nodejs_22

@@ -87,9 +87,9 @@ export const readColorSchemePreferenceFromStorage = (
 
     if (isColorSchemePreference(legacyPreference)) {
       safelyWriteStorage(storage, colorSchemeStorageKey, legacyPreference)
-      legacyColorSchemeStorageKeys.forEach((key) =>
+      legacyColorSchemeStorageKeys.forEach((key) => {
         safelyRemoveStorage(storage, key)
-      )
+      })
       return legacyPreference
     }
   }
@@ -102,9 +102,9 @@ export const writeColorSchemePreferenceToStorage = (
   storage: ColorSchemeStorage | undefined
 ) => {
   safelyWriteStorage(storage, colorSchemeStorageKey, preference)
-  legacyColorSchemeStorageKeys.forEach((key) =>
+  legacyColorSchemeStorageKeys.forEach((key) => {
     safelyRemoveStorage(storage, key)
-  )
+  })
 }
 
 export const resolveColorScheme = (

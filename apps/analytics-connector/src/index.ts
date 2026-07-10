@@ -6,6 +6,17 @@ import type {
   WorkerExecutionContext,
 } from './worker/types'
 
+const withExternalCachePolicy = (request: Request, response: Response) => {
+  if (
+    request.method === 'GET' &&
+    new URL(request.url).pathname.startsWith('/v1/')
+  ) {
+    response.headers.set('Cache-Control', 'private, no-store')
+  }
+
+  return response
+}
+
 export default {
   async fetch(
     request: Request,
@@ -25,17 +36,22 @@ export default {
     }
 
     try {
-      return await analyticsConnectorWebHandler(
+      const response = await analyticsConnectorWebHandler(
         request,
         makeWorkerRequestContext(env, context)
       )
+
+      return withExternalCachePolicy(request, response)
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
           : 'Analytics connector request failed.'
 
-      return errorResponse(500, 'internal_error', message)
+      return withExternalCachePolicy(
+        request,
+        errorResponse(500, 'internal_error', message)
+      )
     }
   },
 }

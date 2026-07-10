@@ -11,10 +11,12 @@
   ],
   "scripts": {
     "content:types": "bun run tools/content-types/src/generate.ts --source apps/cv/src/cv-content/schema/registry.ts --authoring apps/cv/src/cv-content/authoring/components.tsx --out ${CONTENT_ROOT:-../cv-content}/types/content-authoring.d.ts",
-    "format": "nx run-many -t format",
-    "format:check": "nx run-many -t format:check",
-    "lint": "nx run-many -t lint",
-    "lint:fix": "nx run-many -t lint:fix"
+    "format": "biome format --write .github apps fixtures libs tools biome.json nx.json package.json tsconfig.base.json tsconfig.json",
+    "format:check": "biome format --error-on-warnings .github apps fixtures libs tools biome.json nx.json package.json tsconfig.base.json tsconfig.json",
+    "lint": "biome lint --error-on-warnings .github apps fixtures libs tools biome.json nx.json package.json tsconfig.base.json tsconfig.json",
+    "lint:fix": "biome lint --write .github apps fixtures libs tools biome.json nx.json package.json tsconfig.base.json tsconfig.json",
+    "quality:biome": "biome ci --error-on-warnings .github apps fixtures libs tools biome.json nx.json package.json tsconfig.base.json tsconfig.json",
+    "quality": "bun run quality:biome && nx run-many -t typecheck test:unit --parallel=6"
   },
   "dependencies": {
     "@astrojs/react": "^6.0.1",

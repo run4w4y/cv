@@ -9,10 +9,10 @@ analytics shape safe to persist or render.
 
 ## Data Model
 
-Dashboard data uses schema `analytics.dashboard.v1`. The top-level payload
+Dashboard data uses schema `analytics.dashboard.v2`. The top-level payload
 contains:
 
-- `paths`: sanitized path records with page views, visits, visitors, series
+- `paths`: sanitized path records with page views, visits, series
   points, path kind, optional locale/audience id, and aggregate dimensions.
 - `audiences`: summaries derived from private audience paths such as
   `/en/a/<audience-id>/`.
@@ -28,6 +28,11 @@ dimension values.
 
 The sanitizer is intentionally lossy. It ignores anything not needed by the
 dashboard.
+
+For Cloudflare request groups, `count` is the page-view metric and
+`sum.visits` is the visit metric. Country-grouped rows with the same path and
+date are summed before a series point is emitted. Unique visitors are not part
+of this schema because the selected dataset does not provide that metric.
 
 ## Privacy Guarantees
 

@@ -73,12 +73,12 @@ content-repo/
 `content.config.ts` defines:
 
 - `locales`: the locale ids the repository supports;
-- `contentDir`: optional, defaults to `content`;
 - `publicProfiles`: optional, defaults to the app's default profile.
 
 The app default locale is `en` and the default profile is `default`. Those values
-come from `src/cv-content/contract.ts`. The repository loader discovers profile
-ids dynamically from `content/profiles/<profile>/<locale>/`.
+come from `src/cv-content/contract.ts`, together with `contentDir`, the runtime
+content schema, and its version. The repository loader discovers profile ids
+dynamically from `content/profiles/<profile>/<locale>/`.
 
 ## Sections And Composition
 

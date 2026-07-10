@@ -1,6 +1,6 @@
 import type { ContentComposeContext } from '@cv/content-composer'
 import { cloneValue } from '@cv/content-composer'
-import type { ContentManifest, Locale, ProfileSlug } from '@cv/content-core'
+import type { Locale, ProfileSlug } from '@cv/content-core'
 import type { CvContent } from '../model'
 import * as CvSchema from '../schema/registry'
 import { createContentContext } from './context'
@@ -10,13 +10,17 @@ import { finalizeContent, loadProfile } from './profile'
 export const composeCvAppContent = (
   composeContext: ContentComposeContext
 ): {
-  manifest: ContentManifest<CvContent>
+  manifest: {
+    content: Record<Locale, Partial<Record<ProfileSlug, CvContent>>>
+    locales: readonly Locale[]
+    profiles: readonly ProfileSlug[]
+  }
 } => {
   const context = createContentContext(composeContext)
   const entries = discoverContentEntries(context.repository)
   const locales = [...context.repository.config.locales]
   const profiles = [...context.repository.profiles].sort(compareProfiles)
-  const content: Record<Locale, Record<ProfileSlug, CvContent>> = {}
+  const content: Record<Locale, Partial<Record<ProfileSlug, CvContent>>> = {}
 
   if (entries.length === 0) {
     throw new Error(
@@ -42,7 +46,6 @@ export const composeCvAppContent = (
       content,
       locales,
       profiles,
-      schema: CvSchema.cvContentSchemaVersion,
     },
   }
 }

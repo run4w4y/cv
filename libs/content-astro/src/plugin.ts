@@ -16,15 +16,15 @@ import {
   resolvedContentVirtualModuleId,
 } from './virtual-module'
 
-export type ContentArtifactsCache = {
-  get: () => Promise<ContentArtifacts>
+export type ContentArtifactsCache<Content = unknown> = {
+  get: () => Promise<ContentArtifacts<Content>>
   reset: () => void
 }
 
-export type ContentVitePluginOptions = {
-  artifacts: ContentArtifactsCache
+export type ContentVitePluginOptions<Content = unknown> = {
+  artifacts: ContentArtifactsCache<Content>
   contentRoot: string
-  emitFiles?: (artifacts: ContentArtifacts) => Promise<void>
+  emitFiles?: (artifacts: ContentArtifacts<Content>) => Promise<void>
 }
 
 const isInsideDirectory = (directory: string, file: string) => {
@@ -33,10 +33,10 @@ const isInsideDirectory = (directory: string, file: string) => {
   return rel.length > 0 && !rel.startsWith('..') && !isAbsolute(rel)
 }
 
-export const createContentArtifactsCache = (
-  options: ContentLoaderOptions
-): ContentArtifactsCache => {
-  let artifactsPromise: Promise<ContentArtifacts> | undefined
+export const createContentArtifactsCache = <Content>(
+  options: ContentLoaderOptions<Content>
+): ContentArtifactsCache<Content> => {
+  let artifactsPromise: Promise<ContentArtifacts<Content>> | undefined
   let artifactsQueue: Promise<unknown> = Promise.resolve()
 
   const createArtifacts = () => {
@@ -63,11 +63,11 @@ export const createContentArtifactsCache = (
   }
 }
 
-export const contentVitePlugin = ({
+export const contentVitePlugin = <Content>({
   artifacts,
   contentRoot,
   emitFiles,
-}: ContentVitePluginOptions): Plugin => {
+}: ContentVitePluginOptions<Content>): Plugin => {
   const formatError = (error: unknown) =>
     error instanceof Error && error.stack ? error.stack : String(error)
 
@@ -125,6 +125,8 @@ export const contentVitePlugin = ({
       }
 
       await rebuildArtifacts(context.server)
+
+      context.server.ws.send({ type: 'full-reload' })
 
       return []
     },

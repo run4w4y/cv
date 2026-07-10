@@ -17,54 +17,11 @@
         "color": true
       }
     },
-    "lint": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check tools/application-campaign"
-      }
-    },
-    "lint:fix": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check --write tools/application-campaign"
-      }
-    },
-    "test:unit": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "bun test tools/application-campaign/src"
-      }
-    },
-    "typecheck": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "command": "tsc --pretty --noEmit --project tools/application-campaign/tsconfig.json"
-      }
-    },
-    "format": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format --write tools/application-campaign"
-      }
-    },
-    "format:check": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format tools/application-campaign"
-      }
-    }
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
+    "format": {},
+    "format:check": {}
   }
 }

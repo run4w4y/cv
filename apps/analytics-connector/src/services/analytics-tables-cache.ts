@@ -11,7 +11,7 @@ import { WorkerContext } from '../worker/bindings'
 import { readCacheTtlSeconds, withWorkerEnvConfig } from '../worker/config'
 import type { WorkerExecutionContext } from '../worker/types'
 
-const tableCacheUrl = 'https://analytics-connector.internal/v1/tables'
+const tableCacheUrl = 'https://analytics-connector.internal/v2/tables'
 
 const hasDefaultCache = (
   value: CacheStorage
@@ -71,6 +71,19 @@ const decodeCachedTables = (response: Response) =>
     )
   )
 
+const deleteInvalidCacheHit = (cache: Cache, cacheKey: Request) =>
+  Effect.tryPromise({
+    try: () => cache.delete(cacheKey),
+    catch: (cause) =>
+      InternalServerError.fromCause({
+        cause,
+        message: 'Invalid connector table cache entry could not be deleted',
+      }),
+  }).pipe(
+    Effect.catch((error) => Effect.logWarning(error.message)),
+    Effect.asVoid
+  )
+
 const cacheTables = (
   cache: Cache,
   cacheKey: Request,
@@ -80,12 +93,16 @@ const cacheTables = (
 ) => {
   const response = new Response(JSON.stringify(tables), {
     headers: {
-      'Cache-Control': `private, max-age=${ttl}, s-maxage=${ttl}`,
+      'Cache-Control': `public, max-age=${ttl}`,
       'Content-Type': 'application/json',
     },
   })
 
-  workerContext.waitUntil(cache.put(cacheKey, response))
+  const write = Promise.resolve()
+    .then(() => cache.put(cacheKey, response))
+    .catch(() => undefined)
+
+  workerContext.waitUntil(write)
 
   return tables
 }
@@ -112,14 +129,21 @@ export const withAnalyticsTablesCache = (
 
         const cacheKey = tableCacheKey(query)
         const cachedResponse = yield* readCacheHit(cache, cacheKey)
+        const loadAndCache = Effect.gen(function* () {
+          const tables = yield* load
 
-        if (cachedResponse) {
-          return yield* decodeCachedTables(cachedResponse)
-        }
+          return cacheTables(cache, cacheKey, ttl, workerContext, tables)
+        })
 
-        const tables = yield* load
-
-        return cacheTables(cache, cacheKey, ttl, workerContext, tables)
+        return cachedResponse
+          ? yield* decodeCachedTables(cachedResponse).pipe(
+              Effect.catch(() =>
+                deleteInvalidCacheHit(cache, cacheKey).pipe(
+                  Effect.andThen(loadAndCache)
+                )
+              )
+            )
+          : yield* loadAndCache
       })
     )
   )

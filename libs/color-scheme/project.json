@@ -15,54 +15,10 @@
         }
       ]
     },
-    "lint": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check libs/color-scheme"
-      }
-    },
-    "lint:fix": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check --write libs/color-scheme"
-      }
-    },
-    "test": {
-      "executor": "nx:noop",
-      "dependsOn": [
-        {
-          "projects": "self",
-          "target": "test:unit"
-        }
-      ],
-      "outputs": []
-    },
-    "test:unit": {
-      "executor": "nx:run-commands",
-      "dependsOn": [
-        {
-          "projects": "self",
-          "target": "build"
-        }
-      ],
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "bun test libs/color-scheme/src"
-      }
-    },
-    "typecheck": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "command": "tsc --pretty --noEmit --project libs/color-scheme/tsconfig.json"
-      }
-    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
     "build:tsc": {
       "executor": "@nx/js:tsc",
       "outputs": ["{projectRoot}/dist"],
@@ -95,22 +51,7 @@
         "parallel": false
       }
     },
-    "format": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format --write libs/color-scheme"
-      }
-    },
-    "format:check": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format libs/color-scheme"
-      }
-    }
+    "format": {},
+    "format:check": {}
   }
 }

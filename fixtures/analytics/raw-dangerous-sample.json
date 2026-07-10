@@ -17,9 +17,6 @@
                 "pageViews": 12,
                 "visits": 7
               },
-              "uniq": {
-                "visitors": 5
-              },
               "userAgent": "DangerBrowser/1.0",
               "clientIP": "192.0.2.44"
             },
@@ -34,9 +31,6 @@
               "sum": {
                 "pageViews": 4,
                 "visits": 2
-              },
-              "uniq": {
-                "visitors": 2
               }
             },
             {
@@ -50,9 +44,6 @@
               "sum": {
                 "pageViews": 21,
                 "visits": 13
-              },
-              "uniq": {
-                "visitors": 10
               }
             }
           ]

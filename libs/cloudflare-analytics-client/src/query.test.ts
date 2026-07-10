@@ -17,6 +17,7 @@ describe('cloudflare analytics query', () => {
     expect(query).toContain('orderBy: [date_ASC]')
     expect(query).toContain('clientRequestPath')
     expect(query).toContain('datetimeDay: date')
+    expect(query).not.toContain('uniq')
     expect(query).not.toContain('secret-token')
   })
 

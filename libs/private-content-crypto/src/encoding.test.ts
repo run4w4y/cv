@@ -48,4 +48,13 @@ describe('encoding helpers', () => {
       )
     ).toBe('secret')
   })
+
+  test('does not retain malformed secret material in typed failures', async () => {
+    const secret = 'base64url:!!!!do-not-log-this-secret!!!!'
+    const result = await Effect.runPromiseExit(normalizeSecretBytes(secret))
+
+    expect(result._tag).toBe('Failure')
+    expect(result.toString()).not.toContain(secret)
+    expect(result.toString()).not.toContain('do-not-log-this-secret')
+  })
 })

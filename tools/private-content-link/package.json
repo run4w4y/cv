@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@cv/content-build": "workspace:*",
+    "@cv/content-core": "workspace:*",
     "@cv/private-content-config": "workspace:*",
     "@cv/private-content-crypto": "workspace:*",
     "@effect/platform-bun": "4.0.0-beta.91",

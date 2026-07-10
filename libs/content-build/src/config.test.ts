@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { Schema } from 'effect'
+import { Redacted, Schema } from 'effect'
 import {
   contentBuildConfigSchema,
   privateContentBuildSecretsSchema,
@@ -23,7 +23,7 @@ describe('content build schemas', () => {
       rootKey: 'base64url:root-key',
     })
 
-    expect(secrets.rootKey).toBe('base64url:root-key')
+    expect(Redacted.value(secrets.rootKey)).toBe('base64url:root-key')
   })
 
   test('rejects private secrets without a root key', () => {

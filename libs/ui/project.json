@@ -15,34 +15,10 @@
         "generatePackageJson": false
       }
     },
-    "lint": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check libs/ui"
-      }
-    },
-    "lint:fix": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check --write libs/ui"
-      }
-    },
-    "test:unit": {
-      "executor": "nx:noop",
-      "outputs": []
-    },
-    "typecheck": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "command": "tsc --pretty --noEmit --project libs/ui/tsconfig.json"
-      }
-    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
     "storybook:dev": {
       "executor": "nx:run-commands",
       "cache": false,
@@ -66,22 +42,7 @@
         "spa": true
       }
     },
-    "format": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format --write libs/ui"
-      }
-    },
-    "format:check": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format libs/ui"
-      }
-    }
+    "format": {},
+    "format:check": {}
   }
 }

@@ -1,6 +1,6 @@
-import type { ComponentType } from 'react'
+import type { ComponentType, ElementType } from 'react'
 
-export type MdxComponentMap = Record<string, ComponentType<any> | string>
+export type MdxComponentMap = Record<string, ElementType>
 
 export type MdxContentProps = {
   components?: MdxComponentMap

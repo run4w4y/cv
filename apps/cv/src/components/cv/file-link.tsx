@@ -3,11 +3,13 @@ import { cn } from '@cv/ui/utils'
 import { LockKeyhole } from 'lucide-react'
 import {
   type AnchorHTMLAttributes,
+  type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
   useState,
 } from 'react'
-import { PrivateAccessHoverCard } from '@/components/private-cv/access-hover-card'
+import { PrivateAccessHelp } from '@/components/private-cv/access-hover-card'
+import { contentFileLinkPresentation } from '@/lib/cv-document/file-link-resolution'
 import { useCvSession, useOpenCvFile } from '@/lib/cv-document/hooks'
 
 type CvFileLinkProps = AnchorHTMLAttributes<HTMLAnchorElement> & {
@@ -20,6 +22,7 @@ export const CvFileLink = ({
   className,
   href,
   onClick,
+  onKeyDown,
   role,
   tabIndex,
   ...props
@@ -28,22 +31,15 @@ export const CvFileLink = ({
   const openFile = useOpenCvFile()
   const resolution = resolveContentFile(session, href)
   const [opening, setOpening] = useState(false)
-  const isPrivate = resolution.kind === 'private'
-  const isPrivateReady = isPrivate && session.status === 'unlocked'
-  const isPrivateLocked = isPrivate && !isPrivateReady
-  const isUnresolved =
-    resolution.kind === 'missing' || resolution.kind === 'unknown'
-  const isDisabled = isUnresolved || isPrivateLocked
-  const resolvedHref = isPrivateLocked ? undefined : resolution.href
-  const resolvedRole = isPrivateLocked ? (role ?? 'link') : role
-  const resolvedTabIndex = isPrivateLocked ? (tabIndex ?? 0) : tabIndex
-  const fileState = isPrivate
-    ? isPrivateReady
-      ? opening
-        ? 'opening'
-        : 'private-ready'
-      : 'private-locked'
-    : resolution.kind
+  const presentation = contentFileLinkPresentation(
+    resolution,
+    session.status,
+    opening
+  )
+  const isPrivateAction = presentation.mode === 'private-action'
+  const isPrivateLocked = presentation.mode === 'private-locked'
+  const isUnavailable = presentation.mode === 'unavailable'
+  const isDisabled = isPrivateLocked || isUnavailable
 
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
     onClick?.(event)
@@ -52,18 +48,13 @@ export const CvFileLink = ({
       return
     }
 
-    if (isUnresolved) {
-      event.preventDefault()
-      return
-    }
-
-    if (!isPrivate) {
+    if (!isPrivateAction) {
       return
     }
 
     event.preventDefault()
 
-    if (!isPrivateReady || opening) {
+    if (opening) {
       return
     }
 
@@ -75,28 +66,52 @@ export const CvFileLink = ({
       .finally(() => setOpening(false))
   }
 
-  const link = (
+  const handleKeyDown = (event: KeyboardEvent<HTMLAnchorElement>) => {
+    onKeyDown?.(event)
+
+    if (
+      !event.defaultPrevented &&
+      isPrivateAction &&
+      (event.key === 'Enter' || event.key === ' ')
+    ) {
+      event.preventDefault()
+      event.currentTarget.click()
+    }
+  }
+
+  const interactiveLink = (
     <a
-      aria-disabled={isDisabled ? 'true' : undefined}
       aria-busy={opening ? 'true' : undefined}
-      className={cn(
-        'group/cv-file',
-        className,
-        isDisabled &&
-          'cursor-not-allowed text-muted-foreground opacity-80 hover:text-muted-foreground',
-        isPrivateLocked &&
-          'decoration-dotted underline-offset-4 data-[cv-file-state=private-locked]:[text-decoration-style:dotted]'
-      )}
-      data-cv-file-state={fileState}
-      data-private-file-unavailable={isPrivateLocked ? 'true' : undefined}
-      href={resolvedHref}
+      className={cn('group/cv-file', className)}
+      data-cv-file-state={presentation.fileState}
+      href={presentation.href}
       onClick={handleClick}
-      role={resolvedRole}
-      tabIndex={resolvedTabIndex}
+      onKeyDown={handleKeyDown}
+      role={isPrivateAction ? 'button' : role}
+      tabIndex={isPrivateAction ? (tabIndex ?? 0) : tabIndex}
       {...props}
     >
       {children}
-      {isPrivateLocked ? (
+    </a>
+  )
+
+  if (!isDisabled) {
+    return interactiveLink
+  }
+
+  const disabledContent = (
+    <span
+      aria-disabled="true"
+      className={cn(
+        'group/cv-file cursor-not-allowed text-muted-foreground opacity-80',
+        isPrivateLocked && 'decoration-dotted underline-offset-4',
+        className
+      )}
+      data-cv-file-state={presentation.fileState}
+      data-private-file-unavailable={isPrivateLocked ? 'true' : undefined}
+    >
+      {children}
+      {isPrivateLocked && (
         <LockKeyhole
           aria-hidden="true"
           className="size-3.5 shrink-0"
@@ -104,13 +119,13 @@ export const CvFileLink = ({
           data-icon="inline-end"
           strokeWidth={1.7}
         />
-      ) : null}
-    </a>
+      )}
+    </span>
   )
 
   return isPrivateLocked ? (
-    <PrivateAccessHoverCard>{link}</PrivateAccessHoverCard>
+    <PrivateAccessHelp>{disabledContent}</PrivateAccessHelp>
   ) : (
-    link
+    disabledContent
   )
 }

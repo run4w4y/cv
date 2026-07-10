@@ -118,8 +118,10 @@ const colorSchemeRuntimeScript = privateAccess
       ) : null
     }
     <script>
+      import { bindCvDocumentControls } from '@/browser/document-runtime'
       import { bindPrintControls } from '@/browser/print-runtime'
 
+      bindCvDocumentControls()
       bindPrintControls()
     </script>
   </body>

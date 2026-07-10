@@ -1,5 +1,6 @@
-import { Effect } from 'effect'
-import { rootDirectory } from '../paths'
+import { localeSchema, profileSlugSchema } from '@cv/content-core'
+import { Effect, Schema } from 'effect'
+import { ApplicationCampaignConfigError } from '../errors'
 import { logDebug, urlHost, withTelemetrySpan } from '../telemetry'
 import { readApplicationCampaignEnvConfig } from './env'
 import {
@@ -52,6 +53,30 @@ export const resolvePrepareCampaignOptions = (
       envBaseUrl: env.baseUrl,
       publicCvWebBaseUrl: env.publicCvWebBaseUrl,
     })
+    const locale = yield* Schema.decodeUnknownEffect(localeSchema)(
+      overrides.locale ?? env.locale ?? defaultLocale
+    ).pipe(
+      Effect.mapError(
+        (cause) =>
+          new ApplicationCampaignConfigError({
+            cause,
+            message: 'Invalid application campaign locale.',
+          })
+      )
+    )
+    const profile = overrides.profile
+      ? yield* Schema.decodeUnknownEffect(profileSlugSchema)(
+          overrides.profile
+        ).pipe(
+          Effect.mapError(
+            (cause) =>
+              new ApplicationCampaignConfigError({
+                cause,
+                message: 'Invalid application campaign profile.',
+              })
+          )
+        )
+      : undefined
     const campaign = {
       audience: overrides.audience,
       concurrency:
@@ -62,11 +87,11 @@ export const resolvePrepareCampaignOptions = (
         profiles: overrides.excludedProfiles,
       }),
       generate: overrides.generate ?? true,
-      locale: overrides.locale ?? env.locale ?? defaultLocale,
+      locale,
       materials: overrides.materials ?? env.materials ?? 'all',
       outDir: runOutDir,
       pdfOutDir,
-      profile: overrides.profile,
+      profile,
       skipBuild: overrides.skipBuild ?? false,
       skipPdf: overrides.skipPdf ?? false,
       targets,
@@ -79,7 +104,6 @@ export const resolvePrepareCampaignOptions = (
         overrides.reasoningEffort ??
         env.reasoningEffort ??
         defaultCodexReasoningEffort,
-      workingDirectory: rootDirectory,
     }
 
     yield* logDebug('Resolved application campaign options', {

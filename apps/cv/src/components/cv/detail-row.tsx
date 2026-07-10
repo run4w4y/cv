@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react'
-import { RedactedInlineText } from '@/components/private-cv/redactions'
+import {
+  isRedactedText,
+  RedactedInlineText,
+} from '@/components/private-cv/redactions'
 import type { RedactableText } from '@/cv-content/model'
 
 type DetailRowProps = {
@@ -19,13 +22,16 @@ export const DetailRow = ({
 }: DetailRowProps) => {
   const valueContent =
     value === undefined ? children : <RedactedInlineText value={value} />
+  const canLinkValue = Boolean(
+    href && (value === undefined || !isRedactedText(value))
+  )
   const valueClassName =
     'font-mono text-xs/5 text-foreground [&>p]:m-0 [&>p+p]:mt-2'
 
   return (
     <div className="grid gap-4 border-b border-border p-6 last:border-b-0 md:grid-cols-[10rem_1fr_1fr] md:p-6">
       <h3 className="font-mono text-xs/5 text-muted-foreground">{label}</h3>
-      {href ? (
+      {href && canLinkValue ? (
         <a
           className={`${valueClassName} hover:text-blue-600 dark:hover:text-blue-400`}
           href={href}

@@ -18,28 +18,53 @@
     "format": {
       "cache": false,
       "inputs": ["default"],
-      "outputs": []
+      "outputs": [],
+      "executor": "nx:run-commands",
+      "options": {
+        "color": true,
+        "command": "biome format --write {projectRoot}"
+      }
     },
     "format:check": {
       "cache": true,
       "inputs": ["default"],
-      "outputs": []
+      "outputs": [],
+      "executor": "nx:run-commands",
+      "options": {
+        "color": true,
+        "command": "biome format {projectRoot}"
+      }
     },
     "lint": {
       "cache": true,
-      "inputs": ["default", "^default"],
-      "outputs": []
+      "inputs": ["default"],
+      "outputs": [],
+      "executor": "nx:run-commands",
+      "options": {
+        "color": true,
+        "command": "biome lint {projectRoot}"
+      }
     },
     "lint:fix": {
       "cache": false,
-      "inputs": ["default", "^default"],
-      "outputs": []
+      "inputs": ["default"],
+      "outputs": [],
+      "executor": "nx:run-commands",
+      "options": {
+        "color": true,
+        "command": "biome lint --write {projectRoot}"
+      }
     },
     "test:unit": {
       "cache": true,
       "dependsOn": ["^build"],
       "inputs": ["default", "^production"],
-      "outputs": ["{projectRoot}/coverage"]
+      "outputs": [],
+      "executor": "nx:run-commands",
+      "options": {
+        "color": true,
+        "command": "bun test {projectRoot}/src"
+      }
     },
     "test:e2e": {
       "cache": true,
@@ -50,7 +75,13 @@
     "typecheck": {
       "cache": true,
       "dependsOn": ["^build", "^typecheck"],
-      "inputs": ["production", "^production"]
+      "inputs": ["default", "^production"],
+      "outputs": [],
+      "executor": "nx:run-commands",
+      "options": {
+        "color": true,
+        "command": "tsc --pretty --noEmit --project {projectRoot}/tsconfig.json"
+      }
     }
   },
   "namedInputs": {

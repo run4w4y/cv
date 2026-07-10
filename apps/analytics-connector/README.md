@@ -94,3 +94,8 @@ Grafana variable endpoints:
 
 Table endpoints accept `from`, `to`, and `host` query parameters. Grafana uses
 the variable endpoints to populate dashboard filters.
+
+Generated tables are cached in `caches.default` under an internal v2 key. The
+internal response is explicitly cacheable for `CACHE_TTL_SECONDS`; authenticated
+HTTP responses remain `private, no-store`. Invalid cache entries are evicted and
+regenerated, and cache writes are best-effort.

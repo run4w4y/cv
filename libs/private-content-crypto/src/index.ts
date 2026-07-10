@@ -19,6 +19,7 @@ export {
   base64UrlDecode,
   base64UrlEncode,
   bytesToUtf8,
+  normalizeRedactedSecretBytes,
   normalizeSecretBytes,
   utf8ToBytes,
 } from './encoding'
@@ -40,6 +41,7 @@ export {
   createPrivateContentRootKey,
   deriveProfileContentKey,
   parsePrivateContentRootKey,
+  parseRedactedPrivateContentRootKey,
   privateContentRootKeyByteLength,
 } from './root-key'
 export {

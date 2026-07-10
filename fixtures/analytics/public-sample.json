@@ -1,6 +1,6 @@
 {
-  "schema": "analytics.dashboard.v1",
-  "version": 1,
+  "schema": "analytics.dashboard.v2",
+  "version": 2,
   "generatedAt": "2026-06-19T12:00:00.000Z",
   "range": {
     "from": "2026-06-16",
@@ -33,14 +33,12 @@
         {
           "at": "2026-06-17",
           "pageViews": 6,
-          "visits": 4,
-          "visitors": 3
+          "visits": 4
         }
       ],
       "totals": {
         "pageViews": 6,
-        "visits": 4,
-        "visitors": 3
+        "visits": 4
       }
     },
     {
@@ -61,14 +59,12 @@
         {
           "at": "2026-06-18",
           "pageViews": 9,
-          "visits": 5,
-          "visitors": 4
+          "visits": 5
         }
       ],
       "totals": {
         "pageViews": 9,
-        "visits": 5,
-        "visitors": 4
+        "visits": 5
       }
     },
     {
@@ -89,14 +85,12 @@
         {
           "at": "2026-06-19",
           "pageViews": 3,
-          "visits": 2,
-          "visitors": 2
+          "visits": 2
         }
       ],
       "totals": {
         "pageViews": 3,
-        "visits": 2,
-        "visitors": 2
+        "visits": 2
       }
     }
   ]

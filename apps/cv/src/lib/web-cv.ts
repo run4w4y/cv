@@ -1,12 +1,17 @@
-import type { Locale } from '@cv/content-core'
+import {
+  decodeWebBaseUrl,
+  type Locale,
+  resolveWebBaseUrl,
+  webPathSegments,
+} from '@cv/content-core'
 import { getCvWebConfig } from './config'
 
-const localePath = (locale: Locale) => `/${locale}/`
+const localePath = (locale: Locale) => `${webPathSegments(locale)}/`
 
-export const getWebCvBaseUrl = () => getCvWebConfig().webBaseUrl
+export const getWebCvBaseUrl = () => getCvWebConfig().webBaseUrl.href
 
 const webUrlFromBase = (baseUrl: string, path: string) =>
-  new URL(path.replace(/^\/+/u, ''), baseUrl).toString()
+  resolveWebBaseUrl(decodeWebBaseUrl(baseUrl), path).href
 
 const privateAudienceUrlFromBase = ({
   audienceId,
@@ -19,7 +24,7 @@ const privateAudienceUrlFromBase = ({
   readonly locale: Locale
   readonly token?: string
 }) => {
-  const path = `/${locale}/a/${encodeURIComponent(audienceId)}/`
+  const path = `${webPathSegments(locale, 'a', audienceId)}/`
   const relativeUrl = token
     ? `${path}?${new URLSearchParams({ p: token }).toString()}`
     : path
@@ -28,10 +33,10 @@ const privateAudienceUrlFromBase = ({
 }
 
 export const getWebCvAssetUrl = (path: string) =>
-  webUrlFromBase(getWebCvBaseUrl(), path)
+  resolveWebBaseUrl(getCvWebConfig().webBaseUrl, path).href
 
 export const getWebCvUrl = (locale: Locale) =>
-  webUrlFromBase(getWebCvBaseUrl(), localePath(locale))
+  resolveWebBaseUrl(getCvWebConfig().webBaseUrl, localePath(locale)).href
 
 export const getPrivateAudienceCvUrlFromBase = (
   baseUrl: string,

@@ -28,7 +28,6 @@ export type GrafanaAudienceRow = {
   stacks: string
   stage: string
   variant: string
-  visitors: number
   visits: number
 }
 
@@ -45,7 +44,6 @@ export type GrafanaAudienceDailyRow = {
   stage: string
   time: string
   variant: string
-  visitors: number
   visits: number
 }
 
@@ -58,7 +56,6 @@ export type GrafanaPathRow = {
   profile_id: string
   top_country: string
   top_referrer: string
-  visitors: number
   visits: number
 }
 

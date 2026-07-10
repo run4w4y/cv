@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { decodeWebBaseUrl } from '@cv/content-core'
 import {
   base64UrlEncode,
   contentEncryptionKeyBytes,
@@ -8,7 +9,7 @@ import {
   runPrivateCryptoPromise,
 } from '@cv/private-content-crypto'
 import { decodePrivateCapabilityToken } from '@cv/private-content-tokens'
-import { Effect } from 'effect'
+import { Effect, Redacted } from 'effect'
 import { mangleProfileId } from '../ids'
 import { mintPrivateAudienceLinkFromSecrets } from './links'
 
@@ -25,13 +26,13 @@ describe('private content links', () => {
     const link = await runPrivateCryptoPromise(
       mintPrivateAudienceLinkFromSecrets({
         audience: 'Acme',
-        audienceKey,
-        baseUrl: 'https://cv.example.test',
+        audienceKey: Redacted.make(audienceKey),
+        baseUrl: decodeWebBaseUrl('https://cv.example.test'),
         contentIdSalt: 'salt',
         locale: 'en',
         profile: 'frontend',
         secrets: {
-          rootKey,
+          rootKey: Redacted.make(rootKey),
         },
       })
     )
@@ -57,5 +58,24 @@ describe('private content links', () => {
     expect(contentEncryptionKeyBytes(capability.profileContentKey)).toEqual(
       contentEncryptionKeyBytes(expectedProfileKey)
     )
+  })
+
+  test('rejects locale input that is not one safe path segment', async () => {
+    const result = await runPrivateCryptoPromise(
+      Effect.exit(
+        mintPrivateAudienceLinkFromSecrets({
+          audience: 'Acme',
+          audienceKey: Redacted.make(audienceKey),
+          baseUrl: decodeWebBaseUrl('https://cv.example.test/cv'),
+          contentIdSalt: 'salt',
+          locale: 'https://evil.example/x',
+          profile: 'frontend',
+          secrets: { rootKey: Redacted.make(rootKey) },
+        })
+      )
+    )
+
+    expect(result._tag).toBe('Failure')
+    expect(result.toString()).toContain('ContentBuildUsageError')
   })
 })

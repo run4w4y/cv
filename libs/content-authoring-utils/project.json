@@ -15,48 +15,10 @@
         }
       ]
     },
-    "lint": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check libs/content-authoring-utils"
-      }
-    },
-    "lint:fix": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check --write libs/content-authoring-utils"
-      }
-    },
-    "test": {
-      "executor": "nx:noop",
-      "dependsOn": [
-        {
-          "projects": "self",
-          "target": "test:unit"
-        }
-      ],
-      "outputs": []
-    },
-    "test:unit": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "bun test libs/content-authoring-utils/src"
-      }
-    },
-    "typecheck": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "command": "tsc --pretty --noEmit --project libs/content-authoring-utils/tsconfig.json"
-      }
-    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
     "build:tsc": {
       "executor": "@nx/js:tsc",
       "outputs": ["{projectRoot}/dist"],
@@ -82,22 +44,7 @@
         "command": "vite build --config libs/content-authoring-utils/vite.lib.config.ts"
       }
     },
-    "format": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format --write libs/content-authoring-utils"
-      }
-    },
-    "format:check": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format libs/content-authoring-utils"
-      }
-    }
+    "format": {},
+    "format:check": {}
   }
 }

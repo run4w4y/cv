@@ -56,6 +56,14 @@ describe('application campaign config', () => {
     expect(campaign.webBaseUrl?.href).toBe('https://cv.example.com/')
   })
 
+  test('normalizes a slashless deployed path as a directory URL', async () => {
+    const { campaign } = await resolveOptions(baseOverrides, {
+      CV_WEB_BASE_URL: 'https://cv.example.com/cv',
+    })
+
+    expect(campaign.webBaseUrl?.href).toBe('https://cv.example.com/cv/')
+  })
+
   test('combines repeated URLs, URL-file contents, and env URL lists', async () => {
     const { campaign } = await resolveOptions(
       {

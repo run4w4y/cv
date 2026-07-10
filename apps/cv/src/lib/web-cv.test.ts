@@ -15,6 +15,17 @@ describe('web CV URLs', () => {
     )
   })
 
+  test('preserves a slashless deployment path prefix', () => {
+    expect(
+      getPrivateAudienceCvUrlFromBase(
+        'https://run4w4y.github.io/cv',
+        'en',
+        'audience',
+        'token'
+      )
+    ).toBe('https://run4w4y.github.io/cv/en/a/audience/?p=token')
+  })
+
   test('encodes audience path segments and token query parameters', () => {
     expect(
       getPrivateAudienceCvUrlFromBase(

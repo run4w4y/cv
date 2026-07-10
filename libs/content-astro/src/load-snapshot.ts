@@ -26,7 +26,7 @@ export type ContentLoaderOptions<Content = unknown> = ContentBuildConfig & {
   strictPrivate?: boolean
 }
 
-const registryPlugin = (contentRoot: string): Plugin => ({
+const registryPlugin = (contentRoot: string, contentDir: string): Plugin => ({
   name: 'content-build-registry',
   resolveId(id) {
     return id === registryModuleId ? resolvedRegistryModuleId : null
@@ -36,7 +36,12 @@ const registryPlugin = (contentRoot: string): Plugin => ({
       return null
     }
 
-    return runEffectPromise(renderRegistryModuleTemplate({ contentRoot }))
+    return runEffectPromise(
+      renderRegistryModuleTemplate({
+        contentDir,
+        contentRoot,
+      })
+    )
   },
 })
 
@@ -54,7 +59,10 @@ const createContentServer = async <Content>({
         runtime: 'automatic',
       },
     },
-    plugins: [satteriMdxPlugin(), registryPlugin(contentRoot)],
+    plugins: [
+      satteriMdxPlugin(),
+      registryPlugin(contentRoot, contract.contentDir),
+    ],
     resolve: {
       alias: [
         ...workspaceAliases,

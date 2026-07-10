@@ -2,6 +2,7 @@ import {
   base64UrlDecode,
   base64UrlEncode,
   bytesToUtf8,
+  normalizeRedactedSecretBytes,
   normalizeSecretBytes,
   type PrivateCryptoError,
   PrivateCryptoOperationError,
@@ -9,6 +10,7 @@ import {
   WebCryptoApi,
 } from '@cv/private-content-crypto'
 import { Effect } from 'effect'
+import type * as Redacted from 'effect/Redacted'
 import { PrivateAudienceCodecError } from './errors'
 
 const minimumSecretBytes = 32
@@ -159,6 +161,21 @@ export const parsePrivateAudienceCodecKey = (
   secret: string
 ): Effect.Effect<PrivateAudienceCodecKey, PrivateAudienceCodecFailure> =>
   normalizeSecretBytes(secret).pipe(
+    Effect.flatMap((secretBytes) =>
+      secretBytes.byteLength >= minimumSecretBytes
+        ? Effect.succeed({ secretBytes: secretBytes.slice() })
+        : Effect.fail(
+            new PrivateAudienceCodecError({
+              message: `Private audience key must contain at least ${minimumSecretBytes} bytes`,
+            })
+          )
+    )
+  )
+
+export const parseRedactedPrivateAudienceCodecKey = (
+  secret: Redacted.Redacted<string>
+): Effect.Effect<PrivateAudienceCodecKey, PrivateAudienceCodecFailure> =>
+  normalizeRedactedSecretBytes(secret).pipe(
     Effect.flatMap((secretBytes) =>
       secretBytes.byteLength >= minimumSecretBytes
         ? Effect.succeed({ secretBytes: secretBytes.slice() })

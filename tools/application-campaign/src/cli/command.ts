@@ -1,5 +1,10 @@
-import { Console, Effect, Option, Schema } from 'effect'
-import { Command, Flag } from 'effect/unstable/cli'
+import {
+  localeSchema,
+  profileSlugSchema,
+  webBaseUrlSchema,
+} from '@cv/content-core'
+import { Effect, Option, References, Schema } from 'effect'
+import { Command, Flag, GlobalFlag } from 'effect/unstable/cli'
 import { makeCodexApplicationAdvisorLayer } from '../ai/advisor'
 import {
   campaignMaterialsModes,
@@ -8,8 +13,13 @@ import {
 } from '../config/model'
 import { resolvePrepareCampaignOptions } from '../config/resolve'
 import { parseCommaList } from '../config/targets'
-import type { CampaignIssue } from '../workflow/routine'
+import { CampaignReporter } from '../workflow/progress'
 import { type PreparedCampaignRun, prepareCampaign } from '../workflow/run'
+import {
+  campaignOutputModes,
+  makeCampaignPresenter,
+  printCampaignResult,
+} from './presenter'
 
 const NonEmptyTrimmedString = Schema.Trim.pipe(
   Schema.check(Schema.isNonEmpty())
@@ -40,7 +50,7 @@ const audience = optionalString(
   'Private audience slug to use when generating a link.'
 )
 const baseUrl = Flag.string('base-url').pipe(
-  Flag.withSchema(Schema.URLFromString),
+  Flag.withSchema(webBaseUrlSchema),
   Flag.withDescription(
     'Deployed CV base URL. Overrides APPLICATION_CAMPAIGN_BASE_URL and CV_WEB_* env fallbacks.'
   ),
@@ -60,9 +70,12 @@ const excludedProfiles = Flag.string('exclude-profiles').pipe(
   ),
   Flag.optional
 )
-const locale = optionalString(
-  'locale',
-  'Preferred locale for the selected profile and drafted copy.'
+const locale = Flag.string('locale').pipe(
+  Flag.withSchema(localeSchema),
+  Flag.withDescription(
+    'Preferred locale for the selected profile and drafted copy.'
+  ),
+  Flag.optional
 )
 const materials = Flag.choice('materials', campaignMaterialsModes).pipe(
   Flag.withDescription(
@@ -79,13 +92,22 @@ const outRoot = optionalString(
   'out-root',
   'Directory where campaign artifact folders are created.'
 )
+const output = Flag.choice('output', campaignOutputModes).pipe(
+  Flag.withDefault('auto'),
+  Flag.withDescription(
+    'Terminal output mode. Auto uses the live display in an interactive terminal and plain output in CI or pipes.'
+  )
+)
 const pdfOutDir = optionalString(
   'pdf-dir',
   'Directory where generated private profile PDFs are written.'
 )
-const profile = optionalString(
-  'profile',
-  'Private CV profile slug to use instead of letting AI choose.'
+const profile = Flag.string('profile').pipe(
+  Flag.withSchema(profileSlugSchema),
+  Flag.withDescription(
+    'Private CV profile slug to use instead of letting AI choose.'
+  ),
+  Flag.optional
 )
 const reasoningEffort = Flag.choice(
   'reasoning-effort',
@@ -116,75 +138,13 @@ const skipPdf = Flag.boolean('skip-pdf').pipe(
 
 const option = Option.getOrUndefined
 
-const printIssues = (issues: readonly CampaignIssue[]) =>
-  Effect.forEach(
-    issues,
-    (issue) =>
-      issue.severity === 'warning'
-        ? Console.log(`Warning: ${issue.message}`)
-        : Console.error(`Error: ${issue.message}`),
-    { discard: true }
-  )
-
-const printSingleResult = (result: PreparedCampaignRun) =>
-  Effect.gen(function* () {
-    const campaign = result.campaigns[0]
-
-    if (!campaign) {
-      return
-    }
-
-    yield* Console.log(`Application campaign written to ${campaign.outDir}`)
-    yield* Console.log(`Status: ${campaign.status}`)
-
-    if (campaign.status === 'failed') {
-      yield* Console.error(`Campaign failed: ${campaign.error}`)
-      return
-    }
-
-    yield* Console.log(`Selected profile: ${campaign.decisions.profile}`)
-    yield* Console.log(`Audience slug: ${campaign.decisions.audience}`)
-
-    if (campaign.generated.link) {
-      yield* Console.log(`Private link: ${campaign.generated.link.url}`)
-    }
-
-    if (campaign.generated.pdfPath) {
-      yield* Console.log(`PDF written to ${campaign.generated.pdfPath}`)
-    }
-  })
-
-const printBatchResult = (result: PreparedCampaignRun) =>
-  Effect.gen(function* () {
-    yield* Console.log(`Application campaign run written to ${result.outDir}`)
-    yield* Console.log(`Run status: ${result.status}`)
-
-    yield* Effect.forEach(
-      result.campaigns,
-      (campaign) =>
-        Console.log(
-          campaign.status === 'failed'
-            ? `- ${campaign.target.url.href} -> failed (${campaign.error})`
-            : `- ${campaign.target.url.href} -> ${campaign.outDir} (${campaign.decisions.profile}, ${campaign.status})`
-        ),
-      { discard: true }
-    )
-  })
-
-const printResult = (result: PreparedCampaignRun) =>
-  Effect.gen(function* () {
-    yield* result.campaigns.length === 1
-      ? printSingleResult(result)
-      : printBatchResult(result)
-    yield* printIssues(result.issues)
-  })
+export const campaignExitCode = (status: PreparedCampaignRun['status']) =>
+  status === 'succeeded' ? 0 : 1
 
 const setExitCodeFromResult = (result: PreparedCampaignRun) =>
-  result.status === 'succeeded'
-    ? Effect.void
-    : Effect.sync(() => {
-        process.exitCode = 1
-      })
+  Effect.sync(() => {
+    process.exitCode = campaignExitCode(result.status)
+  })
 
 export const prepareCommand = Command.make(
   'application-campaign',
@@ -201,6 +161,7 @@ export const prepareCommand = Command.make(
     model,
     outDir,
     outRoot,
+    output,
     pdfOutDir,
     profile,
     reasoningEffort,
@@ -210,36 +171,53 @@ export const prepareCommand = Command.make(
     urls,
   },
   (options) =>
-    resolvePrepareCampaignOptions({
-      audience: option(options.audience),
-      baseUrl: option(options.baseUrl),
-      codexBin: option(options.codexBin),
-      concurrency: option(options.concurrency),
-      contentRoot: option(options.contentRoot),
-      excludedProfiles: Option.match(options.excludedProfiles, {
-        onNone: () => undefined,
-        onSome: parseCommaList,
-      }),
-      generate: options.generate,
-      locale: option(options.locale),
-      materials: option(options.materials),
-      model: option(options.model),
-      outDir: option(options.outDir),
-      outRoot: option(options.outRoot),
-      pdfOutDir: option(options.pdfOutDir),
-      profile: option(options.profile),
-      reasoningEffort: option(options.reasoningEffort),
-      skipBuild: options.skipBuild,
-      skipPdf: options.skipPdf,
-      urlFileContents: option(options.urlFile),
-      urls: options.urls,
-    }).pipe(
-      Effect.flatMap(({ advisor, campaign }) =>
-        prepareCampaign(campaign).pipe(
-          Effect.provide(makeCodexApplicationAdvisorLayer(advisor))
+    Effect.scoped(
+      Effect.gen(function* () {
+        const configuredLogLevel = yield* GlobalFlag.LogLevel
+        const diagnosticLogs = Option.match(configuredLogLevel, {
+          onNone: () => false,
+          onSome: (level) => level !== 'None',
+        })
+        const { advisor, campaign } = yield* resolvePrepareCampaignOptions({
+          audience: option(options.audience),
+          baseUrl: option(options.baseUrl),
+          codexBin: option(options.codexBin),
+          concurrency: option(options.concurrency),
+          contentRoot: option(options.contentRoot),
+          excludedProfiles: Option.match(options.excludedProfiles, {
+            onNone: () => undefined,
+            onSome: parseCommaList,
+          }),
+          generate: options.generate,
+          locale: option(options.locale),
+          materials: option(options.materials),
+          model: option(options.model),
+          outDir: option(options.outDir),
+          outRoot: option(options.outRoot),
+          pdfOutDir: option(options.pdfOutDir),
+          profile: option(options.profile),
+          reasoningEffort: option(options.reasoningEffort),
+          skipBuild: options.skipBuild,
+          skipPdf: options.skipPdf,
+          urlFileContents: option(options.urlFile),
+          urls: options.urls,
+        })
+        const presenter = yield* makeCampaignPresenter({
+          diagnosticLogs,
+          outputMode: options.output,
+        })
+        const campaignEffect = prepareCampaign(campaign).pipe(
+          Effect.provide(makeCodexApplicationAdvisorLayer(advisor)),
+          Effect.provideService(CampaignReporter, presenter.reporter)
         )
-      ),
-      Effect.tap(printResult),
-      Effect.tap(setExitCodeFromResult)
+        const result = yield* Option.isNone(configuredLogLevel)
+          ? campaignEffect.pipe(
+              Effect.provideService(References.MinimumLogLevel, 'None')
+            )
+          : campaignEffect
+
+        yield* printCampaignResult(result, presenter.mode)
+        yield* setExitCodeFromResult(result)
+      })
     )
 )

@@ -16,81 +16,11 @@
         "generatePackageJson": false
       }
     },
-    "lint": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check libs/cloudflare-analytics-client"
-      }
-    },
-    "lint:fix": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check --write libs/cloudflare-analytics-client"
-      }
-    },
-    "test": {
-      "executor": "nx:noop",
-      "dependsOn": [
-        {
-          "projects": "self",
-          "target": "test:all"
-        }
-      ],
-      "outputs": []
-    },
-    "test:all": {
-      "executor": "nx:noop",
-      "dependsOn": [
-        {
-          "projects": "self",
-          "target": "test:unit"
-        },
-        {
-          "projects": "self",
-          "target": "typecheck"
-        }
-      ],
-      "outputs": []
-    },
-    "test:unit": {
-      "executor": "nx:run-commands",
-      "outputs": ["{projectRoot}/coverage"],
-      "options": {
-        "color": true,
-        "command": "bun test --coverage",
-        "cwd": "libs/cloudflare-analytics-client"
-      }
-    },
-    "typecheck": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "tsc --pretty --noEmit --project libs/cloudflare-analytics-client/tsconfig.json",
-        "cwd": "."
-      }
-    },
-    "format": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format --write libs/cloudflare-analytics-client"
-      }
-    },
-    "format:check": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format libs/cloudflare-analytics-client"
-      }
-    }
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
+    "format": {},
+    "format:check": {}
   }
 }

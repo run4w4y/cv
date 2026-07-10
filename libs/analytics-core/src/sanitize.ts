@@ -17,10 +17,11 @@ import type {
   AnalyticsAudienceRecord,
   AnalyticsDashboardData,
   AnalyticsPathRecord,
+  AnalyticsTotals,
   RawAnalyticsInput,
 } from './types'
 
-type MutablePathRecord = AnalyticsPathRecord
+type MutablePathRecord = Omit<AnalyticsPathRecord, 'series'>
 
 const compareByPath = (a: AnalyticsPathRecord, b: AnalyticsPathRecord) =>
   (a.locale ?? '').localeCompare(b.locale ?? '') ||
@@ -40,6 +41,7 @@ const sanitizeRows = (
   options: { from?: string; to?: string } = {}
 ) => {
   const pathMap = new Map<string, MutablePathRecord>()
+  const seriesByPath = new Map<string, Map<string, AnalyticsTotals>>()
   const allDates: string[] = []
 
   for (const row of rows) {
@@ -63,7 +65,6 @@ const sanitizeRows = (
         ...(classification.locale ? { locale: classification.locale } : {}),
         path: classification.path,
         referrers: {},
-        series: [],
         totals: emptyTotals(),
       } satisfies MutablePathRecord)
 
@@ -74,7 +75,12 @@ const sanitizeRows = (
     if (at) {
       assertSafeString(at, 'date bucket')
       allDates.push(at)
-      record.series.push({ at, ...totals })
+      const series = seriesByPath.get(record.path) ?? new Map()
+      const point = series.get(at) ?? emptyTotals()
+
+      addTotals(point, totals)
+      series.set(at, point)
+      seriesByPath.set(record.path, series)
     }
 
     const dimensionWeight = totals.visits || totals.pageViews || 1
@@ -98,13 +104,20 @@ const sanitizeRows = (
   }
 
   const paths = Array.from(pathMap.values())
-    .map((record) => ({
-      ...record,
-      countries: sortDimensionCounts(record.countries),
-      devices: sortDimensionCounts(record.devices),
-      referrers: sortDimensionCounts(record.referrers),
-      series: record.series.sort((a, b) => a.at.localeCompare(b.at)),
-    }))
+    .map((record) => {
+      const { totals, ...path } = record
+
+      return {
+        ...path,
+        countries: sortDimensionCounts(record.countries),
+        devices: sortDimensionCounts(record.devices),
+        referrers: sortDimensionCounts(record.referrers),
+        series: Array.from(seriesByPath.get(record.path) ?? [])
+          .map(([at, pointTotals]) => ({ at, ...pointTotals }))
+          .sort((a, b) => a.at.localeCompare(b.at)),
+        totals,
+      }
+    })
     .sort(compareByPath)
   const audiences = paths
     .filter(
@@ -158,7 +171,7 @@ const sanitizeRows = (
         (audience) => audience.totals.pageViews === 0
       ).length,
     },
-    version: 1,
+    version: 2,
   } satisfies AnalyticsDashboardData
 }
 
@@ -184,5 +197,5 @@ export const createEmptyAnalyticsDashboardData = () =>
       publicViews: 0,
       zeroVisitAudiences: 0,
     },
-    version: 1,
+    version: 2,
   }) satisfies AnalyticsDashboardData

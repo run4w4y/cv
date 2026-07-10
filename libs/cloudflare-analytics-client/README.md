@@ -23,7 +23,12 @@ HTTP boundary.
    or the default last 30 days.
 3. Execute the Cloudflare GraphQL request.
 4. Prefer daily path rows, falling back to top paths when no daily rows exist.
-5. Pass rows through `sanitizeAnalyticsInput`.
+5. Aggregate country-grouped rows into one point per path and date.
+6. Pass rows through `sanitizeAnalyticsInput`.
+
+The dashboard schema exposes request counts as page views and Cloudflare's
+`sum.visits` as visits. It does not invent a unique-visitor metric because the
+selected GraphQL dataset does not provide one.
 
 ## Boundary
 

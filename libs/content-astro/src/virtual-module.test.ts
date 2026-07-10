@@ -62,6 +62,7 @@ const artifacts = {
           },
         },
       },
+      contentSchema: 'cv.content.v1',
       locales: ['en'],
       profiles: ['default'],
       schema: 'content-manifest.v1',

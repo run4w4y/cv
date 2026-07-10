@@ -172,6 +172,7 @@ const publicManifest = <Content>(
 
   return {
     content,
+    contentSchema: manifest.contentSchema,
     locales,
     profiles,
     schema: manifest.schema,

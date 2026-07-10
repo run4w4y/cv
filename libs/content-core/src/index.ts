@@ -37,3 +37,13 @@ export {
   variableValueSchema,
 } from './schema'
 export { collectVariableUseDescriptors } from './variables'
+export type { WebBaseUrl } from './web-base-url'
+export {
+  decodeWebBaseUrl,
+  decodeWebBaseUrlFromSelf,
+  normalizeWebBaseUrl,
+  resolveWebBaseUrl,
+  webBaseUrlFromSelfSchema,
+  webBaseUrlSchema,
+  webPathSegments,
+} from './web-base-url'

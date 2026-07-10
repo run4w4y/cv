@@ -8,14 +8,12 @@ export type AnalyticsGranularity = 'day' | 'hour'
 export type AnalyticsTotals = {
   pageViews: number
   visits: number
-  visitors: number
 }
 
 export type AnalyticsSeriesPoint = {
   at: string
   pageViews: number
   visits: number
-  visitors: number
 }
 
 export type AnalyticsPathKind = 'audience' | 'public' | 'other'
@@ -78,7 +76,7 @@ export type AnalyticsDashboardData = {
     publicViews: number
     zeroVisitAudiences: number
   }
-  version: 1
+  version: 2
 }
 
 export type RawAnalyticsInput = unknown

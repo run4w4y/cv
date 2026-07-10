@@ -26,9 +26,6 @@ export const cloudflarePayload = {
               sum: {
                 visits: 3,
               },
-              uniq: {
-                uniques: 2,
-              },
             },
             {
               count: 8,
@@ -40,9 +37,6 @@ export const cloudflarePayload = {
               sum: {
                 visits: 5,
               },
-              uniq: {
-                uniques: 4,
-              },
             },
           ],
           topPaths: [
@@ -53,9 +47,6 @@ export const cloudflarePayload = {
               },
               sum: {
                 visits: 999,
-              },
-              uniq: {
-                uniques: 999,
               },
             },
           ],

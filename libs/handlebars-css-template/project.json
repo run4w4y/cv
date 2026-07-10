@@ -15,48 +15,10 @@
         }
       ]
     },
-    "lint": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check libs/handlebars-css-template"
-      }
-    },
-    "lint:fix": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check --write libs/handlebars-css-template"
-      }
-    },
-    "test": {
-      "executor": "nx:noop",
-      "dependsOn": [
-        {
-          "projects": "self",
-          "target": "test:unit"
-        }
-      ],
-      "outputs": []
-    },
-    "test:unit": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "bun test libs/handlebars-css-template/src"
-      }
-    },
-    "typecheck": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "command": "tsc --pretty --noEmit --project libs/handlebars-css-template/tsconfig.json"
-      }
-    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
     "build:tsc": {
       "executor": "@nx/js:tsc",
       "outputs": ["{projectRoot}/dist"],
@@ -89,22 +51,7 @@
         "command": "vite build --config libs/handlebars-css-template/vite.lib.config.ts"
       }
     },
-    "format": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format --write libs/handlebars-css-template"
-      }
-    },
-    "format:check": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format libs/handlebars-css-template"
-      }
-    }
+    "format": {},
+    "format:check": {}
   }
 }

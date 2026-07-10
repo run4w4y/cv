@@ -2,7 +2,7 @@ import { cn } from '@cv/ui/utils'
 import { useLingui } from '@lingui/react'
 import { LockKeyhole } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { PrivateAccessHoverCard } from '@/components/private-cv/access-hover-card'
+import { PrivateAccessHelp } from '@/components/private-cv/access-hover-card'
 import {
   contentVariableState,
   type VariableState,
@@ -86,10 +86,10 @@ export const renderVariableLookupText = ({
   if (unlocked) {
     return (
       <span
-        aria-label={label}
         data-content-variable={variable}
         data-content-variable-state="unlocked"
       >
+        <span className="sr-only">{label}: </span>
         {content}
       </span>
     )
@@ -97,11 +97,11 @@ export const renderVariableLookupText = ({
 
   const element = (
     <span
-      aria-label={label}
       className="inline-flex max-w-full select-none items-baseline border-b border-dotted border-primary/50 font-mono text-[0.92em] font-normal text-muted-foreground underline-offset-4 transition-colors hover:border-primary hover:text-foreground"
       data-content-variable={variable}
       data-content-variable-state="locked"
     >
+      <span className="sr-only">{label}: </span>
       <span aria-hidden="true" className="text-primary/70">
         [
       </span>
@@ -112,7 +112,7 @@ export const renderVariableLookupText = ({
     </span>
   )
 
-  return <PrivateAccessHoverCard>{element}</PrivateAccessHoverCard>
+  return <PrivateAccessHelp>{element}</PrivateAccessHelp>
 }
 
 export const VariableLookupText = (props: VariableLookupProps) => {
@@ -141,7 +141,7 @@ export const RedactedInlineText = ({
       </VariableLookupText>
     </span>
   ) : (
-    <>{value}</>
+    value
   )
 
 export const renderRedactedSection = ({

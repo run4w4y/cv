@@ -1,3 +1,4 @@
+import type { Locale, ProfileSlug, WebBaseUrl } from '@cv/content-core'
 import { Schema } from 'effect'
 
 export const defaultContentRoot = '../cv-content'
@@ -44,32 +45,32 @@ export type PrepareCampaignOptions = {
   readonly contentRoot: string
   readonly excludedProfiles: readonly string[]
   readonly generate: boolean
-  readonly locale: string
+  readonly locale: Locale
   readonly materials: CampaignMaterialsMode
   readonly outDir: string
   readonly pdfOutDir: string
-  readonly profile?: string
+  readonly profile?: ProfileSlug
   readonly skipBuild: boolean
   readonly skipPdf: boolean
   readonly targets: readonly PrepareCampaignTarget[]
-  readonly webBaseUrl?: URL
+  readonly webBaseUrl?: WebBaseUrl
 }
 
 export type PrepareCampaignOverrides = {
   readonly audience?: string
-  readonly baseUrl?: URL
+  readonly baseUrl?: WebBaseUrl
   readonly codexBin?: string
   readonly concurrency?: number
   readonly contentRoot?: string
   readonly excludedProfiles?: readonly string[]
   readonly generate?: boolean
-  readonly locale?: string
+  readonly locale?: Locale
   readonly materials?: CampaignMaterialsMode
   readonly model?: string
   readonly outDir?: string
   readonly outRoot?: string
   readonly pdfOutDir?: string
-  readonly profile?: string
+  readonly profile?: ProfileSlug
   readonly reasoningEffort?: CodexReasoningEffort
   readonly skipBuild?: boolean
   readonly skipPdf?: boolean

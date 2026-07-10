@@ -4,6 +4,7 @@ import * as Handlebars from 'handlebars'
 import { type CssTemplateSpec, renderCssTemplate } from './render-css-template'
 
 const precompileCssTemplate = (source: string): CssTemplateSpec =>
+  // biome-ignore lint/security/noGlobalEval: Exercises Handlebars' generated precompile output in the isolated test process.
   globalThis.eval(
     `(${String(
       Handlebars.precompile(source, {

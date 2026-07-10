@@ -1,3 +1,8 @@
+import {
+  type WebBaseUrl,
+  webBaseUrlFromSelfSchema,
+  webBaseUrlSchema,
+} from '@cv/content-core'
 import { Effect, Schema } from 'effect'
 import { Path } from 'effect/Path'
 import { ApplicationCampaignConfigError } from '../errors'
@@ -160,7 +165,7 @@ export const resolveCampaignTargets = ({
   })
 
 const urlFromHost = (host: string) =>
-  decodeUrl(`https://${host}`).pipe(
+  Schema.decodeUnknownEffect(webBaseUrlSchema)(`https://${host}`).pipe(
     Effect.mapError((cause) =>
       configError(`Invalid CV web host: ${host}`, cause)
     )
@@ -173,16 +178,20 @@ export const resolveWebBaseUrl = ({
   envBaseUrl,
   publicCvWebBaseUrl,
 }: {
-  readonly baseUrl?: URL
-  readonly cvWebBaseUrl?: URL
+  readonly baseUrl?: WebBaseUrl
+  readonly cvWebBaseUrl?: WebBaseUrl
   readonly cvWebHost?: string
-  readonly envBaseUrl?: URL
-  readonly publicCvWebBaseUrl?: URL
+  readonly envBaseUrl?: WebBaseUrl
+  readonly publicCvWebBaseUrl?: WebBaseUrl
 }) => {
   const resolved = baseUrl ?? envBaseUrl ?? cvWebBaseUrl ?? publicCvWebBaseUrl
 
   return resolved
-    ? Effect.succeed(resolved)
+    ? Schema.decodeUnknownEffect(webBaseUrlFromSelfSchema)(resolved).pipe(
+        Effect.mapError((cause) =>
+          configError('Invalid deployed CV base URL.', cause)
+        )
+      )
     : cvWebHost
       ? urlFromHost(cvWebHost)
       : Effect.succeed(undefined)

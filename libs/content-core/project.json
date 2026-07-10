@@ -15,30 +15,9 @@
         }
       ]
     },
-    "lint": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check libs/content-core"
-      }
-    },
-    "lint:fix": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check --write libs/content-core"
-      }
-    },
-    "typecheck": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "command": "tsc --pretty --noEmit --project libs/content-core/tsconfig.json"
-      }
-    },
+    "lint": {},
+    "lint:fix": {},
+    "typecheck": {},
     "build:tsc": {
       "executor": "@nx/js:tsc",
       "outputs": ["{projectRoot}/dist"],
@@ -64,22 +43,8 @@
         "command": "vite build --config libs/content-core/vite.lib.config.ts"
       }
     },
-    "format": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format --write libs/content-core"
-      }
-    },
-    "format:check": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format libs/content-core"
-      }
-    }
+    "test:unit": {},
+    "format": {},
+    "format:check": {}
   }
 }

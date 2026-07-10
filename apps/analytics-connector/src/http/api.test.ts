@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { GrafanaAnalyticsTables } from '@cv/analytics-grafana'
-import { Effect, Layer } from 'effect'
+import { Effect, Layer, type Scope } from 'effect'
 import { HttpClientRequest, HttpServer } from 'effect/unstable/http'
 import { HttpApiMiddleware, HttpApiTest } from 'effect/unstable/httpapi'
 import { AnalyticsTables } from '../services/analytics-tables'
@@ -50,7 +50,6 @@ const tables = {
       stacks: 'Effect, Cloudflare',
       stage: 'active',
       variant: '',
-      visitors: 3,
       visits: 4,
     },
     {
@@ -71,7 +70,6 @@ const tables = {
       stacks: 'Effect',
       stage: 'shared',
       variant: '',
-      visitors: 2,
       visits: 2,
     },
   ],
@@ -135,7 +133,7 @@ const provideApiTestLayer = <A, E, R>(
     : provided
 }
 
-const runApiTest = <A, E>(effect: Effect.Effect<A, E>) =>
+const runApiTest = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
   Effect.runPromise(Effect.scoped(effect))
 
 describe('analytics connector HttpApi contract', () => {

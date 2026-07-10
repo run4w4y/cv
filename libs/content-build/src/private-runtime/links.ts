@@ -1,25 +1,35 @@
-import type { Locale, ProfileSlug } from '@cv/content-core'
+import {
+  type Locale,
+  localeSchema,
+  type ProfileSlug,
+  profileSlugSchema,
+  resolveWebBaseUrl,
+  type WebBaseUrl,
+  webPathSegments,
+} from '@cv/content-core'
 import {
   type ContentEncryptionKey,
   deriveProfileContentKey,
   type PrivateCryptoError,
-  parsePrivateContentRootKey,
+  parseRedactedPrivateContentRootKey,
   type WebCryptoApi,
 } from '@cv/private-content-crypto'
 import {
   encodePrivateAudienceId,
   mintPrivateCapabilityToken,
   type PrivateAudienceCodecFailure,
-  parsePrivateAudienceCodecKey,
+  parseRedactedPrivateAudienceCodecKey,
 } from '@cv/private-content-tokens'
-import { Effect } from 'effect'
+import { Effect, Schema } from 'effect'
+import type * as Redacted from 'effect/Redacted'
 import type { PrivateContentBuildSecrets } from '../config'
+import { ContentBuildUsageError } from '../errors'
 import { mangleProfileId } from '../ids'
 
 export type MintPrivateAudienceLinkFromSecretsOptions = {
   audience: string
-  audienceKey: string
-  baseUrl?: string
+  audienceKey: Redacted.Redacted<string>
+  baseUrl?: WebBaseUrl
   contentIdSalt: string
   locale: string
   profile: string
@@ -39,6 +49,7 @@ export type MintedPrivateAudienceLink = {
 export type MintPrivateAudienceLinkError =
   | PrivateAudienceCodecFailure
   | PrivateCryptoError
+  | ContentBuildUsageError
 
 export const privateAudienceLinkUrl = ({
   audienceId,
@@ -47,18 +58,21 @@ export const privateAudienceLinkUrl = ({
   token,
 }: {
   audienceId: string
-  baseUrl?: string
-  locale: string
+  baseUrl?: WebBaseUrl
+  locale: Locale
   token: string
 }) => {
-  const path = `/${locale}/a/${encodeURIComponent(audienceId)}/`
-  const url = `${path}?${new URLSearchParams({ p: token }).toString()}`
+  const path = `${webPathSegments(locale, 'a', audienceId)}/`
+  const parameters = new URLSearchParams({ p: token }).toString()
+  const url = `/${path}?${parameters}`
 
   if (!baseUrl) {
     return url
   }
 
-  return new URL(url.replace(/^\/+/u, ''), baseUrl).toString()
+  const deployed = resolveWebBaseUrl(baseUrl, path)
+  deployed.searchParams.set('p', token)
+  return deployed.href
 }
 
 const mintPrivateAudienceLinkForProfile = ({
@@ -71,11 +85,11 @@ const mintPrivateAudienceLinkForProfile = ({
   profileId,
 }: {
   audience: string
-  audienceKey: string
-  baseUrl?: string
+  audienceKey: Redacted.Redacted<string>
+  baseUrl?: WebBaseUrl
   contentKey: ContentEncryptionKey
-  locale: string
-  profile: string
+  locale: Locale
+  profile: ProfileSlug
   profileId: string
 }): Effect.Effect<
   MintedPrivateAudienceLink,
@@ -83,7 +97,8 @@ const mintPrivateAudienceLinkForProfile = ({
   WebCryptoApi
 > =>
   Effect.gen(function* () {
-    const audienceCodecKey = yield* parsePrivateAudienceCodecKey(audienceKey)
+    const audienceCodecKey =
+      yield* parseRedactedPrivateAudienceCodecKey(audienceKey)
     const audienceId = yield* encodePrivateAudienceId({
       audience,
       key: audienceCodecKey,
@@ -95,8 +110,8 @@ const mintPrivateAudienceLinkForProfile = ({
     return {
       audience,
       audienceId,
-      locale: locale as Locale,
-      profile: profile as ProfileSlug,
+      locale,
+      profile,
       profileId,
       token,
       url: privateAudienceLinkUrl({
@@ -122,8 +137,28 @@ export const mintPrivateAudienceLinkFromSecrets = ({
   WebCryptoApi
 > =>
   Effect.gen(function* () {
-    const profileId = mangleProfileId(profile, contentIdSalt)
-    const rootKey = yield* parsePrivateContentRootKey(secrets.rootKey)
+    const decodedLocale = yield* Schema.decodeUnknownEffect(localeSchema)(
+      locale
+    ).pipe(
+      Effect.mapError(
+        () =>
+          new ContentBuildUsageError({
+            message: `Invalid private content locale "${locale}".`,
+          })
+      )
+    )
+    const decodedProfile = yield* Schema.decodeUnknownEffect(profileSlugSchema)(
+      profile
+    ).pipe(
+      Effect.mapError(
+        () =>
+          new ContentBuildUsageError({
+            message: `Invalid private content profile "${profile}".`,
+          })
+      )
+    )
+    const profileId = mangleProfileId(decodedProfile, contentIdSalt)
+    const rootKey = yield* parseRedactedPrivateContentRootKey(secrets.rootKey)
     const contentKey = yield* deriveProfileContentKey({ profileId, rootKey })
 
     return yield* mintPrivateAudienceLinkForProfile({
@@ -131,8 +166,8 @@ export const mintPrivateAudienceLinkFromSecrets = ({
       audienceKey,
       baseUrl,
       contentKey,
-      locale,
-      profile,
+      locale: decodedLocale,
+      profile: decodedProfile,
       profileId,
     })
   })

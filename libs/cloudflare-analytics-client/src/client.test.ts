@@ -124,7 +124,7 @@ describe('cloudflare analytics client', () => {
       })
     )
 
-    expect(data.schema).toBe('analytics.dashboard.v1')
+    expect(data.schema).toBe('analytics.dashboard.v2')
   })
 
   test('chunks wider ranges into daily Cloudflare requests', async () => {

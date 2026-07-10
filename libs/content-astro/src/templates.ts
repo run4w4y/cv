@@ -1,8 +1,7 @@
 import { existsSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { Effect, Option } from 'effect'
+import { Effect } from 'effect'
 import { FileSystem } from 'effect/FileSystem'
-import { Path } from 'effect/Path'
 import type { PlatformError } from 'effect/PlatformError'
 import Handlebars from 'handlebars'
 import { workspaceRoot } from './vite-workspace'
@@ -23,6 +22,7 @@ export type ContentRuntimeTemplateContext = {
 }
 
 export type ContentRegistryTemplateContext = {
+  readonly contentDir: string
   readonly contentRoot: string
 }
 
@@ -33,131 +33,151 @@ type ContentRegistryTemplateRenderContext = ContentRegistryTemplateContext & {
   readonly moduleImports: string
 }
 
-const normalizeGlobPath = (path: string) => path.replaceAll('\\', '/')
-
-const contentSourceExtensions = ['.tsx', '.ts', '.jsx', '.js', '.mdx'] as const
-const contentRootModuleExtensions = ['.tsx', '.ts', '.jsx', '.js'] as const
-const registryContentDirectory = 'content'
-const registryRootModuleNames = ['content.config'] as const
-const ignoredContentDirectoryNames = new Set([
+const normalizePath = (path: string) => path.replaceAll('\\', '/')
+const sourceExtensions = ['.tsx', '.ts', '.jsx', '.js', '.mdx'] as const
+const moduleExtensions = ['.tsx', '.ts', '.jsx', '.js'] as const
+const ignoredDirectoryNames = new Set([
   '.direnv',
   '.git',
+  '_files',
   'coverage',
   'dist',
   'node_modules',
 ])
+const declarationPattern = /\.d\.tsx?$/u
+const testPattern = /\.(?:test|spec)\.(?:mdx|tsx?|jsx?)$/u
 
-const isContentSourceFile = (path: string) =>
-  contentSourceExtensions.some((extension) => path.endsWith(extension)) &&
-  !path.endsWith('.d.ts')
+const normalizeContentDirectory = (directory: string) => {
+  const normalized = normalizePath(directory.trim())
+    .replace(/^\/+/u, '')
+    .replace(/\/+$/u, '')
+  const segments = normalized.split('/').filter(Boolean)
 
-const isIgnoredContentDirectory = (name: string) =>
-  name.startsWith('.') || ignoredContentDirectoryNames.has(name)
+  if (
+    segments.length === 0 ||
+    segments.some((segment) => segment === '.' || segment === '..')
+  ) {
+    throw new Error(`Invalid content directory "${directory}".`)
+  }
 
-const listContentSourceFiles = (directory: string): string[] =>
+  return segments.join('/')
+}
+
+const isSourceFile = (path: string) =>
+  sourceExtensions.some((extension) => path.endsWith(extension)) &&
+  !declarationPattern.test(path) &&
+  !testPattern.test(path)
+
+const isIgnoredDirectory = (name: string) =>
+  name.startsWith('.') || ignoredDirectoryNames.has(name)
+
+const listSourceFiles = (directory: string): string[] =>
   existsSync(directory)
     ? readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
         const entryPath = join(directory, entry.name)
 
         if (entry.isDirectory()) {
-          return isIgnoredContentDirectory(entry.name)
+          return isIgnoredDirectory(entry.name)
             ? []
-            : listContentSourceFiles(entryPath)
+            : listSourceFiles(entryPath)
         }
 
-        return entry.isFile() && isContentSourceFile(entryPath)
-          ? [entryPath]
-          : []
+        return entry.isFile() && isSourceFile(entryPath) ? [entryPath] : []
       })
     : []
 
-const listRootContentModules = (contentRoot: string) =>
-  registryRootModuleNames.flatMap((moduleName) =>
-    contentRootModuleExtensions
-      .map((extension) => join(contentRoot, `${moduleName}${extension}`))
-      .filter(existsSync)
-  )
+const firstExistingModule = (basePath: string) =>
+  moduleExtensions
+    .map((extension) => `${basePath}${extension}`)
+    .find(existsSync)
 
-const listRegistrySourceFiles = (contentRoot: string) =>
-  [
-    ...listRootContentModules(contentRoot),
-    ...listContentSourceFiles(join(contentRoot, registryContentDirectory)),
+const listRegistrySourceFiles = ({
+  contentDir,
+  contentRoot,
+}: ContentRegistryTemplateContext) => {
+  const directory = normalizeContentDirectory(contentDir)
+  const rootConfig = firstExistingModule(join(contentRoot, 'content.config'))
+  const variables = firstExistingModule(
+    join(contentRoot, directory, 'variables')
+  )
+  const profiles = listSourceFiles(join(contentRoot, directory, 'profiles'))
+
+  return [
+    ...(rootConfig ? [rootConfig] : []),
+    ...(variables ? [variables] : []),
+    ...profiles,
   ].sort((left, right) =>
     relative(contentRoot, left).localeCompare(relative(contentRoot, right))
   )
+}
 
 const viteFileImportPath = (path: string) => {
-  const normalized = normalizeGlobPath(path)
+  const normalized = normalizePath(path)
 
   return normalized.startsWith('/') ? `/@fs${normalized}` : normalized
 }
 
-const registryEntries = (files: readonly string[], prefix: string) =>
-  files
-    .map(
-      (file, index) =>
-        `${JSON.stringify(viteFileImportPath(file))}: ${prefix}${index}`
-    )
-    .join(',\n    ')
+const importName = (kind: 'contentModule' | 'mdxModule', index: number) =>
+  `${kind}${index}`
 
-const registryImports = (files: readonly string[], prefix: string) =>
+const moduleImports = (
+  files: readonly string[],
+  kind: 'contentModule' | 'mdxModule'
+) =>
   files
     .map(
       (file, index) =>
-        `import * as ${prefix}${index} from ${JSON.stringify(
+        `import * as ${importName(kind, index)} from ${JSON.stringify(
           viteFileImportPath(file)
         )}`
     )
     .join('\n')
 
-const contentRegistryTemplateContext = ({
-  contentRoot,
-}: ContentRegistryTemplateContext): ContentRegistryTemplateRenderContext => {
-  const files = listRegistrySourceFiles(contentRoot)
+const moduleEntries = (
+  files: readonly string[],
+  kind: 'contentModule' | 'mdxModule'
+) =>
+  files
+    .map(
+      (file, index) =>
+        `${JSON.stringify(viteFileImportPath(file))}: ${importName(
+          kind,
+          index
+        )}`
+    )
+    .join(',\n    ')
+
+const registryTemplateContext = (
+  context: ContentRegistryTemplateContext
+): ContentRegistryTemplateRenderContext => {
+  const files = listRegistrySourceFiles(context)
   const mdxFiles = files.filter((file) => file.endsWith('.mdx'))
-  const moduleFiles = files.filter((file) => !file.endsWith('.mdx'))
+  const contentFiles = files.filter((file) => !file.endsWith('.mdx'))
 
   return {
-    contentRoot,
-    mdxEntries: registryEntries(mdxFiles, 'mdxModule'),
-    mdxImports: registryImports(mdxFiles, 'mdxModule'),
-    moduleEntries: registryEntries(moduleFiles, 'contentModule'),
-    moduleImports: registryImports(moduleFiles, 'contentModule'),
+    ...context,
+    mdxEntries: moduleEntries(mdxFiles, 'mdxModule'),
+    mdxImports: moduleImports(mdxFiles, 'mdxModule'),
+    moduleEntries: moduleEntries(contentFiles, 'contentModule'),
+    moduleImports: moduleImports(contentFiles, 'contentModule'),
   }
 }
 
-const templatePathCandidates = (name: string) =>
-  Path.pipe(
-    Effect.map(
-      (path) =>
-        [
-          path.resolve(
-            workspaceRoot,
-            'libs/content-astro/dist/templates',
-            name
-          ),
-          path.resolve(workspaceRoot, 'libs/content-astro/templates', name),
-        ] as const
-    )
-  )
+const templatePath = (name: string) => {
+  const candidates = [
+    join(workspaceRoot, 'libs/content-astro/templates', name),
+    join(workspaceRoot, 'libs/content-astro/dist/templates', name),
+  ] as const
 
-const templatePath = (name: string) =>
-  Effect.all([FileSystem, templatePathCandidates(name)]).pipe(
-    Effect.flatMap(([fileSystem, candidates]) =>
-      Effect.findFirst(candidates, (candidate) =>
-        fileSystem.exists(candidate)
-      ).pipe(Effect.map(Option.getOrElse(() => candidates[0])))
-    )
-  )
+  return candidates.find(existsSync) ?? candidates[0]
+}
 
 const readTemplate = (
   name: string
-): Effect.Effect<string, PlatformError, FileSystem | Path> =>
-  templatePath(name).pipe(
-    Effect.flatMap((path) =>
-      FileSystem.pipe(
-        Effect.flatMap((fileSystem) => fileSystem.readFileString(path))
-      )
+): Effect.Effect<string, PlatformError, FileSystem> =>
+  FileSystem.pipe(
+    Effect.flatMap((fileSystem) =>
+      fileSystem.readFileString(templatePath(name))
     )
   )
 
@@ -187,5 +207,5 @@ export const renderRegistryModuleTemplate = (
 ) =>
   renderTemplate(
     'content-registry.ts.hbs-template',
-    contentRegistryTemplateContext(context)
+    registryTemplateContext(context)
   )

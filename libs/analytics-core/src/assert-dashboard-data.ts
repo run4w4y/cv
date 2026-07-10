@@ -17,8 +17,8 @@ export const assertAnalyticsDashboardData = (
     )
   }
 
-  if (value.version !== 1) {
-    throw new Error('Analytics dashboard data version must be 1')
+  if (value.version !== 2) {
+    throw new Error('Analytics dashboard data version must be 2')
   }
 
   const serialized = JSON.stringify(value)

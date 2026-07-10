@@ -6,16 +6,11 @@ permissions:
   id-token: write
 
 on:
-  push:
-    branches:
-      - main
-  repository_dispatch:
-    types:
-      - content-updated
-  workflow_dispatch:
+  workflow_call:
     inputs:
       content_ref:
         description: Git ref or SHA from run4w4y/cv-content.
+        default: main
         required: false
         type: string
 
@@ -26,7 +21,7 @@ concurrency:
 env:
   ASTRO_TELEMETRY_DISABLED: "1"
   CLOUDFLARE_PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
-  CONTENT_REF: ${{ github.event.client_payload.content_ref || inputs.content_ref || 'main' }}
+  CONTENT_REF: ${{ inputs.content_ref || 'main' }}
   CONTENT_ROOT: ${{ github.workspace }}/.external/cv-content
   CV_WEB_BASE_URL: ${{ vars.CV_WEB_BASE_URL || 'https://run4w4y.github.io/cv' }}
   INFISICAL_ENV: ${{ vars.INFISICAL_ENV || 'prod' }}

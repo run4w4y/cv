@@ -1,1 +1,1 @@
-export const ANALYTICS_DASHBOARD_SCHEMA = 'analytics.dashboard.v1' as const
+export const ANALYTICS_DASHBOARD_SCHEMA = 'analytics.dashboard.v2' as const

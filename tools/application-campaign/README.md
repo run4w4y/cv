@@ -15,6 +15,11 @@ the shortlist turn is skipped. Multi-target runs mint links concurrently and
 send all eligible PDF requests through one build, preview server, and browser
 session.
 
+Interactive runs print the resolved plan and maintain a live step counter with
+the currently active stages. CI and redirected runs automatically use stable,
+append-only output. Pass `--output pretty` or `--output plain` to override the
+automatic selection.
+
 ## Usage
 
 Draft campaign files only:
@@ -82,6 +87,8 @@ Generated PDFs default to `.cv-work/application-pdfs/`.
 - `--out <path>`: exact campaign artifact output directory for one URL. With
   multiple URLs this becomes the batch output root.
 - `--out-root <path>`: directory where default campaign folders are created.
+- `--output <auto|pretty|plain>`: terminal presentation mode. Defaults to
+  `auto`; explicit Effect `--log-level` diagnostics use plain output.
 - `--pdf-dir <path>`: directory where generated private PDFs are written.
 - `--codex-bin <path>`: Codex executable override passed to the Codex SDK.
 - `--model <name>`: Codex model override.
@@ -118,6 +125,13 @@ Base URL precedence is `--base-url`, `APPLICATION_CAMPAIGN_BASE_URL`,
 generation is enabled but no base URL can be resolved, the run logs a warning,
 skips private link/PDF generation, and still writes the draft artifacts.
 
+The operator process intentionally uses the configured production environment:
+it needs real content, tokens, links, and PDF settings. The nested Codex process
+does not inherit that environment. It receives only the small runtime allowlist
+needed to start Codex, runs in a fresh empty temporary directory, and has shell,
+network, and web-search access disabled. Production credentials remain available
+to the deterministic campaign workflow without being exposed to the AI process.
+
 ## Programmatic API
 
 The package exports the campaign workflow, its config resolver, the advisor
@@ -145,4 +159,6 @@ const program = resolvePrepareCampaignOptions({
 ```
 
 Alternative AI implementations provide `ApplicationAdvisor`; campaign code
-does not receive Codex binary, model, reasoning, or working-directory settings.
+does not receive Codex binary, model, or reasoning settings.
+Programmatic callers may also provide `CampaignReporter` to consume typed
+workflow progress events; without an override, reporting is silent.

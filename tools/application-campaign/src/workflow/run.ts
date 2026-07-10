@@ -11,7 +11,18 @@ import { logInfo, logWarning, urlHost, withTelemetrySpan } from '../telemetry'
 import { slugify } from '../text'
 import { formatCampaignError, runtimeError, uniqueIssues } from './issues'
 import { prepareSharedCampaignInputs } from './profile-inputs'
-import { type CampaignTargetRoutine, resolveCampaignRoutine } from './routine'
+import {
+  CampaignProgressEvent,
+  reportCampaignProgress,
+  reportStepSkipped,
+  trackCampaignStep,
+  trackCampaignSteps,
+} from './progress'
+import {
+  type CampaignTargetRoutine,
+  type ReadyRoutineStep,
+  resolveCampaignRoutine,
+} from './routine'
 import { prepareCampaignTarget } from './target'
 import type {
   CampaignDraft,
@@ -59,6 +70,7 @@ type PdfCandidate = {
   readonly draft: CampaignDraft
   readonly link: PrivateContentLinkResult
   readonly outputFileName: string
+  readonly step: ReadyRoutineStep<{ readonly webBaseUrl: URL }>
   readonly webBaseUrl: URL
 }
 
@@ -83,6 +95,7 @@ const pdfCandidates = (
         draft: campaign,
         link: campaign.generated.link,
         stem,
+        step: campaign.routine.privatePdf,
         webBaseUrl: campaign.routine.privatePdf.config.webBaseUrl,
       },
     ]
@@ -104,6 +117,7 @@ const pdfCandidates = (
       draft: candidate.draft,
       link: candidate.link,
       outputFileName: `${candidate.stem}${(totals.get(candidate.stem) ?? 0) > 1 ? `-${occurrence}` : ''}.pdf`,
+      step: candidate.step,
       webBaseUrl: candidate.webBaseUrl,
     }
   })
@@ -116,6 +130,25 @@ export const exportCampaignPdfs = (
   Effect.gen(function* () {
     const candidates = pdfCandidates(campaigns, options.locale)
 
+    yield* Effect.forEach(
+      campaigns,
+      (campaign) => {
+        if (
+          campaign.status === 'failed' ||
+          campaign.generated.link ||
+          campaign.routine.privatePdf.status === 'skipped'
+        ) {
+          return Effect.void
+        }
+
+        return reportStepSkipped(
+          campaign.routine.privatePdf,
+          'Private PDF export skipped because no private link was generated.'
+        )
+      },
+      { discard: true }
+    )
+
     if (candidates.length === 0) {
       return campaigns
     }
@@ -126,17 +159,20 @@ export const exportCampaignPdfs = (
       skipBuild: options.skipBuild,
     })
 
-    const outcome = yield* exportProfilePdfs({
-      items: candidates.map(({ link, outputFileName }) => ({
-        audienceId: link.audienceId,
-        locale: options.locale,
-        outputFileName,
-        token: link.token,
-      })),
-      outputDir: options.pdfOutDir,
-      skipBuild: options.skipBuild,
-      webBaseUrl: candidates[0]?.webBaseUrl,
-    }).pipe(
+    const outcome = yield* trackCampaignSteps(
+      candidates.map((candidate) => candidate.step),
+      exportProfilePdfs({
+        items: candidates.map(({ link, outputFileName }) => ({
+          audienceId: link.audienceId,
+          locale: options.locale,
+          outputFileName,
+          token: link.token,
+        })),
+        outputDir: options.pdfOutDir,
+        skipBuild: options.skipBuild,
+        webBaseUrl: candidates[0]?.webBaseUrl,
+      })
+    ).pipe(
       Effect.map((results) => ({ results, status: 'succeeded' as const })),
       Effect.catch((cause) =>
         Effect.succeed({ cause, status: 'failed' as const })
@@ -200,17 +236,20 @@ const writeTargetArtifacts = (
     return Effect.succeed(campaign)
   }
 
-  return writeCampaignArtifacts({
-    decisions: campaign.decisions,
-    generated: campaign.generated,
-    issues: campaign.issues,
-    job: campaign.job,
-    materialsMode: options.materials,
-    outDir: campaign.outDir,
-    recommendation: campaign.recommendation,
-    routineSteps: campaign.routine.steps,
-    status: campaign.status,
-  }).pipe(
+  return trackCampaignStep(
+    campaign.routine.writeArtifacts,
+    writeCampaignArtifacts({
+      decisions: campaign.decisions,
+      generated: campaign.generated,
+      issues: campaign.issues,
+      job: campaign.job,
+      materialsMode: options.materials,
+      outDir: campaign.outDir,
+      recommendation: campaign.recommendation,
+      routineSteps: campaign.routine.steps,
+      status: campaign.status,
+    })
+  ).pipe(
     Effect.map(() => {
       const { job: _job, routine: _routine, ...result } = campaign
 
@@ -242,6 +281,12 @@ export const campaignRunStatus = (
 
 export const prepareCampaign = (options: PrepareCampaignOptions) =>
   Effect.gen(function* () {
+    yield* reportCampaignProgress(
+      CampaignProgressEvent.RunStarted({
+        concurrency: options.concurrency,
+        targetCount: options.targets.length,
+      })
+    )
     yield* logInfo('Preparing application campaign run', {
       concurrency: options.concurrency,
       excludedProfileCount: options.excludedProfiles.length,
@@ -254,7 +299,13 @@ export const prepareCampaign = (options: PrepareCampaignOptions) =>
     })
 
     const routine = yield* resolveCampaignRoutine(options)
-    const sharedInputs = yield* prepareSharedCampaignInputs(options)
+    yield* reportCampaignProgress(
+      CampaignProgressEvent.RoutineResolved({ routine })
+    )
+    const sharedInputs = yield* trackCampaignStep(
+      routine.profiles,
+      prepareSharedCampaignInputs(options)
+    )
     const drafts = yield* Effect.forEach(
       routine.targets,
       (targetRoutine) =>
@@ -270,7 +321,17 @@ export const prepareCampaign = (options: PrepareCampaignOptions) =>
               error: formatCampaignError(cause),
               jobHost: urlHost(targetRoutine.target.url),
               targetIndex: targetRoutine.target.index,
-            }).pipe(Effect.as(recoverTargetFailure({ cause, targetRoutine })))
+            }).pipe(
+              Effect.andThen(
+                reportCampaignProgress(
+                  CampaignProgressEvent.TargetFailed({
+                    reason: 'Skipped because target preparation failed.',
+                    targetIndex: targetRoutine.target.index,
+                  })
+                )
+              ),
+              Effect.as(recoverTargetFailure({ cause, targetRoutine }))
+            )
           )
         ),
       { concurrency: options.concurrency }
@@ -293,10 +354,13 @@ export const prepareCampaign = (options: PrepareCampaignOptions) =>
       status: campaignRunStatus(campaigns.map((campaign) => campaign.status)),
     } satisfies PreparedCampaignRun
 
-    yield* writeCampaignRunArtifacts({
-      outDir: options.outDir,
-      run: toCampaignRunArtifact(result),
-    })
+    yield* trackCampaignStep(
+      routine.runArtifacts,
+      writeCampaignRunArtifacts({
+        outDir: options.outDir,
+        run: toCampaignRunArtifact(result),
+      })
+    )
 
     yield* logInfo('Finished application campaign run', {
       failedCampaignCount: campaigns.filter(
@@ -311,6 +375,14 @@ export const prepareCampaign = (options: PrepareCampaignOptions) =>
       ).length,
       targetCount: campaigns.length,
     })
+    yield* reportCampaignProgress(
+      CampaignProgressEvent.RunFinished({
+        errorCount: issues.filter((issue) => issue.severity === 'error').length,
+        status: result.status,
+        warningCount: issues.filter((issue) => issue.severity === 'warning')
+          .length,
+      })
+    )
 
     return result
   }).pipe(

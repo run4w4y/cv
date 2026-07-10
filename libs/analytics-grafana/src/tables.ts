@@ -68,7 +68,6 @@ const audienceRows = (
     page_views: audience.totals.pageViews,
     pdf_exported_at: audience.metadata?.pdfExportedAt ?? empty,
     qr_verified_at: audience.metadata?.qrVerifiedAt ?? empty,
-    visitors: audience.totals.visitors,
     visits: audience.totals.visits,
   }))
 
@@ -79,7 +78,6 @@ const audienceDailyRow = (
   ...audienceBase(audience),
   page_views: point.pageViews,
   time: point.at,
-  visitors: point.visitors,
   visits: point.visits,
 })
 
@@ -100,7 +98,6 @@ const pathRows = (paths: AnalyticsPathRecord[]): GrafanaPathRow[] =>
     profile_id: path.profileId ?? empty,
     top_country: firstDimension(path.countries),
     top_referrer: firstDimension(path.referrers),
-    visitors: path.totals.visitors,
     visits: path.totals.visits,
   }))
 

@@ -37,6 +37,11 @@ export {
   ApplicationCampaignRuntimeLayer,
 } from './runtime'
 export {
+  CampaignProgressEvent,
+  CampaignReporter,
+  type CampaignReporterService,
+} from './workflow/progress'
+export {
   type CampaignIssue,
   type CampaignRoutine,
   type CampaignTargetRoutine,

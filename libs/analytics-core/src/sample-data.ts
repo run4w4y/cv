@@ -12,7 +12,6 @@ export const sampleAnalyticsDashboardData = () => {
         refererHost: 'github.com',
       },
       sum: { pageViews: 18, visits: 11 },
-      uniq: { visitors: 9 },
     },
     {
       dimensions: {
@@ -23,7 +22,6 @@ export const sampleAnalyticsDashboardData = () => {
         refererHost: 'linkedin.com',
       },
       sum: { pageViews: 6, visits: 4 },
-      uniq: { visitors: 3 },
     },
     {
       dimensions: {
@@ -34,7 +32,6 @@ export const sampleAnalyticsDashboardData = () => {
         refererHost: 'mail.google.com',
       },
       sum: { pageViews: 9, visits: 5 },
-      uniq: { visitors: 4 },
     },
     {
       dimensions: {
@@ -45,7 +42,6 @@ export const sampleAnalyticsDashboardData = () => {
         refererHost: 'direct',
       },
       sum: { pageViews: 3, visits: 2 },
-      uniq: { visitors: 2 },
     },
   ])
 

@@ -55,30 +55,11 @@
         "color": true
       }
     },
-    "lint": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check apps/cv"
-      }
-    },
-    "lint:fix": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check --write apps/cv"
-      }
-    },
+    "lint": {},
+    "lint:fix": {},
     "typecheck": {
-      "executor": "nx:run-commands",
-      "outputs": [],
       "options": {
-        "command": "../../node_modules/.bin/tsc --pretty --noEmit --project tsconfig.config.json && ../../node_modules/.bin/astro check",
-        "cwd": "apps/cv",
-        "color": true
+        "command": "cd apps/cv && ../../node_modules/.bin/tsc --pretty --noEmit --project tsconfig.config.json && ../../node_modules/.bin/astro check"
       }
     },
     "test:e2e": {
@@ -90,50 +71,8 @@
         "color": true
       }
     },
-    "test:unit": {
-      "executor": "nx:noop",
-      "outputs": []
-    },
-    "test": {
-      "executor": "nx:noop",
-      "dependsOn": [
-        {
-          "projects": "self",
-          "target": "test:all"
-        }
-      ],
-      "outputs": []
-    },
-    "test:all": {
-      "executor": "nx:noop",
-      "dependsOn": [
-        {
-          "projects": "self",
-          "target": "test:e2e"
-        },
-        {
-          "projects": "self",
-          "target": "typecheck"
-        }
-      ],
-      "outputs": []
-    },
-    "format": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format --write apps/cv"
-      }
-    },
-    "format:check": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format apps/cv"
-      }
-    }
+    "test:unit": {},
+    "format": {},
+    "format:check": {}
   }
 }

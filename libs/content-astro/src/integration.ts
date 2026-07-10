@@ -20,8 +20,8 @@ type AstroVitePlugin = NonNullable<
   NonNullable<AstroUserConfig['vite']>['plugins']
 >[number]
 
-export type ContentIntegrationOptions = {
-  contract: ContentContract<any>
+export type ContentIntegrationOptions<Content = unknown> = {
+  contract: ContentContract<Content>
   contentBuildConfig: ContentBuildConfig
   privateSecrets?: PrivateContentBuildSecrets | null
   strictPrivate?: boolean
@@ -84,12 +84,12 @@ const resolveGeneratedRequestFile = (
   return isInsideDirectory(route.root, file) ? file : null
 }
 
-export const contentIntegration = ({
+export const contentIntegration = <Content>({
   contract,
   contentBuildConfig,
   privateSecrets = null,
   strictPrivate = false,
-}: ContentIntegrationOptions): AstroIntegration => {
+}: ContentIntegrationOptions<Content>): AstroIntegration => {
   const { contentIdSalt, contentRoot } = contentBuildConfig
   const artifacts = createContentArtifactsCache({
     contentIdSalt,
@@ -102,7 +102,7 @@ export const contentIntegration = ({
   let devOutputRoot: string | null = null
 
   const emitFiles = async (
-    contentArtifacts: ContentArtifacts,
+    contentArtifacts: ContentArtifacts<Content>,
     outputRootDir: string
   ) => {
     await runEffectPromise(

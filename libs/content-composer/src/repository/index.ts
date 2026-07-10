@@ -1,4 +1,10 @@
-import type { Locale, ProfileSlug } from '@cv/content-core'
+import {
+  type Locale,
+  localeSchema,
+  type ProfileSlug,
+  profileSlugSchema,
+} from '@cv/content-core'
+import { Schema } from 'effect'
 import { readContentModule } from '../content-registry/modules'
 import type { ContentRegistry } from '../content-registry/types'
 import {
@@ -34,14 +40,30 @@ const joinPath = (...parts: readonly string[]) =>
   parts.filter(Boolean).join('/')
 
 const loadRepositoryConfigModule = (registry: ContentRegistry) =>
-  readContentModule<ContentRepositoryConfig>('content.config', registry).data
+  Schema.decodeUnknownSync(
+    Schema.Struct({
+      locales: Schema.Array(localeSchema),
+      publicProfiles: Schema.optional(Schema.Array(profileSlugSchema)),
+    }),
+    { errors: 'all' }
+  )(readContentModule<ContentRepositoryConfig>('content.config', registry).data)
 
 const resolveRepositoryConfig = (
   registry: ContentRegistry,
   options: ContentRepositoryOptions
 ) => {
   const source = loadRepositoryConfigModule(registry)
-  const contentDir = normalizeDirectory(source.contentDir ?? 'content')
+  const contentDir = normalizeDirectory(options.contentDir)
+  const contentDirSegments = contentDir.split('/').filter(Boolean)
+
+  if (
+    contentDirSegments.length === 0 ||
+    contentDirSegments.some((segment) => segment === '.' || segment === '..')
+  ) {
+    throw new Error(
+      'Content contract must define a repository-relative content directory.'
+    )
+  }
 
   if (source.locales.length === 0) {
     throw new Error(

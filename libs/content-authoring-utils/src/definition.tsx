@@ -19,7 +19,7 @@ export type AuthoringExtractor<Props, Blocks extends MdxBlocks = MdxBlocks> = {
 
 export type AuthoringComponentDefinition<
   Props,
-  Scope = never,
+  _Scope = never,
   Blocks extends MdxBlocks = MdxBlocks,
 > = {
   extract?: AuthoringExtractor<Props, Blocks>

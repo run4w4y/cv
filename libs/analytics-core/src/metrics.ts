@@ -4,7 +4,6 @@ import type { AnalyticsTotals } from './types'
 export const emptyTotals = (): AnalyticsTotals => ({
   pageViews: 0,
   visits: 0,
-  visitors: 0,
 })
 
 export const positiveInteger = (value: unknown) => {
@@ -26,7 +25,6 @@ export const addTotals = (
 ) => {
   target.pageViews += positiveInteger(source.pageViews)
   target.visits += positiveInteger(source.visits)
-  target.visitors += positiveInteger(source.visitors)
 }
 
 export const readMetric = (
@@ -58,26 +56,19 @@ export const readMetric = (
 export const readTotalsFromRecord = (record: Record<string, unknown>) => {
   const count = positiveInteger(record.count)
   const pageViews =
+    count ||
     readMetric(record, [
       ['sum', 'pageViews'],
       ['sum', 'pageviews'],
       ['sum', 'requests'],
-      ['sum', 'visits'],
       ['pageViews'],
       ['pageviews'],
       ['requests'],
       ['views'],
-    ]) || count
+    ])
   const visits =
     readMetric(record, [['sum', 'visits'], ['visits'], ['sessions']]) ||
     pageViews
-  const visitors =
-    readMetric(record, [
-      ['uniq', 'uniques'],
-      ['uniq', 'visitors'],
-      ['visitors'],
-      ['uniques'],
-    ]) || visits
 
-  return { pageViews, visits, visitors } satisfies AnalyticsTotals
+  return { pageViews, visits } satisfies AnalyticsTotals
 }

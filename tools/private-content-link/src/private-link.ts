@@ -2,6 +2,7 @@ import {
   type MintedPrivateAudienceLink,
   mintPrivateAudienceLinkFromSecrets,
 } from '@cv/content-build'
+import { type WebBaseUrl, webBaseUrlFromSelfSchema } from '@cv/content-core'
 import {
   type PrivateContentEnv,
   readPrivateAudienceKey,
@@ -10,7 +11,7 @@ import {
   withPrivateContentEnv,
 } from '@cv/private-content-config'
 import { WebCryptoApi } from '@cv/private-content-crypto'
-import { Context, Data, Effect, Layer } from 'effect'
+import { Context, Data, Effect, Layer, Schema } from 'effect'
 
 export type PrivateContentLinkRequest = {
   readonly audience: string
@@ -79,10 +80,24 @@ const mintPrivateContentLinkLive = ({
     const { audienceKey, contentIdSalt, privateSecrets } =
       yield* readLinkConfig(env)
 
+    const normalizedBaseUrl: WebBaseUrl | undefined = baseUrl
+      ? yield* Schema.decodeUnknownEffect(webBaseUrlFromSelfSchema)(
+          baseUrl
+        ).pipe(
+          Effect.mapError(
+            (cause) =>
+              new PrivateContentLinkConfigError({
+                cause,
+                message: 'The deployed CV base URL is invalid.',
+              })
+          )
+        )
+      : undefined
+
     return yield* mintPrivateAudienceLinkFromSecrets({
       audience,
       audienceKey,
-      baseUrl: baseUrl?.href,
+      baseUrl: normalizedBaseUrl,
       contentIdSalt,
       locale,
       profile,

@@ -47,9 +47,9 @@ class FakeElement {
   readonly attributes = new Map<string, string>()
 
   constructor(attributes: Record<string, string> = {}) {
-    Object.entries(attributes).forEach(([key, value]) =>
+    Object.entries(attributes).forEach(([key, value]) => {
       this.attributes.set(key, value)
-    )
+    })
   }
 
   closest(selector: string) {
@@ -144,9 +144,9 @@ const createBrowserHarness = () => {
     addEventListener: (type: string, listener: Listener) =>
       addListener(windowListeners, type, listener),
     dispatchEvent: (event: FakeEvent) => {
-      windowListeners
-        .get(event.type)
-        ?.forEach((listener) => listener({ type: event.type }))
+      windowListeners.get(event.type)?.forEach((listener) => {
+        listener({ type: event.type })
+      })
       return true
     },
     localStorage: storage,
@@ -167,9 +167,9 @@ const createBrowserHarness = () => {
   return {
     classes,
     click: (target: FakeElement) => {
-      documentListeners
-        .get('click')
-        ?.forEach((listener) => listener({ target, type: 'click' }))
+      documentListeners.get('click')?.forEach((listener) => {
+        listener({ target, type: 'click' })
+      })
     },
     controls,
     root,

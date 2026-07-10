@@ -61,14 +61,17 @@ describe('content runtime files', () => {
     expect(
       decodeContentFileIndex({
         profiles: {
+          constructor: ['prototype.pdf'],
           hiring: ['resume/private.pdf'],
           invalid: ['ok.pdf', 7],
+          p_FVikaX4xrFTzIQtT4c: ['case-study.pdf'],
         },
         public: ['resume/public.pdf'],
       })
     ).toEqual({
       profiles: {
         hiring: ['resume/private.pdf'],
+        p_FVikaX4xrFTzIQtT4c: ['case-study.pdf'],
       },
       public: ['resume/public.pdf'],
     })

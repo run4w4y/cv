@@ -1,4 +1,5 @@
 import { Config, ConfigProvider, Data, Effect, Option, Schema } from 'effect'
+import type * as Redacted from 'effect/Redacted'
 
 export type PrivateContentEnv = Readonly<Record<string, string | undefined>>
 
@@ -26,7 +27,7 @@ const configProviderFromEnv = (env: PrivateContentEnv = defaultEnv()) =>
   })
 
 const optionalNonEmptyStringConfig = (name: string) =>
-  Config.nonEmptyString(name).pipe(
+  Config.schema(Schema.RedactedFromValue(Schema.NonEmptyString), name).pipe(
     Config.option,
     Config.map(Option.getOrUndefined)
   )
@@ -77,7 +78,7 @@ export const contentBuildConfigSchema = Schema.Struct({
 })
 
 export const privateContentBuildSecretsSchema = Schema.Struct({
-  rootKey: Schema.NonEmptyString,
+  rootKey: Schema.RedactedFromValue(Schema.NonEmptyString),
 })
 
 export type ContentBuildConfig = Schema.Schema.Type<
@@ -148,14 +149,15 @@ export const readPrivateContentIdSalt: Effect.Effect<
 )
 
 export const readPrivateAudienceKey: Effect.Effect<
-  string,
+  Redacted.Redacted<string>,
   PrivateContentConfigError
-> = Config.nonEmptyString(privateContentEnvNames.audienceKey).pipe(
-  mapConfigError
-)
+> = Config.schema(
+  Schema.RedactedFromValue(Schema.NonEmptyString),
+  privateContentEnvNames.audienceKey
+).pipe(mapConfigError)
 
 export const readOptionalPrivateAudienceKey: Effect.Effect<
-  string | undefined,
+  Redacted.Redacted<string> | undefined,
   PrivateContentConfigError
 > = optionalNonEmptyStringConfig(privateContentEnvNames.audienceKey).pipe(
   mapConfigError

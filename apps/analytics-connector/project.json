@@ -36,81 +36,11 @@
         "command": "bunx wrangler dev --config apps/analytics-connector/wrangler.jsonc"
       }
     },
-    "lint": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check apps/analytics-connector"
-      }
-    },
-    "lint:fix": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check --write apps/analytics-connector"
-      }
-    },
-    "test": {
-      "executor": "nx:noop",
-      "dependsOn": [
-        {
-          "projects": "self",
-          "target": "test:all"
-        }
-      ],
-      "outputs": []
-    },
-    "test:all": {
-      "executor": "nx:noop",
-      "dependsOn": [
-        {
-          "projects": "self",
-          "target": "test:unit"
-        },
-        {
-          "projects": "self",
-          "target": "typecheck"
-        }
-      ],
-      "outputs": []
-    },
-    "test:unit": {
-      "executor": "nx:run-commands",
-      "outputs": ["{projectRoot}/coverage"],
-      "options": {
-        "color": true,
-        "command": "bun test --coverage",
-        "cwd": "apps/analytics-connector"
-      }
-    },
-    "typecheck": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "tsc --pretty --noEmit --project apps/analytics-connector/tsconfig.json",
-        "cwd": "."
-      }
-    },
-    "format": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format --write apps/analytics-connector"
-      }
-    },
-    "format:check": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format apps/analytics-connector"
-      }
-    }
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
+    "format": {},
+    "format:check": {}
   }
 }

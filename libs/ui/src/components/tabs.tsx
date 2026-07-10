@@ -9,6 +9,7 @@ const Tabs = ({
   ...props
 }: TabsPrimitive.Root.Props) => (
   <TabsPrimitive.Root
+    orientation={orientation}
     data-slot="tabs"
     data-orientation={orientation}
     className={cn(

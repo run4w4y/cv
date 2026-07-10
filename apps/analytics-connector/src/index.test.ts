@@ -58,7 +58,6 @@ const cachedTables = {
       stacks: 'Effect, Cloudflare',
       stage: 'cached',
       variant: '',
-      visitors: 3,
       visits: 4,
     },
   ],
@@ -143,6 +142,7 @@ describe('analytics connector worker', () => {
     )
 
     expect(response.status).toBe(401)
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store')
   })
 
   test('returns flattened audience rows from observed paths', async () => {
@@ -150,6 +150,7 @@ describe('analytics connector worker', () => {
     const rows = await response.json()
 
     expect(response.status).toBe(200)
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store')
     expect(JSON.stringify(rows)).not.toContain('?p=')
     expect(rows).toContainEqual(
       expect.objectContaining({
@@ -226,6 +227,7 @@ describe('analytics connector worker', () => {
     const response = await worker.fetch(request('/v1/audiences'), env, context)
 
     expect(response.status).toBe(200)
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store')
     expect(await response.json()).toEqual(cachedTables.audiences)
   })
 
@@ -261,14 +263,130 @@ describe('analytics connector worker', () => {
 
     expect(response.status).toBe(200)
     expect(cachedRequestUrl).toBe(
-      'https://analytics-connector.internal/v1/tables?from=2026-01-01&to=2026-01-02'
+      'https://analytics-connector.internal/v2/tables?from=2026-01-01&to=2026-01-02'
     )
     expect(cachedResponse?.headers.get('Cache-Control')).toBe(
-      'private, max-age=600, s-maxage=600'
+      'public, max-age=600'
     )
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store')
     expect(cachedResponse).toBeDefined()
     expect(await cachedResponse?.json()).toHaveProperty('audiences')
     expect(scheduled).toHaveLength(1)
     await Promise.all(scheduled)
+  })
+
+  test('evicts malformed cached tables and regenerates them', async () => {
+    const scheduled: Promise<unknown>[] = []
+    let deleteCount = 0
+    let putCount = 0
+
+    Object.defineProperty(globalThis, 'caches', {
+      configurable: true,
+      value: {
+        default: {
+          delete: () => {
+            deleteCount += 1
+
+            return Promise.resolve(true)
+          },
+          match: () =>
+            Promise.resolve(
+              new Response('{invalid json', {
+                headers: { 'Content-Type': 'application/json' },
+              })
+            ),
+          put: () => {
+            putCount += 1
+
+            return Promise.resolve()
+          },
+        },
+      },
+    })
+
+    const response = await worker.fetch(request('/v1/audiences'), env, {
+      waitUntil: (promise) => {
+        scheduled.push(promise)
+      },
+    })
+
+    expect(response.status).toBe(200)
+    expect(deleteCount).toBe(1)
+    expect(putCount).toBe(1)
+    expect(await response.json()).not.toEqual(cachedTables.audiences)
+    await Promise.all(scheduled)
+  })
+
+  test('contains background cache write failures', async () => {
+    const scheduled: Promise<unknown>[] = []
+
+    Object.defineProperty(globalThis, 'caches', {
+      configurable: true,
+      value: {
+        default: {
+          match: () => Promise.resolve(undefined),
+          put: () => Promise.reject(new Error('cache unavailable')),
+        },
+      },
+    })
+
+    const response = await worker.fetch(request('/v1/audiences'), env, {
+      waitUntil: (promise) => {
+        scheduled.push(promise)
+      },
+    })
+
+    expect(response.status).toBe(200)
+    expect(scheduled).toHaveLength(1)
+    await Promise.all(scheduled)
+  })
+
+  test('reuses a generated cache entry for an identical request', async () => {
+    const scheduled: Promise<unknown>[] = []
+    let cachedResponse: Response | undefined
+    let matchCount = 0
+    let putCount = 0
+
+    Object.defineProperty(globalThis, 'caches', {
+      configurable: true,
+      value: {
+        default: {
+          match: () => {
+            matchCount += 1
+
+            return Promise.resolve(cachedResponse?.clone())
+          },
+          put: (_cacheKey: Request, response: Response) => {
+            putCount += 1
+            cachedResponse = response.clone()
+
+            return Promise.resolve()
+          },
+        },
+      },
+    })
+
+    const workerContext: WorkerExecutionContext = {
+      waitUntil: (promise) => {
+        scheduled.push(promise)
+      },
+    }
+    const firstResponse = await worker.fetch(
+      request('/v1/audiences?from=2026-01-01'),
+      env,
+      workerContext
+    )
+    await Promise.all(scheduled)
+    const secondResponse = await worker.fetch(
+      request('/v1/audiences?from=2026-01-01'),
+      env,
+      workerContext
+    )
+
+    expect(firstResponse.status).toBe(200)
+    expect(secondResponse.status).toBe(200)
+    expect(await secondResponse.json()).toEqual(await firstResponse.json())
+    expect(matchCount).toBe(2)
+    expect(putCount).toBe(1)
   })
 })

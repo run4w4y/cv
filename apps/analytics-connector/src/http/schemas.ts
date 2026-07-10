@@ -53,7 +53,6 @@ export const GrafanaAudienceRowSchema = Schema.Struct({
   page_views: Schema.Number,
   pdf_exported_at: Schema.String,
   qr_verified_at: Schema.String,
-  visitors: Schema.Number,
   visits: Schema.Number,
 })
 
@@ -61,7 +60,6 @@ export const GrafanaAudienceDailyRowSchema = Schema.Struct({
   ...audienceBaseFields,
   page_views: Schema.Number,
   time: Schema.String,
-  visitors: Schema.Number,
   visits: Schema.Number,
 })
 
@@ -74,7 +72,6 @@ export const GrafanaPathRowSchema = Schema.Struct({
   profile_id: Schema.String,
   top_country: Schema.String,
   top_referrer: Schema.String,
-  visitors: Schema.Number,
   visits: Schema.Number,
 })
 

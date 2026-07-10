@@ -1,6 +1,7 @@
 import { resolveContentFile } from '@cv/private-content-session'
 import { cn } from '@cv/ui/utils'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
+import { contentFileLinkPresentation } from '@/lib/cv-document/file-link-resolution'
 import { useCvSession } from '@/lib/cv-document/hooks'
 
 type PrintPageProps = ComponentPropsWithoutRef<'section'> & {
@@ -53,12 +54,10 @@ export const PrintLink = ({
   const session = useCvSession()
   const resolution = resolveContentFile(session, href ?? '')
   const resolvedHref = href
-    ? resolution.kind === 'private'
-      ? null
-      : resolution.href
+    ? contentFileLinkPresentation(resolution, session.status).printHref
     : undefined
 
-  if (resolvedHref === null) {
+  if (!resolvedHref) {
     return (
       <span className={cn('text-inherit no-underline', className)}>
         {children}

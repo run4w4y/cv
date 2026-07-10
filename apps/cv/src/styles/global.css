@@ -2,7 +2,6 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
-@import "devicon/devicon.min.css";
 
 @source "../../../../libs/ui/src";
 
@@ -267,6 +266,14 @@ body::after {
 button,
 a {
   -webkit-tap-highlight-color: transparent;
+}
+
+[data-cv-header-actions] {
+  display: none;
+}
+
+html[data-cv-header-actions-visible="true"] [data-cv-header-actions] {
+  display: flex;
 }
 
 .print-only {

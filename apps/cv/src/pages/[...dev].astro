@@ -5,7 +5,11 @@ import {
   mintPrivateAudienceLinkFromSecrets,
   type PrivateContentProfileRoute,
 } from '@cv/content-build'
-import type { Locale, ProfileSlug } from '@cv/content-core'
+import {
+  decodeWebBaseUrl,
+  type Locale,
+  type ProfileSlug,
+} from '@cv/content-core'
 import {
   missingPrivateContentAccessEnv,
   type PrivateContentBuildSecrets,
@@ -16,6 +20,7 @@ import {
 import { runPrivateCryptoPromise } from '@cv/private-content-crypto'
 import { buttonVariants } from '@cv/ui/button'
 import { cn } from '@cv/ui/utils'
+import type * as Redacted from 'effect/Redacted'
 import { defaultLocale, localeNames, privateAudiencePath } from '@/lib/i18n'
 import '@/styles/global.css'
 
@@ -34,7 +39,7 @@ type DevProfileLink = {
 }
 
 type DevPrivateLinkConfig = {
-  audienceKey: string
+  audienceKey: Redacted.Redacted<string>
   contentIdSalt: string
   privateSecrets: PrivateContentBuildSecrets
 }
@@ -59,6 +64,7 @@ const loadDevPrivateLinkConfig = (): DevPrivateLinkConfig => ({
 const locales = getLocales()
 const generatedPrivateRoutes = getPrivateRoutes()
 const origin = Astro.url.origin
+const webBaseUrl = decodeWebBaseUrl(origin)
 
 const messageFromError = (error: unknown) =>
   error instanceof Error ? error.message : String(error)
@@ -94,7 +100,7 @@ const linkForRoute = async (
       mintPrivateAudienceLinkFromSecrets({
         audience,
         audienceKey: config.audienceKey,
-        baseUrl: origin,
+        baseUrl: webBaseUrl,
         contentIdSalt: config.contentIdSalt,
         locale: route.lang,
         profile: route.profile,

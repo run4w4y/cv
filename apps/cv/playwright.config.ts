@@ -35,6 +35,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   testDir: `${rootDir}/apps/cv/e2e`,
   timeout: 30_000,
+  workers: Number(process.env.CV_E2E_WORKERS ?? 4),
   use: {
     baseURL: `http://${host}:${port}`,
     launchOptions: executablePath ? { executablePath } : undefined,

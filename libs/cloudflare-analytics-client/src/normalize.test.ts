@@ -19,9 +19,59 @@ describe('cloudflare analytics normalization', () => {
       )
     )
 
-    expect(data.summary.audienceViews).toBe(3)
-    expect(data.summary.publicViews).toBe(5)
+    expect(data.summary.audienceViews).toBe(4)
+    expect(data.summary.publicViews).toBe(8)
     expect(JSON.stringify(data)).not.toMatch(/[?&]p=/u)
+  })
+
+  test('sums country groups into one daily path point', async () => {
+    const data = await Effect.runPromise(
+      normalizeCloudflareAnalyticsResponse(
+        {
+          data: {
+            viewer: {
+              zones: [
+                {
+                  dailyPaths: [
+                    {
+                      count: 4,
+                      dimensions: {
+                        clientCountryName: 'Germany',
+                        clientRequestPath: '/en/',
+                        datetimeDay: '2026-06-18',
+                      },
+                      sum: { visits: 3 },
+                    },
+                    {
+                      count: 5,
+                      dimensions: {
+                        clientCountryName: 'Netherlands',
+                        clientRequestPath: '/en/',
+                        datetimeDay: '2026-06-18',
+                      },
+                      sum: { visits: 2 },
+                    },
+                  ],
+                  topPaths: [],
+                },
+              ],
+            },
+          },
+        },
+        createCloudflareAnalyticsRange({
+          from: '2026-06-18',
+          to: '2026-06-19',
+        })
+      )
+    )
+
+    expect(data.paths[0]?.series).toEqual([
+      {
+        at: '2026-06-18',
+        pageViews: 9,
+        visits: 5,
+      },
+    ])
   })
 
   test('extracts GraphQL error messages without returning raw payloads', () => {

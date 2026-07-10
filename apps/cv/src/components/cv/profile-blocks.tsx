@@ -3,6 +3,7 @@ import type { ComponentType, ReactNode } from 'react'
 import { DetailRow } from '@/components/cv/detail-row'
 import { PrintKeyValueItem, PrintLink } from '@/components/cv/print/primitives'
 import {
+  isRedactedText,
   RedactedInlineText,
   RedactedSection,
 } from '@/components/private-cv/redactions'
@@ -65,6 +66,7 @@ const ProfileRedactedBlockView = ({
 }) => (
   <RedactedSection descriptor={block.descriptor}>
     {block.items.map((item, index) => (
+      // biome-ignore lint/suspicious/noArrayIndexKey: Author-defined duplicate labels need a stable sibling discriminator.
       <ProfileDetailBlockView block={item} key={`${index}:${item.label}`} />
     ))}
   </RedactedSection>
@@ -117,7 +119,11 @@ const PrintProfileDetailBlock = ({ block }: { block: ProfileDetailBlock }) => {
 
   return (
     <PrintKeyValueItem label={block.label}>
-      {block.href ? <PrintLink href={block.href}>{value}</PrintLink> : value}
+      {block.href && !isRedactedText(block.value) ? (
+        <PrintLink href={block.href}>{value}</PrintLink>
+      ) : (
+        value
+      )}
       {block.note ? (
         <span className="mt-[1.35mm] block font-sans text-[5.9pt]/[1.25] font-normal text-slate-500">
           {block.note}
@@ -138,6 +144,7 @@ const PrintProfileRedactedBlock = ({
     lockedHeaderClassName="print:mb-[1.5mm]"
   >
     {block.items.map((item, index) => (
+      // biome-ignore lint/suspicious/noArrayIndexKey: Author-defined duplicate labels need a stable sibling discriminator.
       <PrintProfileDetailBlock block={item} key={`${index}:${item.label}`} />
     ))}
   </RedactedSection>

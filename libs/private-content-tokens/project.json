@@ -15,58 +15,10 @@
         }
       ]
     },
-    "test:unit": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "bun test ./libs/private-content-tokens/src",
-        "color": true
-      },
-      "outputs": []
-    },
-    "test": {
-      "executor": "nx:noop",
-      "dependsOn": [
-        {
-          "projects": "self",
-          "target": "test:all"
-        }
-      ],
-      "outputs": []
-    },
-    "test:all": {
-      "executor": "nx:noop",
-      "dependsOn": [
-        {
-          "projects": "self",
-          "target": "test:unit"
-        }
-      ],
-      "outputs": []
-    },
-    "lint": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check libs/private-content-tokens"
-      }
-    },
-    "lint:fix": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome check --write libs/private-content-tokens"
-      }
-    },
-    "typecheck": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "command": "tsc --pretty --noEmit --project libs/private-content-tokens/tsconfig.json"
-      }
-    },
+    "test:unit": {},
+    "lint": {},
+    "lint:fix": {},
+    "typecheck": {},
     "build:tsc": {
       "executor": "@nx/js:tsc",
       "outputs": ["{projectRoot}/dist"],
@@ -92,22 +44,7 @@
         "command": "vite build --config libs/private-content-tokens/vite.lib.config.ts"
       }
     },
-    "format": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format --write libs/private-content-tokens"
-      }
-    },
-    "format:check": {
-      "executor": "nx:run-commands",
-      "outputs": [],
-      "options": {
-        "color": true,
-        "command": "biome format libs/private-content-tokens"
-      }
-    }
+    "format": {},
+    "format:check": {}
   }
 }

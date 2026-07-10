@@ -7,6 +7,25 @@ permissions:
 on:
   pull_request:
   push:
+  repository_dispatch:
+    types:
+      - content-updated
+  workflow_dispatch:
+    inputs:
+      content_ref:
+        description: Git ref or SHA from run4w4y/cv-content.
+        required: false
+        type: string
+      deploy_target:
+        default: all
+        description: Production target to deploy after the quality gates pass.
+        options:
+          - all
+          - cv
+          - analytics
+          - none
+        required: true
+        type: choice
 
 env:
   ASTRO_TELEMETRY_DISABLED: "1"
@@ -36,12 +55,41 @@ jobs:
       - name: Set up workspace runtime
         uses: ./.github/actions/setup-runtime
 
-      - name: Run quality targets
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "stable"
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4.0.1
+
+      - name: Validate GitHub Actions and embedded shell scripts
         run: |
-          if [[ -n "${ACT:-}" ]]; then
-            ./node_modules/.bin/nx run-many -t format:check lint typecheck test:unit --parallel=6
+          command -v shellcheck
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          shellcheck --shell=bash --exclude=SC2154 .envrc terraform/live/prod/.envrc
+
+      - name: Validate Terraform modules
+        run: |
+          terraform fmt -check -recursive terraform/modules
+          validation_root="$(mktemp -d)"
+          rsync -a --exclude=.terraform --exclude=.terragrunt-cache terraform/modules/ "$validation_root/modules/"
+          for module in "$validation_root"/modules/*; do
+            terraform -chdir="$module" init -backend=false -input=false
+            terraform -chdir="$module" validate
+          done
+
+      - name: Check formatting, imports, and lint rules
+        run: bun run quality:biome
+
+      - name: Run typechecks and unit tests
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ -n "${ACT:-}" || "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "repository_dispatch" ]]; then
+            ./node_modules/.bin/nx run-many -t typecheck test:unit --parallel=6
           else
-            ./node_modules/.bin/nx affected -t format:check lint typecheck test:unit --parallel=6
+            ./node_modules/.bin/nx affected -t typecheck test:unit --parallel=6
           fi
 
   cv-build:
@@ -93,3 +141,45 @@ jobs:
 
       - name: Run browser e2e tests
         run: ./node_modules/.bin/nx run cv:test:e2e
+
+  deploy-cv:
+    name: Deploy production CV
+    needs:
+      - quality
+      - cv-build
+      - cv-e2e
+    if: >-
+      ${{
+        (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+        github.event_name == 'repository_dispatch' ||
+        (github.event_name == 'workflow_dispatch' &&
+          (inputs.deploy_target == 'all' || inputs.deploy_target == 'cv'))
+      }}
+    permissions:
+      actions: read
+      contents: write
+      deployments: write
+      id-token: write
+    secrets: inherit
+    uses: ./.github/workflows/deploy-cv.yml
+    with:
+      content_ref: ${{ github.event.client_payload.content_ref || inputs.content_ref || 'main' }}
+
+  deploy-analytics:
+    name: Deploy production analytics
+    needs:
+      - quality
+      - analytics-build
+    if: >-
+      ${{
+        (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+        (github.event_name == 'workflow_dispatch' &&
+          (inputs.deploy_target == 'all' || inputs.deploy_target == 'analytics'))
+      }}
+    permissions:
+      actions: read
+      contents: read
+      deployments: write
+      id-token: write
+    secrets: inherit
+    uses: ./.github/workflows/deploy-analytics.yml

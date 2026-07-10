@@ -32,7 +32,6 @@
     "astro": "^7.0.6",
     "devicon": "^2.17.0",
     "effect": "4.0.0-beta.91",
-    "es-toolkit": "^1.43.0",
     "lucide-react": "^1.14.0",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",

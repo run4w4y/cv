@@ -10,7 +10,7 @@ import type {
 import {
   deriveProfileContentKey,
   type PrivateCryptoError,
-  parsePrivateContentRootKey,
+  parseRedactedPrivateContentRootKey,
   type WebCryptoApi,
 } from '@cv/private-content-crypto'
 import type {
@@ -278,7 +278,7 @@ export const runtimeProfilesFromInferredProfiles = <Content>(
   WebCryptoApi
 > =>
   Effect.gen(function* () {
-    const rootKey = yield* parsePrivateContentRootKey(secrets.rootKey)
+    const rootKey = yield* parseRedactedPrivateContentRootKey(secrets.rootKey)
 
     return yield* Effect.forEach(profiles, (profile) =>
       Effect.gen(function* () {

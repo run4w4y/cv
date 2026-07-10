@@ -7,6 +7,7 @@ export {
   encodePrivateAudienceId,
   looksLikePrivateAudienceId,
   parsePrivateAudienceCodecKey,
+  parseRedactedPrivateAudienceCodecKey,
 } from './audience'
 export { PRIVATE_CAPABILITY_TOKEN_VERSION } from './constants'
 export { generatePrivateContentKey } from './content-key'

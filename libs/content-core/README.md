@@ -12,6 +12,11 @@ rendering, or encryption implementation.
 - Effect Schema decoders for content manifests, variables, overlays, and file
   indexes.
 - Shared `Locale`, `ProfileSlug`, JSON, variable, redaction, and overlay types.
+- Refined locale/profile/variable identifiers that are safe as record keys and
+  path segments.
+- A branded `WebBaseUrl` schema that accepts HTTP(S) URLs, normalizes deployment
+  paths as directories, and resolves paths without allowing origin or base-path
+  escape.
 - `collectVariableUseDescriptors`, which lets an app-specific privacy adapter
   discover redacted variables inside composed content.
 

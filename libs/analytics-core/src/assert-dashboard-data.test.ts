@@ -45,7 +45,6 @@ describe('assertAnalyticsDashboardData', () => {
             totals: {
               pageViews: 1,
               visits: 1,
-              visitors: 1,
             },
           },
         ],
@@ -68,7 +67,6 @@ describe('assertAnalyticsDashboardData', () => {
             totals: {
               pageViews: 1,
               visits: 1,
-              visitors: 1,
             },
           },
         ],

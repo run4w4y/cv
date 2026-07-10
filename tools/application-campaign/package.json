@@ -9,10 +9,12 @@
   "dependencies": {
     "@cv/content-astro": "workspace:*",
     "@cv/content-build": "workspace:*",
+    "@cv/content-core": "workspace:*",
     "@cv/cv": "workspace:*",
     "@cv/pdf-export": "workspace:*",
     "@cv/private-content-crypto": "workspace:*",
     "@cv/private-content-link": "workspace:*",
+    "@clack/prompts": "^1.7.0",
     "@effect/platform-bun": "4.0.0-beta.91",
     "@openai/codex-sdk": "^0.143.0",
     "effect": "4.0.0-beta.91",

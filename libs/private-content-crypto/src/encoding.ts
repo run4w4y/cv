@@ -1,5 +1,6 @@
 import { base64, base64urlnopad } from '@scure/base'
-import { Effect } from 'effect'
+import { Effect, Redacted } from 'effect'
+import type * as RedactedType from 'effect/Redacted'
 import {
   PrivateCryptoInvalidBase64Error,
   PrivateCryptoInvalidBase64UrlError,
@@ -22,7 +23,8 @@ export const base64UrlDecode = (
 ): Effect.Effect<Uint8Array, PrivateCryptoInvalidBase64UrlError> =>
   Effect.try({
     try: () => base64urlnopad.decode(value),
-    catch: () => new PrivateCryptoInvalidBase64UrlError({ value }),
+    catch: () =>
+      new PrivateCryptoInvalidBase64UrlError({ inputLength: value.length }),
   })
 
 export const normalizeSecretBytes = (
@@ -45,5 +47,10 @@ export const normalizeSecretBytes = (
 const base64Decode = (value: string) =>
   Effect.try({
     try: () => base64.decode(value),
-    catch: () => new PrivateCryptoInvalidBase64Error({ value }),
+    catch: () =>
+      new PrivateCryptoInvalidBase64Error({ inputLength: value.length }),
   })
+
+export const normalizeRedactedSecretBytes = (
+  secret: RedactedType.Redacted<string>
+) => normalizeSecretBytes(Redacted.value(secret))
