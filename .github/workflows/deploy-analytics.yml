@@ -116,6 +116,10 @@ jobs:
           name: analytics-connector-dist
           path: apps/analytics-connector/dist
 
+      - name: Build analytics config dependencies
+        if: ${{ !env.ACT }}
+        run: ./node_modules/.bin/nx run cloudflare-analytics-client:build
+
       - name: Generate analytics connector Wrangler config
         if: ${{ !env.ACT }}
         env:
