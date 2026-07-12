@@ -109,6 +109,7 @@ export const CvFileLink = ({
       )}
       data-cv-file-state={presentation.fileState}
       data-private-file-unavailable={isPrivateLocked ? 'true' : undefined}
+      tabIndex={isPrivateLocked ? (tabIndex ?? 0) : tabIndex}
     >
       {children}
       {isPrivateLocked && (
