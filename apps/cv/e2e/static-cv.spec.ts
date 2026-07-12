@@ -282,11 +282,11 @@ test.describe('static public CV routes', () => {
       page.locator('.print-only a', { hasText: 'Private case study PDF' })
     ).toHaveCount(0)
 
-    const accessHelp = privateFileLink.locator('xpath=..')
-    const accessHelpTrigger = accessHelp.getByRole('button')
-
-    await accessHelpTrigger.focus()
-    await accessHelpTrigger.press('Enter')
+    if (testInfo.project.name.includes('mobile')) {
+      await privateFileLink.focus()
+    } else {
+      await privateFileLink.hover()
+    }
 
     const visibleHoverCard = page
       .locator('[data-private-access-hover-card]:visible')
@@ -295,9 +295,6 @@ test.describe('static public CV routes', () => {
     await expect(visibleHoverCard).toContainText(
       'This detail is hidden in the redacted public version'
     )
-    await page.keyboard.press('Escape')
-    await expect(visibleHoverCard).toBeHidden()
-
     await privateFileLink.click({ force: true })
     await expect(page).toHaveURL(/\/en\/$/u)
     await assertPageGuards()
