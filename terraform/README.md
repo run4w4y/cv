@@ -195,13 +195,20 @@ terragrunt apply
 
 The applications dashboard provides lifecycle KPIs, status/stage/priority
 breakdowns, a complete applications table, follow-up queue, and
-time-ranged recent activity. Company, lifecycle, stage, priority, and label
-controls share one applications query across panels. Empty registries retain
-table schemas and zero-valued KPIs. The applications and recent-activity
-queries use Infinity cursor pagination with 100 rows per request, following the
-existing endpoints' `nextCursor` through the `after` query parameter for up to
-100 pages. Grafana's plugin-wide pagination maximum must permit the same page
-count.
+time-ranged recent activity. The table has Grafana-owned Active, Interest, To
+apply, and Archive presets. They compose the registry API's generic lifecycle
+and target-stage filters, merge the two Archive queries, and apply their own
+fit-score or last-updated ordering after pagination. Company, lifecycle, stage,
+priority, label, and numeric fit-score controls further filter the selected
+view. Lifecycle and target-stage values are color-coded. The compensation
+currency control asks the applications endpoint to convert displayed summaries
+while preserving original stored values.
+
+Empty registries retain table schemas and zero-valued KPIs. The applications
+and recent-activity queries use Infinity cursor pagination with 100 rows per
+request, following the existing endpoints' `nextCursor` through the `after`
+query parameter for up to 100 pages. Grafana's plugin-wide pagination maximum
+must permit the same page count.
 
 ## Cloudflare Permissions
 
