@@ -6,7 +6,9 @@ import { Context, type Effect } from 'effect'
 
 import type { RegistryDatabaseError } from '../errors'
 import type {
+  ApplicationFacets,
   ApplicationListFilter,
+  ApplicationListRecord,
   ApplicationPatch,
   CrudPage,
   PersistApplicationOptions,
@@ -15,6 +17,7 @@ import type {
 } from '../types'
 
 export interface ApplicationsCrud {
+  readonly facets: () => Effect.Effect<ApplicationFacets, RegistryDatabaseError>
   readonly findByIdentifier: (
     identifier: string
   ) => Effect.Effect<Application | undefined, RegistryDatabaseError>
@@ -23,7 +26,7 @@ export interface ApplicationsCrud {
   ) => Effect.Effect<Application | undefined, RegistryDatabaseError>
   readonly list: (
     filter: ApplicationListFilter
-  ) => Effect.Effect<CrudPage<Application>, RegistryDatabaseError>
+  ) => Effect.Effect<CrudPage<ApplicationListRecord>, RegistryDatabaseError>
   readonly patch: (
     applicationId: string,
     patch: ApplicationPatch,

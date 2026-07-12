@@ -13,8 +13,9 @@ type WranglerConfig = {
   readonly main: './dist/index.js'
   readonly name: string
   readonly observability: { readonly enabled: true }
+  readonly preview_urls: false
   readonly secrets: { readonly required: readonly ['REGISTRY_API_TOKEN'] }
-  readonly workers_dev: false
+  readonly workers_dev: true
 }
 
 const defaultOutputPath = 'apps/application-registry-api/wrangler.deploy.jsonc'
@@ -62,8 +63,9 @@ const readConfig = Effect.all({
         main: './dist/index.js',
         name: workerName,
         observability: { enabled: true },
+        preview_urls: false,
         secrets: { required: ['REGISTRY_API_TOKEN'] },
-        workers_dev: false,
+        workers_dev: true,
       }) satisfies WranglerConfig
   )
 )

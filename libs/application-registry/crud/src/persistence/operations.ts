@@ -1,9 +1,8 @@
 import { commandReceipts } from '@cv/application-registry-entity'
 import { eq } from 'drizzle-orm'
 import { Effect } from 'effect'
-
-import type { RegistryQueryDatabase } from '../database'
 import { databaseFailure } from '../errors'
+import type { RegistryQueryDatabase } from '../internal/connection'
 
 export const findOperation = (
   database: RegistryQueryDatabase,

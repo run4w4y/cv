@@ -32,5 +32,5 @@ const canonicalize = (value: unknown): CanonicalValue => {
   return String(value)
 }
 
-export const requestFingerprint = (kind: string, request: unknown) =>
+export const operationRequestSignature = (kind: string, request: unknown) =>
   JSON.stringify(canonicalize({ kind, request }))

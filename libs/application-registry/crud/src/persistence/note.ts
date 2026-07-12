@@ -7,7 +7,7 @@ import {
 import { eq, sql } from 'drizzle-orm'
 import type { BatchItem } from 'drizzle-orm/batch'
 
-import type { RegistryConnections } from '../database'
+import type { RegistryConnections } from '../internal/connection'
 import type { PersistedNote } from '../types'
 import { allocateRevision, currentRevision, runBatch } from './shared'
 
@@ -52,7 +52,7 @@ export const persistNote = (
     }),
     database.batch.insert(commandReceipts).values({
       operationId: input.operationId,
-      requestFingerprint: input.requestFingerprint,
+      operationRequestSignature: input.operationRequestSignature,
       kind: 'application_note',
       applicationId,
       eventId: input.eventId,

@@ -6,12 +6,11 @@ import { Schema } from 'effect'
 
 import { UtcIsoTimestampSchema } from '../model/constraints'
 import { applicationEvents } from '../tables/events'
-import { refineWith } from './refinements'
 
 const applicationEventSelectRefinements = {
-  occurredAt: refineWith(UtcIsoTimestampSchema),
-  recordedAt: refineWith(UtcIsoTimestampSchema),
-  payload: refineWith(Schema.Json),
+  occurredAt: () => UtcIsoTimestampSchema,
+  recordedAt: () => UtcIsoTimestampSchema,
+  payload: () => Schema.Json,
 }
 
 const applicationEventInsertRefinements = {

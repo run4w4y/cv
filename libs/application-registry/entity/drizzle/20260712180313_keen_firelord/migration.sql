@@ -1,0 +1,1 @@
+ALTER TABLE `command_receipts` RENAME COLUMN `request_fingerprint` TO `operation_request_signature`;

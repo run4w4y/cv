@@ -76,19 +76,15 @@ locals {
       }
       CLOUDFLARE_API_TOKEN = {
         value       = local.placeholder_value
-        description = "Cloudflare Terraform token with Workers, Pages, DNS, and Worker Custom Domain permissions."
+        description = "Cloudflare Terraform token with Workers, D1, Pages, and DNS permissions."
       }
       CLOUDFLARE_ZONE_ID = {
         value       = local.placeholder_value
         description = "Cloudflare zone ID that owns the CV public and analytics hostnames."
       }
-      CV_ANALYTICS_CONNECTOR_HOSTNAME = {
+      CLOUDFLARE_WORKERS_DEV_ACCOUNT_SUBDOMAIN = {
         value       = local.placeholder_value
-        description = "Hostname for the analytics connector Worker custom domain, for example analytics.example.com. Use a first-level subdomain on Cloudflare Free."
-      }
-      APPLICATION_REGISTRY_HOSTNAME = {
-        value       = local.placeholder_value
-        description = "Hostname for the application registry Worker custom domain, for example applications.example.com. Use a first-level subdomain on Cloudflare Free."
+        description = "Cloudflare account-level workers.dev subdomain label, without .workers.dev."
       }
       CV_WEB_HOST = {
         value       = local.placeholder_value

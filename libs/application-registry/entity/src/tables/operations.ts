@@ -9,7 +9,7 @@ export const commandReceipts = sqliteTable(
   'command_receipts',
   {
     operationId: text('operation_id').notNull(),
-    requestFingerprint: text('request_fingerprint').notNull(),
+    operationRequestSignature: text('operation_request_signature').notNull(),
     kind: text('kind', { enum: commandKindValues }).notNull(),
     applicationId: text('application_id')
       .notNull()

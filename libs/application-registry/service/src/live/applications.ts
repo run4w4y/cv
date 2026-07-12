@@ -6,10 +6,11 @@ import {
 import { Effect, Layer } from 'effect'
 
 import { RegistryConflictError, RegistryDatabaseError } from '../errors'
-import { RegistryIds } from '../ids/service'
+import { toApplicationListItem } from '../internal/application-list-item'
 import { decodeCursor, encodeCursor } from '../internal/cursor'
 import {
   decorateCompensations,
+  newRegistryId,
   registryNow,
   requireApplication,
 } from '../internal/shared'
@@ -23,10 +24,14 @@ import type {
   UpsertApplicationInput,
 } from '../types'
 
+const asArray = <A>(
+  value: A | readonly A[] | undefined
+): readonly A[] | undefined =>
+  value === undefined ? undefined : Array.isArray(value) ? value : [value as A]
+
 const make = Effect.gen(function* () {
   const applications = yield* ApplicationsCrud
   const annotations = yield* AnnotationsCrud
-  const ids = yield* RegistryIds
 
   const find = Effect.fn('ApplicationsService.find')((identifier: string) =>
     applications
@@ -35,18 +40,27 @@ const make = Effect.gen(function* () {
   )
 
   return {
+    facets: Effect.fn('ApplicationsService.facets')(() =>
+      applications.facets()
+    ),
     find,
     list: Effect.fn('ApplicationsService.list')(
       (query: ListApplicationsInput) =>
         Effect.gen(function* () {
           const cursor = yield* decodeCursor(query.after)
+          const now = yield* registryNow
           const page = yield* applications.list({
             afterRevision: cursor?.revision,
-            applicationStatus: query.applicationStatus,
+            applicationStatus: asArray(query.applicationStatus),
             company: query.company,
-            label: query.label,
+            followUpState: asArray(query.followUpState),
+            label: asArray(query.label),
             limit: query.limit ?? 50,
-            targetStage: query.targetStage,
+            location: query.location,
+            now,
+            personalPriority: asArray(query.personalPriority),
+            role: query.role,
+            targetStage: asArray(query.targetStage),
             url: query.url,
           })
           const last = page.items.at(-1)
@@ -56,7 +70,7 @@ const make = Effect.gen(function* () {
 
           return {
             checkpoint,
-            items: page.items,
+            items: page.items.map((item) => toApplicationListItem(item, now)),
             nextCursor: page.hasNextPage ? checkpoint : null,
           }
         })
@@ -117,14 +131,11 @@ const make = Effect.gen(function* () {
       (request: UpsertApplicationInput) =>
         Effect.gen(function* () {
           const existing = yield* applications.findByJobKey(request.jobKey)
-          const applicationId = existing?.id ?? (yield* ids.next)
+          const applicationId = existing?.id ?? newRegistryId()
           const input: PersistedApplication = {
             ...request,
             applicationId,
-            compensations: yield* decorateCompensations(
-              request.compensations,
-              ids
-            ),
+            compensations: decorateCompensations(request.compensations),
             recordedAt: yield* registryNow,
           }
 

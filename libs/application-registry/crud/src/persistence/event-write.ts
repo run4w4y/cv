@@ -9,7 +9,7 @@ import { and, eq, exists, sql } from 'drizzle-orm'
 import type { BatchItem } from 'drizzle-orm/batch'
 import { Effect } from 'effect'
 
-import type { RegistryConnections } from '../database'
+import type { RegistryConnections } from '../internal/connection'
 import type { PersistedEvent } from '../types'
 import { currentRevision, runBatch } from './shared'
 
@@ -82,9 +82,10 @@ const eventReceiptInsert = (
     database
       .select({
         operationId: applicationEvents.operationId,
-        requestFingerprint: sql<string>`${input.requestFingerprint}`.as(
-          'request_fingerprint'
-        ),
+        operationRequestSignature:
+          sql<string>`${input.operationRequestSignature}`.as(
+            'operation_request_signature'
+          ),
         kind: sql<'application_event'>`'application_event'`.as('kind'),
         applicationId: applicationEvents.applicationId,
         eventId: applicationEvents.id,

@@ -1,9 +1,11 @@
 import { applications } from '@cv/application-registry-entity'
 import { and, eq, sql } from 'drizzle-orm'
 import { Effect } from 'effect'
-
-import type { RegistryConnections, RegistryQueryDatabase } from '../database'
 import { databaseFailure, RegistryDatabaseError } from '../errors'
+import type {
+  RegistryConnections,
+  RegistryQueryDatabase,
+} from '../internal/connection'
 import type { ApplicationPatch, PersistApplicationOptions } from '../types'
 import { findApplication } from './application-queries'
 import {

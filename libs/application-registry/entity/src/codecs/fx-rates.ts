@@ -10,14 +10,13 @@ import {
   UtcIsoTimestampSchema,
 } from '../model/constraints'
 import { fxRates } from '../tables/fx-rates'
-import { refineWith } from './refinements'
 
 const fxRateSelectRefinements = {
-  baseCurrency: refineWith(CurrencyCodeSchema),
-  quoteCurrency: refineWith(CurrencyCodeSchema),
-  rate: refineWith(PositiveRateSchema),
-  observedAt: refineWith(UtcIsoTimestampSchema),
-  fetchedAt: refineWith(UtcIsoTimestampSchema),
+  baseCurrency: () => CurrencyCodeSchema,
+  quoteCurrency: () => CurrencyCodeSchema,
+  rate: () => PositiveRateSchema,
+  observedAt: () => UtcIsoTimestampSchema,
+  fetchedAt: () => UtcIsoTimestampSchema,
 }
 
 const fxRateInsertRefinements = {

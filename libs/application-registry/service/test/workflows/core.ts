@@ -12,7 +12,7 @@ import {
   makeApplicationInput,
   makeCaptureInput,
   recordedAt,
-} from '../support/worker-runtime'
+} from '../support/inputs'
 
 export const applicationWorkflow = Effect.gen(function* () {
   const applications = yield* ApplicationsService

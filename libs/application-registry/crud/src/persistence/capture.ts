@@ -5,7 +5,7 @@ import {
 } from '@cv/application-registry-entity'
 import type { BatchItem } from 'drizzle-orm/batch'
 
-import type { RegistryConnections } from '../database'
+import type { RegistryConnections } from '../internal/connection'
 import type { PersistedCapture } from '../types'
 import { opportunityStatements } from './applications'
 import { allocateRevision, currentRevision, runBatch } from './shared'
@@ -46,7 +46,7 @@ export const persistCapture = (
     }),
     database.batch.insert(commandReceipts).values({
       operationId: input.operationId,
-      requestFingerprint: input.requestFingerprint,
+      operationRequestSignature: input.operationRequestSignature,
       kind: 'campaign_capture',
       applicationId: input.applicationId,
       eventId: input.eventId,

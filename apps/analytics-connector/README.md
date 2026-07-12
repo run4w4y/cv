@@ -38,8 +38,10 @@ bun apps/analytics-connector/scripts/write-wrangler-config.ts \
   apps/analytics-connector/wrangler.deploy.jsonc
 ```
 
-Terraform owns the Worker resource and custom domain or route. Wrangler deploys
-the bundled code, non-secret vars, and runtime secrets.
+Terraform owns the Worker's dedicated `workers.dev` exposure resource and
+derived URL. Wrangler owns Worker creation and deploys the bundled code,
+observability configuration, non-secret vars, and runtime secrets while
+preserving that exposure setting.
 
 ## Local Commands
 

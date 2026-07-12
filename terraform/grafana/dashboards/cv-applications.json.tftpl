@@ -1,0 +1,1938 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "target": {
+          "limit": 100,
+          "matchAny": false,
+          "tags": [],
+          "type": "dashboard"
+        },
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "datasource",
+        "uid": "-- Dashboard --"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "blue", "mode": "fixed" },
+          "mappings": [],
+          "noValue": "0",
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "datasource", "uid": "-- Dashboard --" },
+          "panelId": 20,
+          "refId": "A",
+          "withTransforms": true
+        }
+      ],
+      "title": "Total applications",
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": { "include": { "names": ["id"] } }
+        },
+        {
+          "id": "reduce",
+          "options": {
+            "includeTimeField": false,
+            "mode": "reduceFields",
+            "reducers": ["count"]
+          }
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "datasource", "uid": "-- Dashboard --" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "yellow", "mode": "fixed" },
+          "mappings": [],
+          "noValue": "0",
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "datasource", "uid": "-- Dashboard --" },
+          "panelId": 20,
+          "refId": "A",
+          "withTransforms": true
+        }
+      ],
+      "title": "To prepare",
+      "transformations": [
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "config": {
+                  "id": "regex",
+                  "options": { "value": "^(not_started|preparing)$" }
+                },
+                "fieldName": "applicationStatus"
+              }
+            ],
+            "match": "all",
+            "type": "include"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": { "include": { "names": ["id"] } }
+        },
+        {
+          "id": "reduce",
+          "options": {
+            "includeTimeField": false,
+            "mode": "reduceFields",
+            "reducers": ["count"]
+          }
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "datasource", "uid": "-- Dashboard --" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "light-blue", "mode": "fixed" },
+          "mappings": [],
+          "noValue": "0",
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "datasource", "uid": "-- Dashboard --" },
+          "panelId": 20,
+          "refId": "A",
+          "withTransforms": true
+        }
+      ],
+      "title": "Applied",
+      "transformations": [
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "config": { "id": "equal", "options": { "value": "applied" } },
+                "fieldName": "applicationStatus"
+              }
+            ],
+            "match": "all",
+            "type": "include"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": { "include": { "names": ["id"] } }
+        },
+        {
+          "id": "reduce",
+          "options": {
+            "includeTimeField": false,
+            "mode": "reduceFields",
+            "reducers": ["count"]
+          }
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "datasource", "uid": "-- Dashboard --" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "purple", "mode": "fixed" },
+          "mappings": [],
+          "noValue": "0",
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "datasource", "uid": "-- Dashboard --" },
+          "panelId": 20,
+          "refId": "A",
+          "withTransforms": true
+        }
+      ],
+      "title": "Interviewing",
+      "transformations": [
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "config": {
+                  "id": "regex",
+                  "options": {
+                    "value": "^(recruiter_screen|technical_screen|take_home|interview_loop)$"
+                  }
+                },
+                "fieldName": "applicationStatus"
+              }
+            ],
+            "match": "all",
+            "type": "include"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": { "include": { "names": ["id"] } }
+        },
+        {
+          "id": "reduce",
+          "options": {
+            "includeTimeField": false,
+            "mode": "reduceFields",
+            "reducers": ["count"]
+          }
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "datasource", "uid": "-- Dashboard --" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "green", "mode": "fixed" },
+          "mappings": [],
+          "noValue": "0",
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+      "id": 5,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "datasource", "uid": "-- Dashboard --" },
+          "panelId": 20,
+          "refId": "A",
+          "withTransforms": true
+        }
+      ],
+      "title": "Offers",
+      "transformations": [
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "config": { "id": "equal", "options": { "value": "offer" } },
+                "fieldName": "applicationStatus"
+              }
+            ],
+            "match": "all",
+            "type": "include"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": { "include": { "names": ["id"] } }
+        },
+        {
+          "id": "reduce",
+          "options": {
+            "includeTimeField": false,
+            "mode": "reduceFields",
+            "reducers": ["count"]
+          }
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "datasource", "uid": "-- Dashboard --" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "red", "mode": "fixed" },
+          "mappings": [],
+          "noValue": "0",
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "datasource", "uid": "-- Dashboard --" },
+          "panelId": 20,
+          "refId": "A",
+          "withTransforms": true
+        }
+      ],
+      "title": "Overdue follow-ups",
+      "transformations": [
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "config": { "id": "equal", "options": { "value": "overdue" } },
+                "fieldName": "followUpState"
+              }
+            ],
+            "match": "all",
+            "type": "include"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": { "include": { "names": ["id"] } }
+        },
+        {
+          "id": "reduce",
+          "options": {
+            "includeTimeField": false,
+            "mode": "reduceFields",
+            "reducers": ["count"]
+          }
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "datasource", "uid": "-- Dashboard --" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Applications",
+            "axisPlacement": "auto",
+            "fillOpacity": 75,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineWidth": 1,
+            "scaleDistribution": { "type": "linear" }
+          },
+          "mappings": [
+            {
+              "options": {
+                "applied": { "index": 2, "text": "Applied" },
+                "archived": { "index": 11, "text": "Archived" },
+                "interview_loop": { "index": 6, "text": "Interview loop" },
+                "not_started": { "index": 0, "text": "Not started" },
+                "offer": { "index": 8, "text": "Offer" },
+                "paused": { "index": 7, "text": "Paused" },
+                "preparing": { "index": 1, "text": "Preparing" },
+                "recruiter_screen": { "index": 3, "text": "Recruiter screen" },
+                "rejected": { "index": 9, "text": "Rejected" },
+                "take_home": { "index": 5, "text": "Take home" },
+                "technical_screen": { "index": 4, "text": "Technical screen" },
+                "withdrawn": { "index": 10, "text": "Withdrawn" }
+              },
+              "type": "value"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 10, "x": 0, "y": 4 },
+      "id": 8,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.8,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "hidden",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "orientation": "horizontal",
+        "showValue": "always",
+        "stacking": "none",
+        "tooltip": { "hideZeros": false, "mode": "single", "sort": "none" },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "targets": [
+        {
+          "datasource": { "type": "datasource", "uid": "-- Dashboard --" },
+          "panelId": 20,
+          "refId": "A",
+          "withTransforms": true
+        }
+      ],
+      "title": "Lifecycle status distribution",
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": { "include": { "names": ["applicationStatus", "id"] } }
+        },
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "applicationStatus": {
+                "aggregations": [],
+                "operation": "groupby"
+              },
+              "id": { "aggregations": ["count"], "operation": "aggregate" }
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "includeByName": {},
+            "indexByName": { "applicationStatus": 0, "id (count)": 1 },
+            "renameByName": {
+              "applicationStatus": "Status",
+              "id (count)": "Applications"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [{ "desc": true, "field": "Applications" }]
+          }
+        }
+      ],
+      "type": "barchart"
+    },
+    {
+      "datasource": { "type": "datasource", "uid": "-- Dashboard --" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Applications",
+            "axisPlacement": "auto",
+            "fillOpacity": 75,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineWidth": 1,
+            "scaleDistribution": { "type": "linear" }
+          },
+          "mappings": [
+            {
+              "options": {
+                "apply_next": { "index": 0, "text": "Apply next" },
+                "verify_first": { "index": 1, "text": "Verify first" },
+                "secondary": { "index": 2, "text": "Secondary" },
+                "backlog": { "index": 3, "text": "Backlog" },
+                "watch_after_move": { "index": 4, "text": "Watch after move" },
+                "closed_skip": { "index": 5, "text": "Closed / skip" }
+              },
+              "type": "value"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 7, "x": 10, "y": 4 },
+      "id": 9,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.8,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "hidden",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "orientation": "horizontal",
+        "showValue": "always",
+        "stacking": "none",
+        "tooltip": { "hideZeros": false, "mode": "single", "sort": "none" },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "targets": [
+        {
+          "datasource": { "type": "datasource", "uid": "-- Dashboard --" },
+          "panelId": 20,
+          "refId": "A",
+          "withTransforms": true
+        }
+      ],
+      "title": "Target stages",
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": { "include": { "names": ["targetStage", "id"] } }
+        },
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "targetStage": { "aggregations": [], "operation": "groupby" },
+              "id": { "aggregations": ["count"], "operation": "aggregate" }
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "includeByName": {},
+            "indexByName": { "targetStage": 0, "id (count)": 1 },
+            "renameByName": {
+              "targetStage": "Target stage",
+              "id (count)": "Applications"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [{ "desc": true, "field": "Applications" }]
+          }
+        }
+      ],
+      "type": "barchart"
+    },
+    {
+      "datasource": { "type": "datasource", "uid": "-- Dashboard --" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Applications",
+            "axisPlacement": "auto",
+            "fillOpacity": 75,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineWidth": 1,
+            "scaleDistribution": { "type": "linear" }
+          },
+          "mappings": [
+            {
+              "options": {
+                "high": { "index": 0, "text": "High" },
+                "medium": { "index": 1, "text": "Medium" },
+                "low": { "index": 2, "text": "Low" },
+                "pass": { "index": 3, "text": "Pass" }
+              },
+              "type": "value"
+            },
+            {
+              "options": {
+                "match": "null",
+                "result": { "index": 4, "text": "Unassigned" }
+              },
+              "type": "special"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 7, "x": 17, "y": 4 },
+      "id": 10,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.8,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "hidden",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "orientation": "horizontal",
+        "showValue": "always",
+        "stacking": "none",
+        "tooltip": { "hideZeros": false, "mode": "single", "sort": "none" },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "targets": [
+        {
+          "datasource": { "type": "datasource", "uid": "-- Dashboard --" },
+          "panelId": 20,
+          "refId": "A",
+          "withTransforms": true
+        }
+      ],
+      "title": "Priorities",
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": { "include": { "names": ["personalPriority", "id"] } }
+        },
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "personalPriority": {
+                "aggregations": [],
+                "operation": "groupby"
+              },
+              "id": { "aggregations": ["count"], "operation": "aggregate" }
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "includeByName": {},
+            "indexByName": { "personalPriority": 0, "id (count)": 1 },
+            "renameByName": {
+              "personalPriority": "Priority",
+              "id (count)": "Applications"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [{ "desc": true, "field": "Applications" }]
+          }
+        }
+      ],
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${application_registry_datasource_uid}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "filterable": true,
+            "inspect": false
+          },
+          "mappings": [],
+          "noValue": "—",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "id" },
+            "properties": [{ "id": "custom.hideFrom.viz", "value": true }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "canonicalUrl" },
+            "properties": [{ "id": "custom.hideFrom.viz", "value": true }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "updatedRevision" },
+            "properties": [{ "id": "custom.hideFrom.viz", "value": true }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "company" },
+            "properties": [
+              { "id": "displayName", "value": "Company" },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "targetBlank": true,
+                    "title": "Open job listing",
+                    "url": "$${__data.fields.canonicalUrl}"
+                  }
+                ]
+              },
+              { "id": "custom.width", "value": 180 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "role" },
+            "properties": [
+              { "id": "displayName", "value": "Role" },
+              { "id": "custom.width", "value": 240 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "applicationStatus" },
+            "properties": [
+              { "id": "displayName", "value": "Lifecycle status" },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "applied": {
+                        "color": "light-blue",
+                        "index": 2,
+                        "text": "Applied"
+                      },
+                      "archived": {
+                        "color": "dark-gray",
+                        "index": 11,
+                        "text": "Archived"
+                      },
+                      "interview_loop": {
+                        "color": "purple",
+                        "index": 6,
+                        "text": "Interview loop"
+                      },
+                      "not_started": {
+                        "color": "gray",
+                        "index": 0,
+                        "text": "Not started"
+                      },
+                      "offer": {
+                        "color": "green",
+                        "index": 8,
+                        "text": "Offer"
+                      },
+                      "paused": {
+                        "color": "yellow",
+                        "index": 7,
+                        "text": "Paused"
+                      },
+                      "preparing": {
+                        "color": "blue",
+                        "index": 1,
+                        "text": "Preparing"
+                      },
+                      "recruiter_screen": {
+                        "color": "semi-dark-purple",
+                        "index": 3,
+                        "text": "Recruiter screen"
+                      },
+                      "rejected": {
+                        "color": "red",
+                        "index": 9,
+                        "text": "Rejected"
+                      },
+                      "take_home": {
+                        "color": "orange",
+                        "index": 5,
+                        "text": "Take home"
+                      },
+                      "technical_screen": {
+                        "color": "purple",
+                        "index": 4,
+                        "text": "Technical screen"
+                      },
+                      "withdrawn": {
+                        "color": "orange",
+                        "index": 10,
+                        "text": "Withdrawn"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              { "id": "custom.cellOptions", "value": { "type": "pill" } },
+              { "id": "custom.width", "value": 145 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "targetStage" },
+            "properties": [
+              { "id": "displayName", "value": "Target stage" },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "apply_next": {
+                        "color": "green",
+                        "index": 0,
+                        "text": "Apply next"
+                      },
+                      "verify_first": {
+                        "color": "yellow",
+                        "index": 1,
+                        "text": "Verify first"
+                      },
+                      "secondary": {
+                        "color": "blue",
+                        "index": 2,
+                        "text": "Secondary"
+                      },
+                      "backlog": {
+                        "color": "gray",
+                        "index": 3,
+                        "text": "Backlog"
+                      },
+                      "watch_after_move": {
+                        "color": "purple",
+                        "index": 4,
+                        "text": "Watch after move"
+                      },
+                      "closed_skip": {
+                        "color": "dark-gray",
+                        "index": 5,
+                        "text": "Closed / skip"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              { "id": "custom.cellOptions", "value": { "type": "pill" } },
+              { "id": "custom.width", "value": 135 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "personalPriority" },
+            "properties": [
+              { "id": "displayName", "value": "Priority" },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "high": { "color": "red", "index": 0, "text": "High" },
+                      "medium": {
+                        "color": "yellow",
+                        "index": 1,
+                        "text": "Medium"
+                      },
+                      "low": { "color": "blue", "index": 2, "text": "Low" },
+                      "pass": {
+                        "color": "dark-gray",
+                        "index": 3,
+                        "text": "Pass"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              { "id": "custom.cellOptions", "value": { "type": "pill" } },
+              { "id": "custom.width", "value": 95 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "fitScore" },
+            "properties": [
+              { "id": "displayName", "value": "Fit" },
+              { "id": "min", "value": 0 },
+              { "id": "max", "value": 100 },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "red", "value": null },
+                    { "color": "yellow", "value": 60 },
+                    { "color": "green", "value": 80 }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": { "mode": "gradient", "type": "gauge" }
+              },
+              { "id": "custom.width", "value": 90 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "workMode" },
+            "properties": [{ "id": "displayName", "value": "Work mode" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "location" },
+            "properties": [{ "id": "displayName", "value": "Location" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "labels" },
+            "properties": [
+              { "id": "displayName", "value": "Labels" },
+              { "id": "custom.cellOptions", "value": { "type": "pill" } },
+              { "id": "custom.width", "value": 180 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "compensationSummary" },
+            "properties": [
+              { "id": "displayName", "value": "Compensation" },
+              { "id": "custom.width", "value": 210 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "followUpState" },
+            "properties": [
+              { "id": "displayName", "value": "Follow-up state" },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "none": { "color": "gray", "index": 0, "text": "None" },
+                      "overdue": {
+                        "color": "red",
+                        "index": 1,
+                        "text": "Overdue"
+                      },
+                      "upcoming": {
+                        "color": "yellow",
+                        "index": 2,
+                        "text": "Upcoming"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": { "type": "color-background" }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "followUpAt" },
+            "properties": [
+              { "id": "displayName", "value": "Follow-up" },
+              { "id": "unit", "value": "dateTimeAsLocal" },
+              { "id": "custom.width", "value": 165 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "appliedAt" },
+            "properties": [
+              { "id": "displayName", "value": "Applied" },
+              { "id": "unit", "value": "dateTimeAsLocal" },
+              { "id": "custom.width", "value": 165 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "lastContactAt" },
+            "properties": [
+              { "id": "displayName", "value": "Last contact" },
+              { "id": "unit", "value": "dateTimeAsLocal" },
+              { "id": "custom.width", "value": 165 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "updatedAt" },
+            "properties": [
+              { "id": "displayName", "value": "Updated" },
+              { "id": "unit", "value": "dateTimeAsLocal" },
+              { "id": "custom.width", "value": 165 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "recommendedAction" },
+            "properties": [
+              { "id": "displayName", "value": "Recommended action" },
+              { "id": "custom.wrapText", "value": true },
+              { "id": "custom.width", "value": 300 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "latestEventKind" },
+            "properties": [{ "id": "displayName", "value": "Latest event" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "latestEventAt" },
+            "properties": [
+              { "id": "displayName", "value": "Latest activity" },
+              { "id": "unit", "value": "dateTimeAsLocal" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "captureCount" },
+            "properties": [{ "id": "displayName", "value": "Captures" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "noteCount" },
+            "properties": [{ "id": "displayName", "value": "Notes" }]
+          }
+        ]
+      },
+      "gridPos": { "h": 15, "w": 24, "x": 0, "y": 12 },
+      "id": 20,
+      "options": {
+        "cellHeight": "sm",
+        "enablePagination": true,
+        "showHeader": true,
+        "sortBy": [{ "desc": true, "displayName": "Updated" }]
+      },
+      "targets": [
+        {
+          "columns": [
+            { "selector": "id", "text": "id", "type": "string" },
+            {
+              "selector": "canonicalUrl",
+              "text": "canonicalUrl",
+              "type": "string"
+            },
+            { "selector": "company", "text": "company", "type": "string" },
+            { "selector": "role", "text": "role", "type": "string" },
+            {
+              "selector": "applicationStatus",
+              "text": "applicationStatus",
+              "type": "string"
+            },
+            {
+              "selector": "targetStage",
+              "text": "targetStage",
+              "type": "string"
+            },
+            {
+              "selector": "personalPriority",
+              "text": "personalPriority",
+              "type": "string"
+            },
+            { "selector": "fitScore", "text": "fitScore", "type": "number" },
+            { "selector": "location", "text": "location", "type": "string" },
+            {
+              "selector": "details.workMode",
+              "text": "workMode",
+              "type": "string"
+            },
+            { "selector": "labels", "text": "labels", "type": "string" },
+            {
+              "selector": "compensationSummary",
+              "text": "compensationSummary",
+              "type": "string"
+            },
+            {
+              "selector": "followUpState",
+              "text": "followUpState",
+              "type": "string"
+            },
+            {
+              "selector": "followUpAt",
+              "text": "followUpAt",
+              "type": "timestamp"
+            },
+            {
+              "selector": "appliedAt",
+              "text": "appliedAt",
+              "type": "timestamp"
+            },
+            {
+              "selector": "lastContactAt",
+              "text": "lastContactAt",
+              "type": "timestamp"
+            },
+            {
+              "selector": "updatedAt",
+              "text": "updatedAt",
+              "type": "timestamp"
+            },
+            {
+              "selector": "recommendedAction",
+              "text": "recommendedAction",
+              "type": "string"
+            },
+            {
+              "selector": "latestEventKind",
+              "text": "latestEventKind",
+              "type": "string"
+            },
+            {
+              "selector": "latestEventAt",
+              "text": "latestEventAt",
+              "type": "timestamp"
+            },
+            {
+              "selector": "captureCount",
+              "text": "captureCount",
+              "type": "number"
+            },
+            { "selector": "noteCount", "text": "noteCount", "type": "number" },
+            {
+              "selector": "updatedRevision",
+              "text": "updatedRevision",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${application_registry_datasource_uid}"
+          },
+          "filters": [],
+          "format": "table",
+          "global_query_id": "",
+          "pagination_max_pages": 100,
+          "pagination_mode": "cursor",
+          "pagination_param_cursor_extraction_path": "nextCursor",
+          "pagination_param_cursor_field_name": "after",
+          "pagination_param_cursor_field_type": "query",
+          "pagination_param_size_field_name": "limit",
+          "pagination_param_size_field_type": "query",
+          "pagination_param_size_value": 100,
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "$count(items) > 0 ? items : [{\"id\":\"__grafana_empty__\"}]",
+          "source": "url",
+          "type": "json",
+          "url": "${registry_api_url}/v1/applications",
+          "url_options": {
+            "data": "",
+            "method": "GET",
+            "params": [{ "key": "limit", "value": "100" }]
+          }
+        }
+      ],
+      "title": "All applications",
+      "transformations": [
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "applicationStatus": {
+                "aggregations": ["last"],
+                "operation": "aggregate"
+              },
+              "appliedAt": {
+                "aggregations": ["last"],
+                "operation": "aggregate"
+              },
+              "canonicalUrl": {
+                "aggregations": ["last"],
+                "operation": "aggregate"
+              },
+              "captureCount": {
+                "aggregations": ["last"],
+                "operation": "aggregate"
+              },
+              "company": { "aggregations": ["last"], "operation": "aggregate" },
+              "compensationSummary": {
+                "aggregations": ["last"],
+                "operation": "aggregate"
+              },
+              "fitScore": {
+                "aggregations": ["last"],
+                "operation": "aggregate"
+              },
+              "followUpAt": {
+                "aggregations": ["last"],
+                "operation": "aggregate"
+              },
+              "followUpState": {
+                "aggregations": ["last"],
+                "operation": "aggregate"
+              },
+              "id": { "aggregations": [], "operation": "groupby" },
+              "labels": { "aggregations": ["last"], "operation": "aggregate" },
+              "lastContactAt": {
+                "aggregations": ["last"],
+                "operation": "aggregate"
+              },
+              "latestEventAt": {
+                "aggregations": ["last"],
+                "operation": "aggregate"
+              },
+              "latestEventKind": {
+                "aggregations": ["last"],
+                "operation": "aggregate"
+              },
+              "location": {
+                "aggregations": ["last"],
+                "operation": "aggregate"
+              },
+              "noteCount": {
+                "aggregations": ["last"],
+                "operation": "aggregate"
+              },
+              "personalPriority": {
+                "aggregations": ["last"],
+                "operation": "aggregate"
+              },
+              "recommendedAction": {
+                "aggregations": ["last"],
+                "operation": "aggregate"
+              },
+              "role": { "aggregations": ["last"], "operation": "aggregate" },
+              "targetStage": {
+                "aggregations": ["last"],
+                "operation": "aggregate"
+              },
+              "updatedAt": {
+                "aggregations": ["last"],
+                "operation": "aggregate"
+              },
+              "updatedRevision": {
+                "aggregations": ["last"],
+                "operation": "aggregate"
+              },
+              "workMode": { "aggregations": ["last"], "operation": "aggregate" }
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "includeByName": {},
+            "indexByName": {
+              "id": 0,
+              "company (last)": 1,
+              "role (last)": 2,
+              "applicationStatus (last)": 3,
+              "targetStage (last)": 4,
+              "personalPriority (last)": 5,
+              "fitScore (last)": 6,
+              "location (last)": 7,
+              "workMode (last)": 8,
+              "labels (last)": 9,
+              "compensationSummary (last)": 10,
+              "followUpState (last)": 11,
+              "followUpAt (last)": 12,
+              "appliedAt (last)": 13,
+              "lastContactAt (last)": 14,
+              "updatedAt (last)": 15,
+              "recommendedAction (last)": 16,
+              "latestEventKind (last)": 17,
+              "latestEventAt (last)": 18,
+              "captureCount (last)": 19,
+              "noteCount (last)": 20,
+              "canonicalUrl (last)": 21,
+              "updatedRevision (last)": 22
+            },
+            "renameByName": {
+              "applicationStatus (last)": "applicationStatus",
+              "appliedAt (last)": "appliedAt",
+              "canonicalUrl (last)": "canonicalUrl",
+              "captureCount (last)": "captureCount",
+              "company (last)": "company",
+              "compensationSummary (last)": "compensationSummary",
+              "fitScore (last)": "fitScore",
+              "followUpAt (last)": "followUpAt",
+              "followUpState (last)": "followUpState",
+              "labels (last)": "labels",
+              "lastContactAt (last)": "lastContactAt",
+              "latestEventAt (last)": "latestEventAt",
+              "latestEventKind (last)": "latestEventKind",
+              "location (last)": "location",
+              "noteCount (last)": "noteCount",
+              "personalPriority (last)": "personalPriority",
+              "recommendedAction (last)": "recommendedAction",
+              "role (last)": "role",
+              "targetStage (last)": "targetStage",
+              "updatedAt (last)": "updatedAt",
+              "updatedRevision (last)": "updatedRevision",
+              "workMode (last)": "workMode"
+            }
+          }
+        },
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "config": {
+                  "id": "notEqual",
+                  "options": { "value": "__grafana_empty__" }
+                },
+                "fieldName": "id"
+              }
+            ],
+            "match": "all",
+            "type": "include"
+          }
+        },
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "config": {
+                  "id": "regex",
+                  "options": { "value": "^($${company:regex})$" }
+                },
+                "fieldName": "company"
+              },
+              {
+                "config": {
+                  "id": "regex",
+                  "options": { "value": "^($${applicationStatus:regex})$" }
+                },
+                "fieldName": "applicationStatus"
+              },
+              {
+                "config": {
+                  "id": "regex",
+                  "options": { "value": "^($${targetStage:regex})$" }
+                },
+                "fieldName": "targetStage"
+              },
+              {
+                "config": {
+                  "id": "regex",
+                  "options": { "value": "^($${personalPriority:regex})$" }
+                },
+                "fieldName": "personalPriority"
+              },
+              {
+                "config": {
+                  "id": "regex",
+                  "options": {
+                    "value": "\"(?:$${label:regex})\"|^(?=$${label:regex}$)\\[\\]$"
+                  }
+                },
+                "fieldName": "labels"
+              }
+            ],
+            "match": "all",
+            "type": "include"
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "datasource", "uid": "-- Dashboard --" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "filterable": true,
+            "inspect": false
+          },
+          "mappings": [],
+          "noValue": "—",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "canonicalUrl" },
+            "properties": [{ "id": "custom.hideFrom.viz", "value": true }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "company" },
+            "properties": [
+              { "id": "displayName", "value": "Company" },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "targetBlank": true,
+                    "title": "Open job listing",
+                    "url": "$${__data.fields.canonicalUrl}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "role" },
+            "properties": [{ "id": "displayName", "value": "Role" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "applicationStatus" },
+            "properties": [
+              { "id": "displayName", "value": "Lifecycle status" },
+              { "id": "custom.cellOptions", "value": { "type": "pill" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "personalPriority" },
+            "properties": [
+              { "id": "displayName", "value": "Priority" },
+              { "id": "custom.cellOptions", "value": { "type": "pill" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "followUpState" },
+            "properties": [
+              { "id": "displayName", "value": "Follow-up state" },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "overdue": {
+                        "color": "red",
+                        "index": 0,
+                        "text": "Overdue"
+                      },
+                      "upcoming": {
+                        "color": "yellow",
+                        "index": 1,
+                        "text": "Upcoming"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": { "type": "color-background" }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "followUpAt" },
+            "properties": [
+              { "id": "displayName", "value": "Follow-up" },
+              { "id": "unit", "value": "dateTimeAsLocal" }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 27 },
+      "id": 21,
+      "options": {
+        "cellHeight": "sm",
+        "enablePagination": true,
+        "showHeader": true,
+        "sortBy": [{ "desc": false, "displayName": "Follow-up" }]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "datasource", "uid": "-- Dashboard --" },
+          "panelId": 20,
+          "refId": "A",
+          "withTransforms": true
+        }
+      ],
+      "title": "Follow-ups due",
+      "transformations": [
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "config": {
+                  "id": "regex",
+                  "options": { "value": "^(overdue|upcoming)$" }
+                },
+                "fieldName": "followUpState"
+              }
+            ],
+            "match": "all",
+            "type": "include"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "canonicalUrl",
+                "company",
+                "role",
+                "applicationStatus",
+                "personalPriority",
+                "followUpState",
+                "followUpAt"
+              ]
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${application_registry_datasource_uid}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "filterable": true,
+            "inspect": false
+          },
+          "mappings": [],
+          "noValue": "—",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "id" },
+            "properties": [{ "id": "custom.hideFrom.viz", "value": true }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "applicationId" },
+            "properties": [{ "id": "custom.hideFrom.viz", "value": true }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "canonicalUrl" },
+            "properties": [{ "id": "custom.hideFrom.viz", "value": true }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "company" },
+            "properties": [
+              { "id": "displayName", "value": "Company" },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "targetBlank": true,
+                    "title": "Open job listing",
+                    "url": "$${__data.fields.canonicalUrl}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "role" },
+            "properties": [{ "id": "displayName", "value": "Role" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "occurredAt" },
+            "properties": [
+              { "id": "displayName", "value": "Occurred" },
+              { "id": "unit", "value": "dateTimeAsLocal" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "kind" },
+            "properties": [{ "id": "displayName", "value": "Event" }]
+          }
+        ]
+      },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 27 },
+      "id": 22,
+      "options": {
+        "cellHeight": "sm",
+        "enablePagination": true,
+        "showHeader": true,
+        "sortBy": [{ "desc": true, "displayName": "Occurred" }]
+      },
+      "targets": [
+        {
+          "columns": [
+            { "selector": "id", "text": "id", "type": "string" },
+            {
+              "selector": "applicationId",
+              "text": "applicationId",
+              "type": "string"
+            },
+            { "selector": "company", "text": "company", "type": "string" },
+            { "selector": "role", "text": "role", "type": "string" },
+            {
+              "selector": "canonicalUrl",
+              "text": "canonicalUrl",
+              "type": "string"
+            },
+            { "selector": "kind", "text": "kind", "type": "string" },
+            {
+              "selector": "occurredAt",
+              "text": "occurredAt",
+              "type": "timestamp"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${application_registry_datasource_uid}"
+          },
+          "filters": [],
+          "format": "table",
+          "global_query_id": "",
+          "pagination_max_pages": 100,
+          "pagination_mode": "cursor",
+          "pagination_param_cursor_extraction_path": "nextCursor",
+          "pagination_param_cursor_field_name": "after",
+          "pagination_param_cursor_field_type": "query",
+          "pagination_param_size_field_name": "limit",
+          "pagination_param_size_field_type": "query",
+          "pagination_param_size_value": 100,
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "$count(items) > 0 ? items : [{\"id\":\"__grafana_empty__\"}]",
+          "source": "url",
+          "type": "json",
+          "url": "${registry_api_url}/v1/events",
+          "url_options": {
+            "data": "",
+            "method": "GET",
+            "params": [
+              { "key": "limit", "value": "100" },
+              { "key": "from", "value": "$${__timeFrom:date:iso}" },
+              { "key": "to", "value": "$${__timeTo:date:iso}" }
+            ]
+          }
+        }
+      ],
+      "description": "Events in the selected dashboard time range, filtered by Company. The lifecycle, stage, priority, and label controls apply to application panels.",
+      "title": "Recent activity",
+      "transformations": [
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "config": {
+                  "id": "notEqual",
+                  "options": { "value": "__grafana_empty__" }
+                },
+                "fieldName": "id"
+              }
+            ],
+            "match": "all",
+            "type": "include"
+          }
+        },
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "config": {
+                  "id": "regex",
+                  "options": { "value": "^($${company:regex})$" }
+                },
+                "fieldName": "company"
+              }
+            ],
+            "match": "all",
+            "type": "include"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "includeByName": {},
+            "indexByName": {
+              "id": 0,
+              "applicationId": 1,
+              "canonicalUrl": 2,
+              "company": 3,
+              "role": 4,
+              "kind": 5,
+              "occurredAt": 6
+            },
+            "renameByName": {}
+          }
+        }
+      ],
+      "type": "table"
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 41,
+  "tags": ["cv", "applications", "registry"],
+  "templating": {
+    "list": [
+      {
+        "allValue": ".*",
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": {
+          "type": "yesoreyeram-infinity-datasource",
+          "uid": "${application_registry_datasource_uid}"
+        },
+        "definition": "Application registry companies",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Company",
+        "multi": true,
+        "name": "company",
+        "options": [],
+        "query": {
+          "infinityQuery": {
+            "columns": [],
+            "filters": [],
+            "format": "table",
+            "parser": "backend",
+            "refId": "variable",
+            "root_selector": "$count(companies) > 0 ? companies : [\"__grafana_empty__\"]",
+            "source": "url",
+            "type": "json",
+            "url": "${registry_api_url}/v1/applications/facets",
+            "url_options": { "data": "", "method": "GET" }
+          },
+          "queryType": "infinity",
+          "refId": "variable"
+        },
+        "refresh": 1,
+        "regex": "/^(?!__grafana_empty__$).*$/",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": {
+          "type": "yesoreyeram-infinity-datasource",
+          "uid": "${application_registry_datasource_uid}"
+        },
+        "definition": "Application registry lifecycle statuses",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Lifecycle status",
+        "multi": true,
+        "name": "applicationStatus",
+        "options": [],
+        "query": {
+          "infinityQuery": {
+            "columns": [],
+            "filters": [],
+            "format": "table",
+            "parser": "backend",
+            "refId": "variable",
+            "root_selector": "$count(applicationStatuses) > 0 ? applicationStatuses : [\"__grafana_empty__\"]",
+            "source": "url",
+            "type": "json",
+            "url": "${registry_api_url}/v1/applications/facets",
+            "url_options": { "data": "", "method": "GET" }
+          },
+          "queryType": "infinity",
+          "refId": "variable"
+        },
+        "refresh": 1,
+        "regex": "/^(?!__grafana_empty__$).*$/",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": {
+          "type": "yesoreyeram-infinity-datasource",
+          "uid": "${application_registry_datasource_uid}"
+        },
+        "definition": "Application registry target stages",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Target stage",
+        "multi": true,
+        "name": "targetStage",
+        "options": [],
+        "query": {
+          "infinityQuery": {
+            "columns": [],
+            "filters": [],
+            "format": "table",
+            "parser": "backend",
+            "refId": "variable",
+            "root_selector": "$count(targetStages) > 0 ? targetStages : [\"__grafana_empty__\"]",
+            "source": "url",
+            "type": "json",
+            "url": "${registry_api_url}/v1/applications/facets",
+            "url_options": { "data": "", "method": "GET" }
+          },
+          "queryType": "infinity",
+          "refId": "variable"
+        },
+        "refresh": 1,
+        "regex": "/^(?!__grafana_empty__$).*$/",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": {
+          "type": "yesoreyeram-infinity-datasource",
+          "uid": "${application_registry_datasource_uid}"
+        },
+        "definition": "Application registry personal priorities",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Priority",
+        "multi": true,
+        "name": "personalPriority",
+        "options": [],
+        "query": {
+          "infinityQuery": {
+            "columns": [],
+            "filters": [],
+            "format": "table",
+            "parser": "backend",
+            "refId": "variable",
+            "root_selector": "$count(personalPriorities) > 0 ? personalPriorities : [\"__grafana_empty__\"]",
+            "source": "url",
+            "type": "json",
+            "url": "${registry_api_url}/v1/applications/facets",
+            "url_options": { "data": "", "method": "GET" }
+          },
+          "queryType": "infinity",
+          "refId": "variable"
+        },
+        "refresh": 1,
+        "regex": "/^(?!__grafana_empty__$).*$/",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": {
+          "type": "yesoreyeram-infinity-datasource",
+          "uid": "${application_registry_datasource_uid}"
+        },
+        "definition": "Application registry labels",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Label",
+        "multi": true,
+        "name": "label",
+        "options": [],
+        "query": {
+          "infinityQuery": {
+            "columns": [],
+            "filters": [],
+            "format": "table",
+            "parser": "backend",
+            "refId": "variable",
+            "root_selector": "$count(labels) > 0 ? labels : [\"__grafana_empty__\"]",
+            "source": "url",
+            "type": "json",
+            "url": "${registry_api_url}/v1/applications/facets",
+            "url_options": { "data": "", "method": "GET" }
+          },
+          "queryType": "infinity",
+          "refId": "variable"
+        },
+        "refresh": 1,
+        "regex": "/^(?!__grafana_empty__$).*$/",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-90d", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "CV Applications",
+  "uid": "cv-applications-overview",
+  "version": 0,
+  "weekStart": ""
+}

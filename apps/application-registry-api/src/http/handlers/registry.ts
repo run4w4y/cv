@@ -56,6 +56,7 @@ export const RegistryHandlersLayer = HttpApiBuilder.group(
         .handle('listApplications', ({ query }) =>
           expose(applications.list(query))
         )
+        .handle('listApplicationFacets', () => expose(applications.facets()))
         .handle('getApplication', ({ params }) =>
           expose(applications.find(params.id))
         )

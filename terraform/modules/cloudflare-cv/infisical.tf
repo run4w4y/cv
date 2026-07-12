@@ -21,6 +21,7 @@ resource "infisical_secret" "analytics_connector_url" {
   })
 
   depends_on = [
+    cloudflare_workers_script_subdomain.analytics_connector,
     cloudflare_workers_custom_domain.analytics_connector,
     cloudflare_workers_route.analytics_connector,
   ]
@@ -40,6 +41,7 @@ resource "infisical_secret" "registry_api_url" {
   })
 
   depends_on = [
+    cloudflare_workers_script_subdomain.application_registry,
     cloudflare_workers_custom_domain.application_registry,
     cloudflare_workers_route.application_registry,
   ]
@@ -77,7 +79,7 @@ resource "infisical_secret" "application_registry_worker_name" {
   count = var.infisical_sync_enabled ? 1 : 0
 
   name         = "APPLICATION_REGISTRY_WORKER_NAME"
-  value        = cloudflare_worker.application_registry.name
+  value        = var.application_registry_worker_name
   env_slug     = var.infisical_env_slug
   workspace_id = var.infisical_project_id
   folder_path  = var.infisical_application_registry_folder_path

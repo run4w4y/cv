@@ -1,6 +1,14 @@
 output "connector_url" {
-  description = "Public connector base URL when a custom domain or route was configured."
+  description = "Public analytics connector base URL."
   value       = local.connector_url
+}
+
+output "workers_dev_urls" {
+  description = "Cloudflare-provided workers.dev URLs enabled for the managed Workers."
+  value = {
+    analytics_connector  = local.analytics_connector_workers_dev_url
+    application_registry = local.application_registry_workers_dev_url
+  }
 }
 
 output "pages_project" {
@@ -23,7 +31,7 @@ output "pages_domain" {
 
 output "worker_name" {
   description = "Analytics connector Worker script name."
-  value       = cloudflare_worker.analytics_connector.name
+  value       = var.worker_name
 }
 
 output "worker_custom_domain_hostname" {
@@ -43,9 +51,10 @@ output "application_registry" {
     database_binding    = "APPLICATION_REGISTRY_DB"
     database_id         = cloudflare_d1_database.application_registry.id
     database_name       = cloudflare_d1_database.application_registry.name
-    worker_name         = cloudflare_worker.application_registry.name
+    worker_name         = var.application_registry_worker_name
     custom_domain       = local.application_registry_custom_domain_enabled ? local.application_registry_custom_domain_hostname : null
     route_pattern       = local.application_registry_route_enabled ? local.application_registry_route_pattern : null
     workers_dev_enabled = var.enable_application_registry_worker_dev_subdomain
+    workers_dev_url     = local.application_registry_workers_dev_url
   }
 }

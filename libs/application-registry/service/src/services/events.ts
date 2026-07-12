@@ -6,6 +6,7 @@ import type {
   AppendApplicationEventInput,
   AppendApplicationEventResult,
   ListEventsInput,
+  RegistryEventListItem,
   RegistryItems,
   RegistryPage,
 } from '../types'
@@ -17,7 +18,10 @@ export interface EventsService {
   ) => Effect.Effect<AppendApplicationEventResult, ApplicationRegistryError>
   readonly list: (
     input: ListEventsInput
-  ) => Effect.Effect<RegistryPage<ApplicationEvent>, ApplicationRegistryError>
+  ) => Effect.Effect<
+    RegistryPage<RegistryEventListItem>,
+    ApplicationRegistryError
+  >
   readonly listByApplication: (
     identifier: string
   ) => Effect.Effect<RegistryItems<ApplicationEvent>, ApplicationRegistryError>

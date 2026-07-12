@@ -9,16 +9,23 @@ import {
 } from '@cv/application-registry-crud'
 import { Effect, Layer } from 'effect'
 
-import { RegistryIds } from '../../src/ids/service'
-
-import { application } from './fixtures'
+import { application, applicationListRecord } from './fixtures'
 
 export const applicationsCrud = (
   overrides: Partial<ApplicationsCrud> = {}
 ): ApplicationsCrud => ({
+  facets: () =>
+    Effect.succeed({
+      applicationStatuses: [application.applicationStatus],
+      companies: [application.company],
+      labels: [],
+      personalPriorities: [],
+      targetStages: [application.targetStage],
+    }),
   findByIdentifier: () => Effect.succeed(application),
   findByJobKey: () => Effect.succeed(application),
-  list: () => Effect.succeed({ hasNextPage: false, items: [application] }),
+  list: () =>
+    Effect.succeed({ hasNextPage: false, items: [applicationListRecord] }),
   patch: () => Effect.succeed(application),
   persist: () => Effect.void,
   persistEvent: () => Effect.succeed(true),
@@ -71,16 +78,3 @@ export const operationsCrudLayer = (overrides: Partial<OperationsCrud> = {}) =>
     find: () => Effect.succeed(undefined),
     ...overrides,
   })
-
-export const registryIdsLayer = (values: readonly [string, ...string[]]) => {
-  const remaining = [...values]
-
-  return Layer.succeed(RegistryIds, {
-    next: Effect.suspend(() => {
-      const value = remaining.shift()
-      return value === undefined
-        ? Effect.die(new Error('The test exhausted its registry IDs.'))
-        : Effect.succeed(value)
-    }),
-  })
-}

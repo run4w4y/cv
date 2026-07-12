@@ -83,7 +83,7 @@ This workspace keeps the deployed site static:
   minting, PDF export, application-campaign drafting, and querying/updating the
   synchronized application registry.
 - `terraform/*`: Terragrunt live stacks and Terraform modules for Infisical
-  secret folders, Cloudflare Pages/Worker resources, and Grafana dashboards.
+  secret folders, Cloudflare Pages/D1/routing resources, and Grafana dashboards.
 
 ## Workspace Boundary
 
@@ -163,11 +163,12 @@ The production setup is designed around three managed services:
   `PRIVATE_CONTENT_ROOT_KEY`, and `GRAFANA_CONNECTOR_TOKEN`.
 - Cloudflare hosts the static CV through Pages, the analytics connector Worker,
   and the application registry Worker/D1 database. Terraform creates the
-  resources and routes; Wrangler deploys Worker code, bindings, migrations, and
-  runtime secrets in CI.
-- Grafana reads the Worker through the Infinity datasource. Terraform provisions
-  the datasource, folder, and starter dashboard from
-  `terraform/grafana/dashboards/cv-analytics.json.tftpl`.
+  resources and enables the Workers' `workers.dev` endpoints; Wrangler deploys
+  Worker code, bindings, migrations, and runtime secrets in CI.
+- Grafana reads the analytics and application-registry Workers through separate
+  Infinity datasources. Terraform provisions both folders and dashboards from
+  `terraform/grafana/dashboards/cv-analytics.json.tftpl` and
+  `terraform/grafana/dashboards/cv-applications.json.tftpl`.
 
 The included GitHub workflows are split by responsibility:
 

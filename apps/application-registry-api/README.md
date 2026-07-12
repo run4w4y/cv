@@ -18,7 +18,7 @@ connect to D1 directly.
   Drizzle-derived Effect codecs, and generated migration history.
 - CRUD contracts are imported from `@cv/application-registry-crud`; only this
   runtime composition root imports their D1 implementations from
-  `@cv/application-registry-crud/d1`.
+  `@cv/application-registry-crud/live`.
 - Registry service contracts are imported from
   `@cv/application-registry-service`; only the composition root installs the
   implementations from `@cv/application-registry-service/live`.
@@ -35,8 +35,8 @@ connect to D1 directly.
   ordering, so delayed and same-millisecond writes cannot fall behind a saved
   cursor.
 - Operation receipts make outbox replay safe, including when a write committed
-  but its HTTP response was lost. A canonical request fingerprint prevents one
-  operation ID from being reused with different content.
+  but its HTTP response was lost. A canonical operation request signature
+  prevents one operation ID from being reused with different content.
 
 The database contains applications, labels, notes, events, campaign captures,
 structured compensation, exchange-rate observations, and operation receipts.
@@ -54,8 +54,13 @@ declaration used by handlers and the internal Effect client.
 - `PUT /v1/applications`: upsert a registry projection by job key.
 - `POST /v1/captures`: atomically create/update an application, append its
   `campaign_prepared` event, and store the generated campaign capture.
-- `GET /v1/applications`: filter by company, application status, target stage,
-  label, or exact canonical URL.
+- `GET /v1/applications`: cursor-paginated application table data. Each row
+  includes labels, an original-currency compensation summary, follow-up state,
+  latest event metadata, and note/capture counts. Filters cover company, role,
+  location, one or more lifecycle statuses, target stages, priorities, labels,
+  follow-up states, and exact canonical URL.
+- `GET /v1/applications/facets`: sorted observed companies, statuses, target
+  stages, priorities, and labels for dashboard controls.
 - `GET /v1/applications/:id`: fetch by application ID or exact job key.
 - `PATCH /v1/applications/:id`: update research and lifecycle fields.
 - `DELETE /v1/applications/:id`: remove an application aggregate.
@@ -72,7 +77,9 @@ declaration used by handlers and the internal Effect client.
 - `GET|PUT /v1/applications/:id/labels`: read or replace labels.
 - `POST /v1/applications/:id/notes`: atomically append a typed registry note,
   its history event, and an idempotency receipt.
-- `GET /v1/events`: cursor-paginated global event feed.
+- `GET /v1/events`: cursor-paginated global event feed with application company,
+  role, and canonical URL context. `from` and `to` bound source event time
+  inclusively; `kind` accepts one or more event kinds.
 
 Idempotent capture, event, and note requests include one `operationId`.
 Event writes may include `expectedVersion` for optimistic concurrency; a stale
@@ -87,6 +94,12 @@ operation or payload returns HTTP 409. `occurredAt` and `capturedAt` retain
 source history; server time owns `recordedAt` and projection timestamps.
 Persisted timestamps use canonical UTC ISO strings.
 
+The existing `/v1` API is also the Grafana data source contract; Grafana uses
+the same `REGISTRY_API_TOKEN` as other clients. There is no separate dashboard
+adapter or Grafana-only route family. Numeric `limit` values remain restricted
+to 1–100 (default 50); clients follow `nextCursor` by passing it back as `after`
+until it becomes `null`.
+
 Compensation is stored in its original currency and integer minor units. The
 conversion endpoint reuses a rate fetched within the preceding 24 hours and
 otherwise refreshes the pair from Frankfurter's public API. A bounded Effect
@@ -98,9 +111,10 @@ source amount.
 `GET /v1/events` is the lifecycle/audit feed, not a universal replica change
 log. Its revision cursor is a lossless checkpoint for registry events.
 Application list cursors use `updatedRevision` and also advance for aggregate
-label and note mutations. Page traversal uses `nextCursor`; durable incremental
-sync uses the separate `checkpoint`, including after a final page. Hard deletes
-intentionally do not emit tombstones.
+label and note mutations. Numeric page traversal uses `nextCursor`; durable
+incremental sync uses the separate `checkpoint`, including after a final page.
+The checkpoint identifies the last returned revision or preserves `after` when
+no row matches. Hard deletes intentionally do not emit tombstones.
 
 ## Local development
 
@@ -165,9 +179,10 @@ The integration and end-to-end suites require no Docker daemon:
 
 ## Production deployment
 
-Terraform creates the D1 database, Worker resource, route/custom domain, and
-Infisical values. Wrangler owns the deployed Worker code, D1 binding,
-migrations, and `REGISTRY_API_TOKEN` secret.
+Terraform creates the D1 database, manages the dedicated `workers.dev` exposure
+resource, and writes derived Infisical values. Wrangler owns Worker creation,
+deployed code, observability configuration, the D1 binding, migrations, and
+`REGISTRY_API_TOKEN` secret while preserving that exposure setting.
 
 Required deployment environment:
 

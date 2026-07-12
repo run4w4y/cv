@@ -71,8 +71,12 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
       query: {
         applicationStatus: 'not_started',
         company: 'Example',
+        followUpState: 'none',
         label: 'e2e',
         limit: 10,
+        location: 'Tokyo',
+        personalPriority: 'high',
+        role: 'Integration',
         targetStage: 'apply_next',
       },
     })
@@ -83,6 +87,14 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
   )
   assert.equal(listed.nextCursor, null)
   assert.ok(listed.checkpoint)
+  assert.deepEqual(listed.items[0]?.labels, ['e2e', 'remote'])
+  assert.equal(
+    listed.items[0]?.compensationSummary,
+    'Base salary: JPY 10,000,000–15,000,000 / year'
+  )
+  assert.equal(listed.items[0]?.followUpState, 'none')
+  assert.equal(listed.items[0]?.captureCount, 0)
+  assert.equal(listed.items[0]?.noteCount, 0)
 
   const patched = await Effect.runPromise(
     registry.registry.patchApplication({
@@ -195,6 +207,39 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
   assert.equal(replayedEvent.event.id, event.event.id)
   assert.equal(replayedEvent.application.applicationStatus, 'applied')
 
+  const dashboardList = await Effect.runPromise(
+    registry.registry.listApplications({
+      query: { company: 'Example Company', limit: 100 },
+    })
+  )
+  assert.equal(dashboardList.items.length, 1)
+  assert.deepEqual(dashboardList.items[0]?.labels, ['e2e', 'remote'])
+  assert.equal(dashboardList.items[0]?.captureCount, 1)
+  assert.equal(dashboardList.items[0]?.noteCount, 1)
+  assert.equal(dashboardList.items[0]?.latestEventKind, 'stage_changed')
+  assert.equal(dashboardList.items[0]?.latestEventAt, eventPayload.occurredAt)
+
+  const filteredEvents = await Effect.runPromise(
+    registry.registry.listEvents({
+      query: {
+        from: eventPayload.occurredAt,
+        kind: 'stage_changed',
+        limit: 100,
+        to: eventPayload.occurredAt,
+      },
+    })
+  )
+  assert.deepEqual(
+    filteredEvents.items.map((item) => item.id),
+    [event.event.id]
+  )
+  assert.equal(filteredEvents.items[0]?.company, applicationInput.company)
+  assert.equal(filteredEvents.items[0]?.role, applicationInput.role)
+  assert.equal(
+    filteredEvents.items[0]?.canonicalUrl,
+    applicationInput.canonicalUrl
+  )
+
   const secondary = await Effect.runPromise(
     registry.registry.upsertApplication({
       payload: {
@@ -205,6 +250,30 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
         role: 'Secondary Integration Engineer',
       },
     })
+  )
+
+  const facets = await Effect.runPromise(
+    registry.registry.listApplicationFacets()
+  )
+  assert.deepEqual(facets, {
+    applicationStatuses: ['applied', 'not_started'],
+    companies: ['Example Company', 'Secondary Company'],
+    labels: ['e2e', 'remote'],
+    personalPriorities: ['high'],
+    targetStages: ['apply_next'],
+  })
+
+  const multiStatus = await Effect.runPromise(
+    registry.registry.listApplications({
+      query: {
+        applicationStatus: ['applied', 'not_started'],
+        limit: 100,
+      },
+    })
+  )
+  assert.deepEqual(
+    multiStatus.items.map(({ id }) => id).sort(),
+    [applicationId, secondary.id].sort()
   )
 
   const fetchedAt = new Date().toISOString()
@@ -346,4 +415,119 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
     persisted.recommendedAction,
     'Visible after the application checkpoint.'
   )
+})
+
+test('supports cursor-paginated application and event lists over real HTTP', async () => {
+  const paginationHarness = await RegistryWorkerHarness.make()
+  try {
+    const timestamp = '2026-07-12T00:00:00.000Z'
+    const statements = Array.from({ length: 101 }, (_, index) => {
+      const sequence = index + 1
+      return paginationHarness.database
+        .prepare(
+          `insert into applications (
+            id,
+            job_key,
+            source,
+            canonical_url,
+            company,
+            company_normalized,
+            role,
+            updated_revision,
+            created_at,
+            updated_at
+          ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`
+        )
+        .bind(
+          `pagination-${sequence}`,
+          `pagination:${sequence}`,
+          'pagination-test',
+          `https://example.test/jobs/pagination-${sequence}`,
+          'Pagination Test',
+          'pagination test',
+          `Engineer ${sequence}`,
+          sequence,
+          timestamp,
+          timestamp
+        )
+    })
+    await paginationHarness.database.batch(statements.slice(0, 100))
+    await paginationHarness.database.batch(statements.slice(100))
+
+    const eventStatements = Array.from({ length: 101 }, (_, index) => {
+      const sequence = index + 1
+      return paginationHarness.database
+        .prepare(
+          `insert into application_events (
+            id,
+            application_id,
+            kind,
+            revision,
+            occurred_at,
+            recorded_at,
+            payload,
+            operation_id
+          ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`
+        )
+        .bind(
+          `pagination-event-${sequence}`,
+          `pagination-${sequence}`,
+          'research_updated',
+          sequence,
+          timestamp,
+          timestamp,
+          JSON.stringify({ sequence }),
+          `pagination-operation-${sequence}`
+        )
+    })
+    await paginationHarness.database.batch(eventStatements.slice(0, 100))
+    await paginationHarness.database.batch(eventStatements.slice(100))
+
+    const paginationRegistry = await Effect.runPromise(
+      makeApplicationRegistryHttpClient({
+        baseUrl: paginationHarness.url,
+        token: Redacted.make(registryTestToken),
+      }).pipe(Effect.provide(FetchHttpClient.layer))
+    )
+
+    const pageSizes: number[] = []
+    const ids: string[] = []
+    let after: string | undefined
+
+    do {
+      const page = await Effect.runPromise(
+        paginationRegistry.registry.listApplications({
+          query: { after, limit: 100 },
+        })
+      )
+      pageSizes.push(page.items.length)
+      ids.push(...page.items.map(({ id }) => id))
+      after = page.nextCursor ?? undefined
+    } while (after !== undefined)
+
+    assert.deepEqual(pageSizes, [100, 1])
+    assert.equal(ids.length, 101)
+    assert.equal(new Set(ids).size, 101)
+
+    const eventPageSizes: number[] = []
+    const eventIds: string[] = []
+    let eventAfter: string | undefined
+
+    do {
+      const eventPage = await Effect.runPromise(
+        paginationRegistry.registry.listEvents({
+          query: { after: eventAfter, limit: 100 },
+        })
+      )
+      eventPageSizes.push(eventPage.items.length)
+      eventIds.push(...eventPage.items.map(({ id }) => id))
+      eventAfter = eventPage.nextCursor ?? undefined
+    } while (eventAfter !== undefined)
+
+    assert.deepEqual(eventPageSizes, [100, 1])
+    assert.equal(eventIds.length, 101)
+    assert.equal(new Set(eventIds).size, 101)
+  } finally {
+    await paginationHarness.dispose()
+  }
 })

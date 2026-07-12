@@ -10,18 +10,18 @@ import {
   SubmissionDetailsSchema,
 } from '../model/details'
 import { campaignCaptures } from '../tables/captures'
-import { optionalNullable, refineWith } from './refinements'
+import { optionalNullableInsertField } from './optional-nullable-insert-field'
 
 const campaignCaptureSelectRefinements = {
-  artifacts: refineWith(Schema.Array(ArtifactManifestEntrySchema)),
-  confidence: refineWith(ConfidenceSchema),
-  submissionDetails: refineWith(SubmissionDetailsSchema),
-  capturedAt: refineWith(UtcIsoTimestampSchema),
+  artifacts: () => Schema.Array(ArtifactManifestEntrySchema),
+  confidence: () => ConfidenceSchema,
+  submissionDetails: () => SubmissionDetailsSchema,
+  capturedAt: () => UtcIsoTimestampSchema,
 }
 
 const campaignCaptureInsertRefinements = {
   artifacts: Schema.Array(ArtifactManifestEntrySchema),
-  confidence: optionalNullable(ConfidenceSchema),
+  confidence: optionalNullableInsertField(ConfidenceSchema),
   submissionDetails: SubmissionDetailsSchema,
   capturedAt: UtcIsoTimestampSchema,
 }

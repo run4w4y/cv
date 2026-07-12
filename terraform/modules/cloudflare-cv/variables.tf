@@ -67,6 +67,28 @@ variable "worker_name" {
   default     = "cv-analytics-connector"
 }
 
+variable "workers_dev_account_subdomain" {
+  type        = string
+  description = "Cloudflare account-level workers.dev subdomain label used to construct Worker URLs."
+  default     = ""
+
+  validation {
+    condition = (
+      (!var.enable_worker_dev_subdomain && !var.enable_application_registry_worker_dev_subdomain) ||
+      length(trimspace(var.workers_dev_account_subdomain)) > 0
+    )
+    error_message = "workers_dev_account_subdomain must be set when a Worker is exposed on workers.dev."
+  }
+
+  validation {
+    condition = (
+      trimspace(var.workers_dev_account_subdomain) == "" ||
+      !strcontains(trimspace(var.workers_dev_account_subdomain), ".")
+    )
+    error_message = "workers_dev_account_subdomain must be the account label only, without .workers.dev."
+  }
+}
+
 variable "cv_web_host" {
   type        = string
   description = "Hostname whose Cloudflare analytics should be queried, for example cv.example.com."
@@ -91,7 +113,7 @@ variable "worker_route_pattern" {
 
 variable "enable_worker_dev_subdomain" {
   type        = bool
-  description = "Expose the Worker on workers.dev as well as configured custom domains/routes."
+  description = "Expose the analytics connector Worker on workers.dev."
   default     = false
 }
 
@@ -145,7 +167,7 @@ variable "application_registry_worker_route_pattern" {
 
 variable "enable_application_registry_worker_dev_subdomain" {
   type        = bool
-  description = "Expose the application registry Worker on workers.dev as well as configured custom domains/routes."
+  description = "Expose the application registry Worker on workers.dev."
   default     = false
 }
 

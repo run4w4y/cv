@@ -17,28 +17,27 @@ import type {
 import { DateTime, Effect } from 'effect'
 
 import { RegistryConflictError, RegistryNotFoundError } from '../errors'
-import type { RegistryIds } from '../ids/service'
 
 export type OperationIdentity = {
   readonly applicationId?: string
   readonly kind: CommandKind
   readonly operationId: string
-  readonly requestFingerprint: string
+  readonly operationRequestSignature: string
 }
 
 export const registryNow: Effect.Effect<UtcIsoTimestamp> = DateTime.now.pipe(
   Effect.map(DateTime.formatIso)
 )
 
+export const newRegistryId = () => globalThis.crypto.randomUUID()
+
 export const decorateCompensations = (
-  compensations: readonly ApplicationCompensationInput[] | undefined,
-  ids: RegistryIds
-): Effect.Effect<readonly PersistedCompensation[] | undefined> =>
-  compensations === undefined
-    ? Effect.succeed(undefined)
-    : Effect.forEach(compensations, (compensation) =>
-        ids.next.pipe(Effect.map((id) => ({ ...compensation, id })))
-      )
+  compensations: readonly ApplicationCompensationInput[] | undefined
+): readonly PersistedCompensation[] | undefined =>
+  compensations?.map((compensation) => ({
+    ...compensation,
+    id: newRegistryId(),
+  }))
 
 export const requireApplication = (
   value: Application | undefined,
@@ -112,7 +111,7 @@ const validateOperation = (
     receipt.applicationId === expected.applicationId) &&
   receipt.kind === expected.kind &&
   receipt.operationId === expected.operationId &&
-  receipt.requestFingerprint === expected.requestFingerprint
+  receipt.operationRequestSignature === expected.operationRequestSignature
     ? Effect.void
     : Effect.fail(
         new RegistryConflictError({

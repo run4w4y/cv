@@ -7,12 +7,12 @@ import {
 import { Effect, Layer } from 'effect'
 
 import { RegistryConflictError } from '../errors'
-import { RegistryIds } from '../ids/service'
 import { decodeCursor, encodeCursor } from '../internal/cursor'
-import { requestFingerprint } from '../internal/fingerprint'
+import { operationRequestSignature } from '../internal/operation-request-signature'
 import {
   findRequiredApplication,
   findValidatedOperation,
+  newRegistryId,
   type OperationIdentity,
   registryNow,
   requireEvent,
@@ -23,11 +23,15 @@ import {
 } from '../services/events'
 import type { AppendApplicationEventInput, ListEventsInput } from '../types'
 
+const asArray = <A>(
+  value: A | readonly A[] | undefined
+): readonly A[] | undefined =>
+  value === undefined ? undefined : Array.isArray(value) ? value : [value as A]
+
 const make = Effect.gen(function* () {
   const applications = yield* ApplicationsCrud
   const events = yield* EventsCrud
   const operations = yield* OperationsCrud
-  const ids = yield* RegistryIds
 
   const loadResult = (identity: OperationIdentity, replayed: boolean) =>
     Effect.gen(function* () {
@@ -55,10 +59,13 @@ const make = Effect.gen(function* () {
             applicationId: application.id,
             kind: 'application_event',
             operationId: request.operationId,
-            requestFingerprint: requestFingerprint('application_event', {
-              applicationId: application.id,
-              request,
-            }),
+            operationRequestSignature: operationRequestSignature(
+              'application_event',
+              {
+                applicationId: application.id,
+                request,
+              }
+            ),
           }
           const replay = yield* findValidatedOperation(operations, identity)
           if (replay) return yield* loadResult(identity, true)
@@ -73,15 +80,13 @@ const make = Effect.gen(function* () {
           }
 
           const { nextApplicationStatus, ...eventInput } = request
-          const [eventId, recordedAt] = yield* Effect.all([
-            ids.next,
-            registryNow,
-          ])
+          const eventId = newRegistryId()
+          const recordedAt = yield* registryNow
           const persisted: PersistedEvent = {
             ...eventInput,
             eventId,
             recordedAt,
-            requestFingerprint: identity.requestFingerprint,
+            operationRequestSignature: identity.operationRequestSignature,
           }
           const replayed = yield* applications
             .persistEvent(
@@ -124,7 +129,10 @@ const make = Effect.gen(function* () {
         const cursor = yield* decodeCursor(query.after)
         const page = yield* events.list({
           afterRevision: cursor?.revision,
+          from: query.from,
+          kind: asArray(query.kind),
           limit: query.limit ?? 50,
+          to: query.to,
         })
         const last = page.items.at(-1)
         const checkpoint = last

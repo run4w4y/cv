@@ -2,6 +2,7 @@ export {
   findApplication,
   findApplicationByIdentifier,
   findApplicationByJobKey,
+  listApplicationFacets,
   listApplications,
 } from './application-queries'
 export {

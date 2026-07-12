@@ -25,7 +25,6 @@
         "color": true,
         "commands": [
           "tsc --pretty --noEmit --project libs/application-registry/service/tsconfig.integration.json",
-          "bun build libs/application-registry/service/test/worker.ts --target browser --outdir libs/application-registry/service/test/dist",
           "node --import tsx --test libs/application-registry/service/test/service.integration.test.ts"
         ],
         "parallel": false

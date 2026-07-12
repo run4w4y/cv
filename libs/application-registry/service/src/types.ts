@@ -4,6 +4,7 @@ import type {
   ApplicationCompensation,
   ApplicationCompensationInput,
   ApplicationEvent,
+  ApplicationEventKind,
   ApplicationLabel,
   ApplicationMutable,
   ApplicationNote,
@@ -13,6 +14,7 @@ import type {
   CurrencyCode,
   InformationalApplicationEventKind,
   JsonValue,
+  PersonalPriority,
   StatusChangingApplicationEventKind,
   TargetStage,
 } from '@cv/application-registry-entity'
@@ -58,12 +60,36 @@ export type PatchApplicationInput = ApplicationMutable & {
 
 export type ListApplicationsInput = {
   readonly after?: string
-  readonly applicationStatus?: ApplicationStatus
+  readonly applicationStatus?: ApplicationStatus | readonly ApplicationStatus[]
   readonly company?: string
-  readonly label?: string
+  readonly followUpState?: FollowUpState | readonly FollowUpState[]
+  readonly label?: string | readonly string[]
   readonly limit?: number
-  readonly targetStage?: TargetStage
+  readonly location?: string
+  readonly personalPriority?: PersonalPriority | readonly PersonalPriority[]
+  readonly role?: string
+  readonly targetStage?: TargetStage | readonly TargetStage[]
   readonly url?: string
+}
+
+export type FollowUpState = 'none' | 'overdue' | 'upcoming'
+
+export type ApplicationListItem = Application & {
+  readonly captureCount: number
+  readonly compensationSummary: string | null
+  readonly followUpState: FollowUpState
+  readonly labels: readonly string[]
+  readonly latestEventAt: string | null
+  readonly latestEventKind: ApplicationEventKind | null
+  readonly noteCount: number
+}
+
+export type ApplicationFacets = {
+  readonly applicationStatuses: readonly ApplicationStatus[]
+  readonly companies: readonly string[]
+  readonly labels: readonly string[]
+  readonly personalPriorities: readonly PersonalPriority[]
+  readonly targetStages: readonly TargetStage[]
 }
 
 export type AddApplicationNoteInput = Pick<
@@ -117,7 +143,16 @@ export type AppendApplicationEventInput =
 
 export type ListEventsInput = {
   readonly after?: string
+  readonly from?: string
+  readonly kind?: ApplicationEventKind | readonly ApplicationEventKind[]
   readonly limit?: number
+  readonly to?: string
+}
+
+export type RegistryEventListItem = ApplicationEvent & {
+  readonly canonicalUrl: string
+  readonly company: string
+  readonly role: string
 }
 
 export type ConvertedCompensation = {

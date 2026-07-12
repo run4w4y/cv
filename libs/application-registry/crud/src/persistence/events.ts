@@ -1,14 +1,13 @@
 import {
-  type ApplicationEvent,
   applicationEvents,
+  applications,
   campaignCaptures,
 } from '@cv/application-registry-entity'
-import { asc, eq, gt } from 'drizzle-orm'
+import { and, asc, eq, getColumns, gt, gte, inArray, lte } from 'drizzle-orm'
 import { Effect } from 'effect'
-
-import type { RegistryQueryDatabase } from '../database'
 import { databaseFailure, type RegistryDatabaseError } from '../errors'
-import type { CrudPage, EventListFilter } from '../types'
+import type { RegistryQueryDatabase } from '../internal/connection'
+import type { CrudPage, EventListFilter, RegistryEventListItem } from '../types'
 
 export const findEventByOperation = (
   database: RegistryQueryDatabase,
@@ -38,18 +37,38 @@ export const listApplicationEvents = (
 export const listEvents = (
   database: RegistryQueryDatabase,
   query: EventListFilter
-): Effect.Effect<CrudPage<ApplicationEvent>, RegistryDatabaseError> =>
+): Effect.Effect<CrudPage<RegistryEventListItem>, RegistryDatabaseError> =>
   Effect.gen(function* () {
     const limit = query.limit
-    const rows = yield* database
-      .select()
+    const baseQuery = database
+      .select({
+        ...getColumns(applicationEvents),
+        canonicalUrl: applications.canonicalUrl,
+        company: applications.company,
+        role: applications.role,
+      })
       .from(applicationEvents)
+      .innerJoin(
+        applications,
+        eq(applicationEvents.applicationId, applications.id)
+      )
       .where(
-        query.afterRevision === undefined
-          ? undefined
-          : gt(applicationEvents.revision, query.afterRevision)
+        and(
+          query.afterRevision === undefined
+            ? undefined
+            : gt(applicationEvents.revision, query.afterRevision),
+          query.from
+            ? gte(applicationEvents.occurredAt, query.from)
+            : undefined,
+          query.to ? lte(applicationEvents.occurredAt, query.to) : undefined,
+          query.kind && query.kind.length > 0
+            ? inArray(applicationEvents.kind, query.kind)
+            : undefined
+        )
       )
       .orderBy(asc(applicationEvents.revision))
+
+    const rows = yield* baseQuery
       .limit(limit + 1)
       .pipe(Effect.mapError(databaseFailure('Failed to list registry events')))
 

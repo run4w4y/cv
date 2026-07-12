@@ -27,11 +27,7 @@
       "outputs": [],
       "options": {
         "color": true,
-        "commands": [
-          "bun build libs/application-registry/crud/test/worker.ts --target browser --outdir libs/application-registry/crud/test/dist",
-          "node --import tsx --test libs/application-registry/crud/test/crud.integration.test.ts"
-        ],
-        "parallel": false
+        "command": "node --import tsx --test libs/application-registry/crud/test/crud.integration.test.ts"
       }
     },
     "lint": {},

@@ -49,6 +49,42 @@ describe('application registry HTTP contract', () => {
     expect(page.nextCursor).toBeNull()
   })
 
+  test('accepts single and repeated dashboard query filters', () => {
+    const single = Schema.decodeUnknownSync(ListApplicationsQuerySchema)({
+      applicationStatus: 'applied',
+      followUpState: 'overdue',
+      limit: '100',
+    })
+    const repeated = Schema.decodeUnknownSync(ListApplicationsQuerySchema)({
+      applicationStatus: ['applied', 'technical_screen'],
+      personalPriority: ['high', 'medium'],
+      targetStage: ['apply_next', 'verify_first'],
+    })
+    const events = Schema.decodeUnknownSync(ListEventsQuerySchema)({
+      from: '2026-07-01T00:00:00.000Z',
+      kind: ['stage_changed', 'research_updated'],
+      to: '2026-07-31T23:59:59.999Z',
+    })
+    expect(single.applicationStatus).toBe('applied')
+    expect(single.limit).toBe(100)
+    expect(repeated.applicationStatus).toEqual(['applied', 'technical_screen'])
+    expect(events.kind).toEqual(['stage_changed', 'research_updated'])
+    expect(
+      Option.isNone(
+        Schema.decodeUnknownOption(ListApplicationsQuerySchema)({
+          limit: '101',
+        })
+      )
+    ).toBe(true)
+    expect(
+      Option.isNone(
+        Schema.decodeUnknownOption(ListApplicationsQuerySchema)({
+          limit: 'all',
+        })
+      )
+    ).toBe(true)
+  })
+
   test('requires lifecycle status changes to be explicit', () => {
     const base = {
       deviceId: null,
@@ -77,6 +113,9 @@ describe('application registry HTTP contract', () => {
   test('exports OpenAPI from the same HttpApi declaration', () => {
     expect(applicationRegistryOpenApi.openapi).toBe('3.1.0')
     expect(applicationRegistryOpenApi.paths['/v1/applications']).toBeDefined()
+    expect(
+      applicationRegistryOpenApi.paths['/v1/applications/facets']
+    ).toBeDefined()
     expect(applicationRegistryOpenApi.paths['/v1/captures']).toBeDefined()
   })
 })

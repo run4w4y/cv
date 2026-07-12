@@ -6,13 +6,13 @@ import {
 } from '@cv/application-registry-crud'
 import { Effect, Layer } from 'effect'
 
-import { RegistryIds } from '../ids/service'
-import { requestFingerprint } from '../internal/fingerprint'
+import { operationRequestSignature } from '../internal/operation-request-signature'
 import {
   decorateCompensations,
   findRequiredApplication,
   findValidatedOperation,
   missingRegistryData,
+  newRegistryId,
   type OperationIdentity,
   recoverConcurrentReplay,
   registryNow,
@@ -28,7 +28,6 @@ const make = Effect.gen(function* () {
   const applications = yield* ApplicationsCrud
   const captures = yield* CapturesCrud
   const operations = yield* OperationsCrud
-  const ids = yield* RegistryIds
 
   const loadResult = (identity: OperationIdentity, replayed: boolean) =>
     Effect.gen(function* () {
@@ -79,25 +78,27 @@ const make = Effect.gen(function* () {
           const identity: OperationIdentity = {
             kind: 'campaign_capture',
             operationId: request.operationId,
-            requestFingerprint: requestFingerprint('campaign_capture', request),
+            operationRequestSignature: operationRequestSignature(
+              'campaign_capture',
+              request
+            ),
           }
           const replay = yield* findValidatedOperation(operations, identity)
           if (replay) return yield* loadResult(identity, true)
 
           const existing = yield* applications.findByJobKey(request.jobKey)
-          const [generatedApplicationId, eventId, captureId, recordedAt] =
-            yield* Effect.all([ids.next, ids.next, ids.next, registryNow])
+          const applicationId = existing?.id ?? newRegistryId()
+          const eventId = newRegistryId()
+          const captureId = newRegistryId()
+          const recordedAt = yield* registryNow
           const input: PersistedCapture = {
             ...request,
-            applicationId: existing?.id ?? generatedApplicationId,
+            applicationId,
             captureId,
-            compensations: yield* decorateCompensations(
-              request.compensations,
-              ids
-            ),
+            compensations: decorateCompensations(request.compensations),
             eventId,
             recordedAt,
-            requestFingerprint: identity.requestFingerprint,
+            operationRequestSignature: identity.operationRequestSignature,
           }
           const replayed = yield* persistWithRaceRecovery(identity, input)
           return yield* loadResult(identity, replayed)

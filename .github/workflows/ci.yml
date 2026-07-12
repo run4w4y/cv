@@ -80,6 +80,53 @@ jobs:
             terraform -chdir="$module" validate
           done
 
+      - name: Validate Grafana dashboard templates
+        run: |
+          validation_root="$(mktemp -d)"
+          trap 'rm -rf "$validation_root"' EXIT
+          dashboard_template="$GITHUB_WORKSPACE/terraform/grafana/dashboards/cv-applications.json.tftpl"
+
+          terraform -chdir="$validation_root" console -no-color <<EOF > "$validation_root/dashboard.literal"
+          jsonencode(jsondecode(templatefile("$dashboard_template", {
+            application_registry_datasource_uid = "test-application-registry"
+            registry_api_url = "https://registry.example.test"
+          })))
+          EOF
+
+          jq -r . "$validation_root/dashboard.literal" > "$validation_root/dashboard.json"
+          jq -e '
+            .uid == "cv-applications-overview" and
+            .title == "CV Applications" and
+            ([.panels[] | .targets[]? | select(
+              .url == "https://registry.example.test/v1/applications"
+            )] | length == 1) and
+            ([.panels[] | .targets[]? | select(
+              .url == "https://registry.example.test/v1/events"
+            )] | length == 1) and
+            ([.panels[] | .targets[]? | select(
+              .url == "https://registry.example.test/v1/applications" or
+              .url == "https://registry.example.test/v1/events"
+            )] | all(
+              .parser == "backend" and
+              (.root_selector | contains("items")) and
+              .pagination_mode == "cursor" and
+              .pagination_max_pages == 100 and
+              .pagination_param_cursor_field_name == "after" and
+              .pagination_param_cursor_field_type == "query" and
+              .pagination_param_cursor_extraction_path == "nextCursor" and
+              .pagination_param_size_field_name == "limit" and
+              .pagination_param_size_field_type == "query" and
+              .pagination_param_size_value == 100 and
+              any(.url_options.params[]?; .key == "limit" and .value == "100")
+            )) and
+            ([.panels[] | .targets[]? | select(.datasource.uid == "-- Dashboard --")] | all(
+              .panelId == 20 and .withTransforms == true
+            )) and
+            ([.panels[] | .targets[]? | .url? // empty] | all(contains("/grafana/") | not)) and
+            (.panels[] | select(.id == 20) | .options.enablePagination == true) and
+            (.templating.list | length == 5)
+          ' "$validation_root/dashboard.json"
+
       - name: Check formatting, imports, and lint rules
         run: bun run quality:biome
 

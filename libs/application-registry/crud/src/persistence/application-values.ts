@@ -10,7 +10,7 @@ import type { SQLiteInsertValue } from 'drizzle-orm/sqlite-core'
 import { uniq } from 'es-toolkit'
 import { pick } from 'es-toolkit/object'
 
-import type { RegistryBatchDatabase } from '../database'
+import type { RegistryBatchDatabase } from '../internal/connection'
 import type {
   ApplicationWriteMode,
   PersistedApplication,

@@ -1,18 +1,18 @@
 import { describe, expect, test } from 'bun:test'
 import { Schema } from 'effect'
 import {
-  appendableApplicationEventKindValues,
-  informationalApplicationEventKindValues,
-  statusChangingApplicationEventKindValues,
-} from './model/values'
-import {
   ApplicationCompensationInputSchema,
   ApplicationEventInsertSchema,
   ApplicationMutableSchema,
   ApplicationRowSelectSchema,
   ApplicationWritableSchema,
   FxRateInputSchema,
-} from './schema'
+} from './index'
+import {
+  appendableApplicationEventKindValues,
+  informationalApplicationEventKindValues,
+  statusChangingApplicationEventKindValues,
+} from './model/values'
 
 const applicationRow = {
   id: 'application-1',
@@ -94,12 +94,25 @@ describe('application registry database schemas', () => {
       role: 'Engineer',
       source: 'web',
     })
+    const nullableWritable = Schema.decodeUnknownSync(
+      ApplicationWritableSchema
+    )({
+      canonicalUrl: 'https://example.test/jobs/three',
+      company: 'Example',
+      details: null,
+      fitScore: null,
+      jobKey: 'web:three',
+      role: 'Engineer',
+      source: 'web',
+    })
     const mutable = Schema.decodeUnknownSync(ApplicationMutableSchema)({
       details: null,
       fitScore: null,
     })
 
     expect(writable.fitScore).toBeUndefined()
+    expect(nullableWritable.details).toBeNull()
+    expect(nullableWritable.fitScore).toBeNull()
     expect(mutable.details).toBeNull()
   })
 
@@ -126,10 +139,10 @@ describe('application registry database schemas', () => {
   test('applies domain checks that SQLite metadata cannot express', () => {
     expect(() =>
       Schema.decodeUnknownSync(ApplicationWritableSchema)({
-        canonicalUrl: 'https://example.test/jobs/three',
+        canonicalUrl: 'https://example.test/jobs/four',
         company: 'Example',
         fitScore: 101,
-        jobKey: 'web:three',
+        jobKey: 'web:four',
         role: 'Engineer',
         source: 'web',
       })

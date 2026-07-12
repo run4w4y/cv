@@ -2,7 +2,7 @@ import type { D1Database } from '@cloudflare/workers-types'
 import { Effect, Result } from 'effect'
 
 import { AnnotationsService, ApplicationsService } from '../../src'
-import { makeApplicationInput } from '../support/worker-runtime'
+import { makeApplicationInput } from '../support/inputs'
 
 const firstRow = <Row>(database: D1Database, sql: string) =>
   Effect.promise(() => database.prepare(sql).first<Row>())

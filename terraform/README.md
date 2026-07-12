@@ -2,7 +2,7 @@
 
 This directory contains the infrastructure that belongs to the CV workspace
 itself: secret layout, static-site hosting, analytics connector routing, the
-application registry's D1 database and Worker routing, and a Grafana dashboard.
+application registry's D1 database and Worker routing, and Grafana dashboards.
 It does not provision a general cloud account, a Grafana server, or a content
 repository.
 
@@ -16,12 +16,13 @@ generates a Terraform Cloud backend from `TF_CLOUD_ORGANIZATION`,
   secrets that operators fill manually, and generated secrets used by builds,
   private links, and Grafana auth.
 - `live/prod/cloudflare`: creates the Cloudflare Pages project/domain/DNS record
-  for the static CV site and the Cloudflare Worker resource plus Worker Custom
-  Domain or route for both the analytics connector and application registry. It
-  also creates the application registry's D1 database. Wrangler deploys Worker
-  code, D1 bindings, migrations, and runtime secrets separately.
-- `live/prod/grafana`: creates a Grafana folder, Infinity datasource, and starter
-  analytics dashboard backed by the analytics connector.
+  for the static CV site, exposes the analytics connector and application
+  registry Workers through their Cloudflare-provided `workers.dev` URLs, and
+  creates the application registry's D1 database. Wrangler deploys Worker code,
+  D1 bindings, migrations, and runtime secrets separately.
+- `live/prod/grafana`: creates separate analytics and applications folders,
+  Infinity datasources, and dashboards backed by the analytics connector and
+  application registry API.
 
 Terraform Cloud workspace names:
 
@@ -80,15 +81,26 @@ terragrunt apply
 
 Then fill the user-owned placeholder secrets in Infisical.
 
+Open Cloudflare's **Workers & Pages** landing page once before filling the
+Worker settings. Cloudflare creates the account-level `workers.dev` subdomain
+on that first visit. Its label is the middle portion of any default Worker URL:
+`<worker>.<account-label>.workers.dev`.
+
 Required under `/cv/deploy`:
 
 - `CLOUDFLARE_ACCOUNT_ID`
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ZONE_ID`
-- `APPLICATION_REGISTRY_HOSTNAME`, for example `applications.example.com`
-- `CV_ANALYTICS_CONNECTOR_HOSTNAME`, for example `analytics.example.com`
+- `CLOUDFLARE_WORKERS_DEV_ACCOUNT_SUBDOMAIN`, the account label shown in
+  `<worker>.<account-label>.workers.dev`, without `.workers.dev`
 - `CV_WEB_HOST`, for example `cv.example.com`
 - `DOMAIN_NAME`, for example `example.com`
+
+On an existing deployment, Terraform renames the former
+`CV_ANALYTICS_CONNECTOR_HOSTNAME` secret to
+`CLOUDFLARE_WORKERS_DEV_ACCOUNT_SUBDOMAIN` without destroying the protected
+secret. Replace its old custom-hostname value with the new account label before
+applying the Cloudflare stack.
 
 The registry D1 primary defaults to Cloudflare's `weur` location hint. Override
 it with `APPLICATION_REGISTRY_DB_PRIMARY_LOCATION_HINT` (`wnam`, `enam`,
@@ -142,12 +154,10 @@ This stack creates:
 
 - a Cloudflare Pages project;
 - the Pages custom domain and proxied CNAME record;
-- the analytics connector Worker script resource;
-- either a Worker Custom Domain or Worker route;
+- the analytics connector Worker's `workers.dev` exposure and derived URL;
 - the `cv-application-registry` D1 database, protected from accidental
   Terraform destruction;
-- the application registry Worker script resource and its Custom Domain or
-  route;
+- the application registry Worker's `workers.dev` exposure and derived URL;
 - `ANALYTICS_CONNECTOR_URL` in `/cv/analytics` when Infisical sync is enabled;
 - `REGISTRY_API_URL`, `APPLICATION_REGISTRY_DB_ID`,
   `APPLICATION_REGISTRY_DB_NAME`, and `APPLICATION_REGISTRY_WORKER_NAME` in
@@ -167,13 +177,14 @@ bunx nx run application-registry-api:migrations:apply:remote
 bunx nx run application-registry-api:deploy
 ```
 
-Terraform owns the D1 database, Worker resource, and routing. Wrangler owns the
-deployed Worker version, the `APPLICATION_REGISTRY_DB` D1 binding, migrations,
-and `REGISTRY_API_TOKEN` Worker secret. The deploy target publishes code and
-the secret in one Worker version. Apply Terraform before running the two
-commands above.
+Terraform owns the D1 database, dedicated `workers.dev` exposure resources,
+derived URLs, and Infisical writes. Wrangler owns Worker creation and deployed
+versions, observability configuration, the `APPLICATION_REGISTRY_DB` D1
+binding, migrations, and runtime secrets. The registry deploy target publishes
+code and `REGISTRY_API_TOKEN` in one Worker version.
 
-Apply Grafana after the analytics connector URL and Grafana token are available:
+Apply Grafana after the analytics connector URL, application registry URL and
+token, and Grafana token are available:
 
 ```sh
 cd terraform/live/prod/grafana
@@ -181,6 +192,16 @@ terragrunt init
 terragrunt plan
 terragrunt apply
 ```
+
+The applications dashboard provides lifecycle KPIs, status/stage/priority
+breakdowns, a complete applications table, follow-up queue, and
+time-ranged recent activity. Company, lifecycle, stage, priority, and label
+controls share one applications query across panels. Empty registries retain
+table schemas and zero-valued KPIs. The applications and recent-activity
+queries use Infinity cursor pagination with 100 rows per request, following the
+existing endpoints' `nextCursor` through the `after` query parameter for up to
+100 pages. Grafana's plugin-wide pagination maximum must permit the same page
+count.
 
 ## Cloudflare Permissions
 
@@ -192,9 +213,6 @@ permissions for both Terraform-managed resources and Wrangler deployments:
 - Account: `Pages` `Write`
 - Zone: `DNS` `Write`
 - Zone: `Zone` `Read`
-- Zone: `Workers Routes` `Write`, only when using
-  `CV_ANALYTICS_CONNECTOR_ROUTE_PATTERN` or `APPLICATION_REGISTRY_ROUTE_PATTERN`
-  instead of Worker Custom Domains
 
 Scope account permissions to the target Cloudflare account and zone permissions
 to the target CV domain's zone.
@@ -251,8 +269,9 @@ Infisical as `APPLICATION_REGISTRY_DB_ID` so the generated production Wrangler
 configuration can bind the correct database without checking an environment-
 specific UUID into source control.
 
-The Cloudflare Terraform stack should only manage the Worker resource, domain or
-route, and non-secret vars. Treat HCP Terraform state as sensitive anyway:
+The Cloudflare Terraform stack should only manage `workers.dev` exposure,
+derived deployment values, and non-secret infrastructure. Treat HCP Terraform
+state as sensitive anyway:
 Infisical and Grafana provider state can include generated or provider-managed
 secret values.
 
@@ -262,5 +281,5 @@ secret values.
   analytics, and application registry secrets.
 - `modules/cloudflare-cv`: Pages project/domain/DNS, analytics Worker routing,
   application registry D1 database, and registry Worker routing.
-- `modules/grafana-cv`: Infinity datasource, dashboard folder, and dashboard
-  template binding.
+- `modules/grafana-cv`: analytics and application-registry Infinity
+  datasources, dashboard folders, and dashboard template bindings.

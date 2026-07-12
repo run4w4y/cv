@@ -10,36 +10,36 @@ import { omit, pick } from 'es-toolkit/object'
 import { FitScoreSchema, UtcIsoTimestampSchema } from '../model/constraints'
 import { OpportunityDetailsSchema } from '../model/details'
 import { applications } from '../tables/applications'
-import { optionalNullable, refineWith } from './refinements'
+import { optionalNullableInsertField } from './optional-nullable-insert-field'
 
 const applicationSelectRefinements = {
-  details: refineWith(OpportunityDetailsSchema),
-  fitScore: refineWith(FitScoreSchema),
-  followUpAt: refineWith(UtcIsoTimestampSchema),
-  appliedAt: refineWith(UtcIsoTimestampSchema),
-  lastContactAt: refineWith(UtcIsoTimestampSchema),
-  createdAt: refineWith(UtcIsoTimestampSchema),
-  updatedAt: refineWith(UtcIsoTimestampSchema),
+  details: () => OpportunityDetailsSchema,
+  fitScore: () => FitScoreSchema,
+  followUpAt: () => UtcIsoTimestampSchema,
+  appliedAt: () => UtcIsoTimestampSchema,
+  lastContactAt: () => UtcIsoTimestampSchema,
+  createdAt: () => UtcIsoTimestampSchema,
+  updatedAt: () => UtcIsoTimestampSchema,
 }
 
 const applicationInsertRefinements = {
-  details: optionalNullable(OpportunityDetailsSchema),
-  fitScore: optionalNullable(FitScoreSchema),
-  followUpAt: optionalNullable(UtcIsoTimestampSchema),
-  appliedAt: optionalNullable(UtcIsoTimestampSchema),
-  lastContactAt: optionalNullable(UtcIsoTimestampSchema),
+  details: optionalNullableInsertField(OpportunityDetailsSchema),
+  fitScore: optionalNullableInsertField(FitScoreSchema),
+  followUpAt: optionalNullableInsertField(UtcIsoTimestampSchema),
+  appliedAt: optionalNullableInsertField(UtcIsoTimestampSchema),
+  lastContactAt: optionalNullableInsertField(UtcIsoTimestampSchema),
   createdAt: UtcIsoTimestampSchema,
   updatedAt: UtcIsoTimestampSchema,
 }
 
 const applicationUpdateRefinements = {
-  details: refineWith(OpportunityDetailsSchema),
-  fitScore: refineWith(FitScoreSchema),
-  followUpAt: refineWith(UtcIsoTimestampSchema),
-  appliedAt: refineWith(UtcIsoTimestampSchema),
-  lastContactAt: refineWith(UtcIsoTimestampSchema),
-  createdAt: refineWith(UtcIsoTimestampSchema),
-  updatedAt: refineWith(UtcIsoTimestampSchema),
+  details: () => OpportunityDetailsSchema,
+  fitScore: () => FitScoreSchema,
+  followUpAt: () => UtcIsoTimestampSchema,
+  appliedAt: () => UtcIsoTimestampSchema,
+  lastContactAt: () => UtcIsoTimestampSchema,
+  createdAt: () => UtcIsoTimestampSchema,
+  updatedAt: () => UtcIsoTimestampSchema,
 }
 
 export const ApplicationRowSelectSchema = createSelectSchema(

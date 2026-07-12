@@ -1,11 +1,15 @@
 import {
   ApplicationCompensationSchema,
+  ApplicationEventKindSchema,
   ApplicationEventSchema,
   ApplicationLabelSchema,
   ApplicationNoteSchema,
   ApplicationSchema,
+  ApplicationStatusSchema,
   CampaignCaptureSchema,
   CurrencyCodeSchema,
+  PersonalPrioritySchema,
+  TargetStageSchema,
   UtcIsoTimestampSchema,
 } from '@cv/application-registry-entity'
 import { Schema } from 'effect'
@@ -30,6 +34,8 @@ export {
   RegistryApplicationInputSchema as UpsertApplicationRequestSchema,
 } from './commands'
 
+import { FollowUpStateSchema } from './commands'
+
 const NonEmptyString = Schema.Trim.pipe(Schema.check(Schema.isNonEmpty()))
 
 export const ApplicationIdentifierParamsSchema = Schema.Struct({
@@ -41,13 +47,40 @@ const RevisionPageFields = {
   nextCursor: Schema.NullOr(NonEmptyString),
 }
 
+export const ApplicationListItemSchema = Schema.Struct({
+  ...ApplicationSchema.fields,
+  captureCount: Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0))),
+  compensationSummary: Schema.NullOr(NonEmptyString),
+  followUpState: FollowUpStateSchema,
+  labels: Schema.Array(NonEmptyString),
+  latestEventAt: Schema.NullOr(UtcIsoTimestampSchema),
+  latestEventKind: Schema.NullOr(ApplicationEventKindSchema),
+  noteCount: Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0))),
+})
+
+export type ApplicationListItem = Schema.Schema.Type<
+  typeof ApplicationListItemSchema
+>
+
 export const ListApplicationsResponseSchema = Schema.Struct({
-  items: Schema.Array(ApplicationSchema),
+  items: Schema.Array(ApplicationListItemSchema),
   ...RevisionPageFields,
 })
 
 export type ListApplicationsResponse = Schema.Schema.Type<
   typeof ListApplicationsResponseSchema
+>
+
+export const ApplicationFacetsResponseSchema = Schema.Struct({
+  applicationStatuses: Schema.Array(ApplicationStatusSchema),
+  companies: Schema.Array(ApplicationSchema.fields.company),
+  labels: Schema.Array(NonEmptyString),
+  personalPriorities: Schema.Array(PersonalPrioritySchema),
+  targetStages: Schema.Array(TargetStageSchema),
+})
+
+export type ApplicationFacetsResponse = Schema.Schema.Type<
+  typeof ApplicationFacetsResponseSchema
 >
 
 export const ReplaceApplicationLabelsRequestSchema = Schema.Struct({
@@ -154,8 +187,19 @@ export type ListApplicationCompensationsResponse = Schema.Schema.Type<
   typeof ListApplicationCompensationsResponseSchema
 >
 
+export const RegistryEventListItemSchema = Schema.Struct({
+  ...ApplicationEventSchema.fields,
+  canonicalUrl: ApplicationSchema.fields.canonicalUrl,
+  company: ApplicationSchema.fields.company,
+  role: ApplicationSchema.fields.role,
+})
+
+export type RegistryEventListItem = Schema.Schema.Type<
+  typeof RegistryEventListItemSchema
+>
+
 export const ListEventsResponseSchema = Schema.Struct({
-  items: Schema.Array(ApplicationEventSchema),
+  items: Schema.Array(RegistryEventListItemSchema),
   ...RevisionPageFields,
 })
 

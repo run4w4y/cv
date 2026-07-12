@@ -12,7 +12,7 @@ import {
   makeApplicationInput,
   makeCaptureInput,
   recordedAt,
-} from '../support/worker-runtime'
+} from '../support/inputs'
 
 export const concurrentNoteWorkflow = Effect.gen(function* () {
   const annotations = yield* AnnotationsService

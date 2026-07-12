@@ -82,6 +82,24 @@ const event: ApplicationEvent = {
   operationId: 'capture:one',
 }
 
+const applicationListItem = {
+  ...application,
+  captureCount: 1,
+  compensationSummary: null,
+  followUpState: 'none' as const,
+  labels: ['priority'],
+  latestEventAt: event.occurredAt,
+  latestEventKind: event.kind,
+  noteCount: 1,
+}
+
+const eventListItem = {
+  ...event,
+  canonicalUrl: application.canonicalUrl,
+  company: application.company,
+  role: application.role,
+}
+
 const capture: CampaignCapture = {
   id: 'capture-1',
   applicationId: application.id,
@@ -163,11 +181,19 @@ const makeRegistryLayer = (
       list: () => Effect.succeed({ labels: [], notes: [] }),
     }),
     Layer.succeed(ApplicationsService, {
+      facets: () =>
+        Effect.succeed({
+          applicationStatuses: [application.applicationStatus],
+          companies: [application.company],
+          labels: ['priority'],
+          personalPriorities: [],
+          targetStages: [application.targetStage],
+        }),
       find: () => Effect.succeed(application),
       list: () =>
         Effect.succeed({
           checkpoint: 'revision=1',
-          items: [application],
+          items: [applicationListItem],
           nextCursor: null,
         }),
       patch: () => Effect.succeed(application),
@@ -190,7 +216,7 @@ const makeRegistryLayer = (
       list: () =>
         Effect.succeed({
           checkpoint: 'revision=1',
-          items: [event],
+          items: [eventListItem],
           nextCursor: null,
         }),
       listByApplication: () => Effect.succeed({ items: [event] }),
@@ -279,6 +305,27 @@ describe('application registry HttpApi', () => {
     expect(response.items[0]?.submissionDetails.applicationQuestions).toEqual([
       'Why us?',
     ])
+  })
+
+  test('serves application facets through the static applications route', async () => {
+    const response = await runApiTest(
+      Effect.gen(function* () {
+        const client = yield* HttpApiTest.groups(ApplicationRegistryApi, [
+          'registry',
+        ])
+        return yield* client.registry.listApplicationFacets()
+      }).pipe((effect) =>
+        provideApiTestLayer(effect, makeRegistryLayer(), true)
+      )
+    )
+
+    expect(response).toEqual({
+      applicationStatuses: ['preparing'],
+      companies: ['Example'],
+      labels: ['priority'],
+      personalPriorities: [],
+      targetStages: ['backlog'],
+    })
   })
 
   test('carries one note operation ID through the generated HTTP contract', async () => {

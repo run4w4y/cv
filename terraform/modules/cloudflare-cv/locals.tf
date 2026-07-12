@@ -1,4 +1,6 @@
 locals {
+  workers_dev_account_subdomain = trimspace(var.workers_dev_account_subdomain)
+
   custom_domain_hostname = trimspace(var.worker_custom_domain_hostname)
   route_pattern          = trimspace(var.worker_route_pattern)
 
@@ -14,15 +16,23 @@ locals {
   route_connector_host            = trimsuffix(local.route_pattern, "/*")
   application_registry_route_host = trimsuffix(local.application_registry_route_pattern, "/*")
 
+  analytics_connector_workers_dev_url = var.enable_worker_dev_subdomain ? (
+    "https://${var.worker_name}.${local.workers_dev_account_subdomain}.workers.dev"
+  ) : null
+
+  application_registry_workers_dev_url = var.enable_application_registry_worker_dev_subdomain ? (
+    "https://${var.application_registry_worker_name}.${local.workers_dev_account_subdomain}.workers.dev"
+  ) : null
+
   connector_url = (
     local.custom_domain_enabled ? "https://${local.custom_domain_hostname}" :
     local.route_enabled ? "https://${local.route_connector_host}" :
-    null
+    local.analytics_connector_workers_dev_url
   )
 
   application_registry_api_url = (
     local.application_registry_custom_domain_enabled ? "https://${local.application_registry_custom_domain_hostname}" :
     local.application_registry_route_enabled ? "https://${local.application_registry_route_host}" :
-    null
+    local.application_registry_workers_dev_url
   )
 }

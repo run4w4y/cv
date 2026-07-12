@@ -12,30 +12,30 @@ import {
   UtcIsoTimestampSchema,
 } from '../model/constraints'
 import { applicationCompensations } from '../tables/compensations'
-import { optionalNullable, refineWith } from './refinements'
+import { optionalNullableInsertField } from './optional-nullable-insert-field'
 
 const applicationCompensationSelectRefinements = {
-  currencyCode: refineWith(CurrencyCodeSchema),
-  minimumMinor: refineWith(NonNegativeMinorAmountSchema),
-  maximumMinor: refineWith(NonNegativeMinorAmountSchema),
-  createdAt: refineWith(UtcIsoTimestampSchema),
-  updatedAt: refineWith(UtcIsoTimestampSchema),
+  currencyCode: () => CurrencyCodeSchema,
+  minimumMinor: () => NonNegativeMinorAmountSchema,
+  maximumMinor: () => NonNegativeMinorAmountSchema,
+  createdAt: () => UtcIsoTimestampSchema,
+  updatedAt: () => UtcIsoTimestampSchema,
 }
 
 const applicationCompensationInsertRefinements = {
   currencyCode: CurrencyCodeSchema,
-  minimumMinor: optionalNullable(NonNegativeMinorAmountSchema),
-  maximumMinor: optionalNullable(NonNegativeMinorAmountSchema),
+  minimumMinor: optionalNullableInsertField(NonNegativeMinorAmountSchema),
+  maximumMinor: optionalNullableInsertField(NonNegativeMinorAmountSchema),
   createdAt: UtcIsoTimestampSchema,
   updatedAt: UtcIsoTimestampSchema,
 }
 
 const applicationCompensationUpdateRefinements = {
-  currencyCode: refineWith(CurrencyCodeSchema),
-  minimumMinor: refineWith(NonNegativeMinorAmountSchema),
-  maximumMinor: refineWith(NonNegativeMinorAmountSchema),
-  createdAt: refineWith(UtcIsoTimestampSchema),
-  updatedAt: refineWith(UtcIsoTimestampSchema),
+  currencyCode: () => CurrencyCodeSchema,
+  minimumMinor: () => NonNegativeMinorAmountSchema,
+  maximumMinor: () => NonNegativeMinorAmountSchema,
+  createdAt: () => UtcIsoTimestampSchema,
+  updatedAt: () => UtcIsoTimestampSchema,
 }
 
 export const ApplicationCompensationSchema = createSelectSchema(

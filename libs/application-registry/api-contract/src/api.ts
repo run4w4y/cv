@@ -18,6 +18,7 @@ import {
   AppendApplicationEventRequestSchema,
   AppendApplicationEventResponseSchema,
   ApplicationAnnotationsResponseSchema,
+  ApplicationFacetsResponseSchema,
   ApplicationIdentifierParamsSchema,
   CreateCampaignCaptureRequestSchema,
   CreateCampaignCaptureResponseSchema,
@@ -72,6 +73,12 @@ export class RegistryApi extends HttpApiGroup.make('registry')
       error: registryEndpointErrors,
       query: ListApplicationsQuerySchema,
       success: ListApplicationsResponseSchema,
+    })
+  )
+  .add(
+    HttpApiEndpoint.get('listApplicationFacets', '/applications/facets', {
+      error: registryEndpointErrors,
+      success: ApplicationFacetsResponseSchema,
     })
   )
   .add(

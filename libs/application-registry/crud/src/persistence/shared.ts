@@ -2,9 +2,8 @@ import { registrySequence } from '@cv/application-registry-entity'
 import { sql } from 'drizzle-orm'
 import type { BatchItem } from 'drizzle-orm/batch'
 import { Effect } from 'effect'
-
-import type { RegistryBatchDatabase } from '../database'
 import { RegistryDatabaseError } from '../errors'
+import type { RegistryBatchDatabase } from '../internal/connection'
 
 export const currentRevision = sql<number>`(
   select ${registrySequence.revision}

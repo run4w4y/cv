@@ -12,14 +12,13 @@ inputs = {
   pages_project_name      = get_env("CLOUDFLARE_PAGES_PROJECT", "cv")
   pages_production_branch = get_env("CLOUDFLARE_PAGES_PRODUCTION_BRANCH", "main")
 
-  worker_custom_domain_hostname = get_env("CV_ANALYTICS_CONNECTOR_HOSTNAME", "")
-  worker_route_pattern          = get_env("CV_ANALYTICS_CONNECTOR_ROUTE_PATTERN", "")
+  workers_dev_account_subdomain = get_env("CLOUDFLARE_WORKERS_DEV_ACCOUNT_SUBDOMAIN")
+  enable_worker_dev_subdomain   = true
 
   application_registry_worker_name                    = get_env("APPLICATION_REGISTRY_WORKER_NAME", "cv-application-registry")
   application_registry_database_name                  = get_env("APPLICATION_REGISTRY_DB_NAME", "cv-application-registry")
   application_registry_database_primary_location_hint = get_env("APPLICATION_REGISTRY_DB_PRIMARY_LOCATION_HINT", "weur")
-  application_registry_worker_custom_domain_hostname  = get_env("APPLICATION_REGISTRY_HOSTNAME", "")
-  application_registry_worker_route_pattern           = get_env("APPLICATION_REGISTRY_ROUTE_PATTERN", "")
+  enable_application_registry_worker_dev_subdomain    = true
 
   infisical_sync_enabled                     = get_env("INFISICAL_PROJECT_ID", "") != ""
   infisical_host                             = get_env("INFISICAL_HOST", "https://app.infisical.com")

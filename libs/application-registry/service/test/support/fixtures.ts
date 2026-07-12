@@ -1,3 +1,4 @@
+import type { ApplicationListRecord } from '@cv/application-registry-crud'
 import type {
   Application,
   ApplicationCompensation,
@@ -69,6 +70,13 @@ export const event: ApplicationEvent = {
   revision: 4,
 }
 
+export const registryEventListItem = {
+  ...event,
+  canonicalUrl: application.canonicalUrl,
+  company: application.company,
+  role: application.role,
+}
+
 export const capture: CampaignCapture = {
   applicationId: application.id,
   artifacts: [],
@@ -113,6 +121,16 @@ export const compensation: ApplicationCompensation = {
   updatedAt: recordedAt,
 }
 
+export const applicationListRecord: ApplicationListRecord = {
+  ...application,
+  captureCount: 0,
+  compensations: [],
+  labels: [],
+  latestEventAt: null,
+  latestEventKind: null,
+  noteCount: 0,
+}
+
 export const fxRate: FxRate = {
   baseCurrency: 'EUR',
   fetchedAt: recordedAt,
@@ -132,6 +150,6 @@ export const receipt = (
   noteId: note.id,
   operationId: 'note-operation-1',
   recordedAt,
-  requestFingerprint: '',
+  operationRequestSignature: '',
   ...input,
 })

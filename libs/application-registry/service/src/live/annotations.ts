@@ -6,12 +6,12 @@ import {
 } from '@cv/application-registry-crud'
 import { Effect, Layer } from 'effect'
 
-import { RegistryIds } from '../ids/service'
-import { requestFingerprint } from '../internal/fingerprint'
+import { operationRequestSignature } from '../internal/operation-request-signature'
 import {
   findRequiredApplication,
   findValidatedOperation,
   missingRegistryData,
+  newRegistryId,
   type OperationIdentity,
   recoverConcurrentReplay,
   registryNow,
@@ -28,7 +28,6 @@ const make = Effect.gen(function* () {
   const annotations = yield* AnnotationsCrud
   const applications = yield* ApplicationsCrud
   const operations = yield* OperationsCrud
-  const ids = yield* RegistryIds
 
   return {
     addNote: Effect.fn('AnnotationsService.addNote')(
@@ -42,10 +41,13 @@ const make = Effect.gen(function* () {
             applicationId: application.id,
             kind: 'application_note',
             operationId: request.operationId,
-            requestFingerprint: requestFingerprint('application_note', {
-              applicationId: application.id,
-              request,
-            }),
+            operationRequestSignature: operationRequestSignature(
+              'application_note',
+              {
+                applicationId: application.id,
+                request,
+              }
+            ),
           }
           const replay = yield* findValidatedOperation(operations, identity)
 
@@ -57,17 +59,15 @@ const make = Effect.gen(function* () {
             return { note, replayed: true }
           }
 
-          const [noteId, eventId, recordedAt] = yield* Effect.all([
-            ids.next,
-            ids.next,
-            registryNow,
-          ])
+          const noteId = newRegistryId()
+          const eventId = newRegistryId()
+          const recordedAt = yield* registryNow
           const persisted: PersistedNote = {
             ...request,
             eventId,
             noteId,
             recordedAt,
-            requestFingerprint: identity.requestFingerprint,
+            operationRequestSignature: identity.operationRequestSignature,
           }
           const replayed = yield* recoverConcurrentReplay(
             operations,

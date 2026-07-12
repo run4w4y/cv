@@ -5,9 +5,8 @@ import {
 } from '@cv/application-registry-entity'
 import { and, desc, eq } from 'drizzle-orm'
 import { Effect } from 'effect'
-
-import type { RegistryQueryDatabase } from '../database'
 import { databaseFailure } from '../errors'
+import type { RegistryQueryDatabase } from '../internal/connection'
 
 export const listCompensations = (
   database: RegistryQueryDatabase,

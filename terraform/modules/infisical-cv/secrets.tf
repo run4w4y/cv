@@ -152,3 +152,8 @@ moved {
   from = infisical_secret.this["/cv/analytics:GRAFANA_CONNECTOR_TOKEN"]
   to   = infisical_secret.grafana_connector_token
 }
+
+moved {
+  from = infisical_secret.this["/cv/deploy:CV_ANALYTICS_CONNECTOR_HOSTNAME"]
+  to   = infisical_secret.this["/cv/deploy:CLOUDFLARE_WORKERS_DEV_ACCOUNT_SUBDOMAIN"]
+}

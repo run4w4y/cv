@@ -1,11 +1,18 @@
-resource "cloudflare_worker" "analytics_connector" {
-  account_id = var.cloudflare_account_id
-  name       = var.worker_name
+removed {
+  from = cloudflare_worker.analytics_connector
 
-  subdomain = var.enable_worker_dev_subdomain ? {
-    enabled          = true
-    previews_enabled = false
-  } : null
+  lifecycle {
+    destroy = false
+  }
+}
+
+resource "cloudflare_workers_script_subdomain" "analytics_connector" {
+  count = var.enable_worker_dev_subdomain ? 1 : 0
+
+  account_id       = var.cloudflare_account_id
+  script_name      = var.worker_name
+  enabled          = true
+  previews_enabled = false
 }
 
 resource "cloudflare_workers_custom_domain" "analytics_connector" {
@@ -13,11 +20,9 @@ resource "cloudflare_workers_custom_domain" "analytics_connector" {
 
   account_id = var.cloudflare_account_id
   hostname   = local.custom_domain_hostname
-  service    = cloudflare_worker.analytics_connector.name
+  service    = var.worker_name
   zone_id    = var.cloudflare_zone_id
   zone_name  = var.zone_name
-
-  depends_on = [cloudflare_worker.analytics_connector]
 }
 
 resource "cloudflare_workers_route" "analytics_connector" {
@@ -25,14 +30,16 @@ resource "cloudflare_workers_route" "analytics_connector" {
 
   zone_id = var.cloudflare_zone_id
   pattern = local.route_pattern
-  script  = cloudflare_worker.analytics_connector.name
-
-  depends_on = [cloudflare_worker.analytics_connector]
+  script  = var.worker_name
 }
 
 resource "cloudflare_d1_database" "application_registry" {
   account_id = var.cloudflare_account_id
   name       = var.application_registry_database_name
+
+  read_replication = {
+    mode = "disabled"
+  }
 
   primary_location_hint = (
     trimspace(var.application_registry_database_primary_location_hint) != "" ?
@@ -45,14 +52,13 @@ resource "cloudflare_d1_database" "application_registry" {
   }
 }
 
-resource "cloudflare_worker" "application_registry" {
-  account_id = var.cloudflare_account_id
-  name       = var.application_registry_worker_name
+resource "cloudflare_workers_script_subdomain" "application_registry" {
+  count = var.enable_application_registry_worker_dev_subdomain ? 1 : 0
 
-  subdomain = var.enable_application_registry_worker_dev_subdomain ? {
-    enabled          = true
-    previews_enabled = false
-  } : null
+  account_id       = var.cloudflare_account_id
+  script_name      = var.application_registry_worker_name
+  enabled          = true
+  previews_enabled = false
 }
 
 resource "cloudflare_workers_custom_domain" "application_registry" {
@@ -60,11 +66,9 @@ resource "cloudflare_workers_custom_domain" "application_registry" {
 
   account_id = var.cloudflare_account_id
   hostname   = local.application_registry_custom_domain_hostname
-  service    = cloudflare_worker.application_registry.name
+  service    = var.application_registry_worker_name
   zone_id    = var.cloudflare_zone_id
   zone_name  = var.zone_name
-
-  depends_on = [cloudflare_worker.application_registry]
 }
 
 resource "cloudflare_workers_route" "application_registry" {
@@ -72,7 +76,5 @@ resource "cloudflare_workers_route" "application_registry" {
 
   zone_id = var.cloudflare_zone_id
   pattern = local.application_registry_route_pattern
-  script  = cloudflare_worker.application_registry.name
-
-  depends_on = [cloudflare_worker.application_registry]
+  script  = var.application_registry_worker_name
 }

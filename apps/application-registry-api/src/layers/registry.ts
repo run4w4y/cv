@@ -1,37 +1,16 @@
-import {
-  RegistryCrudD1Live,
-  RegistryDatabase,
-  registryDatabaseD1Layer,
-} from '@cv/application-registry-crud/d1'
+import { makeRegistryCrudLive } from '@cv/application-registry-crud/live'
 import {
   FrankfurterFxRateProviderLive,
   FxRatesLive,
 } from '@cv/application-registry-fx'
-import {
-  RegistryIdsLive,
-  RegistryServicesLive,
-} from '@cv/application-registry-service/live'
+import { RegistryServicesLive } from '@cv/application-registry-service/live'
 import { Effect, Layer } from 'effect'
 import * as FetchHttpClient from 'effect/unstable/http/FetchHttpClient'
 
 import { WorkerEnv } from '../worker/bindings'
 
-const RegistryDatabaseLayer = Layer.succeed(
-  RegistryDatabase,
-  RegistryDatabase.of({
-    use: (operation) =>
-      WorkerEnv.pipe(
-        Effect.flatMap((env) =>
-          RegistryDatabase.use((database) => database.use(operation)).pipe(
-            Effect.provide(registryDatabaseD1Layer(env.APPLICATION_REGISTRY_DB))
-          )
-        )
-      ),
-  })
-)
-
-const RegistryCrudLayer = RegistryCrudD1Live.pipe(
-  Layer.provide(RegistryDatabaseLayer)
+const RegistryCrudLayer = makeRegistryCrudLive(
+  WorkerEnv.pipe(Effect.map((env) => env.APPLICATION_REGISTRY_DB))
 )
 
 const FxRateProviderLayer = FrankfurterFxRateProviderLive.pipe(
@@ -45,6 +24,5 @@ const FxLayer = FxRatesLive.pipe(
 
 export const RegistryServiceLayer = RegistryServicesLive.pipe(
   Layer.provide(RegistryCrudLayer),
-  Layer.provide(RegistryIdsLive),
   Layer.provide(FxLayer)
 )

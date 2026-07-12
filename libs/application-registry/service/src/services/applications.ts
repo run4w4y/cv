@@ -6,6 +6,8 @@ import { Context, type Effect } from 'effect'
 
 import type { ApplicationRegistryError } from '../errors'
 import type {
+  ApplicationFacets,
+  ApplicationListItem,
   ListApplicationsInput,
   PatchApplicationInput,
   RegistryPage,
@@ -13,12 +15,19 @@ import type {
 } from '../types'
 
 export interface ApplicationsService {
+  readonly facets: () => Effect.Effect<
+    ApplicationFacets,
+    ApplicationRegistryError
+  >
   readonly find: (
     identifier: string
   ) => Effect.Effect<Application, ApplicationRegistryError>
   readonly list: (
     input: ListApplicationsInput
-  ) => Effect.Effect<RegistryPage<Application>, ApplicationRegistryError>
+  ) => Effect.Effect<
+    RegistryPage<ApplicationListItem>,
+    ApplicationRegistryError
+  >
   readonly patch: (
     identifier: string,
     input: PatchApplicationInput

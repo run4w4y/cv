@@ -24,8 +24,9 @@ type WranglerConfig = {
   readonly observability: {
     readonly enabled: boolean
   }
+  readonly preview_urls: false
   readonly vars: Readonly<Record<string, string>>
-  readonly workers_dev: false
+  readonly workers_dev: true
 }
 
 class WranglerConfigError extends Data.TaggedError('WranglerConfigError')<{
@@ -106,6 +107,7 @@ const readWranglerConfig = Effect.all({
         observability: {
           enabled: true,
         },
+        preview_urls: false,
         vars: {
           ...(analyticsFallback
             ? { [analyticsFallbackEnv]: analyticsFallback }
@@ -115,7 +117,7 @@ const readWranglerConfig = Effect.all({
           [cloudflareZoneIdEnv]: cloudflareZoneId,
           [cvWebHostEnv]: cvWebHost,
         },
-        workers_dev: false,
+        workers_dev: true,
       }) satisfies WranglerConfig
   )
 )

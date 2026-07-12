@@ -6,9 +6,8 @@ import {
   annotationsCrudLayer,
   applicationsCrudLayer,
   operationsCrudLayer,
-  registryIdsLayer,
 } from '../../test/support/layers'
-import { requestFingerprint } from '../internal/fingerprint'
+import { operationRequestSignature } from '../internal/operation-request-signature'
 import { AnnotationsService } from '../services/annotations'
 import { AnnotationsServiceLive } from './annotations'
 
@@ -26,8 +25,7 @@ const live = (
   AnnotationsServiceLive.pipe(
     Layer.provide(annotationLayer),
     Layer.provide(applicationsCrudLayer()),
-    Layer.provide(operationLayer),
-    Layer.provide(registryIdsLayer(['note-1', 'event-1']))
+    Layer.provide(operationLayer)
   )
 
 describe('AnnotationsService', () => {
@@ -52,13 +50,14 @@ describe('AnnotationsService', () => {
     )
 
     expect(result).toEqual({ note, replayed: false })
-    expect(persisted?.noteId).toBe(note.id)
-    expect(persisted?.eventId).toBe('event-1')
+    expect(persisted?.noteId).toMatch(/^[\da-f-]{36}$/u)
+    expect(persisted?.eventId).toMatch(/^[\da-f-]{36}$/u)
+    expect(persisted?.eventId).not.toBe(persisted?.noteId)
   })
 
   test('loads an existing note without writing during replay', async () => {
     let wrote = false
-    const fingerprint = requestFingerprint('application_note', {
+    const signature = operationRequestSignature('application_note', {
       applicationId: application.id,
       request,
     })
@@ -77,7 +76,9 @@ describe('AnnotationsService', () => {
             }),
             operationsCrudLayer({
               find: () =>
-                Effect.succeed(receipt({ requestFingerprint: fingerprint })),
+                Effect.succeed(
+                  receipt({ operationRequestSignature: signature })
+                ),
             })
           )
         )
@@ -100,7 +101,7 @@ describe('AnnotationsService', () => {
             operationsCrudLayer({
               find: () =>
                 Effect.succeed(
-                  receipt({ requestFingerprint: 'another-request' })
+                  receipt({ operationRequestSignature: 'another-request' })
                 ),
             })
           )

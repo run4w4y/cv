@@ -7,9 +7,11 @@ import { asc, eq, sql } from 'drizzle-orm'
 import type { BatchItem } from 'drizzle-orm/batch'
 import { Effect } from 'effect'
 import { uniq } from 'es-toolkit'
-
-import type { RegistryConnections, RegistryQueryDatabase } from '../database'
 import { databaseFailure } from '../errors'
+import type {
+  RegistryConnections,
+  RegistryQueryDatabase,
+} from '../internal/connection'
 import { allocateRevision, currentRevision, runBatch } from './shared'
 
 export const listLabels = (

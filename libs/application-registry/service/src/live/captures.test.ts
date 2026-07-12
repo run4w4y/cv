@@ -6,9 +6,8 @@ import {
   applicationsCrudLayer,
   capturesCrudLayer,
   operationsCrudLayer,
-  registryIdsLayer,
 } from '../../test/support/layers'
-import { requestFingerprint } from '../internal/fingerprint'
+import { operationRequestSignature } from '../internal/operation-request-signature'
 import { CapturesService } from '../services/captures'
 import type { CreateCampaignCaptureInput } from '../types'
 import { CapturesServiceLive } from './captures'
@@ -35,13 +34,16 @@ const request: CreateCampaignCaptureInput = {
   targetStage: application.targetStage,
 }
 
-const captureReceipt = () =>
+const captureReceipt = (captureId = capture.id) =>
   receipt({
-    captureId: capture.id,
+    captureId,
     kind: 'campaign_capture',
     noteId: null,
     operationId: request.operationId,
-    requestFingerprint: requestFingerprint('campaign_capture', request),
+    operationRequestSignature: operationRequestSignature(
+      'campaign_capture',
+      request
+    ),
   })
 
 const live = (
@@ -51,10 +53,7 @@ const live = (
   CapturesServiceLive.pipe(
     Layer.provide(applicationsCrudLayer()),
     Layer.provide(captureLayer),
-    Layer.provide(operationLayer),
-    Layer.provide(
-      registryIdsLayer(['application-generated', 'event-1', capture.id])
-    )
+    Layer.provide(operationLayer)
   )
 
 describe('CapturesService', () => {
@@ -74,7 +73,10 @@ describe('CapturesService', () => {
               },
             }),
             operationsCrudLayer({
-              find: () => Effect.succeed(stored ? captureReceipt() : undefined),
+              find: () =>
+                Effect.succeed(
+                  stored ? captureReceipt(persisted?.captureId) : undefined
+                ),
             })
           )
         )
@@ -83,7 +85,8 @@ describe('CapturesService', () => {
 
     expect(result).toEqual({ application, capture, replayed: false })
     expect(persisted?.applicationId).toBe(application.id)
-    expect(persisted?.captureId).toBe(capture.id)
+    expect(persisted?.captureId).toMatch(/^[\da-f-]{36}$/u)
+    expect(persisted?.eventId).toMatch(/^[\da-f-]{36}$/u)
   })
 
   test('replays a capture without allocating or writing', async () => {

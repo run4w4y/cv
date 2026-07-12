@@ -14,9 +14,9 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./d1": {
-      "types": "./dist/d1/index.d.ts",
-      "default": "./dist/d1/index.js"
+    "./live": {
+      "types": "./dist/live/index.d.ts",
+      "default": "./dist/live/index.js"
     },
     "./test-support": {
       "types": "./dist/test-support/index.d.ts",
