@@ -16,7 +16,7 @@ export const CurrencyCodeSchema = Schema.String.pipe(
 
 export type CurrencyCode = Schema.Schema.Type<typeof CurrencyCodeSchema>
 
-export const FitScoreSchema = Schema.Number.pipe(
+export const FitScoreSchema = Schema.Int.pipe(
   Schema.check(
     Schema.isGreaterThanOrEqualTo(0),
     Schema.isLessThanOrEqualTo(100)

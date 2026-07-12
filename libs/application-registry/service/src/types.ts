@@ -62,6 +62,7 @@ export type ListApplicationsInput = {
   readonly after?: string
   readonly applicationStatus?: ApplicationStatus | readonly ApplicationStatus[]
   readonly company?: string
+  readonly currency?: CurrencyCode | 'original'
   readonly followUpState?: FollowUpState | readonly FollowUpState[]
   readonly label?: string | readonly string[]
   readonly limit?: number

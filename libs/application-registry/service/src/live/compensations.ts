@@ -3,60 +3,18 @@ import {
   CompensationsCrud,
   RegistryDatabaseError,
 } from '@cv/application-registry-crud'
-import type {
-  ApplicationCompensation,
-  CurrencyCode,
-  FxRate,
-} from '@cv/application-registry-entity'
-import { convertMinorAmount, FxRates } from '@cv/application-registry-fx'
+import type { CurrencyCode } from '@cv/application-registry-entity'
+import { FxRates } from '@cv/application-registry-fx'
 import { Effect, Layer } from 'effect'
 import { uniq } from 'es-toolkit'
 
-import { RegistryBadRequestError } from '../errors'
+import { convertCompensation } from '../internal/compensation-conversion'
 import { findRequiredApplication } from '../internal/shared'
 import {
   CompensationsService,
   type CompensationsService as CompensationsServiceShape,
 } from '../services/compensations'
-import type {
-  ApplicationCompensationResultItem,
-  ApplicationCompensationsResult,
-} from '../types'
-
-const convertCompensation = (
-  original: ApplicationCompensation,
-  quoteCurrency: CurrencyCode,
-  rate: FxRate
-): Effect.Effect<ApplicationCompensationResultItem, RegistryBadRequestError> =>
-  Effect.all({
-    maximumMinor: convertMinorAmount(
-      original.maximumMinor,
-      original.currencyCode,
-      quoteCurrency,
-      rate.rate
-    ),
-    minimumMinor: convertMinorAmount(
-      original.minimumMinor,
-      original.currencyCode,
-      quoteCurrency,
-      rate.rate
-    ),
-  }).pipe(
-    Effect.mapError(
-      (cause) => new RegistryBadRequestError({ message: cause.message })
-    ),
-    Effect.map(({ maximumMinor, minimumMinor }) => ({
-      conversion: {
-        currencyCode: quoteCurrency,
-        maximumMinor,
-        minimumMinor,
-        observedAt: rate.observedAt,
-        provider: rate.provider,
-        rate: rate.rate,
-      },
-      original,
-    }))
-  )
+import type { ApplicationCompensationsResult } from '../types'
 
 const make = Effect.gen(function* () {
   const applications = yield* ApplicationsCrud

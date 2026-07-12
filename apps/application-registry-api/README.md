@@ -55,8 +55,10 @@ declaration used by handlers and the internal Effect client.
 - `POST /v1/captures`: atomically create/update an application, append its
   `campaign_prepared` event, and store the generated campaign capture.
 - `GET /v1/applications`: cursor-paginated application table data. Each row
-  includes labels, an original-currency compensation summary, follow-up state,
-  latest event metadata, and note/capture counts. Filters cover company, role,
+  includes labels, a compensation summary, follow-up state, latest event
+  metadata, and note/capture counts. `currency=USD` (or another ISO code)
+  converts the displayed summary; `currency=original` leaves it unchanged.
+  Filters cover company, role,
   location, one or more lifecycle statuses, target stages, priorities, labels,
   follow-up states, and exact canonical URL.
 - `GET /v1/applications/facets`: sorted observed companies, statuses, target

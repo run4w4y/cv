@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { PersistedApplication } from '@cv/application-registry-crud'
+import { FxRates } from '@cv/application-registry-fx'
 import { Effect, Layer } from 'effect'
 import { TestClock } from 'effect/testing'
 import {
@@ -18,7 +19,20 @@ import { ApplicationsServiceLive } from './applications'
 const live = (applicationLayer = applicationsCrudLayer()) =>
   ApplicationsServiceLive.pipe(
     Layer.provide(applicationLayer),
-    Layer.provide(annotationsCrudLayer())
+    Layer.provide(annotationsCrudLayer()),
+    Layer.provide(
+      Layer.succeed(FxRates, {
+        get: (baseCurrency, quoteCurrency) =>
+          Effect.succeed({
+            baseCurrency,
+            fetchedAt: recordedAt,
+            observedAt: recordedAt,
+            provider: 'test',
+            quoteCurrency,
+            rate: 2,
+          }),
+      })
+    )
   )
 
 describe('ApplicationsService', () => {
@@ -78,7 +92,9 @@ describe('ApplicationsService', () => {
     const page = await Effect.runPromise(
       Effect.gen(function* () {
         yield* TestClock.setTime(Date.parse(recordedAt))
-        return yield* ApplicationsService.use((service) => service.list({}))
+        return yield* ApplicationsService.use((service) =>
+          service.list({ currency: 'USD' })
+        )
       }).pipe(
         Effect.provide([
           live(
@@ -106,7 +122,7 @@ describe('ApplicationsService', () => {
     )
 
     expect(page.items[0]).toMatchObject({
-      compensationSummary: 'Base salary: EUR 100,000–120,000 / year',
+      compensationSummary: 'Base salary: USD 200,000–240,000 / year',
       followUpState: 'overdue',
       labels: ['priority'],
       latestEventKind: 'stage_changed',

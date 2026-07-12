@@ -317,6 +317,22 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
     rate: 0.0067,
   })
 
+  const convertedDashboard = await Effect.runPromise(
+    registry.registry.listApplications({
+      query: {
+        currency: 'USD',
+        limit: 100,
+      },
+    })
+  )
+  const convertedApplication = convertedDashboard.items.find(
+    ({ id }) => id === applicationId
+  )
+  assert.equal(
+    convertedApplication?.compensationSummary,
+    'Base salary: USD 67,000–100,500 / year'
+  )
+
   const firstPage = await Effect.runPromise(
     registry.registry.listApplications({ query: { limit: 1 } })
   )

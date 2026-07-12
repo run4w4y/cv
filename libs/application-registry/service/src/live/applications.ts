@@ -3,10 +3,22 @@ import {
   ApplicationsCrud,
   type PersistedApplication,
 } from '@cv/application-registry-crud'
+import type {
+  ApplicationCompensation,
+  CurrencyCode,
+  FxRate,
+} from '@cv/application-registry-entity'
+import { FxRates } from '@cv/application-registry-fx'
 import { Effect, Layer } from 'effect'
+import { uniq } from 'es-toolkit'
 
-import { RegistryConflictError, RegistryDatabaseError } from '../errors'
+import {
+  type RegistryBadRequestError,
+  RegistryConflictError,
+  RegistryDatabaseError,
+} from '../errors'
 import { toApplicationListItem } from '../internal/application-list-item'
+import { convertCompensationForDisplay } from '../internal/compensation-conversion'
 import { decodeCursor, encodeCursor } from '../internal/cursor'
 import {
   decorateCompensations,
@@ -29,9 +41,30 @@ const asArray = <A>(
 ): readonly A[] | undefined =>
   value === undefined ? undefined : Array.isArray(value) ? value : [value as A]
 
+const convertForSummary = (
+  original: ApplicationCompensation,
+  quoteCurrency: CurrencyCode,
+  rates: ReadonlyMap<CurrencyCode, FxRate>
+): Effect.Effect<
+  ApplicationCompensation,
+  RegistryBadRequestError | RegistryDatabaseError
+> => {
+  const rate = rates.get(original.currencyCode)
+  if (!rate) {
+    return Effect.fail(
+      new RegistryDatabaseError({
+        cause: new Error('Resolved compensation rate disappeared.'),
+        message: 'Could not resolve a compensation exchange rate.',
+      })
+    )
+  }
+  return convertCompensationForDisplay(original, quoteCurrency, rate)
+}
+
 const make = Effect.gen(function* () {
   const applications = yield* ApplicationsCrud
   const annotations = yield* AnnotationsCrud
+  const fxRates = yield* FxRates
 
   const find = Effect.fn('ApplicationsService.find')((identifier: string) =>
     applications
@@ -68,9 +101,40 @@ const make = Effect.gen(function* () {
             ? encodeCursor({ revision: last.updatedRevision })
             : (query.after ?? null)
 
+          const quoteCurrency =
+            query.currency === undefined || query.currency === 'original'
+              ? undefined
+              : query.currency
+          const rates = quoteCurrency
+            ? new Map(
+                yield* Effect.forEach(
+                  uniq(
+                    page.items.flatMap(({ compensations }) =>
+                      compensations.map(({ currencyCode }) => currencyCode)
+                    )
+                  ),
+                  (baseCurrency) =>
+                    fxRates
+                      .get(baseCurrency, quoteCurrency)
+                      .pipe(Effect.map((rate) => [baseCurrency, rate] as const))
+                )
+              )
+            : undefined
+          const items = yield* Effect.forEach(page.items, (item) =>
+            quoteCurrency && rates
+              ? Effect.forEach(item.compensations, (original) =>
+                  convertForSummary(original, quoteCurrency, rates)
+                ).pipe(
+                  Effect.map((displayed) =>
+                    toApplicationListItem(item, now, displayed)
+                  )
+                )
+              : Effect.succeed(toApplicationListItem(item, now))
+          )
+
           return {
             checkpoint,
-            items: page.items.map((item) => toApplicationListItem(item, now)),
+            items,
             nextCursor: page.hasNextPage ? checkpoint : null,
           }
         })

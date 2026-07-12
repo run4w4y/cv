@@ -76,12 +76,15 @@ export const resolveFollowUpState = (
 
 export const toApplicationListItem = (
   record: ApplicationListRecord,
-  now: string
+  now: string,
+  displayedCompensations?: readonly ApplicationCompensation[]
 ): ApplicationListItem => {
   const { compensations, ...application } = record
   return {
     ...application,
-    compensationSummary: formatCompensationSummary(compensations),
+    compensationSummary: formatCompensationSummary(
+      displayedCompensations ?? compensations
+    ),
     followUpState: resolveFollowUpState(application.followUpAt, now),
   }
 }

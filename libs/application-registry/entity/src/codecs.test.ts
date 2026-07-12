@@ -149,6 +149,17 @@ describe('application registry database schemas', () => {
     ).toThrow()
 
     expect(() =>
+      Schema.decodeUnknownSync(ApplicationWritableSchema)({
+        canonicalUrl: 'https://example.test/jobs/fractional-fit',
+        company: 'Example',
+        fitScore: 91.5,
+        jobKey: 'web:fractional-fit',
+        role: 'Engineer',
+        source: 'web',
+      })
+    ).toThrow()
+
+    expect(() =>
       Schema.decodeUnknownSync(FxRateInputSchema)({
         baseCurrency: 'USD',
         quoteCurrency: 'JPY',

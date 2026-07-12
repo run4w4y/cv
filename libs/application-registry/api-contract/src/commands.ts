@@ -9,6 +9,7 @@ import {
   ApplicationWritableSchema,
   appendableApplicationEventKindValues,
   CampaignCaptureSchema,
+  CurrencyCodeSchema,
   InformationalApplicationEventKindSchema,
   informationalApplicationEventKindValues,
   PersonalPrioritySchema,
@@ -120,6 +121,11 @@ const ListLimitSchema = Schema.NumberFromString.pipe(
   Schema.check(Schema.isInt(), Schema.isBetween({ minimum: 1, maximum: 100 }))
 )
 
+export const CompensationDisplayCurrencySchema = Schema.Union([
+  Schema.Literal('original'),
+  CurrencyCodeSchema,
+])
+
 export const FollowUpStateSchema = Schema.Literals([
   'none',
   'overdue',
@@ -137,6 +143,7 @@ export const ListApplicationsQuerySchema = Schema.Struct({
     ])
   ),
   company: Schema.optional(NonEmptyString),
+  currency: Schema.optional(CompensationDisplayCurrencySchema),
   followUpState: Schema.optional(
     Schema.Union([FollowUpStateSchema, Schema.Array(FollowUpStateSchema)])
   ),

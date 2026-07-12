@@ -52,6 +52,7 @@ describe('application registry HTTP contract', () => {
   test('accepts single and repeated dashboard query filters', () => {
     const single = Schema.decodeUnknownSync(ListApplicationsQuerySchema)({
       applicationStatus: 'applied',
+      currency: 'USD',
       followUpState: 'overdue',
       limit: '100',
     })
@@ -66,6 +67,7 @@ describe('application registry HTTP contract', () => {
       to: '2026-07-31T23:59:59.999Z',
     })
     expect(single.applicationStatus).toBe('applied')
+    expect(single.currency).toBe('USD')
     expect(single.limit).toBe(100)
     expect(repeated.applicationStatus).toEqual(['applied', 'technical_screen'])
     expect(events.kind).toEqual(['stage_changed', 'research_updated'])
@@ -73,6 +75,13 @@ describe('application registry HTTP contract', () => {
       Option.isNone(
         Schema.decodeUnknownOption(ListApplicationsQuerySchema)({
           limit: '101',
+        })
+      )
+    ).toBe(true)
+    expect(
+      Option.isNone(
+        Schema.decodeUnknownOption(ListApplicationsQuerySchema)({
+          currency: 'usd',
         })
       )
     ).toBe(true)
