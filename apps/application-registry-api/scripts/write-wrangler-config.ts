@@ -1,4 +1,4 @@
-import { Config, Effect, Option } from 'effect'
+import { Config, Effect } from 'effect'
 
 type WranglerConfig = {
   readonly $schema: string
@@ -21,9 +21,9 @@ type WranglerConfig = {
 const defaultOutputPath = 'apps/application-registry-api/wrangler.deploy.jsonc'
 
 const optionalString = (name: string, fallback: string) =>
-  Config.nonEmptyString(name).pipe(
-    Config.option,
-    Config.map(Option.getOrElse(() => fallback))
+  Config.string(name).pipe(
+    Config.withDefault(fallback),
+    Config.map((value) => value.trim() || fallback)
   )
 
 const readOutputPath = Effect.sync(
