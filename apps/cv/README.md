@@ -17,9 +17,9 @@ or how the document should look.
 This app owns those decisions:
 
 - `src/cv-content/contract.ts`: the `ContentContract` passed to
-  `@cv/content-astro`. It sets the default locale/profile, content schema
-  version, authoring module, composition function, and private variable
-  collection.
+  `@cv/content-astro`. It sets the content schema and version, authoring module,
+  composition function, and private variable collection. Repository layout and
+  defaults live in `content.config.ts`.
 - `src/cv-content/schema/*`: Effect schemas for the concrete CV source modules
   and final `CvContent` manifest.
 - `src/cv-content/compose/*`: app-specific logic that turns discovered
@@ -72,13 +72,15 @@ content-repo/
 
 `content.config.ts` defines:
 
+- `contentDir`: the repository-relative authored content directory;
+- `defaultLocale`: the locale inherited by generic consumers;
+- `defaultProfile`: the base profile used for section inheritance;
 - `locales`: the locale ids the repository supports;
-- `publicProfiles`: optional, defaults to the app's default profile.
+- `publicProfiles`: optional, defaults to the configured default profile.
 
-The app default locale is `en` and the default profile is `default`. Those values
-come from `src/cv-content/contract.ts`, together with `contentDir`, the runtime
-content schema, and its version. The repository loader discovers profile ids
-dynamically from `content/profiles/<profile>/<locale>/`.
+This repository uses `en` and `default`. The repository loader discovers profile
+ids dynamically from `content/profiles/<profile>/<locale>/`; the app contract
+only defines how those generic sections become a validated CV document.
 
 ## Sections And Composition
 

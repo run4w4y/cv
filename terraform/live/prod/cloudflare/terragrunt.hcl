@@ -15,11 +15,18 @@ inputs = {
   worker_custom_domain_hostname = get_env("CV_ANALYTICS_CONNECTOR_HOSTNAME", "")
   worker_route_pattern          = get_env("CV_ANALYTICS_CONNECTOR_ROUTE_PATTERN", "")
 
-  infisical_sync_enabled          = get_env("INFISICAL_PROJECT_ID", "") != ""
-  infisical_host                  = get_env("INFISICAL_HOST", "https://app.infisical.com")
-  infisical_project_id            = get_env("INFISICAL_PROJECT_ID", "")
-  infisical_env_slug              = get_env("INFISICAL_ENV", "prod")
-  infisical_analytics_folder_path = "/cv/analytics"
+  application_registry_worker_name                    = get_env("APPLICATION_REGISTRY_WORKER_NAME", "cv-application-registry")
+  application_registry_database_name                  = get_env("APPLICATION_REGISTRY_DB_NAME", "cv-application-registry")
+  application_registry_database_primary_location_hint = get_env("APPLICATION_REGISTRY_DB_PRIMARY_LOCATION_HINT", "weur")
+  application_registry_worker_custom_domain_hostname  = get_env("APPLICATION_REGISTRY_HOSTNAME", "")
+  application_registry_worker_route_pattern           = get_env("APPLICATION_REGISTRY_ROUTE_PATTERN", "")
+
+  infisical_sync_enabled                     = get_env("INFISICAL_PROJECT_ID", "") != ""
+  infisical_host                             = get_env("INFISICAL_HOST", "https://app.infisical.com")
+  infisical_project_id                       = get_env("INFISICAL_PROJECT_ID", "")
+  infisical_env_slug                         = get_env("INFISICAL_ENV", "prod")
+  infisical_analytics_folder_path            = "/cv/analytics"
+  infisical_application_registry_folder_path = "/cv/application-registry"
 }
 
 generate "backend" {

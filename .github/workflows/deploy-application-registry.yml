@@ -1,0 +1,83 @@
+name: Deploy Application Registry
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+on:
+  workflow_call:
+
+concurrency:
+  group: application-registry-production
+  cancel-in-progress: false
+
+env:
+  INFISICAL_ENV: ${{ vars.INFISICAL_ENV || 'prod' }}
+  INFISICAL_HOST: ${{ vars.INFISICAL_HOST || 'https://app.infisical.com' }}
+
+jobs:
+  deploy-application-registry:
+    name: Migrate and deploy registry Worker
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      actions: read
+      contents: read
+      deployments: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          filter: tree:0
+
+      - name: Fetch Infisical secrets
+        if: ${{ !env.ACT }}
+        uses: ./.github/actions/fetch-infisical
+        with:
+          identity-id: ${{ secrets.INFISICAL_IDENTITY_ID }}
+          project-slug: ${{ secrets.INFISICAL_PROJECT_SLUG }}
+          env-slug: ${{ env.INFISICAL_ENV }}
+          host: ${{ env.INFISICAL_HOST }}
+
+      - name: Set up workspace runtime
+        uses: ./.github/actions/setup-runtime
+
+      - name: Validate production registry configuration
+        run: |
+          missing=()
+          for name in \
+            APPLICATION_REGISTRY_DB_ID \
+            APPLICATION_REGISTRY_DB_NAME \
+            APPLICATION_REGISTRY_WORKER_NAME \
+            CLOUDFLARE_ACCOUNT_ID \
+            CLOUDFLARE_API_TOKEN \
+            REGISTRY_API_TOKEN
+          do
+            if [[ -z "${!name:-}" ]]; then
+              missing+=("$name")
+            fi
+          done
+
+          if (( ${#missing[@]} > 0 )); then
+            printf '::error title=Missing production registry configuration::Missing: %s\n' "${missing[*]}"
+            exit 1
+          fi
+
+      - name: Build registry Worker
+        run: ./node_modules/.bin/nx run application-registry-api:build --skip-nx-cache
+
+      - name: Generate production Wrangler config
+        env:
+          APPLICATION_REGISTRY_COMPATIBILITY_DATE: ${{ vars.APPLICATION_REGISTRY_COMPATIBILITY_DATE }}
+        run: bun apps/application-registry-api/scripts/write-wrangler-config.ts apps/application-registry-api/wrangler.deploy.jsonc
+
+      - name: Apply D1 migrations
+        run: node ../../node_modules/wrangler/bin/wrangler.js d1 migrations apply APPLICATION_REGISTRY_DB --remote --config wrangler.deploy.jsonc
+        working-directory: apps/application-registry-api
+
+      - name: Deploy registry Worker with bearer secret
+        run: bun scripts/deploy.ts wrangler.deploy.jsonc
+        working-directory: apps/application-registry-api

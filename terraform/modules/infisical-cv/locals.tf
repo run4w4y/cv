@@ -1,9 +1,10 @@
 locals {
-  root_path      = "/${var.root_folder_name}"
-  analytics_path = "${local.root_path}/analytics"
-  content_path   = "${local.root_path}/content"
-  deploy_path    = "${local.root_path}/deploy"
-  grafana_path   = "${local.root_path}/grafana"
+  root_path                 = "/${var.root_folder_name}"
+  analytics_path            = "${local.root_path}/analytics"
+  application_registry_path = "${local.root_path}/application-registry"
+  content_path              = "${local.root_path}/content"
+  deploy_path               = "${local.root_path}/deploy"
+  grafana_path              = "${local.root_path}/grafana"
 
   placeholder_value = "TODO_FILL_ME"
 
@@ -18,6 +19,11 @@ locals {
       name        = "analytics"
       path        = local.analytics_path
       description = "Runtime analytics connector secrets and derived deployment outputs."
+    }
+    application_registry = {
+      name        = "application-registry"
+      path        = local.application_registry_path
+      description = "Application registry API authentication and Cloudflare deployment values."
     }
     content = {
       name        = "content"
@@ -79,6 +85,10 @@ locals {
       CV_ANALYTICS_CONNECTOR_HOSTNAME = {
         value       = local.placeholder_value
         description = "Hostname for the analytics connector Worker custom domain, for example analytics.example.com. Use a first-level subdomain on Cloudflare Free."
+      }
+      APPLICATION_REGISTRY_HOSTNAME = {
+        value       = local.placeholder_value
+        description = "Hostname for the application registry Worker custom domain, for example applications.example.com. Use a first-level subdomain on Cloudflare Free."
       }
       CV_WEB_HOST = {
         value       = local.placeholder_value

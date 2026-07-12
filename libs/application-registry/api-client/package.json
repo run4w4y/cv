@@ -1,0 +1,23 @@
+{
+  "name": "@cv/application-registry-api-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@cv/application-registry-api-contract": "workspace:*",
+    "@cv/effect-http-auth": "workspace:*",
+    "effect": "4.0.0-beta.91"
+  }
+}

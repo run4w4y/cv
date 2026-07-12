@@ -1,0 +1,37 @@
+{
+  "name": "@cv/application-registry-crud",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./d1": {
+      "types": "./dist/d1/index.d.ts",
+      "default": "./dist/d1/index.js"
+    },
+    "./test-support": {
+      "types": "./dist/test-support/index.d.ts",
+      "default": "./dist/test-support/index.js"
+    }
+  },
+  "dependencies": {
+    "@cv/application-registry-entity": "workspace:*",
+    "@effect/sql-d1": "4.0.0-beta.91",
+    "drizzle-orm": "1.0.0-rc.4",
+    "effect": "4.0.0-beta.91",
+    "es-toolkit": "^1.43.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "4.20260511.1",
+    "miniflare": "4.20260708.1"
+  }
+}

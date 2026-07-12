@@ -1,11 +1,12 @@
 output "paths" {
   description = "Infisical paths managed by this module."
   value = {
-    root      = local.root_path
-    analytics = local.analytics_path
-    content   = local.content_path
-    deploy    = local.deploy_path
-    grafana   = local.grafana_path
+    root                 = local.root_path
+    analytics            = local.analytics_path
+    application_registry = local.application_registry_path
+    content              = local.content_path
+    deploy               = local.deploy_path
+    grafana              = local.grafana_path
   }
 }
 
@@ -31,6 +32,9 @@ output "generated_secrets" {
     ]
     (local.analytics_path) = [
       infisical_secret.grafana_connector_token.name,
+    ]
+    (local.application_registry_path) = [
+      infisical_secret.registry_api_token.name,
     ]
   }
 }

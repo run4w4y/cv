@@ -108,8 +108,8 @@ export const resolvePrepareCampaignOptions = (
 
     yield* logDebug('Resolved application campaign options', {
       concurrency: campaign.concurrency,
-      excludedProfileCount: campaign.excludedProfiles.length,
-      excludedProfiles: campaign.excludedProfiles.join(', '),
+      excludedProfileCount: campaign.excludedProfiles?.length,
+      excludedProfiles: campaign.excludedProfiles?.join(', '),
       generate: campaign.generate,
       hasFixedAudience: Boolean(campaign.audience),
       hasFixedProfile: Boolean(campaign.profile),

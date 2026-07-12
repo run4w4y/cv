@@ -13,7 +13,7 @@
         "{workspaceRoot}/.cv-work/application-pdfs"
       ],
       "options": {
-        "command": "bun run tools/application-campaign/src/cli/main.ts",
+        "command": "bun run tools/application-campaign/src/cli/composition/main.ts",
         "color": true
       }
     },

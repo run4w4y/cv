@@ -59,3 +59,12 @@ export class ApplicationCampaignAiError extends Data.TaggedError(
   readonly cause?: unknown
   readonly message: string
 }> {}
+
+export class ApplicationCampaignPluginError extends Data.TaggedError(
+  'ApplicationCampaignPluginError'
+)<{
+  readonly cause?: unknown
+  readonly message: string
+  readonly pluginId: string
+  readonly stage: string
+}> {}

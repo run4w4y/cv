@@ -1,0 +1,26 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "effect-http-auth",
+  "projectType": "library",
+  "sourceRoot": "libs/effect-http-auth/src",
+  "tags": ["scope:shared", "type:core", "visibility:private"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/effect-http-auth/src/index.ts",
+        "outputPath": "libs/effect-http-auth/dist",
+        "rootDir": "libs/effect-http-auth/src",
+        "tsConfig": "libs/effect-http-auth/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
+    "format": {},
+    "format:check": {}
+  }
+}

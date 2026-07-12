@@ -4,11 +4,7 @@ import type {
   ProfileSlug,
   VariableUseDescriptor,
 } from '@cv/content-core'
-import {
-  contentManifestSchemaVersion,
-  localeSchema,
-  profileSlugSchema,
-} from '@cv/content-core'
+import { contentManifestSchemaVersion } from '@cv/content-core'
 import { Schema } from 'effect'
 import type { ContentRegistry, MdxModule } from './content-registry/types'
 import type {
@@ -19,6 +15,7 @@ import {
   type ContentRepository,
   type ContentSectionSource,
   loadContentRepository,
+  type ResolvedContentRepositoryConfig,
 } from './repository'
 
 export type ContentVariableCollectionContext<Content = unknown> = {
@@ -59,11 +56,8 @@ export type ContentComposeContext = {
 export type ContentContract<Content = unknown> = {
   authoringModule: string
   compose: (context: ContentComposeContext) => ContentComposeOutput<Content>
-  contentDir: string
   contentSchema: Schema.Codec<Content, unknown>
   contentSchemaVersion: string
-  defaultLocale: Locale
-  defaultProfile: ProfileSlug
   privacy?: ContentPrivacyAdapter<Content>
 }
 
@@ -127,20 +121,23 @@ const assertJsonValue = (
 
 const validateManifest = <Content>(
   source: ContentComposeOutput<Content>['manifest'],
-  contract: ContentContract<Content>
+  contract: ContentContract<Content>,
+  repositoryConfig: ResolvedContentRepositoryConfig
 ): ContentManifest<Content> => {
+  const { defaultLocale, defaultProfile } = repositoryConfig
+
   assertUnique('locale', source.locales)
   assertUnique('profile', source.profiles)
 
-  if (!source.locales.includes(contract.defaultLocale)) {
+  if (!source.locales.includes(defaultLocale)) {
     throw new Error(
-      `Content manifest must include the default locale "${contract.defaultLocale}".`
+      `Content manifest must include the default locale "${defaultLocale}".`
     )
   }
 
-  if (!source.profiles.includes(contract.defaultProfile)) {
+  if (!source.profiles.includes(defaultProfile)) {
     throw new Error(
-      `Content manifest must include the default profile "${contract.defaultProfile}".`
+      `Content manifest must include the default profile "${defaultProfile}".`
     )
   }
 
@@ -201,14 +198,11 @@ const validateManifest = <Content>(
   }
 
   if (
-    !Object.hasOwn(content, contract.defaultLocale) ||
-    !Object.hasOwn(
-      content[contract.defaultLocale] ?? {},
-      contract.defaultProfile
-    )
+    !Object.hasOwn(content, defaultLocale) ||
+    !Object.hasOwn(content[defaultLocale] ?? {}, defaultProfile)
   ) {
     throw new Error(
-      `Content manifest must contain ${contract.defaultProfile}/${contract.defaultLocale}.`
+      `Content manifest must contain ${defaultProfile}/${defaultLocale}.`
     )
   }
 
@@ -272,18 +266,11 @@ export const composeContent = <Content>(
   registry: ContentRegistry,
   contract: ContentContract<Content>
 ): ComposeContentResult<Content> => {
-  Schema.decodeUnknownSync(localeSchema)(contract.defaultLocale)
-  Schema.decodeUnknownSync(profileSlugSchema)(contract.defaultProfile)
-
   if (!contract.contentSchemaVersion.trim()) {
     throw new Error('Content contract must define a content schema version.')
   }
 
-  const repository = loadContentRepository(registry, {
-    contentDir: contract.contentDir,
-    defaultLocale: contract.defaultLocale,
-    defaultProfile: contract.defaultProfile,
-  })
+  const repository = loadContentRepository(registry)
 
   const output = contract.compose({
     repository,
@@ -291,7 +278,7 @@ export const composeContent = <Content>(
   })
 
   return {
-    manifest: validateManifest(output.manifest, contract),
+    manifest: validateManifest(output.manifest, contract, repository.config),
     repository,
   }
 }

@@ -11,6 +11,8 @@ concrete CV application that consumes it:
   browser-opened payloads;
 - analytics are derived from Cloudflare request data through a small Worker, so
   the public CV does not need client-side analytics scripts;
+- application campaigns can write to a synchronized, event-backed Cloudflare
+  D1 registry through a separate authenticated Worker and offline-first client;
 - production infrastructure is described with Terraform/Terragrunt for
   Infisical, Cloudflare, and Grafana.
 
@@ -42,6 +44,24 @@ This workspace keeps the deployed site static:
 - `apps/analytics-connector`: Cloudflare Worker that queries Cloudflare
   Analytics GraphQL, sanitizes the result, decodes private audience ids when
   configured, and exposes Grafana-friendly JSON endpoints.
+- `apps/application-registry-api`: authenticated Effect `HttpApi` Worker backed
+  by D1. It translates HTTP requests into registry service calls and does not
+  own persistence or business rules.
+- `libs/application-registry/entity`: canonical TS-first Drizzle tables and
+  inferred models, plus select/insert/update Effect codecs derived with
+  Drizzle's official Effect integration.
+- `libs/application-registry/crud`: database-operation contracts at the package
+  root, D1/Drizzle implementations under `/d1`, and reusable Miniflare test
+  support.
+- `libs/application-registry/service`: database-independent service contracts at
+  the package root and registry workflow implementations under `/live`, covering
+  replay/conflict handling, explicit lifecycle changes, and pagination.
+- `libs/application-registry/fx`: Frankfurter exchange-rate access plus
+  isolate-local and D1-backed 24-hour caching.
+- `libs/application-registry/api-contract`: Effect `HttpApi`, transport schemas,
+  errors, authorization declaration, and OpenAPI document.
+- `libs/application-registry/api-client`: typed Effect client and layer derived
+  directly from the registry `HttpApi` declaration.
 - `libs/content-core`: shared content vocabulary, schema primitives, variables,
   overlays, and file-index types. It does not define the CV app's final content
   schema.
@@ -60,7 +80,8 @@ This workspace keeps the deployed site static:
   `libs/handlebars-css-template`: small reusable UI/runtime utilities used by
   the app and tools.
 - `tools/*`: operator tools for content declaration generation, private link
-  minting, PDF export, and application-campaign drafting.
+  minting, PDF export, application-campaign drafting, and querying/updating the
+  synchronized application registry.
 - `terraform/*`: Terragrunt live stacks and Terraform modules for Infisical
   secret folders, Cloudflare Pages/Worker resources, and Grafana dashboards.
 
@@ -126,6 +147,7 @@ bunx nx run private-content-link:link -- \
   --locale en \
   --base-url https://cv.example.com
 bunx nx run content-types:generate
+bunx nx run application-registry:registry -- list
 ```
 
 See [apps/cv/README.md](apps/cv/README.md) for the app content model, route
@@ -139,22 +161,27 @@ The production setup is designed around three managed services:
   Terraform creates the folder shape and generated secrets such as
   `CONTENT_ID_SALT`, `PRIVATE_CONTENT_AUDIENCE_KEY`,
   `PRIVATE_CONTENT_ROOT_KEY`, and `GRAFANA_CONNECTOR_TOKEN`.
-- Cloudflare hosts the static CV through Pages and hosts the analytics connector
-  as a Worker. Terraform creates the Pages project/domain/DNS and Worker domain
-  or route; Wrangler deploys Worker code and runtime secrets in CI.
+- Cloudflare hosts the static CV through Pages, the analytics connector Worker,
+  and the application registry Worker/D1 database. Terraform creates the
+  resources and routes; Wrangler deploys Worker code, bindings, migrations, and
+  runtime secrets in CI.
 - Grafana reads the Worker through the Infinity datasource. Terraform provisions
   the datasource, folder, and starter dashboard from
   `terraform/grafana/dashboards/cv-analytics.json.tftpl`.
 
 The included GitHub workflows are split by responsibility:
 
-- `CI` runs formatting, linting, typechecking, unit tests, fixture app builds,
-  Worker builds, and browser e2e tests against checked-in fixture content.
+- `CI` runs formatting, linting, typechecking, unit tests, migration drift
+  detection, Miniflare integration suites for registry persistence, services,
+  and API behavior, Worker builds/e2e tests, and browser e2e tests against
+  checked-in fixture content.
 - `Deploy CV` fetches Infisical secrets, checks out the private content
   repository, builds the static app, exports public PDFs, publishes release PDF
   assets, and deploys Cloudflare Pages.
 - `Deploy Analytics` builds and deploys the Cloudflare Worker when the analytics
   project is affected or the workflow is run manually.
+- `Deploy Application Registry` builds the Worker, applies D1 migrations,
+  uploads its bearer token, and deploys the authenticated API.
 
 Forks should review `.github/workflows/deploy-cv.yml` before production use. The
 content checkout step needs to point at the fork's content repository or another
@@ -169,6 +196,8 @@ secret folders, Cloudflare permissions, and Grafana prerequisites.
   routes, private access, and PDF export.
 - [apps/analytics-connector/README.md](apps/analytics-connector/README.md):
   Worker configuration and Grafana endpoints.
+- [apps/application-registry-api/README.md](apps/application-registry-api/README.md):
+  D1 schema, Worker API, local development, and deployment ownership.
 - [terraform/README.md](terraform/README.md): Infisical, Cloudflare, and Grafana
   infrastructure.
 - [tools/content-types/README.md](tools/content-types/README.md): generate
@@ -179,6 +208,8 @@ secret folders, Cloudflare permissions, and Grafana prerequisites.
   private PDFs with Playwright.
 - [tools/application-campaign/README.md](tools/application-campaign/README.md):
   draft application campaign artifacts from a job posting.
+- [tools/application-registry/README.md](tools/application-registry/README.md):
+  cross-device registry CLI and durable outbox.
 
 Package-level READMEs under `libs/*` describe smaller library boundaries and
 public imports.

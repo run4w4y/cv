@@ -7,6 +7,7 @@ const projectRoot = fileURLToPath(new URL('.', import.meta.url))
 const entries = {
   index: resolve(projectRoot, 'src/index.ts'),
   'load-snapshot': resolve(projectRoot, 'src/load-snapshot.ts'),
+  'source-repository': resolve(projectRoot, 'src/source-repository.ts'),
 }
 
 const external = (id: string) =>

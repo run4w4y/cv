@@ -1,96 +1,83 @@
-import type { CvContent } from '@cv/cv/content-model'
-import { Effect } from 'effect'
+import type { ProfileCatalog } from './catalog'
 import {
-  fields,
-  joinBlocks,
-  type ProfileRenderContext,
-  renderSection,
-  textValue,
+  type AuthoredSharedSource,
+  layeredProfileContent,
+  renderJsonMarkdown,
+  renderProfileLayer,
+  renderSharedSources,
 } from './render-shared'
-import type { ResolvedProfileCatalog } from './variables'
-
-const renderContactSection = (
-  context: ProfileRenderContext,
-  content: CvContent
-) =>
-  Effect.gen(function* () {
-    const links = [...content.contact.contact, ...content.contact.social]
-    const renderedLinks = yield* Effect.forEach(links, (link) =>
-      textValue(context, link.value).pipe(
-        Effect.map((value) => {
-          const href =
-            link.href && link.href !== value && link.href !== `mailto:${value}`
-              ? link.href
-              : undefined
-
-          return fields([[link.label, href ? `${value} (${href})` : value]])
-        })
-      )
-    )
-
-    return renderedLinks.length > 0
-      ? joinBlocks(['## Contact', renderedLinks.join('\n')])
-      : undefined
-  })
 
 const renderProfileMarkdown = ({
   content,
-  ...context
-}: ProfileRenderContext & {
-  readonly content: CvContent
-}) =>
-  Effect.gen(function* () {
-    const name = yield* textValue(context, content.identity.name)
-    const contact = yield* renderContactSection(context, content)
-    const sections = yield* Effect.forEach(content.sections, (section) =>
-      renderSection(context, section)
-    )
-    const markdown = joinBlocks([
-      `# Profile: ${context.profile}`,
-      fields([
-        ['Label', content.profile.label],
-        ['Locale', content.profile.locale],
-        ['Target role', content.profile.targetRole],
-        ['Headline', content.profile.headline],
-        ['Profile summary', content.profile.summary],
-        ['Last updated', content.profile.lastUpdated],
-      ]),
-      '## Identity',
-      fields([
-        ['Name', name],
-        ['Role', content.identity.role],
-        ['Headline', content.identity.headline],
-        ['Summary', content.identity.summary],
-        ['Location', content.identity.location],
-        ['Timezone', content.identity.timezone],
-      ]),
-      contact,
-      joinBlocks(sections),
-    ])
+  profile,
+}: {
+  readonly content: Exclude<
+    ProfileCatalog['content'][string][string],
+    undefined
+  >
+  readonly profile: string
+}) => {
+  const layered = layeredProfileContent(content)
 
-    return markdown
-  })
+  return [
+    `# Profile: ${profile}`,
+    layered
+      ? layered.layers.map((layer) => renderProfileLayer(layer)).join('\n\n')
+      : renderJsonMarkdown(content),
+  ].join('\n\n')
+}
+
+const sharedSourcesForProfiles = ({
+  catalog,
+  locale,
+  profiles,
+}: {
+  readonly catalog: ProfileCatalog
+  readonly locale: string
+  readonly profiles: readonly string[]
+}) => {
+  const sources = new Map<string, AuthoredSharedSource>()
+
+  for (const profile of profiles) {
+    const layered = layeredProfileContent(catalog.content[locale]?.[profile])
+
+    for (const source of layered?.sharedSources ?? []) {
+      sources.set(`${source.modulePath}\u0000${source.source}`, source)
+    }
+  }
+
+  return [...sources.values()]
+}
 
 export const renderProfilesMarkdown = ({
   catalog,
   locale,
   profiles,
 }: {
-  readonly catalog: ResolvedProfileCatalog
+  readonly catalog: ProfileCatalog
   readonly locale: string
   readonly profiles: readonly string[]
-}) =>
-  Effect.forEach(profiles, (profile) => {
-    const content = catalog.content[locale]?.[profile]
+}) => {
+  const sharedSources = sharedSourcesForProfiles({ catalog, locale, profiles })
+  const sharedContext =
+    sharedSources.length > 0
+      ? [
+          '# Shared authored sources',
+          'These repository-wide definitions are referenced by the profile layers below.',
+          renderSharedSources(sharedSources),
+        ].join('\n\n')
+      : undefined
+  const profileContexts = profiles
+    .map((profile) => {
+      const content = catalog.content[locale]?.[profile]
 
-    return content
-      ? renderProfileMarkdown({
-          catalog,
-          content,
-          locale,
-          profile,
-        })
-      : Effect.succeed(
-          `# Profile: ${profile}\n\nNo ${locale} content is available for this profile.`
-        )
-  }).pipe(Effect.map((items) => items.join('\n\n---\n\n')))
+      return content !== undefined
+        ? renderProfileMarkdown({ content, profile })
+        : `# Profile: ${profile}\n\nNo ${locale} content is available for this profile.`
+    })
+    .join('\n\n---\n\n')
+
+  return [sharedContext, profileContexts]
+    .filter((block): block is string => block !== undefined)
+    .join('\n\n---\n\n')
+}

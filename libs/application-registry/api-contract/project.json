@@ -1,0 +1,27 @@
+{
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "name": "application-registry-api-contract",
+  "projectType": "library",
+  "sourceRoot": "libs/application-registry/api-contract/src",
+  "tags": ["scope:application-registry", "type:api", "visibility:private"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/application-registry/api-contract/src/index.ts",
+        "outputPath": "libs/application-registry/api-contract/dist",
+        "rootDir": "libs/application-registry/api-contract/src",
+        "tsConfig": "libs/application-registry/api-contract/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
+    "format": {},
+    "format:check": {}
+  }
+}

@@ -71,3 +71,17 @@ export const CampaignProfileShortlistSchema = Schema.Struct({
 export type CampaignProfileShortlist = Schema.Schema.Type<
   typeof CampaignProfileShortlistSchema
 >
+
+export type CampaignJobAnalysis = CampaignProfileShortlist & {
+  readonly extensions: Readonly<Record<string, unknown>>
+}
+
+export const makeCampaignJobAnalysisSchema = <
+  Fields extends Schema.Struct.Fields,
+>(
+  extensionFields: Fields
+) =>
+  Schema.Struct({
+    ...CampaignProfileShortlistSchema.fields,
+    extensions: Schema.Struct(extensionFields),
+  })

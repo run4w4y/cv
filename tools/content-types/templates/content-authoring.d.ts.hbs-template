@@ -36,7 +36,9 @@ declare namespace ContentAuthoring {
       readonly variables: Record<string, LocalizedVariableValue>
     }
     export type ContentRepositoryConfig = {
-      readonly contentDir?: string
+      readonly contentDir: string
+      readonly defaultLocale: Locale
+      readonly defaultProfile: ProfileSlug
       readonly locales: readonly Locale[]
       readonly publicProfiles?: readonly ProfileSlug[]
     }

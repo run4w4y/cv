@@ -1,21 +1,17 @@
 import { Effect } from 'effect'
 import type { PrepareCampaignOptions } from '../config/model'
 import { ApplicationCampaignConfigError } from '../errors'
-import {
-  discoverProfileCatalog,
-  excludeProfileSlugs,
-  profileContextLocale,
-  profileSlugsForLocale,
-} from '../profiles/catalog'
+import type { ProfileCatalog as LoadedProfileCatalog } from '../profiles/catalog'
+import { excludeProfileSlugs, profileSlugsForLocale } from '../profiles/catalog'
 import { renderProfileSummariesMarkdown } from '../profiles/render-summary'
-import type { ResolvedProfileCatalog } from '../profiles/variables'
-import { resolveProfileVariables } from '../profiles/variables'
+import { CampaignProfileSource } from '../profiles/source'
 import { logInfo } from '../telemetry'
 
-export type ProfileCatalog = ResolvedProfileCatalog
+export type ProfileCatalog = LoadedProfileCatalog
 
 export type SharedCampaignInputs = {
   readonly candidateProfiles: readonly string[]
+  readonly excludedProfiles: readonly string[]
   readonly profileCatalog: ProfileCatalog
   readonly profileSummaries: string
 }
@@ -46,7 +42,7 @@ const resolveCampaignProfiles = ({
     if (selectableProfiles.length === 0) {
       return yield* Effect.fail(
         new ApplicationCampaignConfigError({
-          message: `No ${locale} CV profiles are available after exclusions. Excluded profiles: ${excludedProfiles.join(', ') || '(none)'}.`,
+          message: `No ${locale} content profiles are available after exclusions. Excluded profiles: ${excludedProfiles.join(', ') || '(none)'}.`,
         })
       )
     }
@@ -64,45 +60,49 @@ const resolveCampaignProfiles = ({
 
 export const prepareSharedCampaignInputs = (options: PrepareCampaignOptions) =>
   Effect.gen(function* () {
-    const discoveredCatalog = yield* discoverProfileCatalog(options.contentRoot)
-    const localeProfiles = profileSlugsForLocale(
-      discoveredCatalog,
-      profileContextLocale
-    )
+    const source = yield* CampaignProfileSource
+    const discoveredCatalog = yield* source.open({
+      contentRoot: options.contentRoot,
+    })
+    const contextLocale = discoveredCatalog.defaultLocale
+    const excludedProfiles = options.excludedProfiles ?? [
+      discoveredCatalog.defaultProfile,
+    ]
+    const localeProfiles = profileSlugsForLocale(discoveredCatalog)
     const selectableProfiles = excludeProfileSlugs(
       localeProfiles,
-      options.excludedProfiles
+      excludedProfiles
     )
     const candidateProfiles = yield* resolveCampaignProfiles({
       selectableProfiles,
-      excludedProfiles: options.excludedProfiles,
+      excludedProfiles,
       fixedProfile: options.profile,
-      locale: profileContextLocale,
+      locale: contextLocale,
     })
 
-    const profileCatalog = yield* resolveProfileVariables({
-      catalog: discoveredCatalog,
-      locale: profileContextLocale,
+    const profileCatalog = yield* discoveredCatalog.load({
+      locale: contextLocale,
       profiles: candidateProfiles,
     })
 
     yield* logInfo('Loaded campaign profile inputs', {
       candidateProfileCount: candidateProfiles.length,
       contentLocaleCount: profileCatalog.locales.length,
-      excludedProfileCount: options.excludedProfiles.length,
+      excludedProfileCount: excludedProfiles.length,
+      contentLocale: contextLocale,
       localeProfileCount: localeProfiles.length,
-      profileContextLocale,
       selectableProfileCount: selectableProfiles.length,
     })
 
-    const profileSummaries = yield* renderProfileSummariesMarkdown({
+    const profileSummaries = renderProfileSummariesMarkdown({
       catalog: profileCatalog,
-      locale: profileContextLocale,
+      locale: contextLocale,
       profiles: candidateProfiles,
     })
 
     return {
       candidateProfiles,
+      excludedProfiles,
       profileCatalog,
       profileSummaries,
     }

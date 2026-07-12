@@ -29,6 +29,11 @@ resource "random_password" "grafana_connector_token" {
   special = false
 }
 
+resource "random_password" "registry_api_token" {
+  length  = 48
+  special = false
+}
+
 resource "random_password" "content_id_salt" {
   length  = 48
   special = false
@@ -113,6 +118,26 @@ resource "infisical_secret" "grafana_connector_token" {
 
   metadata = merge(local.common_metadata, {
     description = "Terraform-generated bearer token Grafana sends to the analytics connector."
+    kind        = "generated-secret"
+  })
+
+  depends_on = [infisical_secret_folder.child]
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "infisical_secret" "registry_api_token" {
+  name             = "REGISTRY_API_TOKEN"
+  value_wo         = random_password.registry_api_token.result
+  value_wo_version = 1
+  env_slug         = var.environment_slug
+  workspace_id     = var.infisical_project_id
+  folder_path      = local.application_registry_path
+
+  metadata = merge(local.common_metadata, {
+    description = "Terraform-generated bearer token required by the application registry API."
     kind        = "generated-secret"
   })
 

@@ -5,11 +5,23 @@ export {
   makeCodexApplicationAdvisorLayer,
 } from './ai/advisor'
 export {
+  type CampaignJobAnalysis,
   type CampaignProfileShortlist,
   CampaignProfileShortlistSchema,
   type CampaignRecommendation,
   CampaignRecommendationSchema,
 } from './ai/schema'
+export type {
+  StructuredAiRequest,
+  StructuredAiService,
+} from './ai/structured'
+export type {
+  CampaignArtifactFile,
+  CampaignArtifactManifest,
+  WriteCampaignArtifactsInput,
+} from './artifacts/write-campaign'
+export { prepareCommand } from './cli/command'
+export { runCli } from './cli/runtime'
 export {
   type CampaignMaterialsMode,
   CampaignMaterialsModeSchema,
@@ -29,13 +41,41 @@ export {
   ApplicationCampaignContentError,
   ApplicationCampaignFileSystemError,
   ApplicationCampaignNetworkError,
+  ApplicationCampaignPluginError,
   ApplicationCampaignTemplateError,
   ApplicationCampaignValidationError,
 } from './errors'
 export {
+  CampaignPlugins,
+  type CampaignPluginsService,
+  makeCampaignPluginsLayer,
+  makeCampaignPluginsService,
+} from './plugins/service'
+export type {
+  CampaignAnalysisContributionRegistration,
+  CampaignAnalysisPromptContribution,
+  CampaignJobAnalysisContribution,
+  CampaignPlugin,
+} from './plugins/types'
+export { defineCampaignAnalysisContribution } from './plugins/types'
+export type { ProfileCatalog } from './profiles/catalog'
+export {
+  renderJsonMarkdown,
+  renderJsonSummaryMarkdown,
+} from './profiles/render-shared'
+export {
+  type CampaignProfileCollection,
+  type CampaignProfileLoadRequest,
+  CampaignProfileSource,
+  type CampaignProfileSourceService,
+} from './profiles/source'
+export {
+  ApplicationCampaignPlatformLayer,
   type ApplicationCampaignRuntime,
-  ApplicationCampaignRuntimeLayer,
+  makeApplicationCampaignRuntimeLayer,
 } from './runtime'
+export * from './workflow/graph'
+export * from './workflow/keys'
 export {
   CampaignProgressEvent,
   CampaignReporter,
@@ -53,3 +93,9 @@ export {
   type PreparedCampaignRun,
   prepareCampaign,
 } from './workflow/run'
+export { campaignWorkflowStepIds } from './workflow/step-ids'
+export type {
+  CampaignDecisions,
+  GeneratedCampaign,
+  PreparedCampaign,
+} from './workflow/types'

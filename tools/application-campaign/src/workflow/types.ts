@@ -19,10 +19,12 @@ export type GeneratedCampaign = {
 
 export type PreparedCampaign = {
   readonly decisions: CampaignDecisions
+  readonly extensions: Readonly<Record<string, unknown>>
   readonly generated: GeneratedCampaign
   readonly issues: readonly CampaignIssue[]
   readonly outDir: string
   readonly recommendation: CampaignRecommendation
+  readonly runId: string
   readonly status: 'partial' | 'succeeded'
   readonly target: CampaignTargetRoutine['target']
 }
@@ -32,6 +34,7 @@ export type FailedCampaign = {
   readonly generated: GeneratedCampaign
   readonly issues: readonly CampaignIssue[]
   readonly outDir: string
+  readonly runId: string
   readonly status: 'failed'
   readonly target: CampaignTargetRoutine['target']
 }
@@ -43,6 +46,7 @@ export type PreparedCampaignRun = {
   readonly issues: readonly CampaignIssue[]
   readonly outDir: string
   readonly routine: CampaignRoutine
+  readonly runId: string
   readonly status: 'failed' | 'partial' | 'succeeded'
 }
 

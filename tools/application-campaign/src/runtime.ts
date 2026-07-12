@@ -8,12 +8,17 @@ import { BunServices } from '@effect/platform-bun'
 import { Layer } from 'effect'
 import * as FetchHttpClient from 'effect/unstable/http/FetchHttpClient'
 import type * as HttpClient from 'effect/unstable/http/HttpClient'
+import {
+  CampaignProfileSource,
+  type CampaignProfileSourceService,
+} from './profiles/source'
 
 export type ApplicationCampaignRuntime =
   | BunServices.BunServices
   | HttpClient.HttpClient
   | PdfExporter
   | PrivateContentLink
+  | CampaignProfileSource
 
 const PlatformLayer = Layer.merge(BunServices.layer, FetchHttpClient.layer)
 const PrivateContentLinkLayer = PrivateContentLinkLive.pipe(
@@ -21,8 +26,16 @@ const PrivateContentLinkLayer = PrivateContentLinkLive.pipe(
 )
 const PdfExporterLayer = PdfExporterLive.pipe(Layer.provide(PlatformLayer))
 
-export const ApplicationCampaignRuntimeLayer = Layer.mergeAll(
+export const ApplicationCampaignPlatformLayer = Layer.mergeAll(
   PlatformLayer,
   PrivateContentLinkLayer,
   PdfExporterLayer
 )
+
+export const makeApplicationCampaignRuntimeLayer = (
+  profileSource: CampaignProfileSourceService
+) =>
+  Layer.merge(
+    ApplicationCampaignPlatformLayer,
+    Layer.succeed(CampaignProfileSource, profileSource)
+  )

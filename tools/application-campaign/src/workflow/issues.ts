@@ -1,3 +1,4 @@
+import type { CampaignPluginIssue } from '../plugins/types'
 import type { CampaignIssue, CampaignTargetRoutine } from './routine'
 
 export const formatCampaignError = (cause: unknown): string => {
@@ -36,6 +37,16 @@ const runtimeIssue = ({
 export const runtimeError = (
   input: Omit<Parameters<typeof runtimeIssue>[0], 'severity'>
 ) => runtimeIssue({ ...input, severity: 'error' })
+
+export const pluginWarning = (
+  issue: CampaignPluginIssue,
+  targetUrl?: string
+): CampaignIssue => ({
+  message: issue.message,
+  severity: 'warning',
+  step: `plugin:${issue.pluginId}:${issue.stage}`,
+  ...(targetUrl ? { targetUrl } : {}),
+})
 
 export const uniqueIssues = (issues: readonly CampaignIssue[]) => {
   const seen = new Set<string>()

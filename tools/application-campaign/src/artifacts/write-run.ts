@@ -32,11 +32,13 @@ export type CampaignRunArtifact = {
   readonly routine: {
     readonly steps: readonly RoutineStep<unknown>[]
   }
+  readonly runId: string
   readonly status: PreparedCampaignRun['status']
 }
 
 export const toCampaignRunArtifact = (
-  run: PreparedCampaignRun
+  run: PreparedCampaignRun,
+  generatedAt: string
 ): CampaignRunArtifact => ({
   campaigns: run.campaigns.map((campaign) => ({
     decisions: campaign.status === 'failed' ? undefined : campaign.decisions,
@@ -52,20 +54,23 @@ export const toCampaignRunArtifact = (
     status: campaign.status,
     url: campaign.target.url.href,
   })),
-  generatedAt: new Date().toISOString(),
+  generatedAt,
   issues: run.issues,
   outDir: run.outDir,
   routine: { steps: run.routine.steps },
+  runId: run.runId,
   status: run.status,
 })
+
+export type WriteCampaignRunArtifactsInput = {
+  readonly outDir: string
+  readonly run: CampaignRunArtifact
+}
 
 export const writeCampaignRunArtifacts = ({
   outDir,
   run,
-}: {
-  readonly outDir: string
-  readonly run: CampaignRunArtifact
-}) =>
+}: WriteCampaignRunArtifactsInput) =>
   Effect.gen(function* () {
     const path = yield* Path
 

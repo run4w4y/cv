@@ -18,6 +18,10 @@
       "types": "./dist/load-snapshot.d.ts",
       "default": "./dist/load-snapshot.js"
     },
+    "./source": {
+      "types": "./dist/source-repository.d.ts",
+      "default": "./dist/source-repository.js"
+    },
     "./virtual": {
       "types": "./dist/virtual.d.ts"
     }

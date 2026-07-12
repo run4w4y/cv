@@ -1,0 +1,44 @@
+{
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "name": "application-registry-crud",
+  "projectType": "library",
+  "sourceRoot": "libs/application-registry/crud/src",
+  "tags": [
+    "scope:application-registry",
+    "type:data-access",
+    "visibility:private"
+  ],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/application-registry/crud/src/index.ts",
+        "outputPath": "libs/application-registry/crud/dist",
+        "rootDir": "libs/application-registry/crud/src",
+        "tsConfig": "libs/application-registry/crud/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "outputs": [],
+      "options": {
+        "color": true,
+        "commands": [
+          "bun build libs/application-registry/crud/test/worker.ts --target browser --outdir libs/application-registry/crud/test/dist",
+          "node --import tsx --test libs/application-registry/crud/test/crud.integration.test.ts"
+        ],
+        "parallel": false
+      }
+    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
+    "format": {},
+    "format:check": {}
+  }
+}

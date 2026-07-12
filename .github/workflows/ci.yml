@@ -23,6 +23,7 @@ on:
           - all
           - cv
           - analytics
+          - registry
           - none
         required: true
         type: choice
@@ -124,6 +125,50 @@ jobs:
       - name: Build analytics Worker
         run: ./node_modules/.bin/nx run analytics-connector:build
 
+  application-registry-build:
+    name: Build application registry Worker
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          filter: tree:0
+
+      - name: Set up workspace runtime
+        uses: ./.github/actions/setup-runtime
+
+      - name: Verify application registry migration drift
+        run: ./node_modules/.bin/nx run application-registry-entity:migrations:check --skip-nx-cache
+
+      - name: Build application registry Worker
+        run: ./node_modules/.bin/nx run application-registry-api:build --skip-nx-cache
+
+  application-registry-tests:
+    name: Test application registry Worker
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          filter: tree:0
+
+      - name: Set up workspace runtime
+        uses: ./.github/actions/setup-runtime
+
+      - name: Run registry CRUD integration tests
+        run: ./node_modules/.bin/nx run application-registry-crud:test:integration --skip-nx-cache
+
+      - name: Run registry service integration tests
+        run: ./node_modules/.bin/nx run application-registry-service:test:integration --skip-nx-cache
+
+      - name: Run registry API integration tests
+        run: ./node_modules/.bin/nx run application-registry-api:test:integration --skip-nx-cache
+
+      - name: Run built Worker end-to-end tests
+        run: ./node_modules/.bin/nx run application-registry-api:test:e2e --skip-nx-cache
+
   cv-e2e:
     name: Run CV e2e tests
     runs-on: ubuntu-latest
@@ -183,3 +228,23 @@ jobs:
       id-token: write
     secrets: inherit
     uses: ./.github/workflows/deploy-analytics.yml
+
+  deploy-application-registry:
+    name: Deploy production application registry
+    needs:
+      - quality
+      - application-registry-build
+      - application-registry-tests
+    if: >-
+      ${{
+        (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+        (github.event_name == 'workflow_dispatch' &&
+          (inputs.deploy_target == 'all' || inputs.deploy_target == 'registry'))
+      }}
+    permissions:
+      actions: read
+      contents: read
+      deployments: write
+      id-token: write
+    secrets: inherit
+    uses: ./.github/workflows/deploy-application-registry.yml

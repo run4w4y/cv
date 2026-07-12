@@ -3,17 +3,27 @@
 Local operator tool for turning a job posting URL into an application campaign
 draft.
 
-The tool fetches a job post, composes available CV content profiles through the
-same content pipeline as the CV app, asks the Codex SDK-backed advisor to first
-shortlist the relevant profiles from compact summaries, then sends only those
-full English profile markdown contexts for the final structured recommendation.
-It writes campaign artifacts under `.cv-work/applications/` by default and can
-also mint a private CV link and export the matching PDF.
+The tool fetches a job post and opens an injectable profile source. The
+repository CLI composition reads the content repository directly through the
+generic source-repository API: it discovers authored modules from
+`content.config.ts` and supplies raw TS/MDX base and profile layers with their
+paths and provenance. It does not import the CV application, its schema, its
+content contract, or a generated interchange artifact.
 
-When a fixed profile is supplied, or only one profile remains after exclusions,
-the shortlist turn is skipped. Multi-target runs mint links concurrently and
-send all eligible PDF requests through one build, preview server, and browser
-session.
+The Codex SDK-backed advisor first performs one structured job-analysis pass
+over bounded profile-layer summaries. That pass always runs, including
+fixed-profile jobs, so plugins can extract additional operational data. The
+final pass receives the selected profiles' inherited base and targeted source
+layers, plus shared authored support modules, and produces the recommendation
+and optional application materials.
+
+It writes campaign artifacts under `.cv-work/applications/` by default and can
+also mint a private CV link and export the matching PDF. The one tool project
+contains both the generic campaign engine and its private repository CLI
+composition. Only `src/cli/composition` and `src/cli/plugins` know about the
+local content-repository loader and application-registry package. The reusable
+workflow consumes generic authored source layers and does not inspect a final
+CV document shape.
 
 Interactive runs print the resolved plan and maintain a live step counter with
 the currently active stages. CI and redirected runs automatically use stable,
@@ -63,6 +73,7 @@ Each campaign directory contains:
 - `application.json`
 - `link.txt`, when a private link is generated
 - `pdf-path.txt`, when a private PDF is exported
+- `artifact-manifest.json`, listing every campaign-owned file
 
 Every run writes `run.json` in the run output root. A run and each target report
 one of `succeeded`, `partial`, or `failed`. Missing optional generation config is
@@ -71,6 +82,34 @@ or failed result and a nonzero CLI exit code.
 
 Generated PDFs default to `.cv-work/application-pdfs/`.
 
+Artifact directories are prepared in a sibling staging directory and promoted
+only after every new file is ready. Reruns remove files owned by the previous
+manifest (including stale material, link, and PDF references) while carrying
+unrelated operator files such as notes forward. Cover-letter and email subjects
+remain available in `recommendation.json` and are included in the standalone
+Markdown files.
+
+## Plugins and AI extensions
+
+`CampaignPlugin` contributes executable run- or target-scoped workflow steps.
+Steps declare dependencies and one of `warn`, `fail-target`, or `fail-run`.
+The graph compiler rejects duplicate IDs, missing dependencies, and cycles;
+the same graph drives scheduling and progress events. Step outputs are stored
+in an immutable typed context, so plugins can populate prompt additions or
+consume prior results without lifecycle-hook argument types.
+
+A plugin extends the shared first AI pass by publishing a named instruction and
+Effect schema from one of its steps and registering the typed result key. The
+core analysis step reads those contributions from the workflow context, builds
+one combined response schema, and decodes the result once.
+
+The CLI-local application-registry plugin uses one contribution to request
+submission instructions, orthogonal opportunity details, and structured
+compensation in each posting's original currency and integer minor units. After
+artifacts commit, it sends one idempotent capture through the registry client.
+The client writes to its durable local outbox before attempting the network
+request, so an unavailable Worker queues the capture for later replay.
+
 ## Options
 
 - `--url <url>`: job posting URL. Can be passed multiple times.
@@ -78,10 +117,10 @@ Generated PDFs default to `.cv-work/application-pdfs/`.
 - `--content-root <path>`: content repository root. Overrides
   `APPLICATION_CAMPAIGN_CONTENT_ROOT`.
 - `--profile <slug>`: fixed private CV profile. If omitted, the AI recommends
-  the best profile from the composed CV content.
+  the best profile from the authored source context.
 - `--exclude-profiles <slugs>`: comma-separated profile slugs excluded from AI
-  selection. Defaults to `default`; pass an empty value to include every
-  profile.
+  selection. Defaults to the repository's configured default profile; pass an
+  empty value to include every profile.
 - `--audience <slug>`: fixed private audience slug. If omitted, the AI suggests
   a company-based slug and the tool normalizes it.
 - `--out <path>`: exact campaign artifact output directory for one URL. With
@@ -116,6 +155,11 @@ Generated PDFs default to `.cv-work/application-pdfs/`.
 - `CV_WEB_BASE_URL`
 - `PUBLIC_CV_WEB_BASE_URL`
 - `CV_WEB_HOST`
+- `REGISTRY_API_URL`, optional; enables registry capture when paired with the
+  token
+- `REGISTRY_API_TOKEN`, optional; must be configured together with the URL
+- `REGISTRY_DEVICE_ID`, optional device label stored on registry events
+- `REGISTRY_OUTBOX_DIR`, optional durable outbox location
 
 `APPLICATION_CAMPAIGN_CONTENT_ROOT` takes precedence over `CONTENT_ROOT`. If no
 content root is configured, the tool falls back to `../cv-content`.
@@ -139,7 +183,7 @@ service, the Codex implementation layer, and the platform runtime layer:
 
 ```ts
 import {
-  ApplicationCampaignRuntimeLayer,
+  makeApplicationCampaignRuntimeLayer,
   makeCodexApplicationAdvisorLayer,
   prepareCampaign,
   resolvePrepareCampaignOptions,
@@ -154,7 +198,7 @@ const program = resolvePrepareCampaignOptions({
       Effect.provide(makeCodexApplicationAdvisorLayer(advisor))
     )
   ),
-  Effect.provide(ApplicationCampaignRuntimeLayer)
+  Effect.provide(makeApplicationCampaignRuntimeLayer(myProfileSource))
 )
 ```
 
@@ -162,3 +206,34 @@ Alternative AI implementations provide `ApplicationAdvisor`; campaign code
 does not receive Codex binary, model, or reasoning settings.
 Programmatic callers may also provide `CampaignReporter` to consume typed
 workflow progress events; without an override, reporting is silent.
+
+Programmatic callers provide `CampaignProfileSource`. The built-in repository
+implementation returns schema-independent authored source layers. Alternative
+implementations may provide the same generic layer envelope without depending
+on the CV application or materializing a final document contract.
+
+Plugins are composed explicitly:
+
+```ts
+import {
+  makeCampaignPluginsLayer,
+  prepareCampaign,
+} from '@cv/application-campaign'
+import { Effect } from 'effect'
+
+const plugin = {
+  id: 'example',
+  steps: [{
+    id: 'example.after-artifacts',
+    label: 'Record external metadata',
+    scope: 'target',
+    failurePolicy: 'warn',
+    dependsOn: ['write-artifacts'],
+    execute: ({ outputs }) => record(outputs).pipe(Effect.as([])),
+  }],
+}
+
+const program = prepareCampaign(campaign).pipe(
+  Effect.provide(makeCampaignPluginsLayer([plugin]))
+)
+```

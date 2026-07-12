@@ -19,6 +19,14 @@ export {
 } from './errors'
 export { mangleContentId, mangleProfileId } from './ids'
 export {
+  type BuildContentSnapshotOptions,
+  buildContentSnapshot,
+  buildContentSource,
+  type ContentBuildSnapshot,
+  type ContentBuildSource,
+  type PrivateContentProfileRoute,
+} from './pipeline/snapshot'
+export {
   type MintedPrivateAudienceLink,
   type MintPrivateAudienceLinkFromSecretsOptions,
   mintPrivateAudienceLinkFromSecrets,
@@ -30,11 +38,3 @@ export {
   resolveContentVariableValue,
 } from './private-runtime/profiles'
 export { loadContentVariablesSource } from './private-runtime/source'
-export {
-  type BuildContentSnapshotOptions,
-  buildContentSnapshot,
-  buildContentSource,
-  type ContentBuildSnapshot,
-  type ContentBuildSource,
-  type PrivateContentProfileRoute,
-} from './source/snapshot'

@@ -56,7 +56,8 @@ describe('campaign plan formatting', () => {
     const routine = await Effect.runPromise(resolveCampaignRoutine(options))
     const plan = formatCampaignPlan(routine)
 
-    expect(plan).toContain('Plan (5 runnable, 2 skipped)')
+    expect(plan).toContain('Plan (6 runnable, 2 skipped)')
+    expect(plan).toContain('Prepare campaign targets')
     expect(plan).toContain('jobs.example.com/platform')
     expect(plan).toContain('[-] Mint private CV link')
     expect(plan).toContain('[ ] Write campaign run manifest')

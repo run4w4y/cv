@@ -66,7 +66,7 @@ const contentRoot = optionalString(
 )
 const excludedProfiles = Flag.string('exclude-profiles').pipe(
   Flag.withDescription(
-    'Comma-separated profile slugs to exclude from AI selection. Defaults to default.'
+    "Comma-separated profile slugs to exclude from AI selection. Defaults to the content repository's configured default profile."
   ),
   Flag.optional
 )

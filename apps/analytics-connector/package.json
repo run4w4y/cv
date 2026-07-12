@@ -8,6 +8,7 @@
     "deploy": "nx run analytics-connector:deploy"
   },
   "dependencies": {
+    "@cv/effect-http-auth": "workspace:*",
     "@cv/cloudflare-analytics-client": "workspace:*",
     "@cv/analytics-core": "workspace:*",
     "@cv/analytics-grafana": "workspace:*",

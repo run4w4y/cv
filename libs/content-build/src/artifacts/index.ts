@@ -30,7 +30,7 @@ import {
   type BuildContentSnapshotOptions,
   buildContentSnapshot,
   type ContentBuildSnapshot,
-} from '../source/snapshot'
+} from '../pipeline/snapshot'
 
 export type ContentArtifactPaths = ContentFileOutputPaths
 

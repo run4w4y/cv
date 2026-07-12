@@ -6,7 +6,6 @@ export const defaultCampaignOutRoot = '.cv-work/applications'
 export const defaultPdfOutDir = '.cv-work/application-pdfs'
 export const defaultLocale = 'en'
 export const defaultCodexModel = 'gpt-5.5'
-export const defaultExcludedProfiles = ['default'] as const
 export const defaultCampaignConcurrency = 2
 
 export const campaignMaterialsModes = ['all', 'none'] as const
@@ -43,7 +42,8 @@ export type PrepareCampaignOptions = {
   readonly audience?: string
   readonly concurrency: number
   readonly contentRoot: string
-  readonly excludedProfiles: readonly string[]
+  /** Undefined applies the content repository's configured default profile. */
+  readonly excludedProfiles?: readonly string[]
   readonly generate: boolean
   readonly locale: Locale
   readonly materials: CampaignMaterialsMode

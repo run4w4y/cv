@@ -12,12 +12,6 @@ const registry = ({
   modules,
 })
 
-const fallback = {
-  contentDir: 'content',
-  defaultLocale: 'en',
-  defaultProfile: 'default',
-} as const
-
 describe('content repository discovery', () => {
   test('loads configured locales, discovers profiles, and indexes source/effective sections', () => {
     const repository = loadContentRepository(
@@ -33,6 +27,9 @@ describe('content repository discovery', () => {
         modules: {
           'content.config.ts': {
             default: {
+              contentDir: 'content',
+              defaultLocale: 'en',
+              defaultProfile: 'default',
               locales: ['en', 'ru'],
               publicProfiles: ['default'],
             },
@@ -56,8 +53,7 @@ describe('content repository discovery', () => {
             default: {},
           },
         },
-      }),
-      fallback
+      })
     )
 
     expect(repository.config.locales).toEqual(['en', 'ru'])
@@ -91,12 +87,48 @@ describe('content repository discovery', () => {
       },
     ])
     expect(
+      repository
+        .listSourceSections('en', 'backend')
+        .map((section) => section.modulePath)
+    ).toEqual([
+      'content/profiles/backend/en/education/innopolis.ts',
+      'content/profiles/backend/en/experience/acme.mdx',
+      'content/profiles/backend/en/projects/cv.ts',
+    ])
+    expect(
       repository.getEffectiveSection('en', 'backend', ['education'])
     ).toMatchObject({
       modulePath: 'content/profiles/default/en/education.ts',
       profile: 'backend',
       sourceProfile: 'default',
     })
+  })
+
+  test('can resolve repository layout entirely from content.config', () => {
+    const repository = loadContentRepository(
+      registry({
+        modules: {
+          'content.config.ts': {
+            default: {
+              contentDir: 'source',
+              defaultLocale: 'ru',
+              defaultProfile: 'base',
+              locales: ['ru'],
+            },
+          },
+          'source/profiles/base/ru/profile.ts': { default: {} },
+        },
+      })
+    )
+
+    expect(repository.config).toEqual({
+      contentDir: 'source',
+      defaultLocale: 'ru',
+      defaultProfile: 'base',
+      locales: ['ru'],
+      publicProfiles: ['base'],
+    })
+    expect(repository.profiles).toEqual(['base'])
   })
 
   test('rejects files that resolve to the same section path', () => {
@@ -111,6 +143,9 @@ describe('content repository discovery', () => {
           modules: {
             'content.config.ts': {
               default: {
+                contentDir: 'content',
+                defaultLocale: 'en',
+                defaultProfile: 'default',
                 locales: ['en'],
               },
             },
@@ -118,8 +153,7 @@ describe('content repository discovery', () => {
               default: {},
             },
           },
-        }),
-        fallback
+        })
       )
     ).toThrow('Duplicate content section "about"')
   })
@@ -130,6 +164,9 @@ describe('content repository discovery', () => {
         modules: {
           'content.config.ts': {
             default: {
+              contentDir: 'content',
+              defaultLocale: 'en',
+              defaultProfile: 'default',
               locales: ['en'],
             },
           },
@@ -149,8 +186,7 @@ describe('content repository discovery', () => {
             default: {},
           },
         },
-      }),
-      fallback
+      })
     )
 
     expect(
@@ -167,6 +203,9 @@ describe('content repository discovery', () => {
           modules: {
             'content.config.ts': {
               default: {
+                contentDir: 'content',
+                defaultLocale: 'en',
+                defaultProfile: 'default',
                 locales: ['en'],
               },
             },
@@ -174,12 +213,31 @@ describe('content repository discovery', () => {
               default: {},
             },
           },
-        }),
-        fallback
+        })
       )
     ).toThrow(
       'Default content profile "default" was not discovered for locale "en"'
     )
+  })
+
+  test('requires a repository-relative content directory', () => {
+    expect(() =>
+      loadContentRepository(
+        registry({
+          modules: {
+            'content.config.ts': {
+              default: {
+                contentDir: '/absolute/content',
+                defaultLocale: 'en',
+                defaultProfile: 'default',
+                locales: ['en'],
+              },
+            },
+            'content/profiles/default/en/profile.ts': { default: {} },
+          },
+        })
+      )
+    ).toThrow('repository-relative content directory')
   })
 
   test('requires a root content repository config', () => {
@@ -191,8 +249,7 @@ describe('content repository discovery', () => {
               default: {},
             },
           },
-        }),
-        fallback
+        })
       )
     ).toThrow('Missing content source module content.config')
   })

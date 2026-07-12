@@ -1,0 +1,30 @@
+{
+  "name": "@cv/application-registry-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nx run application-registry-api:build",
+    "dev": "nx run application-registry-api:dev",
+    "deploy": "nx run application-registry-api:deploy",
+    "test:integration": "nx run application-registry-api:test:integration",
+    "test:e2e": "nx run application-registry-api:test:e2e",
+    "migrations:apply:local": "nx run application-registry-api:migrations:apply:local",
+    "migrations:apply:remote": "nx run application-registry-api:migrations:apply:remote"
+  },
+  "dependencies": {
+    "@cv/application-registry-entity": "workspace:*",
+    "@cv/application-registry-crud": "workspace:*",
+    "@cv/application-registry-fx": "workspace:*",
+    "@cv/application-registry-service": "workspace:*",
+    "@cv/application-registry-api-contract": "workspace:*",
+    "@cv/effect-http-auth": "workspace:*",
+    "effect": "4.0.0-beta.91"
+  },
+  "devDependencies": {
+    "@cv/application-registry-api-client": "workspace:*",
+    "@cloudflare/workers-types": "4.20260511.1",
+    "drizzle-orm": "1.0.0-rc.4",
+    "miniflare": "4.20260708.1"
+  }
+}

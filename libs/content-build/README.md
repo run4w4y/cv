@@ -7,6 +7,10 @@ deterministic public ids, emits public files, encrypts private files, infers
 private runtime profile payloads, and exposes helpers for minting private
 audience links.
 
+The composed snapshot is an internal build-pipeline concept under
+`src/pipeline`. Consumers that only need authored repository context can read
+generic source layers without building or materializing this snapshot.
+
 ## Inputs
 
 - `CONTENT_ROOT`: content repository root.

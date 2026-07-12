@@ -1,5 +1,5 @@
 import { Cause, Context, Data, Effect, Exit } from 'effect'
-import type { CampaignRoutine, ReadyRoutineStep } from './routine'
+import type { CampaignRoutine, ReadyRoutineStep, RoutineStep } from './routine'
 import type { PreparedCampaignRun } from './types'
 
 export type CampaignProgressEvent = Data.TaggedEnum<{
@@ -126,7 +126,7 @@ export const reportStepDetail = (
   )
 
 export const reportStepSkipped = (
-  step: ReadyRoutineStep<unknown>,
+  step: Pick<RoutineStep<unknown>, 'id'>,
   reason: string
 ) =>
   reportCampaignProgress(

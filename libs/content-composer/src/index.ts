@@ -27,12 +27,12 @@ export type {
 export {
   type ContentRepository,
   type ContentRepositoryConfig,
-  type ContentRepositoryOptions,
   type ContentSectionKind,
   type ContentSectionLookup,
   type ContentSectionSource,
   loadContentRepository,
   type ResolvedContentRepositoryConfig,
+  resolveContentRepositoryConfig,
 } from './repository'
 export { cloneValue, isContentPlainObject, mergeValue } from './value/merge'
 export { requireField } from './value/source'

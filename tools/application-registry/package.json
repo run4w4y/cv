@@ -1,0 +1,23 @@
+{
+  "name": "@cv/application-registry",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "application-registry": "./src/cli/main.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@cv/application-registry-api-client": "workspace:*",
+    "@cv/application-registry-entity": "workspace:*",
+    "@cv/application-registry-api-contract": "workspace:*",
+    "@effect/platform-bun": "4.0.0-beta.91",
+    "effect": "4.0.0-beta.91",
+    "es-toolkit": "^1.43.0"
+  },
+  "devDependencies": {
+    "bun-types": "^1.3.14"
+  }
+}

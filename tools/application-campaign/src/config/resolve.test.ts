@@ -43,7 +43,7 @@ describe('application campaign config', () => {
 
     expect(advisor.model).toBe('gpt-5.5')
     expect(advisor.reasoningEffort).toBe('medium')
-    expect(campaign.excludedProfiles).toEqual(['default'])
+    expect(campaign.excludedProfiles).toBeUndefined()
     expect(campaign.generate).toBeTrue()
     expect(campaign.materials).toBe('all')
   })

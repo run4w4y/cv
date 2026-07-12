@@ -41,7 +41,9 @@ const ignoredDirectoryNames = new Set([
   '.git',
   '_files',
   'coverage',
+  'deps',
   'dist',
+  'files',
   'node_modules',
 ])
 const declarationPattern = /\.d\.tsx?$/u

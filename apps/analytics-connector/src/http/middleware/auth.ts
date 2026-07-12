@@ -1,4 +1,8 @@
-import { Context, Effect, Layer, Redacted } from 'effect'
+import {
+  authorizeBearerCredential,
+  verifyBearerToken,
+} from '@cv/effect-http-auth'
+import { Context, Effect, Layer } from 'effect'
 import { HttpApiMiddleware, HttpApiSecurity } from 'effect/unstable/httpapi'
 import {
   readGrafanaConnectorToken,
@@ -36,34 +40,33 @@ export const verifyConnectorBearerToken = (
   AuthenticatedConnectorPrincipal,
   UnauthorizedError | ServiceUnavailableError
 > =>
-  readGrafanaConnectorToken.pipe(
-    withWorkerEnvConfig,
-    Effect.mapError(() =>
-      ServiceUnavailableError.make({
-        message: 'Grafana connector token is not configured.',
-      })
+  verifyBearerToken(token, {
+    configuredToken: readGrafanaConnectorToken.pipe(
+      withWorkerEnvConfig,
+      Effect.mapError(() =>
+        ServiceUnavailableError.make({
+          message: 'Grafana connector token is not configured.',
+        })
+      )
     ),
-    Effect.flatMap((configuredToken) =>
-      token === Redacted.value(configuredToken)
-        ? Effect.succeed({ principal: 'grafana' as const })
-        : Effect.fail(
-            UnauthorizedError.make({
-              message: 'Missing or invalid Grafana connector token.',
-            })
-          )
-    )
-  )
+    onUnauthorized: () =>
+      UnauthorizedError.make({
+        message: 'Missing or invalid Grafana connector token.',
+      }),
+    principal: { principal: 'grafana' as const },
+  })
 
 export const ConnectorAuthorizationLayer = Layer.succeed(
   ConnectorAuthorization,
   ConnectorAuthorization.of({
     bearer: (httpEffect, { credential }) =>
-      verifyConnectorBearerToken(Redacted.value(credential)).pipe(
-        Effect.flatMap((principal) =>
+      authorizeBearerCredential(
+        credential,
+        verifyConnectorBearerToken,
+        (principal) =>
           httpEffect.pipe(
             Effect.provideService(AuthenticatedConnectorRequest, principal)
           )
-        )
       ),
   })
 )

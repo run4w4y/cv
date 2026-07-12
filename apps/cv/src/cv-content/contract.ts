@@ -19,10 +19,7 @@ const cvContentPrivacy = {
 export const cvContentContract = {
   authoringModule,
   compose: composeCvAppContent,
-  contentDir: 'content',
   contentSchema: cvContentSchema,
   contentSchemaVersion: cvContentSchemaVersion,
-  defaultLocale: 'en',
-  defaultProfile: 'default',
   privacy: cvContentPrivacy,
 } satisfies ContentContract<CvContent>

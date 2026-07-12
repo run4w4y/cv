@@ -12,17 +12,18 @@ profile inheritance, merges plain content values, and calls an app-owned
 - A content repository has a root `content.config.ts`.
 - Profile content lives below
   `<contentDir>/profiles/<profile>/<locale>/<section>`, where `contentDir`
-  is selected by the app-owned contract.
+  is configured by the repository.
 - `.ts`, `.tsx`, `.js`, `.jsx`, and `.mdx` files can be content sections.
 - Non-default profiles can inherit sections from the default profile.
 
 ## What The App Owns
 
-The app decides what each section means. `@cv/content-composer` can discover an
+The repository config owns source layout, locales, and default profile. The app
+decides what each section means. `@cv/content-composer` can discover an
 `experience/acme.mdx` section, but it does not know whether that is a job,
 project, article, or something else. The app-owned `ContentContract` supplies
-the runtime schema and version, final composition logic, content directory,
-default locale/profile, and authoring module. The composer stamps the generic
+the runtime schema and version, final composition logic, and authoring module.
+The composer stamps the generic
 `content-manifest.v1` envelope, validates every final value with the app schema,
 and rejects values that cannot cross the JSON boundary.
 

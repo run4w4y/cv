@@ -8,7 +8,13 @@ const registry: ContentRegistry = {
   mdxModules: {},
   modules: {
     'content.config.ts': {
-      default: { locales: ['en'], publicProfiles: ['default'] },
+      default: {
+        contentDir: 'content',
+        defaultLocale: 'en',
+        defaultProfile: 'default',
+        locales: ['en'],
+        publicProfiles: ['default'],
+      },
     },
     'content/profiles/default/en/profile.ts': { default: {} },
   },
@@ -27,11 +33,8 @@ const contractFor = (
       profiles,
     },
   }),
-  contentDir: 'content',
   contentSchema,
   contentSchemaVersion: 'test.content.v1',
-  defaultLocale: 'en',
-  defaultProfile: 'default',
 })
 
 describe('content contract', () => {

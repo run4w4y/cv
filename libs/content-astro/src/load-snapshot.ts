@@ -13,6 +13,7 @@ import { Effect } from 'effect'
 import { createServer, type Plugin } from 'vite'
 import { satteriMdxPlugin } from './mdx-plugin'
 import { runEffectPromise } from './node-runtime'
+import { loadContentRepositoryConfig } from './source-repository'
 import { renderRegistryModuleTemplate } from './templates'
 import { workspaceAliases, workspaceRoot } from './vite-workspace'
 
@@ -48,8 +49,10 @@ const registryPlugin = (contentRoot: string, contentDir: string): Plugin => ({
 const createContentServer = async <Content>({
   contentRoot,
   contract,
-}: ContentLoaderOptions<Content>) =>
-  createServer({
+}: ContentLoaderOptions<Content>) => {
+  const repositoryConfig = await loadContentRepositoryConfig({ contentRoot })
+
+  return createServer({
     appType: 'custom',
     configFile: false,
     logLevel: 'silent',
@@ -61,7 +64,7 @@ const createContentServer = async <Content>({
     },
     plugins: [
       satteriMdxPlugin(),
-      registryPlugin(contentRoot, contract.contentDir),
+      registryPlugin(contentRoot, repositoryConfig.contentDir),
     ],
     resolve: {
       alias: [
@@ -84,6 +87,7 @@ const createContentServer = async <Content>({
       middlewareMode: true,
     },
   })
+}
 
 const loadRegistry = async <Content>(
   options: ContentLoaderOptions<Content>

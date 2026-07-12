@@ -1,10 +1,7 @@
 import { BunRuntime } from '@effect/platform-bun'
 import { Console, Effect } from 'effect'
 import { CliError, Command } from 'effect/unstable/cli'
-import {
-  type ApplicationCampaignRuntime,
-  ApplicationCampaignRuntimeLayer,
-} from '../runtime'
+import type { ApplicationCampaignRuntime } from '../runtime'
 import { withTelemetrySpan } from '../telemetry'
 
 const setFailedExitCode = Effect.sync(() => {
@@ -26,7 +23,7 @@ const reportDefect = (defect: unknown) =>
     Effect.andThen(setFailedExitCode)
   )
 
-export const runCli = <Name extends string, Input, ContextInput, E>(
+export const runCli = <Name extends string, Input, ContextInput, E, LayerError>(
   command: Command.Command<
     Name,
     Input,
@@ -34,7 +31,11 @@ export const runCli = <Name extends string, Input, ContextInput, E>(
     E,
     ApplicationCampaignRuntime
   >,
-  config: { readonly version: string }
+  config: { readonly version: string },
+  runtimeLayer: import('effect').Layer.Layer<
+    ApplicationCampaignRuntime,
+    LayerError
+  >
 ) =>
   Command.run(command, config).pipe(
     withTelemetrySpan('application-campaign.cli', {
@@ -43,7 +44,7 @@ export const runCli = <Name extends string, Input, ContextInput, E>(
     Effect.catch((error) =>
       CliError.isCliError(error) ? setFailedExitCode : Effect.fail(error)
     ),
-    Effect.provide(ApplicationCampaignRuntimeLayer),
+    Effect.provide(runtimeLayer),
     Effect.catch(reportError),
     Effect.catchDefect(reportDefect),
     BunRuntime.runMain

@@ -1,274 +1,328 @@
-import type {
-  CvContent,
-  ProfileBlock,
-  RedactableText,
-} from '@cv/cv/content-model'
-import { Effect } from 'effect'
-import { ApplicationCampaignContentError } from '../errors'
-import type { ResolvedProfileCatalog } from './variables'
+export const profileSummaryCharacterBudget = 16_000
 
-export type CvSection = CvContent['sections'][number]
-type AboutSection = Extract<CvSection, { readonly type: 'profile' }>
-type EducationSection = Extract<CvSection, { readonly type: 'education' }>
-type ExperienceSection = Extract<CvSection, { readonly type: 'experience' }>
-type ProjectsSection = Extract<CvSection, { readonly type: 'projects' }>
-type SkillsSection = Extract<CvSection, { readonly type: 'skills' }>
+export type AuthoredProfileSource = {
+  readonly kind: 'mdx' | 'module'
+  readonly modulePath: string
+  readonly path: readonly string[]
+  readonly source: string
+}
 
-export type MarkdownField = readonly [label: string, value: string | undefined]
+export type AuthoredProfileLayer = {
+  readonly profile: string
+  readonly sources: readonly AuthoredProfileSource[]
+}
 
-export type ProfileRenderContext = {
-  readonly catalog: ResolvedProfileCatalog
+export type AuthoredSharedSource = {
+  readonly modulePath: string
+  readonly source: string
+}
+
+export type LayeredProfileContent = {
+  readonly defaultProfile: string
+  readonly layers: readonly AuthoredProfileLayer[]
   readonly locale: string
   readonly profile: string
+  readonly sharedSources: readonly AuthoredSharedSource[]
 }
 
-export const hasText = (value: string | undefined): value is string =>
-  Boolean(value?.trim())
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
 
-export const compact = (value: string | undefined) => value?.trim()
+const isStringArray = (value: unknown): value is readonly string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === 'string')
 
-export const textValue = (
-  context: ProfileRenderContext,
-  value: RedactableText
-): Effect.Effect<string, ApplicationCampaignContentError> => {
-  if (typeof value === 'string') {
-    return Effect.succeed(value)
+const authoredSource = (value: unknown): AuthoredProfileSource | undefined => {
+  if (
+    !isRecord(value) ||
+    (value.kind !== 'mdx' && value.kind !== 'module') ||
+    typeof value.modulePath !== 'string' ||
+    !isStringArray(value.path) ||
+    typeof value.source !== 'string'
+  ) {
+    return undefined
   }
 
-  const resolved = context.catalog.resolvedVariables.get(value.variable)
-
-  return resolved === undefined
-    ? Effect.fail(
-        new ApplicationCampaignContentError({
-          message: `Private content variable "${value.variable}" was not resolved for ${context.locale}.`,
-        })
-      )
-    : Effect.succeed(resolved)
+  return {
+    kind: value.kind,
+    modulePath: value.modulePath,
+    path: value.path,
+    source: value.source,
+  }
 }
 
-export const commaList = (
-  items: readonly string[] | undefined,
-  limit?: number
+const authoredLayer = (value: unknown): AuthoredProfileLayer | undefined => {
+  if (
+    !isRecord(value) ||
+    typeof value.profile !== 'string' ||
+    !Array.isArray(value.sources)
+  ) {
+    return undefined
+  }
+
+  const sources = value.sources.map(authoredSource)
+
+  return sources.every((source) => source !== undefined)
+    ? { profile: value.profile, sources }
+    : undefined
+}
+
+const authoredSharedSource = (
+  value: unknown
+): AuthoredSharedSource | undefined => {
+  if (
+    !isRecord(value) ||
+    typeof value.modulePath !== 'string' ||
+    typeof value.source !== 'string'
+  ) {
+    return undefined
+  }
+
+  return { modulePath: value.modulePath, source: value.source }
+}
+
+export const layeredProfileContent = (
+  value: unknown
+): LayeredProfileContent | undefined => {
+  if (
+    !isRecord(value) ||
+    typeof value.defaultProfile !== 'string' ||
+    !Array.isArray(value.layers) ||
+    typeof value.locale !== 'string' ||
+    typeof value.profile !== 'string' ||
+    !Array.isArray(value.sharedSources)
+  ) {
+    return undefined
+  }
+
+  const layers = value.layers.map(authoredLayer)
+  const sharedSources = value.sharedSources.map(authoredSharedSource)
+
+  if (
+    layers.some((layer) => layer === undefined) ||
+    sharedSources.some((source) => source === undefined)
+  ) {
+    return undefined
+  }
+
+  return {
+    defaultProfile: value.defaultProfile,
+    layers: layers.filter(
+      (layer): layer is AuthoredProfileLayer => layer !== undefined
+    ),
+    locale: value.locale,
+    profile: value.profile,
+    sharedSources: sharedSources.filter(
+      (source): source is AuthoredSharedSource => source !== undefined
+    ),
+  }
+}
+
+const json = (value: unknown) => JSON.stringify(value, null, 2) ?? String(value)
+
+const longestBacktickRun = (value: string) =>
+  Math.max(0, ...(value.match(/`+/gu)?.map((run) => run.length) ?? []))
+
+const fenced = (source: string, language: string) => {
+  const fence = '`'.repeat(Math.max(3, longestBacktickRun(source) + 1))
+
+  return `${fence}${language}\n${source}\n${fence}`
+}
+
+const sourceLanguage = (
+  source: Pick<AuthoredProfileSource, 'kind' | 'modulePath'>
 ) => {
-  const selected = limit ? items?.slice(0, limit) : items
-
-  return selected && selected.length > 0 ? selected.join(', ') : undefined
-}
-
-export const bulletList = (items: readonly string[]) =>
-  items.length > 0 ? items.map((item) => `- ${item}`).join('\n') : undefined
-
-export const fields = (items: readonly MarkdownField[]) =>
-  items
-    .flatMap(([label, value]) =>
-      hasText(value) ? [`- ${label}: ${value}`] : []
-    )
-    .join('\n')
-
-export const joinBlocks = (items: readonly (string | undefined)[]) =>
-  items.filter(hasText).join('\n\n')
-
-export const signalText = (items: readonly (string | undefined)[]) =>
-  items.filter(hasText).join(' - ')
-
-const renderProfileBlock = (
-  context: ProfileRenderContext,
-  block: ProfileBlock
-): Effect.Effect<string, ApplicationCampaignContentError> => {
-  switch (block.type) {
-    case 'heading':
-      return Effect.succeed(`### ${block.text}`)
-    case 'title':
-      return Effect.succeed(`#### ${block.text}`)
-    case 'text':
-      return Effect.succeed(block.text)
-    case 'detail':
-      return Effect.gen(function* () {
-        const value = yield* textValue(context, block.value)
-        const note = block.note ? ` (${block.note})` : ''
-        const href = block.href ? ` ${block.href}` : ''
-
-        return `- ${block.label}: ${value}${note}${href}`
-      })
-    case 'redacted':
-      return Effect.gen(function* () {
-        const items = yield* Effect.forEach(block.items, (item) =>
-          renderProfileBlock(context, item)
-        )
-        const title = block.descriptor.title
-          ? `### ${block.descriptor.title}`
-          : undefined
-
-        return joinBlocks([title, items.join('\n')])
-      })
+  if (source.kind === 'mdx') {
+    return 'mdx'
   }
+
+  const extension = source.modulePath.split('.').at(-1)?.toLowerCase()
+
+  return extension === 'ts' ||
+    extension === 'tsx' ||
+    extension === 'js' ||
+    extension === 'jsx'
+    ? extension
+    : 'text'
 }
 
-const renderAboutSection = (
-  context: ProfileRenderContext,
-  section: AboutSection
-) =>
-  Effect.gen(function* () {
-    const items = yield* Effect.forEach(section.items, (item) =>
-      Effect.gen(function* () {
-        const blocks = yield* Effect.forEach(item.blocks, (block) =>
-          renderProfileBlock(context, block)
-        )
+const renderSource = (
+  source: AuthoredProfileSource,
+  renderedSource = source.source,
+  headingLevel = 3
+) => {
+  const path = source.path.length > 0 ? source.path.join(' / ') : undefined
 
-        return joinBlocks(blocks)
-      })
-    )
+  return [
+    `${'#'.repeat(headingLevel)} Source: ${source.modulePath}`,
+    path ? `Content path: ${path}` : undefined,
+    fenced(renderedSource, sourceLanguage(source)),
+  ]
+    .filter((block): block is string => block !== undefined)
+    .join('\n\n')
+}
 
-    return joinBlocks([
-      `## ${section.label}`,
-      section.description,
-      joinBlocks(items),
-    ])
+const renderProfileLayerWithSourceBudget = (
+  layer: AuthoredProfileLayer,
+  headingLevel: number,
+  sourceCharacterBudget: number | undefined
+) => {
+  const rendered: string[] = []
+  let used = 0
+  let omitted = 0
+
+  for (const source of layer.sources) {
+    const remaining =
+      sourceCharacterBudget === undefined
+        ? undefined
+        : Math.max(0, sourceCharacterBudget - used)
+
+    if (remaining === 0) {
+      omitted += source.source.length
+      continue
+    }
+
+    const renderedSource =
+      remaining === undefined || source.source.length <= remaining
+        ? source.source
+        : source.source.slice(0, remaining)
+    used += renderedSource.length
+    omitted += source.source.length - renderedSource.length
+    rendered.push(renderSource(source, renderedSource, headingLevel + 1))
+  }
+
+  const truncation =
+    omitted > 0
+      ? `> ${omitted.toLocaleString('en-US')} source characters were omitted from this compact context.`
+      : undefined
+
+  return [
+    `${'#'.repeat(headingLevel)} Authored layer: ${layer.profile}`,
+    ...rendered,
+    truncation,
+  ]
+    .filter((block): block is string => block !== undefined)
+    .join('\n\n')
+}
+
+const fitRenderedBudget = ({
+  budget,
+  render,
+  sourceLength,
+}: {
+  readonly budget: number
+  readonly render: (sourceCharacterBudget: number) => string
+  readonly sourceLength: number
+}) => {
+  const complete = render(sourceLength)
+
+  if (complete.length <= budget) {
+    return complete
+  }
+
+  let lower = 0
+  let upper = sourceLength
+  let best = render(0)
+
+  if (best.length > budget) {
+    const notice =
+      '> Compact context omitted to stay within the rendering budget.'
+
+    return notice.length <= budget ? notice : ''
+  }
+
+  while (lower <= upper) {
+    const candidateBudget = Math.floor((lower + upper) / 2)
+    const candidate = render(candidateBudget)
+
+    if (candidate.length <= budget) {
+      best = candidate
+      lower = candidateBudget + 1
+    } else {
+      upper = candidateBudget - 1
+    }
+  }
+
+  return best
+}
+
+export const renderProfileLayer = (
+  layer: AuthoredProfileLayer,
+  options: {
+    readonly headingLevel?: number
+    readonly renderedCharacterBudget?: number
+  } = {}
+) => {
+  const headingLevel = options.headingLevel ?? 2
+  const renderedCharacterBudget = options.renderedCharacterBudget
+
+  if (renderedCharacterBudget === undefined) {
+    return renderProfileLayerWithSourceBudget(layer, headingLevel, undefined)
+  }
+
+  return fitRenderedBudget({
+    budget: renderedCharacterBudget,
+    render: (sourceCharacterBudget) =>
+      renderProfileLayerWithSourceBudget(
+        layer,
+        headingLevel,
+        sourceCharacterBudget
+      ),
+    sourceLength: layer.sources.reduce(
+      (length, source) => length + source.source.length,
+      0
+    ),
   })
+}
 
-const renderExperienceItem = (
-  context: ProfileRenderContext,
-  item: ExperienceSection['items'][number]
-) =>
-  Effect.gen(function* () {
-    const company = yield* textValue(context, item.company)
+export const selectProfileSummaryLayer = (
+  content: LayeredProfileContent,
+  profile: string
+) => {
+  const selected = content.layers.find((layer) => layer.profile === profile)
 
-    return joinBlocks([
-      `### ${item.title} at ${company}`,
-      fields([
-        ['Period', item.period],
-        ['Location', item.location],
-        ['Stack', commaList(item.stack)],
-      ]),
-      item.summary,
-      item.workstreams && item.workstreams.length > 0
-        ? joinBlocks([
-            'Workstreams:',
-            bulletList(
-              item.workstreams.map(
-                (workstream) => `${workstream.title}: ${workstream.summary}`
-              )
-            ),
-          ])
-        : undefined,
-      item.highlights.length > 0
-        ? joinBlocks(['Highlights:', bulletList(item.highlights)])
-        : undefined,
-    ])
-  })
+  if (selected?.sources.length) {
+    return selected
+  }
 
-const renderExperienceSection = (
-  context: ProfileRenderContext,
-  section: ExperienceSection
-) =>
-  Effect.gen(function* () {
-    const items = yield* Effect.forEach(section.items, (item) =>
-      renderExperienceItem(context, item)
-    )
+  return content.layers.find(
+    (layer) => layer.profile === content.defaultProfile
+  )
+}
 
-    return joinBlocks([
-      `## ${section.label}`,
-      section.description,
-      joinBlocks(items),
-    ])
-  })
+export const renderSharedSources = (sources: readonly AuthoredSharedSource[]) =>
+  sources
+    .map((source) => {
+      const kind = source.modulePath.endsWith('.mdx') ? 'mdx' : 'module'
 
-const renderProjectItem = (item: ProjectsSection['items'][number]) =>
-  joinBlocks([
-    `### ${item.name}`,
-    fields([
-      ['Visibility', item.visibility],
-      ['Stack', commaList(item.stack)],
-      [
-        'Links',
-        item.links.length > 0
-          ? item.links.map((link) => `${link.label}: ${link.href}`).join('; ')
+      return renderSource({ ...source, kind, path: [] }, source.source, 2)
+    })
+    .join('\n\n')
+
+/** The profile source is trusted; the Markdown is only transport for an LLM. */
+export const renderJsonMarkdown = (value: unknown) =>
+  fenced(json(value), 'json')
+
+export const renderJsonSummaryMarkdown = (
+  value: unknown,
+  renderedCharacterBudget = profileSummaryCharacterBudget
+) => {
+  const serialized = json(value)
+
+  return fitRenderedBudget({
+    budget: renderedCharacterBudget,
+    render: (sourceCharacterBudget) => {
+      const rendered = serialized.slice(0, sourceCharacterBudget)
+      const omitted = serialized.length - rendered.length
+
+      return [
+        fenced(rendered, 'json'),
+        omitted > 0
+          ? `> ${omitted.toLocaleString('en-US')} source characters were omitted from this compact context.`
           : undefined,
-      ],
-    ]),
-    item.summary,
-  ])
-
-const renderProjectsSection = (section: ProjectsSection) =>
-  joinBlocks([
-    `## ${section.label}`,
-    section.description,
-    joinBlocks(section.items.map(renderProjectItem)),
-  ])
-
-const renderSkillGroup = (group: SkillsSection['items'][number]) =>
-  joinBlocks([
-    `### ${group.group}`,
-    group.items && group.items.length > 0
-      ? bulletList([group.items.join(', ')])
-      : undefined,
-    group.subgroups && group.subgroups.length > 0
-      ? bulletList(
-          group.subgroups.map(
-            (subgroup) => `${subgroup.group}: ${subgroup.items.join(', ')}`
-          )
-        )
-      : undefined,
-  ])
-
-const renderSkillsSection = (section: SkillsSection) =>
-  joinBlocks([
-    `## ${section.label}`,
-    section.description,
-    section.printStack.length > 0
-      ? joinBlocks(['Print stack:', bulletList(section.printStack)])
-      : undefined,
-    joinBlocks(section.items.map(renderSkillGroup)),
-  ])
-
-const renderEducationItem = (item: EducationSection['items'][number]) =>
-  joinBlocks([
-    `### ${item.degree}`,
-    fields([
-      ['Institution', item.institution],
-      ['Period', item.period],
-      ['Location', item.location],
-    ]),
-    item.details,
-    item.thesis
-      ? joinBlocks([
-          `Thesis: ${item.thesis.title}`,
-          item.thesis.summary,
-          item.thesis.links.length > 0
-            ? fields([
-                [
-                  'Links',
-                  item.thesis.links
-                    .map((link) => `${link.label}: ${link.href}`)
-                    .join('; '),
-                ],
-              ])
-            : undefined,
-        ])
-      : undefined,
-  ])
-
-const renderEducationSection = (section: EducationSection) =>
-  joinBlocks([
-    `## ${section.label}`,
-    section.description,
-    joinBlocks(section.items.map(renderEducationItem)),
-  ])
-
-export const renderSection = (
-  context: ProfileRenderContext,
-  section: CvSection
-) => {
-  switch (section.type) {
-    case 'profile':
-      return renderAboutSection(context, section)
-    case 'experience':
-      return renderExperienceSection(context, section)
-    case 'projects':
-      return Effect.succeed(renderProjectsSection(section))
-    case 'skills':
-      return Effect.succeed(renderSkillsSection(section))
-    case 'education':
-      return Effect.succeed(renderEducationSection(section))
-  }
+      ]
+        .filter((block): block is string => block !== undefined)
+        .join('\n\n')
+    },
+    sourceLength: serialized.length,
+  })
 }

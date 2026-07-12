@@ -1,6 +1,7 @@
 import { Effect, Schema } from 'effect'
 import { ApplicationCampaignValidationError } from '../errors'
 import {
+  type CampaignJobAnalysis,
   type CampaignProfileShortlist,
   CampaignProfileShortlistSchema,
   type CampaignRecommendation,
@@ -149,3 +150,9 @@ export const parseCampaignProfileShortlistEffect = (
       validateCampaignProfileShortlist(shortlist, context)
     )
   )
+
+export const validateCampaignJobAnalysis = (
+  analysis: CampaignJobAnalysis,
+  context: ProfileSelectionValidationContext
+) =>
+  validateCampaignProfileShortlist(analysis, context).pipe(Effect.as(analysis))

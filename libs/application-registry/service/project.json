@@ -1,0 +1,41 @@
+{
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "name": "application-registry-service",
+  "projectType": "library",
+  "sourceRoot": "libs/application-registry/service/src",
+  "tags": ["scope:application-registry", "type:service", "visibility:private"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/application-registry/service/src/index.ts",
+        "outputPath": "libs/application-registry/service/dist",
+        "rootDir": "libs/application-registry/service/src",
+        "tsConfig": "libs/application-registry/service/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "outputs": [],
+      "options": {
+        "color": true,
+        "commands": [
+          "tsc --pretty --noEmit --project libs/application-registry/service/tsconfig.integration.json",
+          "bun build libs/application-registry/service/test/worker.ts --target browser --outdir libs/application-registry/service/test/dist",
+          "node --import tsx --test libs/application-registry/service/test/service.integration.test.ts"
+        ],
+        "parallel": false
+      }
+    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
+    "format": {},
+    "format:check": {}
+  }
+}

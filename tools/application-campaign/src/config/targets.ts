@@ -3,21 +3,21 @@ import {
   webBaseUrlFromSelfSchema,
   webBaseUrlSchema,
 } from '@cv/content-core'
-import { Effect, Schema } from 'effect'
+import { DateTime, Effect, Schema } from 'effect'
 import { Path } from 'effect/Path'
+import { uniq } from 'es-toolkit'
 import { ApplicationCampaignConfigError } from '../errors'
 import { rootDirectory } from '../paths'
 import { slugify } from '../text'
-import { defaultExcludedProfiles, type PrepareCampaignTarget } from './model'
+import type { PrepareCampaignTarget } from './model'
 
-export const parseCommaList = (value: string) => [
-  ...new Set(
+export const parseCommaList = (value: string) =>
+  uniq(
     value
       .split(',')
       .map((item) => item.trim())
       .filter(Boolean)
-  ),
-]
+  )
 
 const parseUrlList = (value: string) =>
   value
@@ -80,9 +80,7 @@ export const resolveExcludedProfiles = ({
   readonly profiles?: readonly string[]
 }) =>
   profiles ??
-  (envProfiles === undefined
-    ? [...defaultExcludedProfiles]
-    : parseCommaList(envProfiles))
+  (envProfiles === undefined ? undefined : parseCommaList(envProfiles))
 
 export const resolveProjectPath = (rawPath: string) =>
   Effect.gen(function* () {
@@ -96,7 +94,7 @@ export const resolveProjectPath = (rawPath: string) =>
 const defaultOutDir = ({ outRoot, url }: { outRoot: string; url: URL }) =>
   Effect.gen(function* () {
     const path = yield* Path
-    const date = new Date().toISOString().slice(0, 10)
+    const date = DateTime.formatIsoDateUtc(yield* DateTime.now)
     const slug = slugify(
       `${url.hostname}-${url.pathname.split('/').filter(Boolean).at(-1) ?? 'job'}`
     )

@@ -35,3 +35,17 @@ output "worker_route_pattern" {
   description = "Configured Worker route pattern, if any."
   value       = local.route_enabled ? local.route_pattern : null
 }
+
+output "application_registry" {
+  description = "Application registry Worker and D1 deployment values used by Wrangler and registry clients."
+  value = {
+    api_url             = local.application_registry_api_url
+    database_binding    = "APPLICATION_REGISTRY_DB"
+    database_id         = cloudflare_d1_database.application_registry.id
+    database_name       = cloudflare_d1_database.application_registry.name
+    worker_name         = cloudflare_worker.application_registry.name
+    custom_domain       = local.application_registry_custom_domain_enabled ? local.application_registry_custom_domain_hostname : null
+    route_pattern       = local.application_registry_route_enabled ? local.application_registry_route_pattern : null
+    workers_dev_enabled = var.enable_application_registry_worker_dev_subdomain
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "name": "application-registry-entity",
+  "projectType": "library",
+  "sourceRoot": "libs/application-registry/entity/src",
+  "tags": ["scope:application-registry", "type:data", "visibility:private"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/application-registry/entity/src/index.ts",
+        "outputPath": "libs/application-registry/entity/dist",
+        "rootDir": "libs/application-registry/entity/src",
+        "tsConfig": "libs/application-registry/entity/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "migrations:generate": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "outputs": ["{projectRoot}/drizzle"],
+      "options": {
+        "color": true,
+        "command": "bun run --cwd libs/application-registry/entity drizzle-kit generate --config drizzle.config.ts"
+      }
+    },
+    "migrations:check": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "bun libs/application-registry/entity/scripts/check-migrations.ts"
+      }
+    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
+    "format": {},
+    "format:check": {}
+  }
+}

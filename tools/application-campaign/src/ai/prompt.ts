@@ -16,6 +16,7 @@ type PromptJobContext = {
 }
 
 type ProfileShortlistPromptContext = {
+  readonly extensionInstructions: string
   readonly job: PromptJobContext
   readonly locale: string
   readonly profileInstruction: string
@@ -43,7 +44,7 @@ const promptJobContext = (job: JobSource): PromptJobContext => ({
 const shortlistProfileInstruction = (fixedProfile: string | undefined) =>
   fixedProfile
     ? `Request only the fixed profile "${fixedProfile}". Do not request any other profile.`
-    : 'Request the profile or profiles whose full English CV context you need for the final decision. Prefer 1-3 profiles; include more only when the summaries are genuinely ambiguous.'
+    : 'Request the profile or profiles whose full authored source context you need for the final decision. Prefer 1-3 profiles; include more only when the compact contexts are genuinely ambiguous.'
 
 const recommendationProfileInstruction = (fixedProfile: string | undefined) =>
   fixedProfile
@@ -61,11 +62,13 @@ const recommendationMaterialsInstruction = (mode: CampaignMaterialsMode) =>
     : 'Draft the applicant-facing cover letter and email according to the writing rules below.'
 
 export const renderProfileShortlistPrompt = ({
+  extensionInstructions,
   fixedProfile,
   job,
   locale,
   profileSummaries,
 }: {
+  readonly extensionInstructions?: string
   readonly fixedProfile?: string
   readonly job: JobSource
   readonly locale: string
@@ -80,6 +83,9 @@ export const renderProfileShortlistPrompt = ({
     })
 
     const context = {
+      extensionInstructions:
+        extensionInstructions?.trim() ||
+        'No campaign plugins requested additional job fields. Return an empty extensions object.',
       job: promptJobContext(job),
       locale,
       profileInstruction: shortlistProfileInstruction(fixedProfile),

@@ -10,7 +10,7 @@ variable "cloudflare_account_id" {
 
 variable "cloudflare_api_token" {
   type        = string
-  description = "Cloudflare deploy token with Account Workers Scripts, Pages Write, and Zone DNS Write permissions."
+  description = "Cloudflare deploy token with Account Workers Scripts, D1 Write, Pages Write, and Zone DNS Write permissions."
   sensitive   = true
 
   validation {
@@ -95,9 +95,63 @@ variable "enable_worker_dev_subdomain" {
   default     = false
 }
 
+variable "application_registry_worker_name" {
+  type        = string
+  description = "Application registry Worker script name."
+  default     = "cv-application-registry"
+
+  validation {
+    condition     = length(trimspace(var.application_registry_worker_name)) > 0
+    error_message = "application_registry_worker_name must be set."
+  }
+}
+
+variable "application_registry_database_name" {
+  type        = string
+  description = "D1 database name used by the application registry Worker."
+  default     = "cv-application-registry"
+
+  validation {
+    condition     = length(trimspace(var.application_registry_database_name)) > 0
+    error_message = "application_registry_database_name must be set."
+  }
+}
+
+variable "application_registry_database_primary_location_hint" {
+  type        = string
+  description = "Cloudflare D1 primary location hint. Leave empty to let Cloudflare choose."
+  default     = "weur"
+
+  validation {
+    condition = contains(
+      ["", "wnam", "enam", "weur", "eeur", "apac", "oc"],
+      trimspace(var.application_registry_database_primary_location_hint)
+    )
+    error_message = "application_registry_database_primary_location_hint must be empty or one of wnam, enam, weur, eeur, apac, or oc."
+  }
+}
+
+variable "application_registry_worker_custom_domain_hostname" {
+  type        = string
+  description = "Optional application registry Worker Custom Domain hostname, for example applications.example.com."
+  default     = ""
+}
+
+variable "application_registry_worker_route_pattern" {
+  type        = string
+  description = "Optional application registry Worker route pattern, for example applications.example.com/*. Prefer a custom domain."
+  default     = ""
+}
+
+variable "enable_application_registry_worker_dev_subdomain" {
+  type        = bool
+  description = "Expose the application registry Worker on workers.dev as well as configured custom domains/routes."
+  default     = false
+}
+
 variable "infisical_sync_enabled" {
   type        = bool
-  description = "Whether to write Cloudflare-derived analytics values back into Infisical."
+  description = "Whether to write Cloudflare-derived analytics and application registry values back into Infisical."
   default     = false
 }
 
@@ -109,7 +163,7 @@ variable "infisical_host" {
 
 variable "infisical_project_id" {
   type        = string
-  description = "Infisical project ID that receives Cloudflare-derived analytics values."
+  description = "Infisical project ID that receives Cloudflare-derived deployment values."
   default     = ""
 
   validation {
@@ -132,5 +186,16 @@ variable "infisical_analytics_folder_path" {
   validation {
     condition     = startswith(var.infisical_analytics_folder_path, "/")
     error_message = "infisical_analytics_folder_path must start with '/'."
+  }
+}
+
+variable "infisical_application_registry_folder_path" {
+  type        = string
+  description = "Infisical folder path that receives Cloudflare-derived application registry deployment values."
+  default     = "/cv/application-registry"
+
+  validation {
+    condition     = startswith(var.infisical_application_registry_folder_path, "/")
+    error_message = "infisical_application_registry_folder_path must start with '/'."
   }
 }

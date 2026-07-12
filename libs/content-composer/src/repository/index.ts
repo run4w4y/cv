@@ -15,7 +15,6 @@ import {
 import type {
   ContentRepository,
   ContentRepositoryConfig,
-  ContentRepositoryOptions,
   ContentSectionSource,
   ResolvedContentRepositoryConfig,
 } from './types'
@@ -23,69 +22,78 @@ import type {
 export type {
   ContentRepository,
   ContentRepositoryConfig,
-  ContentRepositoryOptions,
   ContentSectionKind,
   ContentSectionLookup,
   ContentSectionSource,
   ResolvedContentRepositoryConfig,
 } from './types'
 
-const normalizeDirectory = (path: string | undefined) =>
-  (path?.trim() ?? '')
-    .replace(/\\/gu, '/')
-    .replace(/^\/+/u, '')
-    .replace(/\/+$/u, '')
+const normalizeDirectory = (path: string) =>
+  path.trim().replace(/\\/gu, '/').replace(/\/+$/u, '')
 
 const joinPath = (...parts: readonly string[]) =>
   parts.filter(Boolean).join('/')
 
-const loadRepositoryConfigModule = (registry: ContentRegistry) =>
-  Schema.decodeUnknownSync(
+export const resolveContentRepositoryConfig = (
+  source: unknown
+): ResolvedContentRepositoryConfig => {
+  const decoded = Schema.decodeUnknownSync(
     Schema.Struct({
+      contentDir: Schema.String,
+      defaultLocale: localeSchema,
+      defaultProfile: profileSlugSchema,
       locales: Schema.Array(localeSchema),
       publicProfiles: Schema.optional(Schema.Array(profileSlugSchema)),
     }),
     { errors: 'all' }
-  )(readContentModule<ContentRepositoryConfig>('content.config', registry).data)
-
-const resolveRepositoryConfig = (
-  registry: ContentRegistry,
-  options: ContentRepositoryOptions
-) => {
-  const source = loadRepositoryConfigModule(registry)
-  const contentDir = normalizeDirectory(options.contentDir)
+  )(source)
+  const contentDir = normalizeDirectory(decoded.contentDir)
   const contentDirSegments = contentDir.split('/').filter(Boolean)
+  const isAbsoluteDirectory =
+    contentDir.startsWith('/') || /^[A-Za-z]:\//u.test(contentDir)
 
   if (
+    isAbsoluteDirectory ||
     contentDirSegments.length === 0 ||
     contentDirSegments.some((segment) => segment === '.' || segment === '..')
   ) {
     throw new Error(
-      'Content contract must define a repository-relative content directory.'
+      'Content repository config must define a repository-relative content directory.'
     )
   }
 
-  if (source.locales.length === 0) {
+  if (decoded.locales.length === 0) {
     throw new Error(
       'Content repository config must define at least one locale.'
     )
   }
 
-  if (!source.locales.includes(options.defaultLocale)) {
+  if (!decoded.locales.includes(decoded.defaultLocale)) {
     throw new Error(
-      `Content repository config must include the default locale "${options.defaultLocale}".`
+      `Content repository config must include the default locale "${decoded.defaultLocale}".`
     )
   }
 
   return {
-    config: {
-      contentDir,
-      defaultLocale: options.defaultLocale,
-      defaultProfile: options.defaultProfile,
-      locales: source.locales,
-      publicProfiles: source.publicProfiles ?? [options.defaultProfile],
-    } satisfies ResolvedContentRepositoryConfig,
-    profileRootPath: joinPath(contentDir, 'profiles'),
+    contentDir: contentDirSegments.join('/'),
+    defaultLocale: decoded.defaultLocale,
+    defaultProfile: decoded.defaultProfile,
+    locales: decoded.locales,
+    publicProfiles: decoded.publicProfiles ?? [decoded.defaultProfile],
+  }
+}
+
+const loadRepositoryConfigModule = (registry: ContentRegistry) =>
+  resolveContentRepositoryConfig(
+    readContentModule<ContentRepositoryConfig>('content.config', registry).data
+  )
+
+const resolveRepositoryConfig = (registry: ContentRegistry) => {
+  const config = loadRepositoryConfigModule(registry)
+
+  return {
+    config,
+    profileRootPath: joinPath(config.contentDir, 'profiles'),
   }
 }
 
@@ -131,10 +139,9 @@ const sortSections = (sections: readonly ContentSectionSource[]) =>
   )
 
 export const loadContentRepository = (
-  registry: ContentRegistry,
-  options: ContentRepositoryOptions
+  registry: ContentRegistry
 ): ContentRepository => {
-  const { config, profileRootPath } = resolveRepositoryConfig(registry, options)
+  const { config, profileRootPath } = resolveRepositoryConfig(registry)
   const sourceSections = discoverSourceSections(
     registry,
     profileRootPath,
@@ -193,11 +200,19 @@ export const loadContentRepository = (
       )
     )
 
+  const listSourceSections = (locale: Locale, profile: ProfileSlug) =>
+    sortSections(
+      sourceSections.filter(
+        (section) => section.locale === locale && section.profile === profile
+      )
+    )
+
   return {
     config,
     getEffectiveSection,
     getSourceSection,
     listSourceChildren,
+    listSourceSections,
     profiles,
   }
 }

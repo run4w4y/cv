@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cv-application-registry",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-22",
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "APPLICATION_REGISTRY_DB",
+      "database_name": "cv-application-registry",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "../../libs/application-registry/entity/drizzle",
+      "migrations_pattern": "../../libs/application-registry/entity/drizzle/*/migration.sql"
+    }
+  ]
+}

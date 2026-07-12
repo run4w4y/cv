@@ -1,4 +1,4 @@
-import { Effect, Option, Schema } from 'effect'
+import { DateTime, Effect, Option, Schema } from 'effect'
 import { Headers, HttpClient, HttpClientResponse } from 'effect/unstable/http'
 import { ApplicationCampaignNetworkError } from './errors'
 import { logDebug, logInfo, withTelemetrySpan } from './telemetry'
@@ -59,7 +59,7 @@ export const fetchJobSource = (url: URL) =>
     return {
       body,
       contentType,
-      fetchedAt: new Date().toISOString(),
+      fetchedAt: DateTime.formatIso(yield* DateTime.now),
       url: url.href,
     } satisfies JobSource
   }).pipe(

@@ -55,6 +55,28 @@ describe('content registry template', () => {
         )
       )
       writeSourceFile(
+        join(
+          contentRoot,
+          'content',
+          'profiles',
+          'default',
+          'en',
+          'deps',
+          'dependency.ts'
+        )
+      )
+      writeSourceFile(
+        join(
+          contentRoot,
+          'content',
+          'profiles',
+          'default',
+          'en',
+          'files',
+          'attachment.ts'
+        )
+      )
+      writeSourceFile(
         join(contentRoot, 'content', 'files', 'public', 'download.js')
       )
       writeSourceFile(
@@ -109,6 +131,8 @@ describe('content registry template', () => {
       )
       expect(source).not.toContain('about.test.ts')
       expect(source).not.toContain('_files')
+      expect(source).not.toContain('dependency.ts')
+      expect(source).not.toContain('attachment.ts')
       expect(source).not.toContain('download.js')
       expect(source).not.toContain('node_modules')
     } finally {

@@ -1,5 +1,5 @@
 import { intro, log, outro, taskLog } from '@clack/prompts'
-import { Effect, Semaphore } from 'effect'
+import { Clock, Effect, Semaphore } from 'effect'
 import type {
   CampaignProgressEvent,
   CampaignReporterService,
@@ -34,11 +34,11 @@ export type CampaignPresenter = {
   readonly reporter: CampaignReporterService
 }
 
-const makeState = (): PresentationState => ({
+const makeState = (startedAt: number): PresentationState => ({
   concurrency: 1,
   definitions: new Map(),
   finished: false,
-  startedAt: Date.now(),
+  startedAt,
   steps: new Map(),
   targetByStep: new Map(),
   targetLabels: new Map(),
@@ -78,11 +78,15 @@ const updateStep = (
   }
 }
 
-const applyEvent = (state: PresentationState, event: CampaignProgressEvent) => {
+const applyEvent = (
+  state: PresentationState,
+  event: CampaignProgressEvent,
+  now: number
+) => {
   switch (event._tag) {
     case 'RunStarted':
       state.concurrency = event.concurrency
-      state.startedAt = Date.now()
+      state.startedAt = now
       return
     case 'RoutineResolved':
       initializeRoutine(state, event.routine)
@@ -168,6 +172,7 @@ export const formatCampaignPlan = (routine: CampaignRoutine) => {
   const lines = [
     `Plan (${ready} runnable, ${routine.steps.length - ready} skipped)`,
     planStep(routine.profiles, '  '),
+    planStep(routine.targetsStep, '  '),
   ]
 
   for (const target of routine.targets) {
@@ -189,7 +194,7 @@ const formatDuration = (milliseconds: number) => {
   return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`
 }
 
-const progressStatus = (state: PresentationState) => {
+const progressStatus = (state: PresentationState, now: number) => {
   const runnable = [...state.definitions.values()].filter(
     (step) => step.status === 'ready'
   )
@@ -207,7 +212,7 @@ const progressStatus = (state: PresentationState) => {
   const filled = Math.floor((completed / Math.max(1, runnable.length)) * width)
   const failures = failed > 0 ? ` | ${failed} failed` : ''
 
-  return `[${'='.repeat(filled)}${'-'.repeat(width - filled)}] ${completed}/${runnable.length} | ${running} running | ${skipped} skipped${failures} | ${formatDuration(Date.now() - state.startedAt)}`
+  return `[${'='.repeat(filled)}${'-'.repeat(width - filled)}] ${completed}/${runnable.length} | ${running} running | ${skipped} skipped${failures} | ${formatDuration(now - state.startedAt)}`
 }
 
 const targetLabel = (state: PresentationState, targetIndex: number) => {
@@ -238,7 +243,9 @@ const activeStatus = (state: PresentationState) => {
           ? targetLabel(state, targetIndex)
           : stepId === state.routine?.runArtifacts.id
             ? 'Run output'
-            : 'Shared profiles'
+            : stepId === state.routine?.targetsStep.id
+              ? 'Campaign targets'
+              : 'Shared profiles'
       return [`${owner}: ${progress.detail ?? definition?.label ?? stepId}`]
     }
   )
@@ -252,15 +259,15 @@ const activeStatus = (state: PresentationState) => {
   return `Active: ${visible.join(' | ')}${remainder > 0 ? ` | +${remainder} more` : ''}`
 }
 
-const liveStatus = (state: PresentationState) =>
-  `${progressStatus(state)}\n${activeStatus(state)}`
+const liveStatus = (state: PresentationState, now: number) =>
+  `${progressStatus(state, now)}\n${activeStatus(state)}`
 
 const makePrettyReporter = Effect.gen(function* () {
-  const state = makeState()
+  const state = makeState(yield* Clock.currentTimeMillis)
   const semaphore = yield* Semaphore.make(1)
   let live: TaskLogController | undefined
 
-  const startDisplay = (routine: CampaignRoutine) => {
+  const startDisplay = (routine: CampaignRoutine, now: number) => {
     log.info(
       `${routine.targets.length} target${routine.targets.length === 1 ? '' : 's'} | concurrency ${state.concurrency}`,
       { output: process.stderr }
@@ -273,30 +280,30 @@ const makePrettyReporter = Effect.gen(function* () {
       retainLog: false,
       title: 'Running application campaign',
     })
-    live.message(liveStatus(state))
+    live.message(liveStatus(state, now))
   }
 
-  const render = (event: CampaignProgressEvent) => {
+  const render = (event: CampaignProgressEvent, now: number) => {
     if (event._tag === 'RunStarted') {
       intro('Application campaign', { output: process.stderr })
       return
     }
     if (event._tag === 'RoutineResolved') {
-      startDisplay(event.routine)
+      startDisplay(event.routine, now)
       return
     }
     if (!live) {
       return
     }
 
-    live.message(liveStatus(state))
+    live.message(liveStatus(state, now))
 
     if (event._tag === 'RunFinished') {
       const warnings =
         event.warningCount > 0
           ? ` with ${event.warningCount} warning${event.warningCount === 1 ? '' : 's'}`
           : ''
-      const message = `Application campaign ${event.status}${warnings} in ${formatDuration(Date.now() - state.startedAt)}`
+      const message = `Application campaign ${event.status}${warnings} in ${formatDuration(now - state.startedAt)}`
       if (event.status === 'succeeded' && event.errorCount === 0) {
         live.success(message, { showLog: false })
       } else {
@@ -309,22 +316,28 @@ const makePrettyReporter = Effect.gen(function* () {
   const reporter: CampaignReporterService = {
     report: (event) =>
       semaphore.withPermit(
-        Effect.sync(() => {
-          applyEvent(state, event)
-          render(event)
+        Effect.gen(function* () {
+          const now = yield* Clock.currentTimeMillis
+          yield* Effect.sync(() => {
+            applyEvent(state, event, now)
+            render(event, now)
+          })
         })
       ),
   }
 
   yield* Effect.sleep('1 second').pipe(
     Effect.andThen(
-      semaphore.withPermit(
-        Effect.sync(() => {
-          if (live && !state.finished) {
-            live.message(liveStatus(state))
-          }
-        })
-      )
+      Effect.gen(function* () {
+        const now = yield* Clock.currentTimeMillis
+        yield* semaphore.withPermit(
+          Effect.sync(() => {
+            if (live && !state.finished) {
+              live.message(liveStatus(state, now))
+            }
+          })
+        )
+      })
     ),
     Effect.forever,
     Effect.forkScoped
@@ -350,55 +363,58 @@ const writeErrorLine = (line: string) => {
 }
 
 const makePlainReporter = Effect.gen(function* () {
-  const state = makeState()
+  const state = makeState(yield* Clock.currentTimeMillis)
   const semaphore = yield* Semaphore.make(1)
   const reporter: CampaignReporterService = {
     report: (event) =>
       semaphore.withPermit(
-        Effect.sync(() => {
-          applyEvent(state, event)
-          const label =
-            'stepId' in event
-              ? (state.definitions.get(event.stepId)?.label ?? event.stepId)
-              : undefined
+        Effect.gen(function* () {
+          const now = yield* Clock.currentTimeMillis
+          yield* Effect.sync(() => {
+            applyEvent(state, event, now)
+            const label =
+              'stepId' in event
+                ? (state.definitions.get(event.stepId)?.label ?? event.stepId)
+                : undefined
 
-          switch (event._tag) {
-            case 'RunStarted':
-              writeErrorLine(
-                `Application campaign: ${event.targetCount} target${event.targetCount === 1 ? '' : 's'}, concurrency ${event.concurrency}`
-              )
-              return
-            case 'RoutineResolved':
-              writeErrorLine(formatCampaignPlan(event.routine))
-              return
-            case 'StepStarted':
-              writeErrorLine(`[start] ${label}`)
-              return
-            case 'StepDetail':
-              writeErrorLine(`[work] ${label}: ${event.message}`)
-              return
-            case 'StepSucceeded':
-              writeErrorLine(`[done] ${label}`)
-              return
-            case 'StepFailed':
-              writeErrorLine(`[failed] ${label}: ${event.message}`)
-              return
-            case 'StepSkipped':
-              writeErrorLine(`[skipped] ${label}: ${event.reason}`)
-              return
-            case 'TargetIdentified':
-              writeErrorLine(`[target] ${event.company} | ${event.role}`)
-              return
-            case 'TargetFailed':
-              writeErrorLine(
-                `[skipped] Remaining stages for ${targetLabel(state, event.targetIndex)}`
-              )
-              return
-            case 'RunFinished':
-              writeErrorLine(
-                `[complete] ${event.status} in ${formatDuration(Date.now() - state.startedAt)} | ${event.warningCount} warnings | ${event.errorCount} errors`
-              )
-          }
+            switch (event._tag) {
+              case 'RunStarted':
+                writeErrorLine(
+                  `Application campaign: ${event.targetCount} target${event.targetCount === 1 ? '' : 's'}, concurrency ${event.concurrency}`
+                )
+                return
+              case 'RoutineResolved':
+                writeErrorLine(formatCampaignPlan(event.routine))
+                return
+              case 'StepStarted':
+                writeErrorLine(`[start] ${label}`)
+                return
+              case 'StepDetail':
+                writeErrorLine(`[work] ${label}: ${event.message}`)
+                return
+              case 'StepSucceeded':
+                writeErrorLine(`[done] ${label}`)
+                return
+              case 'StepFailed':
+                writeErrorLine(`[failed] ${label}: ${event.message}`)
+                return
+              case 'StepSkipped':
+                writeErrorLine(`[skipped] ${label}: ${event.reason}`)
+                return
+              case 'TargetIdentified':
+                writeErrorLine(`[target] ${event.company} | ${event.role}`)
+                return
+              case 'TargetFailed':
+                writeErrorLine(
+                  `[skipped] Remaining stages for ${targetLabel(state, event.targetIndex)}`
+                )
+                return
+              case 'RunFinished':
+                writeErrorLine(
+                  `[complete] ${event.status} in ${formatDuration(now - state.startedAt)} | ${event.warningCount} warnings | ${event.errorCount} errors`
+                )
+            }
+          })
         })
       ),
   }

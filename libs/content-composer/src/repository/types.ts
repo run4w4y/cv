@@ -1,14 +1,11 @@
 import type { Locale, ProfileSlug } from '@cv/content-core'
 
 export type ContentRepositoryConfig = {
-  locales: readonly Locale[]
-  publicProfiles?: readonly ProfileSlug[]
-}
-
-export type ContentRepositoryOptions = {
   contentDir: string
   defaultLocale: Locale
   defaultProfile: ProfileSlug
+  locales: readonly Locale[]
+  publicProfiles?: readonly ProfileSlug[]
 }
 
 export type ResolvedContentRepositoryConfig = {
@@ -45,6 +42,10 @@ export type ContentRepository = {
     locale: Locale,
     profile: ProfileSlug,
     path: readonly string[]
+  ) => readonly ContentSectionSource[]
+  listSourceSections: (
+    locale: Locale,
+    profile: ProfileSlug
   ) => readonly ContentSectionSource[]
   profiles: readonly ProfileSlug[]
 }
