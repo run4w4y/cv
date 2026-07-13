@@ -1,16 +1,28 @@
 import {
+  type Application,
+  type ApplicationCompensation,
   ApplicationCompensationSchema,
+  type ApplicationEvent,
+  type ApplicationEventKind,
   ApplicationEventKindSchema,
   ApplicationEventSchema,
+  type ApplicationLabel,
   ApplicationLabelSchema,
+  type ApplicationListingCheck,
   ApplicationListingCheckSchema,
+  type ApplicationNote,
   ApplicationNoteSchema,
   ApplicationSchema,
+  type ApplicationStatus,
   ApplicationStatusSchema,
+  type CampaignCapture,
   CampaignCaptureSchema,
   CurrencyCodeSchema,
+  type ListingCheckRun,
   ListingCheckRunSchema,
+  type PersonalPriority,
   PersonalPrioritySchema,
+  type TargetStage,
   TargetStageSchema,
   UtcIsoTimestampSchema,
 } from '@cv/application-registry-entity'
@@ -38,7 +50,7 @@ export {
   SubmitListingCheckFindingsCommandSchema as SubmitListingCheckFindingsRequestSchema,
 } from './commands'
 
-import { FollowUpStateSchema } from './commands'
+import { type FollowUpState, FollowUpStateSchema } from './commands'
 
 const NonEmptyString = Schema.Trim.pipe(Schema.check(Schema.isNonEmpty()))
 
@@ -55,42 +67,68 @@ const RevisionPageFields = {
   nextCursor: Schema.NullOr(NonEmptyString),
 }
 
-export const ApplicationListItemSchema = Schema.Struct({
-  ...ApplicationSchema.fields,
-  captureCount: Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0))),
-  compensationSummary: Schema.NullOr(NonEmptyString),
-  followUpState: FollowUpStateSchema,
-  labels: Schema.Array(NonEmptyString),
-  latestEventAt: Schema.NullOr(UtcIsoTimestampSchema),
-  latestEventKind: Schema.NullOr(ApplicationEventKindSchema),
-  latestApplicationUrl: Schema.NullOr(NonEmptyString),
-  noteCount: Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0))),
-})
+export type ApplicationListItem = Application & {
+  readonly captureCount: number
+  readonly compensationSummary: string | null
+  readonly followUpState: FollowUpState
+  readonly labels: readonly string[]
+  readonly latestEventAt: string | null
+  readonly latestEventKind: ApplicationEventKind | null
+  readonly latestApplicationUrl: string | null
+  readonly noteCount: number
+}
 
-export type ApplicationListItem = Schema.Schema.Type<
-  typeof ApplicationListItemSchema
->
+export const ApplicationListItemSchema: Schema.Codec<ApplicationListItem> =
+  Schema.revealCodec(
+    Schema.Struct({
+      ...ApplicationSchema.fields,
+      captureCount: Schema.Int.pipe(
+        Schema.check(Schema.isGreaterThanOrEqualTo(0))
+      ),
+      compensationSummary: Schema.NullOr(NonEmptyString),
+      followUpState: FollowUpStateSchema,
+      labels: Schema.Array(NonEmptyString),
+      latestEventAt: Schema.NullOr(UtcIsoTimestampSchema),
+      latestEventKind: Schema.NullOr(ApplicationEventKindSchema),
+      latestApplicationUrl: Schema.NullOr(NonEmptyString),
+      noteCount: Schema.Int.pipe(
+        Schema.check(Schema.isGreaterThanOrEqualTo(0))
+      ),
+    })
+  )
 
-export const ListApplicationsResponseSchema = Schema.Struct({
-  items: Schema.Array(ApplicationListItemSchema),
-  ...RevisionPageFields,
-})
+export type ListApplicationsResponse = {
+  readonly items: readonly ApplicationListItem[]
+  readonly checkpoint: string | null
+  readonly nextCursor: string | null
+}
 
-export type ListApplicationsResponse = Schema.Schema.Type<
-  typeof ListApplicationsResponseSchema
->
+export const ListApplicationsResponseSchema: Schema.Codec<ListApplicationsResponse> =
+  Schema.revealCodec(
+    Schema.Struct({
+      items: Schema.Array(ApplicationListItemSchema),
+      ...RevisionPageFields,
+    })
+  )
 
-export const ApplicationFacetsResponseSchema = Schema.Struct({
-  applicationStatuses: Schema.Array(ApplicationStatusSchema),
-  companies: Schema.Array(ApplicationSchema.fields.company),
-  labels: Schema.Array(NonEmptyString),
-  personalPriorities: Schema.Array(PersonalPrioritySchema),
-  targetStages: Schema.Array(TargetStageSchema),
-})
+export type ApplicationFacetsResponse = {
+  readonly applicationStatuses: readonly ApplicationStatus[]
+  readonly companies: readonly string[]
+  readonly labels: readonly string[]
+  readonly personalPriorities: readonly PersonalPriority[]
+  readonly targetStages: readonly TargetStage[]
+}
 
-export type ApplicationFacetsResponse = Schema.Schema.Type<
-  typeof ApplicationFacetsResponseSchema
->
+export const ApplicationFacetsResponseSchema: Schema.Codec<ApplicationFacetsResponse> =
+  Schema.revealCodec(
+    Schema.Struct({
+      applicationStatuses: Schema.Array(ApplicationStatusSchema),
+      companies: Schema.Array(ApplicationSchema.fields.company),
+      labels: Schema.Array(NonEmptyString),
+      personalPriorities: Schema.Array(PersonalPrioritySchema),
+      targetStages: Schema.Array(TargetStageSchema),
+    })
+  )
 
 export const ReplaceApplicationLabelsRequestSchema = Schema.Struct({
   labels: Schema.Array(NonEmptyString),
@@ -100,89 +138,128 @@ export type ReplaceApplicationLabelsRequest = Schema.Schema.Type<
   typeof ReplaceApplicationLabelsRequestSchema
 >
 
-export const ListApplicationLabelsResponseSchema = Schema.Struct({
-  items: Schema.Array(ApplicationLabelSchema),
-})
+export type ListApplicationLabelsResponse = {
+  readonly items: readonly ApplicationLabel[]
+}
 
-export const AddApplicationNoteResponseSchema = Schema.Struct({
-  note: ApplicationNoteSchema,
-  replayed: Schema.Boolean,
-})
+export const ListApplicationLabelsResponseSchema: Schema.Codec<ListApplicationLabelsResponse> =
+  Schema.revealCodec(
+    Schema.Struct({ items: Schema.Array(ApplicationLabelSchema) })
+  )
 
-export type AddApplicationNoteResponse = Schema.Schema.Type<
-  typeof AddApplicationNoteResponseSchema
->
+export type AddApplicationNoteResponse = {
+  readonly note: ApplicationNote
+  readonly replayed: boolean
+}
 
-export const ApplicationAnnotationsResponseSchema = Schema.Struct({
-  labels: Schema.Array(ApplicationLabelSchema),
-  notes: Schema.Array(ApplicationNoteSchema),
-})
+export const AddApplicationNoteResponseSchema: Schema.Codec<AddApplicationNoteResponse> =
+  Schema.revealCodec(
+    Schema.Struct({
+      note: ApplicationNoteSchema,
+      replayed: Schema.Boolean,
+    })
+  )
 
-export type ApplicationAnnotationsResponse = Schema.Schema.Type<
-  typeof ApplicationAnnotationsResponseSchema
->
+export type ApplicationAnnotationsResponse = {
+  readonly labels: readonly ApplicationLabel[]
+  readonly notes: readonly ApplicationNote[]
+}
 
-export const CreateCampaignCaptureResponseSchema = Schema.Struct({
-  application: ApplicationSchema,
-  capture: CampaignCaptureSchema,
-  replayed: Schema.Boolean,
-})
+export const ApplicationAnnotationsResponseSchema: Schema.Codec<ApplicationAnnotationsResponse> =
+  Schema.revealCodec(
+    Schema.Struct({
+      labels: Schema.Array(ApplicationLabelSchema),
+      notes: Schema.Array(ApplicationNoteSchema),
+    })
+  )
 
-export type CreateCampaignCaptureResponse = Schema.Schema.Type<
-  typeof CreateCampaignCaptureResponseSchema
->
+export type CreateCampaignCaptureResponse = {
+  readonly application: Application
+  readonly capture: CampaignCapture
+  readonly replayed: boolean
+}
 
-export const AppendApplicationEventResponseSchema = Schema.Struct({
-  application: ApplicationSchema,
-  event: ApplicationEventSchema,
-  replayed: Schema.Boolean,
-})
+export const CreateCampaignCaptureResponseSchema: Schema.Codec<CreateCampaignCaptureResponse> =
+  Schema.revealCodec(
+    Schema.Struct({
+      application: ApplicationSchema,
+      capture: CampaignCaptureSchema,
+      replayed: Schema.Boolean,
+    })
+  )
 
-export type AppendApplicationEventResponse = Schema.Schema.Type<
-  typeof AppendApplicationEventResponseSchema
->
+export type AppendApplicationEventResponse = {
+  readonly application: Application
+  readonly event: ApplicationEvent
+  readonly replayed: boolean
+}
 
-export const ListApplicationCapturesResponseSchema = Schema.Struct({
-  items: Schema.Array(CampaignCaptureSchema),
-})
+export const AppendApplicationEventResponseSchema: Schema.Codec<AppendApplicationEventResponse> =
+  Schema.revealCodec(
+    Schema.Struct({
+      application: ApplicationSchema,
+      event: ApplicationEventSchema,
+      replayed: Schema.Boolean,
+    })
+  )
 
-export type ListApplicationCapturesResponse = Schema.Schema.Type<
-  typeof ListApplicationCapturesResponseSchema
->
+export type ListApplicationCapturesResponse = {
+  readonly items: readonly CampaignCapture[]
+}
 
-export const ListApplicationListingChecksResponseSchema = Schema.Struct({
-  items: Schema.Array(ApplicationListingCheckSchema),
-})
+export const ListApplicationCapturesResponseSchema: Schema.Codec<ListApplicationCapturesResponse> =
+  Schema.revealCodec(
+    Schema.Struct({ items: Schema.Array(CampaignCaptureSchema) })
+  )
 
-export type ListApplicationListingChecksResponse = Schema.Schema.Type<
-  typeof ListApplicationListingChecksResponseSchema
->
+export type ListApplicationListingChecksResponse = {
+  readonly items: readonly ApplicationListingCheck[]
+}
 
-export const SubmitListingCheckFindingsResponseSchema = Schema.Struct({
-  archivedCount: Schema.Int.pipe(
-    Schema.check(Schema.isGreaterThanOrEqualTo(0))
-  ),
-  checks: Schema.Array(ApplicationListingCheckSchema),
-  rejected: Schema.Array(
-    Schema.Struct({ applicationId: NonEmptyString, message: NonEmptyString })
-  ),
-  replayedCount: Schema.Int.pipe(
-    Schema.check(Schema.isGreaterThanOrEqualTo(0))
-  ),
-  run: ListingCheckRunSchema,
-})
+export const ListApplicationListingChecksResponseSchema: Schema.Codec<ListApplicationListingChecksResponse> =
+  Schema.revealCodec(
+    Schema.Struct({ items: Schema.Array(ApplicationListingCheckSchema) })
+  )
 
-export type SubmitListingCheckFindingsResponse = Schema.Schema.Type<
-  typeof SubmitListingCheckFindingsResponseSchema
->
+export type SubmitListingCheckFindingsResponse = {
+  readonly archivedCount: number
+  readonly checks: readonly ApplicationListingCheck[]
+  readonly rejected: readonly {
+    readonly applicationId: string
+    readonly message: string
+  }[]
+  readonly replayedCount: number
+  readonly run: ListingCheckRun
+}
 
-export const ListApplicationEventsResponseSchema = Schema.Struct({
-  items: Schema.Array(ApplicationEventSchema),
-})
+export const SubmitListingCheckFindingsResponseSchema: Schema.Codec<SubmitListingCheckFindingsResponse> =
+  Schema.revealCodec(
+    Schema.Struct({
+      archivedCount: Schema.Int.pipe(
+        Schema.check(Schema.isGreaterThanOrEqualTo(0))
+      ),
+      checks: Schema.Array(ApplicationListingCheckSchema),
+      rejected: Schema.Array(
+        Schema.Struct({
+          applicationId: NonEmptyString,
+          message: NonEmptyString,
+        })
+      ),
+      replayedCount: Schema.Int.pipe(
+        Schema.check(Schema.isGreaterThanOrEqualTo(0))
+      ),
+      run: ListingCheckRunSchema,
+    })
+  )
 
-export type ListApplicationEventsResponse = Schema.Schema.Type<
-  typeof ListApplicationEventsResponseSchema
->
+export type ListApplicationEventsResponse = {
+  readonly items: readonly ApplicationEvent[]
+}
+
+export const ListApplicationEventsResponseSchema: Schema.Codec<ListApplicationEventsResponse> =
+  Schema.revealCodec(
+    Schema.Struct({ items: Schema.Array(ApplicationEventSchema) })
+  )
 
 export const ListApplicationCompensationsQuerySchema = Schema.Struct({
   currency: Schema.optional(CurrencyCodeSchema),
@@ -192,55 +269,77 @@ export type ListApplicationCompensationsQuery = Schema.Schema.Type<
   typeof ListApplicationCompensationsQuerySchema
 >
 
-export const ConvertedCompensationSchema = Schema.Struct({
-  currencyCode: CurrencyCodeSchema,
-  minimumMinor: Schema.NullOr(Schema.Int),
-  maximumMinor: Schema.NullOr(Schema.Int),
-  rate: Schema.Number.pipe(Schema.check(Schema.isGreaterThan(0))),
-  provider: NonEmptyString,
-  observedAt: UtcIsoTimestampSchema,
-})
+export type ConvertedCompensation = {
+  readonly currencyCode: string
+  readonly minimumMinor: number | null
+  readonly maximumMinor: number | null
+  readonly rate: number
+  readonly provider: string
+  readonly observedAt: string
+}
 
-export type ConvertedCompensation = Schema.Schema.Type<
-  typeof ConvertedCompensationSchema
->
+export const ConvertedCompensationSchema: Schema.Codec<ConvertedCompensation> =
+  Schema.revealCodec(
+    Schema.Struct({
+      currencyCode: CurrencyCodeSchema,
+      minimumMinor: Schema.NullOr(Schema.Int),
+      maximumMinor: Schema.NullOr(Schema.Int),
+      rate: Schema.Number.pipe(Schema.check(Schema.isGreaterThan(0))),
+      provider: NonEmptyString,
+      observedAt: UtcIsoTimestampSchema,
+    })
+  )
 
-export const ApplicationCompensationResponseItemSchema = Schema.Struct({
-  original: ApplicationCompensationSchema,
-  conversion: Schema.NullOr(ConvertedCompensationSchema),
-})
+export type ApplicationCompensationResponseItem = {
+  readonly original: ApplicationCompensation
+  readonly conversion: ConvertedCompensation | null
+}
 
-export type ApplicationCompensationResponseItem = Schema.Schema.Type<
-  typeof ApplicationCompensationResponseItemSchema
->
+export const ApplicationCompensationResponseItemSchema: Schema.Codec<ApplicationCompensationResponseItem> =
+  Schema.revealCodec(
+    Schema.Struct({
+      original: ApplicationCompensationSchema,
+      conversion: Schema.NullOr(ConvertedCompensationSchema),
+    })
+  )
 
-export const ListApplicationCompensationsResponseSchema = Schema.Struct({
-  items: Schema.Array(ApplicationCompensationResponseItemSchema),
-})
+export type ListApplicationCompensationsResponse = {
+  readonly items: readonly ApplicationCompensationResponseItem[]
+}
 
-export type ListApplicationCompensationsResponse = Schema.Schema.Type<
-  typeof ListApplicationCompensationsResponseSchema
->
+export const ListApplicationCompensationsResponseSchema: Schema.Codec<ListApplicationCompensationsResponse> =
+  Schema.revealCodec(
+    Schema.Struct({
+      items: Schema.Array(ApplicationCompensationResponseItemSchema),
+    })
+  )
 
-export const RegistryEventListItemSchema = Schema.Struct({
-  ...ApplicationEventSchema.fields,
-  canonicalUrl: ApplicationSchema.fields.canonicalUrl,
-  company: ApplicationSchema.fields.company,
-  role: ApplicationSchema.fields.role,
-})
+export type RegistryEventListItem = ApplicationEvent &
+  Pick<Application, 'canonicalUrl' | 'company' | 'role'>
 
-export type RegistryEventListItem = Schema.Schema.Type<
-  typeof RegistryEventListItemSchema
->
+export const RegistryEventListItemSchema: Schema.Codec<RegistryEventListItem> =
+  Schema.revealCodec(
+    Schema.Struct({
+      ...ApplicationEventSchema.fields,
+      canonicalUrl: ApplicationSchema.fields.canonicalUrl,
+      company: ApplicationSchema.fields.company,
+      role: ApplicationSchema.fields.role,
+    })
+  )
 
-export const ListEventsResponseSchema = Schema.Struct({
-  items: Schema.Array(RegistryEventListItemSchema),
-  ...RevisionPageFields,
-})
+export type ListEventsResponse = {
+  readonly items: readonly RegistryEventListItem[]
+  readonly checkpoint: string | null
+  readonly nextCursor: string | null
+}
 
-export type ListEventsResponse = Schema.Schema.Type<
-  typeof ListEventsResponseSchema
->
+export const ListEventsResponseSchema: Schema.Codec<ListEventsResponse> =
+  Schema.revealCodec(
+    Schema.Struct({
+      items: Schema.Array(RegistryEventListItemSchema),
+      ...RevisionPageFields,
+    })
+  )
 
 export const HealthResponseSchema = Schema.Struct({ ok: Schema.Boolean })
 

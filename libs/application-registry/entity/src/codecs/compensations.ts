@@ -43,6 +43,9 @@ export const ApplicationCompensationSchema = createSelectSchema(
   applicationCompensationSelectRefinements
 )
 
+export type ApplicationCompensation =
+  typeof applicationCompensations.$inferSelect
+
 export const ApplicationCompensationInsertSchema = createInsertSchema(
   applicationCompensations,
   applicationCompensationInsertRefinements
@@ -52,10 +55,6 @@ export const ApplicationCompensationUpdateSchema = createUpdateSchema(
   applicationCompensations,
   applicationCompensationUpdateRefinements
 )
-
-export type ApplicationCompensation = Schema.Schema.Type<
-  typeof ApplicationCompensationSchema
->
 
 export const ApplicationCompensationInputSchema = Schema.Struct(
   omit(ApplicationCompensationInsertSchema.fields, [

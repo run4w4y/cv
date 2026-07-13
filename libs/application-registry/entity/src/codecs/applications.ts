@@ -118,11 +118,14 @@ export type ApplicationMutable = Schema.Schema.Type<
   typeof ApplicationMutableSchema
 >
 
+export type Application = Omit<
+  typeof applications.$inferSelect,
+  'companyNormalized'
+>
+
 export const ApplicationSchema = Schema.Struct(
   omit(ApplicationRowSelectSchema.fields, ['companyNormalized'])
 )
-
-export type Application = Schema.Schema.Type<typeof ApplicationSchema>
 
 export const applicationPublicColumns = omit(getColumns(applications), [
   'companyNormalized',

@@ -19,16 +19,15 @@ export const ApplicationListingCheckSchema = createSelectSchema(
   }
 )
 
-export type ApplicationListingCheck = Schema.Schema.Type<
-  typeof ApplicationListingCheckSchema
->
+export type ApplicationListingCheck =
+  typeof applicationListingChecks.$inferSelect
 
 export const ListingCheckRunSchema = createSelectSchema(listingCheckRuns, {
   completedAt: () => UtcIsoTimestampSchema,
   startedAt: () => UtcIsoTimestampSchema,
 })
 
-export type ListingCheckRun = Schema.Schema.Type<typeof ListingCheckRunSchema>
+export type ListingCheckRun = typeof listingCheckRuns.$inferSelect
 
 export const ApplicationListingCheckScheduleSchema = createSelectSchema(
   applicationListingCheckSchedules,
@@ -39,6 +38,5 @@ export const ApplicationListingCheckScheduleSchema = createSelectSchema(
   }
 )
 
-export type ApplicationListingCheckSchedule = Schema.Schema.Type<
-  typeof ApplicationListingCheckScheduleSchema
->
+export type ApplicationListingCheckSchedule =
+  typeof applicationListingCheckSchedules.$inferSelect

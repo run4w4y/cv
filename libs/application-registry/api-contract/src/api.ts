@@ -1,6 +1,10 @@
 import {
+  type Application,
+  type ApplicationLabel,
   ApplicationLabelSchema,
   ApplicationSchema,
+  type ListingCheckRun,
+  ListingCheckRunSchema,
 } from '@cv/application-registry-entity'
 import { Schema } from 'effect'
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from 'effect/unstable/httpapi'
@@ -49,6 +53,14 @@ const registryEndpointErrors = [
   InternalServerErrorSchema,
 ] as const
 
+const ApplicationResponseSchema: Schema.Codec<Application> =
+  Schema.revealCodec(ApplicationSchema)
+const ApplicationLabelArrayResponseSchema: Schema.Codec<
+  readonly ApplicationLabel[]
+> = Schema.revealCodec(Schema.Array(ApplicationLabelSchema))
+const ListingCheckRunResponseSchema: Schema.Codec<ListingCheckRun> =
+  Schema.revealCodec(ListingCheckRunSchema)
+
 export class PublicApi extends HttpApiGroup.make('public', {
   topLevel: true,
 }).add(
@@ -62,7 +74,7 @@ export class RegistryApi extends HttpApiGroup.make('registry')
     HttpApiEndpoint.put('upsertApplication', '/applications', {
       error: registryEndpointErrors,
       payload: UpsertApplicationRequestSchema,
-      success: ApplicationSchema,
+      success: ApplicationResponseSchema,
     })
   )
   .add(
@@ -89,7 +101,7 @@ export class RegistryApi extends HttpApiGroup.make('registry')
     HttpApiEndpoint.get('getApplication', '/applications/:id', {
       error: registryEndpointErrors,
       params: ApplicationIdentifierParamsSchema,
-      success: ApplicationSchema,
+      success: ApplicationResponseSchema,
     })
   )
   .add(
@@ -97,7 +109,7 @@ export class RegistryApi extends HttpApiGroup.make('registry')
       error: registryEndpointErrors,
       params: ApplicationIdentifierParamsSchema,
       payload: PatchApplicationRequestSchema,
-      success: ApplicationSchema,
+      success: ApplicationResponseSchema,
     })
   )
   .add(
@@ -171,7 +183,7 @@ export class RegistryApi extends HttpApiGroup.make('registry')
         error: registryEndpointErrors,
         params: ApplicationIdentifierParamsSchema,
         payload: ReplaceApplicationLabelsRequestSchema,
-        success: Schema.Array(ApplicationLabelSchema),
+        success: ApplicationLabelArrayResponseSchema,
       }
     )
   )
@@ -216,7 +228,7 @@ export class RegistryApi extends HttpApiGroup.make('registry')
     HttpApiEndpoint.get('getListingCheckRun', '/listing-check-runs/:id', {
       error: registryEndpointErrors,
       params: ListingCheckRunIdentifierParamsSchema,
-      success: SubmitListingCheckFindingsResponseSchema.fields.run,
+      success: ListingCheckRunResponseSchema,
     })
   )
   .prefix('/v1')

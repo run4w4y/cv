@@ -24,9 +24,9 @@ export const ApplicationEventSchema = createSelectSchema(
   applicationEventSelectRefinements
 )
 
+export type ApplicationEvent = typeof applicationEvents.$inferSelect
+
 export const ApplicationEventInsertSchema = createInsertSchema(
   applicationEvents,
   applicationEventInsertRefinements
 )
-
-export type ApplicationEvent = Schema.Schema.Type<typeof ApplicationEventSchema>

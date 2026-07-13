@@ -31,9 +31,9 @@ export const CampaignCaptureSchema = createSelectSchema(
   campaignCaptureSelectRefinements
 )
 
+export type CampaignCapture = typeof campaignCaptures.$inferSelect
+
 export const CampaignCaptureInsertSchema = createInsertSchema(
   campaignCaptures,
   campaignCaptureInsertRefinements
 )
-
-export type CampaignCapture = Schema.Schema.Type<typeof CampaignCaptureSchema>
