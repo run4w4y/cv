@@ -21,7 +21,7 @@ export const Footer = () => {
     <footer className="mx-auto flex max-w-7xl flex-col gap-3 border-x border-t border-border px-6 py-6 font-mono text-xs/5 text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-8">
       <span>{content.document.footer.copyright}</span>
       <span>{content.document.footer.stack}</span>
-      {isRedactedText(sourceCode.value) ? (
+      {isRedactedText(sourceCode.value) || !sourceCode.href ? (
         <span className={className}>{linkContent}</span>
       ) : (
         <a

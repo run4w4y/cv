@@ -43,7 +43,7 @@ export const optionalFields = <Fields extends SchemaFields>(
   ) as OptionalSchemaFields<Fields>
 
 const textLinkFields = {
-  href: Schema.String,
+  href: Schema.optional(Schema.String),
   icon: Schema.optional(Schema.String),
   label: Schema.String,
   value: redactableTextSchema,

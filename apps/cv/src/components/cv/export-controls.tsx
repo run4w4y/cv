@@ -13,7 +13,7 @@ type ExportControlsProps = {
   compact?: boolean
   currentLocale: Locale
   exportLabel: string
-  githubHref: string
+  githubHref?: string
   githubLabel: string
   heroSentinel?: boolean
   localeHrefs?: Partial<Record<Locale, string>>
@@ -97,22 +97,24 @@ export const ExportControls = ({
         <Download aria-hidden="true" data-icon="inline-end" strokeWidth={1.8} />
       </Button>
 
-      <a
-        aria-label={githubLabel}
-        className={cn(
-          buttonVariants({ size: 'toolbar', variant: 'toolbar' }),
-          'font-mono uppercase',
-          compact && 'max-[459px]:px-3'
-        )}
-        href={githubHref}
-        rel="noreferrer"
-        target="_blank"
-      >
-        <span className={cn(compact && 'hidden min-[460px]:inline')}>
-          {githubLabel}
-        </span>
-        <TechIcon iconSlot="inline-end" name="GitHub" />
-      </a>
+      {githubHref && (
+        <a
+          aria-label={githubLabel}
+          className={cn(
+            buttonVariants({ size: 'toolbar', variant: 'toolbar' }),
+            'font-mono uppercase',
+            compact && 'max-[459px]:px-3'
+          )}
+          href={githubHref}
+          rel="noreferrer"
+          target="_blank"
+        >
+          <span className={cn(compact && 'hidden min-[460px]:inline')}>
+            {githubLabel}
+          </span>
+          <TechIcon iconSlot="inline-end" name="GitHub" />
+        </a>
+      )}
 
       {children}
     </div>
