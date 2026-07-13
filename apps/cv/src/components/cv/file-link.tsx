@@ -82,7 +82,7 @@ export const CvFileLink = ({
   const interactiveLink = (
     <a
       aria-busy={opening ? 'true' : undefined}
-      className={cn('group/cv-file', className)}
+      className={cn('group/cv-file cursor-pointer', className)}
       data-cv-file-state={presentation.fileState}
       href={presentation.href}
       onClick={handleClick}

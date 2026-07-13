@@ -266,8 +266,14 @@ test.describe('static public CV routes', () => {
     const privateFileLink = page
       .locator('[data-cv-file-state="private-locked"]')
       .first()
+    const publicFileLink = page
+      .locator('a[data-cv-file-state="public"]')
+      .first()
 
     await expect(privateFileLink).toBeVisible()
+    await expect(privateFileLink).toHaveCSS('cursor', 'not-allowed')
+    await expect(publicFileLink).toBeVisible()
+    await expect(publicFileLink).toHaveCSS('cursor', 'pointer')
     expect(await privateFileLink.getAttribute('href')).toBeNull()
     await expect(privateFileLink).toHaveAttribute(
       'data-cv-file-state',
@@ -552,6 +558,11 @@ test.describe('private CV printing', () => {
     await expect(page.locator('body')).toContainText(
       e2eFixturePrivateCanaries[0]
     )
+    const privateFileAction = page
+      .locator('a[data-cv-file-state="private-ready"]')
+      .first()
+    await expect(privateFileAction).toBeVisible()
+    await expect(privateFileAction).toHaveCSS('cursor', 'pointer')
     await expect(page.locator('[data-print-qr-image]')).toHaveAttribute(
       'data-print-qr-url',
       link.url
