@@ -1,0 +1,27 @@
+{
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "name": "application-registry-listing-check",
+  "projectType": "library",
+  "sourceRoot": "libs/application-registry/listing-check/src",
+  "tags": ["scope:application-registry", "type:util", "visibility:private"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/application-registry/listing-check/src/index.ts",
+        "outputPath": "libs/application-registry/listing-check/dist",
+        "rootDir": "libs/application-registry/listing-check/src",
+        "tsConfig": "libs/application-registry/listing-check/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
+    "format": {},
+    "format:check": {}
+  }
+}

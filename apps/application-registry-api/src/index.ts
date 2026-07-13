@@ -1,8 +1,13 @@
 import { applicationRegistryWebHandler } from './http/runtime'
+import {
+  listingChecksAreEnabled,
+  runScheduledListingChecks,
+} from './scheduled/listing-checks'
 import { makeWorkerRequestContext } from './worker/bindings'
 import type {
   ApplicationRegistryEnv,
   WorkerExecutionContext,
+  WorkerScheduledController,
 } from './worker/types'
 
 const withPrivateCachePolicy = (request: Request, response: Response) => {
@@ -35,5 +40,13 @@ export default {
         Response.json({ code: 'internal_error', message }, { status: 500 })
       )
     }
+  },
+  scheduled(
+    _controller: WorkerScheduledController,
+    env: ApplicationRegistryEnv,
+    context: WorkerExecutionContext
+  ): void {
+    if (!listingChecksAreEnabled(env)) return
+    context.waitUntil(runScheduledListingChecks(env))
   },
 }

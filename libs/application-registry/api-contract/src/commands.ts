@@ -13,6 +13,9 @@ import {
   FitScoreSchema,
   InformationalApplicationEventKindSchema,
   informationalApplicationEventKindValues,
+  ListingCheckModeSchema,
+  ListingCheckTargetSchema,
+  ListingObservationSchema,
   PersonalPrioritySchema,
   StatusChangingApplicationEventKindSchema,
   statusChangingApplicationEventKindValues,
@@ -116,6 +119,33 @@ export const AppendApplicationEventCommandSchema = Schema.Union([
 
 export type AppendApplicationEventCommand = Schema.Schema.Type<
   typeof AppendApplicationEventCommandSchema
+>
+
+export const ListingCheckFindingSchema = Schema.Struct({
+  applicationId: NonEmptyString,
+  canonicalUrl: NonEmptyString,
+  observation: ListingObservationSchema,
+  operationId: NonEmptyString,
+  target: ListingCheckTargetSchema,
+})
+
+export type ListingCheckFinding = Schema.Schema.Type<
+  typeof ListingCheckFindingSchema
+>
+
+export const SubmitListingCheckFindingsCommandSchema = Schema.Struct({
+  expectedCount: Schema.Int.pipe(
+    Schema.check(Schema.isGreaterThanOrEqualTo(0))
+  ),
+  finalBatch: Schema.Boolean,
+  findings: Schema.Array(ListingCheckFindingSchema),
+  mode: ListingCheckModeSchema,
+  runId: NonEmptyString,
+  startedAt: UtcIsoTimestampSchema,
+})
+
+export type SubmitListingCheckFindingsCommand = Schema.Schema.Type<
+  typeof SubmitListingCheckFindingsCommandSchema
 >
 
 const ListLimitSchema = Schema.NumberFromString.pipe(

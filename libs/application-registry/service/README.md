@@ -24,6 +24,16 @@ The public services are split by registry slice:
 - `CapturesService` owns idempotent campaign capture ingestion.
 - `EventsService` owns idempotent event append and cursor pagination.
 - `CompensationsService` owns original and converted compensation views.
+- `ListingChecksService` owns idempotent local-finding ingestion, internal
+  scheduled runs, grace windows, lifecycle safeguards, and listing-check
+  history.
+
+`ListingAvailabilityChecker` lives in the runtime-neutral
+`@cv/application-registry-listing-check` package. Both the local Bun CLI and the
+internal Worker scheduler use its provider and bounded-page strategies. This
+service owns the durable decision: target validation, target-stage cadence,
+suspected-closed confirmation windows, safe archival eligibility, leases, and
+failure backoff all remain server-side.
 
 Application listing computes one request-time follow-up state, formats stored
 minor-unit compensation into a concise original-currency summary, and preserves

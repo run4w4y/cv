@@ -25,6 +25,12 @@ export const application: Application = {
   id: 'application-1',
   jobKey: 'test:one',
   lastContactAt: null,
+  listingAvailability: 'unchecked',
+  listingCheckedAt: null,
+  listingClosedCandidateAt: null,
+  listingConfidence: null,
+  listingConsecutiveClosedChecks: 0,
+  listingReasonCode: null,
   location: null,
   openStatus: null,
   personalPriority: null,
@@ -128,6 +134,7 @@ export const applicationListRecord: ApplicationListRecord = {
   labels: [],
   latestEventAt: null,
   latestEventKind: null,
+  latestApplicationUrl: null,
   noteCount: 0,
 }
 

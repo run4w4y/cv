@@ -7,6 +7,7 @@ import { makeCapturesCrudLive } from './captures'
 import { makeCompensationsCrudLive } from './compensations'
 import { makeEventsCrudLive } from './events'
 import { makeFxRatesCrudLive } from './fx-rates'
+import { makeListingChecksCrudLive } from './listing-checks'
 import { makeOperationsCrudLive } from './operations'
 
 export const makeRegistryCrudLive = (database: Effect.Effect<D1Database>) =>
@@ -17,5 +18,6 @@ export const makeRegistryCrudLive = (database: Effect.Effect<D1Database>) =>
     makeCompensationsCrudLive(database),
     makeEventsCrudLive(database),
     makeFxRatesCrudLive(database),
+    makeListingChecksCrudLive(database),
     makeOperationsCrudLive(database)
   )

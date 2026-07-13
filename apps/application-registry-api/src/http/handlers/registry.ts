@@ -12,6 +12,7 @@ import {
   CapturesService,
   CompensationsService,
   EventsService,
+  ListingChecksService,
 } from '@cv/application-registry-service'
 import { Effect, Match } from 'effect'
 import { HttpApiBuilder } from 'effect/unstable/httpapi'
@@ -45,6 +46,7 @@ export const RegistryHandlersLayer = HttpApiBuilder.group(
       const captures = yield* CapturesService
       const compensations = yield* CompensationsService
       const events = yield* EventsService
+      const listingChecks = yield* ListingChecksService
 
       return handlers
         .handle('upsertApplication', ({ payload }) =>
@@ -93,5 +95,14 @@ export const RegistryHandlersLayer = HttpApiBuilder.group(
           expose(annotations.addNote(params.id, payload))
         )
         .handle('listEvents', ({ query }) => expose(events.list(query)))
+        .handle('listApplicationListingChecks', ({ params }) =>
+          expose(listingChecks.listByApplication(params.id))
+        )
+        .handle('submitListingCheckFindings', ({ payload }) =>
+          expose(listingChecks.submitFindings(payload))
+        )
+        .handle('getListingCheckRun', ({ params }) =>
+          expose(listingChecks.findRun(params.id))
+        )
     })
 )

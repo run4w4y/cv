@@ -12,6 +12,7 @@
   "dependencies": {
     "@cv/application-registry-api-client": "workspace:*",
     "@cv/application-registry-entity": "workspace:*",
+    "@cv/application-registry-listing-check": "workspace:*",
     "@cv/application-registry-api-contract": "workspace:*",
     "@effect/platform-bun": "4.0.0-beta.91",
     "effect": "4.0.0-beta.91",

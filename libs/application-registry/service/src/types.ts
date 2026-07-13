@@ -6,6 +6,7 @@ import type {
   ApplicationEvent,
   ApplicationEventKind,
   ApplicationLabel,
+  ApplicationListingCheck,
   ApplicationMutable,
   ApplicationNote,
   ApplicationStatus,
@@ -14,6 +15,11 @@ import type {
   CurrencyCode,
   InformationalApplicationEventKind,
   JsonValue,
+  ListingCheckAction,
+  ListingCheckMode,
+  ListingCheckRun,
+  ListingCheckTarget,
+  ListingObservation,
   PersonalPriority,
   StatusChangingApplicationEventKind,
   TargetStage,
@@ -84,6 +90,7 @@ export type ApplicationListItem = Application & {
   readonly labels: readonly string[]
   readonly latestEventAt: string | null
   readonly latestEventKind: ApplicationEventKind | null
+  readonly latestApplicationUrl: string | null
   readonly noteCount: number
 }
 
@@ -174,3 +181,64 @@ export type ApplicationCompensationResultItem = {
 
 export type ApplicationCompensationsResult =
   RegistryItems<ApplicationCompensationResultItem>
+
+export type RecordListingObservationInput = {
+  readonly mode: ListingCheckMode
+  readonly observation: ListingObservation
+  readonly operationId: string
+  readonly runId?: string
+}
+
+export type CheckListingResult = {
+  readonly application: Application
+  readonly archived: boolean
+  readonly check: ApplicationListingCheck
+  readonly replayed: boolean
+}
+
+export type SubmitListingCheckFinding = {
+  readonly applicationId: string
+  readonly canonicalUrl: string
+  readonly observation: ListingObservation
+  readonly operationId: string
+  readonly target: ListingCheckTarget
+}
+
+export type SubmitListingCheckFindingsInput = {
+  readonly expectedCount: number
+  readonly finalBatch: boolean
+  readonly findings: readonly SubmitListingCheckFinding[]
+  readonly mode: ListingCheckMode
+  readonly runId: string
+  readonly startedAt: string
+}
+
+export type SubmitListingCheckFindingsResult = {
+  readonly archivedCount: number
+  readonly checks: readonly ApplicationListingCheck[]
+  readonly rejected: readonly {
+    readonly applicationId: string
+    readonly message: string
+  }[]
+  readonly replayedCount: number
+  readonly run: ListingCheckRun
+}
+
+export type RunDueListingChecksInput = {
+  readonly limit: number
+  readonly mode: ListingCheckMode
+}
+
+export type RunDueListingChecksResult = {
+  readonly checks: readonly ApplicationListingCheck[]
+  readonly run: ListingCheckRun
+}
+
+export type ListingCheckDecision = {
+  readonly action: ListingCheckAction
+  readonly archiveApplication: boolean
+  readonly availability: 'open' | 'suspected_closed' | 'closed' | 'unknown'
+  readonly closedCandidateAt: string | null
+  readonly consecutiveClosedChecks: number
+  readonly nextCheckAt: string
+}

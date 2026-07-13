@@ -45,9 +45,118 @@ export const personalPriorityValues = PersonalPrioritySchema.literals
 
 export type PersonalPriority = Schema.Schema.Type<typeof PersonalPrioritySchema>
 
+export const ListingAvailabilitySchema = Schema.Literals([
+  'unchecked',
+  'open',
+  'suspected_closed',
+  'closed',
+  'unknown',
+])
+
+export const listingAvailabilityValues = ListingAvailabilitySchema.literals
+
+export type ListingAvailability = Schema.Schema.Type<
+  typeof ListingAvailabilitySchema
+>
+
+export const ListingCheckOutcomeSchema = Schema.Literals([
+  'open',
+  'closed',
+  'unknown',
+])
+
+export const listingCheckOutcomeValues = ListingCheckOutcomeSchema.literals
+
+export type ListingCheckOutcome = Schema.Schema.Type<
+  typeof ListingCheckOutcomeSchema
+>
+
+export const ListingCheckConfidenceSchema = Schema.Literals([
+  'low',
+  'medium',
+  'high',
+  'confirmed',
+])
+
+export const listingCheckConfidenceValues =
+  ListingCheckConfidenceSchema.literals
+
+export type ListingCheckConfidence = Schema.Schema.Type<
+  typeof ListingCheckConfidenceSchema
+>
+
+export const ListingCheckActionSchema = Schema.Literals([
+  'keep',
+  'recheck',
+  'review',
+  'archive',
+])
+
+export const listingCheckActionValues = ListingCheckActionSchema.literals
+
+export type ListingCheckAction = Schema.Schema.Type<
+  typeof ListingCheckActionSchema
+>
+
+export const ListingCheckReasonSchema = Schema.Literals([
+  'http_404',
+  'http_410',
+  'provider_open',
+  'provider_closed',
+  'valid_through_expired',
+  'explicit_closed_text',
+  'working_application_path',
+  'identity_mismatch',
+  'redirected_to_listing_page',
+  'access_forbidden',
+  'rate_limited',
+  'server_error',
+  'network_error',
+  'unclassified_page',
+])
+
+export const listingCheckReasonValues = ListingCheckReasonSchema.literals
+
+export type ListingCheckReason = Schema.Schema.Type<
+  typeof ListingCheckReasonSchema
+>
+
+export const ListingCheckRunTriggerSchema = Schema.Literals([
+  'cli',
+  'scheduled',
+])
+
+export const listingCheckRunTriggerValues =
+  ListingCheckRunTriggerSchema.literals
+
+export type ListingCheckRunTrigger = Schema.Schema.Type<
+  typeof ListingCheckRunTriggerSchema
+>
+
+export const ListingCheckModeSchema = Schema.Literals([
+  'report',
+  'archive_eligible',
+])
+
+export const listingCheckModeValues = ListingCheckModeSchema.literals
+
+export type ListingCheckMode = Schema.Schema.Type<typeof ListingCheckModeSchema>
+
+export const ListingCheckRunStateSchema = Schema.Literals([
+  'running',
+  'completed',
+])
+
+export const listingCheckRunStateValues = ListingCheckRunStateSchema.literals
+
+export type ListingCheckRunState = Schema.Schema.Type<
+  typeof ListingCheckRunStateSchema
+>
+
 export const systemApplicationEventKindValues = [
   'discovered',
   'campaign_prepared',
+  'listing_closed',
 ] as const
 
 export const statusChangingApplicationEventKindValues = [

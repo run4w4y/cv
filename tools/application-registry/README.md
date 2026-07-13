@@ -33,6 +33,7 @@ application-registry captures <id-or-job-key> [--json]
 application-registry compensations <id-or-job-key> [--currency USD] [--json]
 application-registry status <id-or-job-key> <status> [--expected-version ...]
 application-registry note <id-or-job-key> <note> [--json]
+application-registry check [--concurrency 64] [--per-host 6] [--batch-size 50] [--archive] [--dry-run] [--json]
 application-registry sync [--json]
 ```
 
@@ -44,8 +45,23 @@ bunx nx run application-registry:registry -- find Acme --status applied
 bunx nx run application-registry:registry -- captures <id-or-job-key> --json
 bunx nx run application-registry:registry -- compensations <id-or-job-key> --currency USD
 bunx nx run application-registry:registry -- status <id-or-job-key> interview_loop
+bunx nx run application-registry:registry -- check
+bunx nx run application-registry:registry -- check --concurrency 96 --per-host 8
+bunx nx run application-registry:registry -- check --archive
 bunx nx run application-registry:registry -- sync
 ```
+
+`check` first materializes every registry application, then fetches and
+classifies the listings on the local machine. The default pool is 64 requests
+with at most six checks active against one hostname. Results are submitted in
+durable batches of 50; `--dry-run` skips submission. The backend never fetches
+a page on behalf of this command. It validates the target and applies the
+durable grace-window and archival policy to the submitted observations.
+
+The default is report-only. `--archive` permits the backend to archive only
+`not_started` or `preparing` applications after its confirmation policy passes.
+Applications that have already been submitted remain in their lifecycle state
+for manual review.
 
 Writes are placed in the typed local outbox before they are sent. Entries are
 retained for audit with `synced`, `retry`, `blocked`, or `dead-letter` state.
@@ -54,10 +70,11 @@ invalid payloads, conflicts, and response-contract failures are dead-lettered;
 transport, throttling, and transient server failures use bounded Effect retry
 before remaining queued.
 
-Lifecycle changes and first-class notes both enter the durable typed outbox
-before the network request. `note` writes a `general` annotation through the
-receipt-backed notes endpoint with `application-registry-cli` as its source;
-replaying the same operation cannot duplicate the note.
+Lifecycle changes, listing-finding batches, and first-class notes enter the
+durable typed outbox before the network request. `note` writes a `general`
+annotation through the receipt-backed notes endpoint with
+`application-registry-cli` as its source; replaying the same operation cannot
+duplicate the note.
 
 `compensations` reads the structured original-currency ranges. Passing
 `--currency` asks the Worker to return converted minor-unit amounts alongside

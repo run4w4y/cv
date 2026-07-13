@@ -4,6 +4,7 @@ import {
   FxRatesLive,
 } from '@cv/application-registry-fx'
 import { RegistryServicesLive } from '@cv/application-registry-service/live'
+import { ListingAvailabilityCheckerLive } from '@cv/application-registry-listing-check'
 import { Effect, Layer } from 'effect'
 import * as FetchHttpClient from 'effect/unstable/http/FetchHttpClient'
 
@@ -24,5 +25,6 @@ const FxLayer = FxRatesLive.pipe(
 
 export const RegistryServiceLayer = RegistryServicesLive.pipe(
   Layer.provide(RegistryCrudLayer),
-  Layer.provide(FxLayer)
+  Layer.provide(FxLayer),
+  Layer.provide(ListingAvailabilityCheckerLive)
 )

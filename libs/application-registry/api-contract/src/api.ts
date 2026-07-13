@@ -29,12 +29,16 @@ import {
   ListApplicationCompensationsResponseSchema,
   ListApplicationEventsResponseSchema,
   ListApplicationLabelsResponseSchema,
+  ListApplicationListingChecksResponseSchema,
   ListApplicationsQuerySchema,
   ListApplicationsResponseSchema,
   ListEventsQuerySchema,
   ListEventsResponseSchema,
+  ListingCheckRunIdentifierParamsSchema,
   PatchApplicationRequestSchema,
   ReplaceApplicationLabelsRequestSchema,
+  SubmitListingCheckFindingsRequestSchema,
+  SubmitListingCheckFindingsResponseSchema,
   UpsertApplicationRequestSchema,
 } from './schemas'
 
@@ -184,6 +188,35 @@ export class RegistryApi extends HttpApiGroup.make('registry')
       error: registryEndpointErrors,
       query: ListEventsQuerySchema,
       success: ListEventsResponseSchema,
+    })
+  )
+  .add(
+    HttpApiEndpoint.get(
+      'listApplicationListingChecks',
+      '/applications/:id/listing-checks',
+      {
+        error: registryEndpointErrors,
+        params: ApplicationIdentifierParamsSchema,
+        success: ListApplicationListingChecksResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.post(
+      'submitListingCheckFindings',
+      '/listing-check-findings',
+      {
+        error: registryEndpointErrors,
+        payload: SubmitListingCheckFindingsRequestSchema,
+        success: SubmitListingCheckFindingsResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.get('getListingCheckRun', '/listing-check-runs/:id', {
+      error: registryEndpointErrors,
+      params: ListingCheckRunIdentifierParamsSchema,
+      success: SubmitListingCheckFindingsResponseSchema.fields.run,
     })
   )
   .prefix('/v1')

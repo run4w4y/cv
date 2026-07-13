@@ -4,10 +4,12 @@ import type { D1Database } from '@cloudflare/workers-types'
 import { makeRegistryCrudLive } from '@cv/application-registry-crud/live'
 import { RegistryMiniflareHarness } from '@cv/application-registry-crud/test-support'
 import { FxRates } from '@cv/application-registry-fx'
-import { Effect, Layer, ManagedRuntime } from 'effect'
+import { ListingAvailabilityChecker } from '@cv/application-registry-listing-check'
+import { Duration, Effect, Layer, ManagedRuntime } from 'effect'
 
+import { ApplicationsService, ListingChecksService } from '../src'
 import { RegistryServicesLive } from '../src/live'
-import { recordedAt } from './support/inputs'
+import { makeApplicationInput, recordedAt } from './support/inputs'
 import {
   concurrentCapturesWorkflow,
   concurrentNoteWorkflow,
@@ -38,11 +40,38 @@ const FakeFxRatesLive = Layer.succeed(FxRates, {
     }),
 })
 
+const FakeListingAvailabilityCheckerLive = Layer.succeed(
+  ListingAvailabilityChecker,
+  {
+    check: (target) =>
+      Effect.succeed({
+        checkedAt: recordedAt,
+        checkerVersion: 'test',
+        confidence: 'high',
+        contentHash: null,
+        evidence: [
+          {
+            code: 'test_open',
+            detail: 'Integration test listing is open.',
+            sourceUrl: target.url,
+          },
+        ],
+        finalUrl: target.url,
+        httpStatus: 200,
+        outcome: 'open',
+        provider: 'test',
+        reasonCode: 'provider_open',
+        requestedUrl: target.url,
+      }),
+  }
+)
+
 const makeRegistryServiceTestRuntime = (database: D1Database) =>
   ManagedRuntime.make(
     RegistryServicesLive.pipe(
       Layer.provide(makeRegistryCrudLive(Effect.succeed(database))),
-      Layer.provide(FakeFxRatesLive)
+      Layer.provide(FakeFxRatesLive),
+      Layer.provide(FakeListingAvailabilityCheckerLive)
     )
   )
 
@@ -93,6 +122,148 @@ test('persists an explicit status transition and replays its event command', asy
     ['service:event:1']
   )
   assert.deepEqual(receipts, [{ operationId: 'service:event:1' }])
+})
+
+test('ingests local findings idempotently and applies archival policy on the backend', async () => {
+  const result = await runtime.runPromise(
+    Effect.gen(function* () {
+      const applications = yield* ApplicationsService
+      const listingChecks = yield* ListingChecksService
+      const application = yield* applications.upsert(
+        makeApplicationInput('local-finding')
+      )
+      const input = {
+        expectedCount: 1,
+        finalBatch: true,
+        findings: [
+          {
+            applicationId: application.id,
+            canonicalUrl: application.canonicalUrl,
+            observation: {
+              checkedAt: recordedAt,
+              checkerVersion: 'test-local',
+              confidence: 'confirmed' as const,
+              contentHash: null,
+              evidence: [
+                {
+                  code: 'provider_api',
+                  detail: 'Provider confirms the posting is closed.',
+                  sourceUrl: application.canonicalUrl,
+                },
+              ],
+              finalUrl: application.canonicalUrl,
+              httpStatus: 410,
+              outcome: 'closed' as const,
+              provider: 'test-provider',
+              reasonCode: 'provider_closed' as const,
+              requestedUrl: application.canonicalUrl,
+            },
+            operationId: 'local-run:application:1',
+            target: {
+              company: application.company,
+              role: application.role,
+              url: application.canonicalUrl,
+            },
+          },
+        ],
+        mode: 'archive_eligible' as const,
+        runId: 'local-run',
+        startedAt: recordedAt,
+      }
+      const first = yield* listingChecks.submitFindings(input)
+      const replay = yield* listingChecks.submitFindings(input)
+      return { first, replay }
+    })
+  )
+
+  assert.equal(result.first.archivedCount, 1)
+  assert.equal(result.first.run.state, 'completed')
+  assert.equal(result.first.run.checkedCount, 1)
+  assert.equal(result.replay.replayedCount, 1)
+  assert.equal(result.replay.run.checkedCount, 1)
+  assert.deepEqual(result.replay.rejected, [])
+})
+
+test('keeps completed run counts accurate when durable batches arrive out of order', async () => {
+  const result = await runtime.runPromise(
+    Effect.gen(function* () {
+      const applications = yield* ApplicationsService
+      const listingChecks = yield* ListingChecksService
+      const firstApplication = yield* applications.upsert(
+        makeApplicationInput('out-of-order-first')
+      )
+      const secondApplication = yield* applications.upsert(
+        makeApplicationInput('out-of-order-second')
+      )
+      const finding = (
+        application: typeof firstApplication,
+        operationId: string
+      ) => ({
+        applicationId: application.id,
+        canonicalUrl: application.canonicalUrl,
+        observation: {
+          checkedAt: recordedAt,
+          checkerVersion: 'test-local',
+          confidence: 'high' as const,
+          contentHash: null,
+          evidence: [
+            {
+              code: 'application_action',
+              detail: 'The application action is available.',
+              sourceUrl: application.canonicalUrl,
+            },
+          ],
+          finalUrl: application.canonicalUrl,
+          httpStatus: 200,
+          outcome: 'open' as const,
+          provider: 'test-provider',
+          reasonCode: 'working_application_path' as const,
+          requestedUrl: application.canonicalUrl,
+        },
+        operationId,
+        target: {
+          company: application.company,
+          role: application.role,
+          url: application.canonicalUrl,
+        },
+      })
+      const common = {
+        expectedCount: 3,
+        mode: 'report' as const,
+        runId: 'out-of-order-run',
+        startedAt: recordedAt,
+      }
+      const final = yield* listingChecks.submitFindings({
+        ...common,
+        finalBatch: true,
+        findings: [finding(secondApplication, 'out-of-order:second')],
+      })
+      yield* Effect.sleep(Duration.millis(5))
+      const replayedFinal = yield* listingChecks.submitFindings({
+        ...common,
+        finalBatch: true,
+        findings: [finding(secondApplication, 'out-of-order:second')],
+      })
+      const earlier = yield* listingChecks.submitFindings({
+        ...common,
+        finalBatch: false,
+        findings: [finding(firstApplication, 'out-of-order:first')],
+      })
+      return { earlier, final, replayedFinal }
+    })
+  )
+
+  assert.equal(result.final.run.state, 'completed')
+  assert.equal(result.final.run.checkedCount, 1)
+  assert.equal(result.final.run.errorCount, 2)
+  assert.equal(result.replayedFinal.replayedCount, 1)
+  assert.equal(
+    result.replayedFinal.run.completedAt,
+    result.final.run.completedAt
+  )
+  assert.equal(result.earlier.run.state, 'completed')
+  assert.equal(result.earlier.run.checkedCount, 2)
+  assert.equal(result.earlier.run.errorCount, 1)
 })
 
 test('replays note and capture commands and rejects operation conflicts', async () => {

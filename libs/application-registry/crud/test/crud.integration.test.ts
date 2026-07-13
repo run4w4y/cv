@@ -8,6 +8,7 @@ import {
   ApplicationsCrud,
   EventsCrud,
   FxRatesCrud,
+  ListingChecksCrud,
   type PersistedApplication,
   type PersistedEvent,
   type PersistedNote,
@@ -66,7 +67,11 @@ const runCrud = <A, E>(
   program: Effect.Effect<
     A,
     E,
-    AnnotationsCrud | ApplicationsCrud | EventsCrud | FxRatesCrud
+    | AnnotationsCrud
+    | ApplicationsCrud
+    | EventsCrud
+    | FxRatesCrud
+    | ListingChecksCrud
   >
 ) =>
   Effect.runPromise(
@@ -433,6 +438,127 @@ test('persists and retrieves FX cache rows through FxRatesCrud', async () => {
   assert.equal(stored.baseCurrency, 'USD')
   assert.equal(stored.quoteCurrency, 'EUR')
   assert.equal(stored.rate, 0.91)
+})
+
+test('claims, records, and archives listing checks through migrated D1 tables', async () => {
+  const result = await runCrud(
+    Effect.gen(function* () {
+      const applications = yield* ApplicationsCrud
+      const checks = yield* ListingChecksCrud
+      yield* seedApplication
+      yield* checks.startRun({
+        id: 'listing-run-1',
+        mode: 'archive_eligible',
+        selectedCount: 1,
+        startedAt: recordedAt,
+        trigger: 'scheduled',
+      })
+      yield* checks.ensureEligibleSchedules(recordedAt)
+      const claimed = yield* checks.claimDue({
+        leaseToken: 'listing-run-1',
+        leaseUntil: '2026-07-12T12:20:00.000Z',
+        limit: 10,
+        now: recordedAt,
+      })
+      const firstApplied = yield* checks.persist({
+        applicationId: application.applicationId,
+        archiveApplication: false,
+        checkedAt: recordedAt,
+        checkerVersion: '1',
+        closedCandidateAt: recordedAt,
+        confidence: 'high',
+        consecutiveClosedChecks: 1,
+        contentHash: null,
+        eventId: null,
+        evidence: [
+          { code: 'http_status', detail: 'HTTP 404', sourceUrl: null },
+        ],
+        finalUrl: application.canonicalUrl,
+        httpStatus: 404,
+        id: 'listing-check-1',
+        listingAvailability: 'suspected_closed',
+        nextCheckAt: '2026-07-13T12:00:00.000Z',
+        operationId: 'listing-check-operation-1',
+        outcome: 'closed',
+        provider: 'example.test',
+        receivedAt: recordedAt,
+        reasonCode: 'http_404',
+        recommendedAction: 'recheck',
+        recordedAt,
+        requestedUrl: application.canonicalUrl,
+        runId: 'listing-run-1',
+      })
+      const firstProjection = yield* applications.findByIdentifier(
+        application.applicationId
+      )
+      const secondApplied = yield* checks.persist({
+        applicationId: application.applicationId,
+        archiveApplication: true,
+        checkedAt: '2026-07-13T12:00:00.000Z',
+        checkerVersion: '1',
+        closedCandidateAt: recordedAt,
+        confidence: 'high',
+        consecutiveClosedChecks: 2,
+        contentHash: null,
+        eventId: 'listing-closed-event-1',
+        evidence: [
+          { code: 'http_status', detail: 'HTTP 404', sourceUrl: null },
+        ],
+        finalUrl: application.canonicalUrl,
+        httpStatus: 404,
+        id: 'listing-check-2',
+        listingAvailability: 'closed',
+        nextCheckAt: '2026-07-14T12:00:00.000Z',
+        operationId: 'listing-check-operation-2',
+        outcome: 'closed',
+        provider: 'example.test',
+        receivedAt: '2026-07-13T12:00:00.000Z',
+        reasonCode: 'http_404',
+        recommendedAction: 'archive',
+        recordedAt: '2026-07-13T12:00:00.000Z',
+        requestedUrl: application.canonicalUrl,
+        runId: null,
+      })
+      yield* checks.completeRun(
+        'listing-run-1',
+        {
+          checkedCount: 1,
+          closedCount: 0,
+          errorCount: 0,
+          openCount: 0,
+          reviewCount: 1,
+          selectedCount: 1,
+        },
+        '2026-07-12T12:01:00.000Z'
+      )
+      return {
+        checks: yield* checks.listByApplication(application.applicationId),
+        claimed,
+        firstApplied,
+        firstProjection,
+        run: yield* checks.findRun('listing-run-1'),
+        secondApplied,
+        secondProjection: yield* applications.findByIdentifier(
+          application.applicationId
+        ),
+      }
+    })
+  )
+
+  assert.equal(result.claimed.length, 1)
+  assert.equal(result.firstApplied, true)
+  assert.equal(result.firstProjection?.listingAvailability, 'suspected_closed')
+  assert.equal(result.secondApplied, true)
+  assert.equal(result.secondProjection?.listingAvailability, 'closed')
+  assert.equal(result.secondProjection?.applicationStatus, 'archived')
+  assert.equal(result.checks.length, 2)
+  assert.equal(result.run?.state, 'completed')
+
+  const events = await harness.query<{ kind: string }>(
+    `select kind from application_events where id = ?1`,
+    ['listing-closed-event-1']
+  )
+  assert.deepEqual(events, [{ kind: 'listing_closed' }])
 })
 
 test('enforces migrated D1 foreign keys and cascades application children', async () => {

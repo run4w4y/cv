@@ -8,6 +8,7 @@ import type {
   Application,
   ApplicationCompensation,
   ApplicationEvent,
+  ApplicationListingCheck,
   ApplicationNote,
 } from '@cv/application-registry-entity'
 import { BunServices } from '@effect/platform-bun'
@@ -44,6 +45,12 @@ const application: Application = {
   id: 'application-1',
   jobKey: 'web:one',
   lastContactAt: null,
+  listingAvailability: 'unchecked',
+  listingCheckedAt: null,
+  listingClosedCandidateAt: null,
+  listingConfidence: null,
+  listingConsecutiveClosedChecks: 0,
+  listingReasonCode: null,
   location: null,
   openStatus: null,
   personalPriority: null,
@@ -95,6 +102,33 @@ const compensation: ApplicationCompensation = {
   rawText: 'JPY 8–12M',
   source: 'job-board',
   updatedAt: '2026-07-10T00:00:00.000Z',
+}
+
+const listingCheck: ApplicationListingCheck = {
+  applicationId: application.id,
+  checkedAt: application.updatedAt,
+  checkerVersion: '1',
+  confidence: 'high',
+  contentHash: null,
+  evidence: [
+    {
+      code: 'application_action',
+      detail: 'The matching posting exposes an application action.',
+      sourceUrl: application.canonicalUrl,
+    },
+  ],
+  finalUrl: application.canonicalUrl,
+  httpStatus: 200,
+  id: 'listing-check-1',
+  nextCheckAt: '2026-07-17T00:00:00.000Z',
+  operationId: 'listing-check-operation-1',
+  outcome: 'open',
+  provider: 'example.test',
+  receivedAt: application.updatedAt,
+  reasonCode: 'working_application_path',
+  recommendedAction: 'keep',
+  requestedUrl: application.canonicalUrl,
+  runId: null,
 }
 
 const noteRequest = (): AddApplicationNoteRequest => ({
@@ -160,6 +194,89 @@ const withTemporaryOutbox = <A, E>(
   }).pipe(Effect.provide(BunServices.layer))
 
 describe('application registry client', () => {
+  test('submits a durable batch of locally collected listing findings', async () => {
+    let requestedUrl = ''
+    let requestMethod = ''
+    let requestBody = ''
+    const fetch = makeFetch(async (input, init) => {
+      const request = new Request(input, init)
+      requestedUrl = request.url
+      requestMethod = request.method
+      requestBody = await request.text()
+      return Response.json({
+        archivedCount: 0,
+        checks: [listingCheck],
+        rejected: [],
+        replayedCount: 0,
+        run: {
+          checkedCount: 1,
+          closedCount: 0,
+          completedAt: application.updatedAt,
+          errorCount: 0,
+          id: 'listing-run-1',
+          mode: 'report',
+          openCount: 1,
+          reviewCount: 0,
+          selectedCount: 1,
+          startedAt: application.createdAt,
+          state: 'completed',
+          trigger: 'cli',
+        },
+      })
+    })
+
+    const result = await Effect.runPromise(
+      withTemporaryOutbox(
+        fetch,
+        ApplicationRegistryClient.pipe(
+          Effect.flatMap((client) =>
+            client.submitListingCheckFindings('listing-run-1-batch-1', {
+              expectedCount: 1,
+              finalBatch: true,
+              findings: [
+                {
+                  applicationId: application.id,
+                  canonicalUrl: application.canonicalUrl,
+                  observation: {
+                    checkedAt: listingCheck.checkedAt,
+                    checkerVersion: listingCheck.checkerVersion,
+                    confidence: listingCheck.confidence,
+                    contentHash: listingCheck.contentHash,
+                    evidence: listingCheck.evidence,
+                    finalUrl: listingCheck.finalUrl,
+                    httpStatus: listingCheck.httpStatus,
+                    outcome: listingCheck.outcome,
+                    provider: listingCheck.provider,
+                    reasonCode: listingCheck.reasonCode,
+                    requestedUrl: listingCheck.requestedUrl,
+                  },
+                  operationId: listingCheck.operationId,
+                  target: {
+                    company: application.company,
+                    role: application.role,
+                    url: application.canonicalUrl,
+                  },
+                },
+              ],
+              mode: 'report',
+              runId: 'listing-run-1',
+              startedAt: application.createdAt,
+            })
+          )
+        )
+      )
+    )
+
+    expect(result.status).toBe('synced')
+    expect(requestedUrl).toBe(
+      'https://registry.example.test/v1/listing-check-findings'
+    )
+    expect(requestMethod).toBe('POST')
+    const payload = JSON.parse(requestBody)
+    expect(payload.batchId).toBeUndefined()
+    expect(payload.findings).toHaveLength(1)
+  })
+
   test('lists converted compensation through the generated endpoint', async () => {
     let requestedUrl = ''
     let requestMethod = ''

@@ -13,6 +13,9 @@ import {
 import type { OpportunityDetails } from '../model/details'
 import {
   applicationStatusValues,
+  listingAvailabilityValues,
+  listingCheckConfidenceValues,
+  listingCheckReasonValues,
   personalPriorityValues,
   targetStageValues,
 } from '../model/values'
@@ -53,6 +56,22 @@ export const applications = sqliteTable(
     followUpAt: text('follow_up_at'),
     appliedAt: text('applied_at'),
     lastContactAt: text('last_contact_at'),
+    listingAvailability: text('listing_availability', {
+      enum: listingAvailabilityValues,
+    })
+      .notNull()
+      .default('unchecked'),
+    listingConfidence: text('listing_confidence', {
+      enum: listingCheckConfidenceValues,
+    }),
+    listingReasonCode: text('listing_reason_code', {
+      enum: listingCheckReasonValues,
+    }),
+    listingCheckedAt: text('listing_checked_at'),
+    listingClosedCandidateAt: text('listing_closed_candidate_at'),
+    listingConsecutiveClosedChecks: integer('listing_consecutive_closed_checks')
+      .notNull()
+      .default(0),
     version: integer('version').notNull().default(1),
     updatedRevision: integer('updated_revision').notNull(),
     createdAt: text('created_at').notNull(),
@@ -70,6 +89,9 @@ export const applications = sqliteTable(
       table.targetStage,
       table.updatedRevision
     ),
+    index('applications_listing_availability_idx').on(
+      table.listingAvailability
+    ),
     uniqueIndex('applications_updated_revision_unique').on(
       table.updatedRevision
     ),
@@ -84,6 +106,22 @@ export const applications = sqliteTable(
     check(
       'applications_personal_priority_check',
       sql`${table.personalPriority} is null or ${table.personalPriority} in (${sqlStringList(personalPriorityValues)})`
+    ),
+    check(
+      'applications_listing_availability_check',
+      sql`${table.listingAvailability} in (${sqlStringList(listingAvailabilityValues)})`
+    ),
+    check(
+      'applications_listing_confidence_check',
+      sql`${table.listingConfidence} is null or ${table.listingConfidence} in (${sqlStringList(listingCheckConfidenceValues)})`
+    ),
+    check(
+      'applications_listing_reason_check',
+      sql`${table.listingReasonCode} is null or ${table.listingReasonCode} in (${sqlStringList(listingCheckReasonValues)})`
+    ),
+    check(
+      'applications_listing_closed_count_check',
+      sql`${table.listingConsecutiveClosedChecks} >= 0`
     ),
     check(
       'applications_fit_score_check',

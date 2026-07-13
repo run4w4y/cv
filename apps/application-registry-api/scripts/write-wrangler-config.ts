@@ -15,6 +15,12 @@ type WranglerConfig = {
   readonly observability: { readonly enabled: true }
   readonly preview_urls: false
   readonly secrets: { readonly required: readonly ['REGISTRY_API_TOKEN'] }
+  readonly triggers: { readonly crons: readonly ['17 * * * *'] }
+  readonly vars: {
+    readonly LISTING_CHECKS_ENABLED: 'true'
+    readonly LISTING_CHECK_ARCHIVE_ENABLED: 'false'
+    readonly LISTING_CHECK_BATCH_SIZE: '5'
+  }
   readonly workers_dev: true
 }
 
@@ -65,6 +71,12 @@ const readConfig = Effect.all({
         observability: { enabled: true },
         preview_urls: false,
         secrets: { required: ['REGISTRY_API_TOKEN'] },
+        triggers: { crons: ['17 * * * *'] },
+        vars: {
+          LISTING_CHECKS_ENABLED: 'true',
+          LISTING_CHECK_ARCHIVE_ENABLED: 'false',
+          LISTING_CHECK_BATCH_SIZE: '5',
+        },
         workers_dev: true,
       }) satisfies WranglerConfig
   )

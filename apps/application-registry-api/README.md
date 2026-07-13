@@ -30,6 +30,10 @@ connect to D1 directly.
   atomic.
 - Event rows retain history while the `applications` row is the current
   searchable projection.
+- Listing-check rows retain HTTP/provider evidence while the application row
+  stores the current availability projection. A separate schedule table uses
+  bounded leases and retry backoff so overlapping cron invocations do not
+  process the same due item.
 - D1 assigns a monotonic revision inside each mutation batch. Application and
   global-event cursors use revisions rather than client timestamps or UUID
   ordering, so delayed and same-millisecond writes cannot fall behind a saved
@@ -82,6 +86,29 @@ declaration used by handlers and the internal Effect client.
 - `GET /v1/events`: cursor-paginated global event feed with application company,
   role, and canonical URL context. `from` and `to` bound source event time
   inclusively; `kind` accepts one or more event kinds.
+- `GET /v1/applications/:id/listing-checks`: return stored listing-check
+  evidence and decisions newest first.
+- `POST /v1/listing-check-findings`: idempotently ingest a bounded batch of
+  observations produced by the local CLI. This endpoint never fetches a job
+  page; it validates targets and applies server-owned policy and persistence.
+- `GET /v1/listing-check-runs/:id`: return a persisted run summary.
+
+The shared checker prefers authoritative provider APIs for Greenhouse and
+Lever, then uses the fetched page's status, redirects, matching JobPosting JSON-LD,
+`validThrough`, explicit closure wording, and a working apply action. HTTP 410
+and provider API removal are confirmed closure signals. A 404, expired
+`validThrough`, or matching closure text first creates a suspected-closed
+candidate and is rechecked after its grace window. Authentication, rate limits,
+server failures, network failures, redirects to generic pages, and identity
+mismatches without a replacement posting remain unknown/review signals and
+never archive a listing. When the same URL clearly advertises and accepts
+applications for a materially different role, the original listing becomes a
+suspected-closed candidate and still has to pass its confirmation window.
+
+Archive mode is constrained twice: policy only recommends it for
+`not_started`/`preparing` applications, and the D1 update checks the status
+again atomically. Report mode still records evidence, updates availability,
+and schedules the next check, but never changes the application lifecycle.
 
 Idempotent capture, event, and note requests include one `operationId`.
 Event writes may include `expectedVersion` for optimistic concurrency; a stale
@@ -136,6 +163,19 @@ secret before testing authenticated routes:
 cd apps/application-registry-api
 printf '%s' 'local-registry-token' | node ../../node_modules/wrangler/bin/wrangler.js secret put REGISTRY_API_TOKEN --local
 ```
+
+Wrangler config installs an hourly cron at minute 17. This is an internal
+fallback scanner, not an HTTP-triggered batch. The scheduled handler is
+report-only by default and uses a batch size of five. Its plain-text Worker
+variables are:
+
+- `LISTING_CHECKS_ENABLED`: set to `false` to make the handler a no-op.
+- `LISTING_CHECK_ARCHIVE_ENABLED`: set to `true` to permit policy-approved
+  archival; the checked-in default is `false`.
+- `LISTING_CHECK_BATCH_SIZE`: integer batch size, capped at 10.
+
+These defaults keep the scheduled workload small and compatible with the same
+Worker/D1 deployment; no separate scheduler service is required.
 
 After changing a table under `libs/application-registry/entity/src/tables`,
 generate and inspect the D1-owned migration:

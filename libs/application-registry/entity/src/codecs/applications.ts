@@ -18,6 +18,8 @@ const applicationSelectRefinements = {
   followUpAt: () => UtcIsoTimestampSchema,
   appliedAt: () => UtcIsoTimestampSchema,
   lastContactAt: () => UtcIsoTimestampSchema,
+  listingCheckedAt: () => UtcIsoTimestampSchema,
+  listingClosedCandidateAt: () => UtcIsoTimestampSchema,
   createdAt: () => UtcIsoTimestampSchema,
   updatedAt: () => UtcIsoTimestampSchema,
 }

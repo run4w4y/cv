@@ -1,4 +1,8 @@
 import { BunRuntime, BunServices } from '@effect/platform-bun'
+import {
+  type ListingAvailabilityChecker,
+  ListingAvailabilityCheckerLive,
+} from '@cv/application-registry-listing-check'
 import { Console, Effect, Layer } from 'effect'
 import { CliError, Command } from 'effect/unstable/cli'
 import * as FetchHttpClient from 'effect/unstable/http/FetchHttpClient'
@@ -12,6 +16,7 @@ import { readApplicationRegistryClientConfig } from '../config'
 export type ApplicationRegistryRuntime =
   | BunServices.BunServices
   | ApplicationRegistryClient
+  | ListingAvailabilityChecker
 
 const PlatformLayer = Layer.merge(BunServices.layer, FetchHttpClient.layer)
 
@@ -51,12 +56,17 @@ const DeferredRegistryClientLayer = Layer.succeed(ApplicationRegistryClient, {
   list: (query) => withConfiguredRegistryClient((client) => client.list(query)),
   show: (identifier) =>
     withConfiguredRegistryClient((client) => client.show(identifier)),
+  submitListingCheckFindings: (batchId, request) =>
+    withConfiguredRegistryClient((client) =>
+      client.submitListingCheckFindings(batchId, request)
+    ),
   sync: () => withConfiguredRegistryClient((client) => client.sync()),
 } satisfies ApplicationRegistryClientService)
 
-const ApplicationRegistryRuntimeLayer = Layer.merge(
+const ApplicationRegistryRuntimeLayer = Layer.mergeAll(
   PlatformLayer,
-  DeferredRegistryClientLayer
+  DeferredRegistryClientLayer,
+  ListingAvailabilityCheckerLive
 )
 
 const setFailedExitCode = Effect.sync(() => {

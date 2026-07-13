@@ -12,6 +12,8 @@ import type {
   ListApplicationEventsResponse,
   ListApplicationsQuery,
   ListApplicationsResponse,
+  SubmitListingCheckFindingsRequest,
+  SubmitListingCheckFindingsResponse,
 } from '@cv/application-registry-api-contract'
 import type { Application } from '@cv/application-registry-entity'
 import { Context, type Effect } from 'effect'
@@ -98,6 +100,13 @@ export type ApplicationRegistryClientService = {
   readonly show: (
     identifier: string
   ) => Effect.Effect<Application, RegistryReadError>
+  readonly submitListingCheckFindings: (
+    batchId: string,
+    request: SubmitListingCheckFindingsRequest
+  ) => Effect.Effect<
+    RegistryWriteResult<SubmitListingCheckFindingsResponse>,
+    RegistryDurableWriteError
+  >
   readonly sync: () => Effect.Effect<
     RegistrySyncResult,
     RegistryDurableWriteError

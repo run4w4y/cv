@@ -12,6 +12,7 @@ import {
   and,
   asc,
   count,
+  desc,
   eq,
   exists,
   gt,
@@ -160,6 +161,19 @@ const enrichApplications = (
       .where(inArray(campaignCaptures.applicationId, applicationIds))
       .groupBy(campaignCaptures.applicationId)
 
+    const applicationUrlRows = yield* database
+      .select({
+        applicationId: campaignCaptures.applicationId,
+        submissionDetails: campaignCaptures.submissionDetails,
+      })
+      .from(campaignCaptures)
+      .where(inArray(campaignCaptures.applicationId, applicationIds))
+      .orderBy(
+        asc(campaignCaptures.applicationId),
+        desc(campaignCaptures.capturedAt),
+        desc(campaignCaptures.id)
+      )
+
     const noteCountRows = yield* database
       .select({
         applicationId: applicationNotes.applicationId,
@@ -196,6 +210,15 @@ const enrichApplications = (
     const captureCountByApplication = new Map(
       captureCountRows.map((row) => [row.applicationId, row.value])
     )
+    const latestApplicationUrlByApplication = new Map<string, string | null>()
+    for (const row of applicationUrlRows) {
+      if (!latestApplicationUrlByApplication.has(row.applicationId)) {
+        latestApplicationUrlByApplication.set(
+          row.applicationId,
+          row.submissionDetails.applicationUrl
+        )
+      }
+    }
     const noteCountByApplication = new Map(
       noteCountRows.map((row) => [row.applicationId, row.value])
     )
@@ -209,6 +232,8 @@ const enrichApplications = (
         labels: labelsByApplication.get(application.id) ?? [],
         latestEventAt: latestEvent?.occurredAt ?? null,
         latestEventKind: latestEvent?.kind ?? null,
+        latestApplicationUrl:
+          latestApplicationUrlByApplication.get(application.id) ?? null,
         noteCount: noteCountByApplication.get(application.id) ?? 0,
       }
     })

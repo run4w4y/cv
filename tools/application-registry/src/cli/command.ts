@@ -18,6 +18,7 @@ import {
   printJson,
   printWriteResult,
 } from './output'
+import { runLocalListingScan } from './listing-scan'
 
 const jsonOutput = Flag.boolean('json').pipe(
   Flag.withDescription('Print machine-readable JSON.')
@@ -287,6 +288,58 @@ export const noteCommand = Command.make(
     })
 ).pipe(Command.withDescription('Append a note to an application.'))
 
+const archiveEligible = Flag.boolean('archive').pipe(
+  Flag.withDescription(
+    'Archive eligible not-started applications after the grace policy passes.'
+  )
+)
+const checkLimit = Flag.integer('concurrency').pipe(
+  Flag.withDescription('Maximum simultaneous local checks.'),
+  Flag.withDefault(64)
+)
+const perHost = Flag.integer('per-host').pipe(
+  Flag.withDescription('Maximum simultaneous checks against one hostname.'),
+  Flag.withDefault(6)
+)
+const batchSize = Flag.integer('batch-size').pipe(
+  Flag.withDescription('Findings submitted per durable API batch (1–50).'),
+  Flag.withDefault(50)
+)
+const dryRun = Flag.boolean('dry-run').pipe(
+  Flag.withDescription('Run every check locally without submitting findings.')
+)
+
+export const checkCommand = Command.make(
+  'check',
+  {
+    archive: archiveEligible,
+    batchSize,
+    concurrency: checkLimit,
+    dryRun,
+    json: jsonOutput,
+    perHost,
+  },
+  (options) =>
+    Effect.gen(function* () {
+      const result = yield* runLocalListingScan({
+        archive: options.archive,
+        batchSize: options.batchSize,
+        concurrency: options.concurrency,
+        dryRun: options.dryRun,
+        perHost: options.perHost,
+      })
+      return yield* options.json
+        ? printJson(result)
+        : Console.log(
+            `Run ${result.runId}: ${result.checked}/${result.total} checked; ${result.open} open, ${result.closed} closed, ${result.unknown} unknown; ${result.submittedBatches} submitted batches, ${result.queuedBatches} queued, ${result.rejected} rejected, ${result.archived} archived${result.dryRun ? ' (dry run)' : ''}.`
+          )
+    })
+).pipe(
+  Command.withDescription(
+    'Scan every application locally and submit findings in durable batches.'
+  )
+)
+
 export const syncCommand = Command.make(
   'sync',
   { json: jsonOutput },
@@ -319,6 +372,7 @@ export const applicationRegistryCommand = rootCommand.pipe(
     compensationsCommand,
     statusCommand,
     noteCommand,
+    checkCommand,
     syncCommand,
   ])
 )

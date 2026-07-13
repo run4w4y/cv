@@ -6,6 +6,7 @@ import type {
   AddApplicationNoteRequest,
   AppendApplicationEventRequest,
   CreateCampaignCaptureRequest,
+  SubmitListingCheckFindingsRequest,
 } from '@cv/application-registry-api-contract'
 import { Effect, Layer } from 'effect'
 
@@ -20,6 +21,7 @@ import {
   type RegistryCommand,
   RegistryOutbox,
   type RegistryOutboxEntry,
+  registryCommandOperationId,
 } from '../outbox'
 import {
   ApplicationRegistryClient,
@@ -58,6 +60,10 @@ const makeApplicationRegistryClient = Effect.gen(function* () {
   const capture = (request: CreateCampaignCaptureRequest) =>
     api.registry.createCapture({ payload: request })
 
+  const submitListingCheckFindings = (
+    request: SubmitListingCheckFindingsRequest
+  ) => api.registry.submitListingCheckFindings({ payload: request })
+
   const replay = (command: RegistryCommand) => {
     switch (command._tag) {
       case 'AddApplicationNote':
@@ -68,6 +74,8 @@ const makeApplicationRegistryClient = Effect.gen(function* () {
         )
       case 'CaptureCampaign':
         return capture(command.request).pipe(Effect.asVoid)
+      case 'SubmitListingCheckFindings':
+        return submitListingCheckFindings(command.request).pipe(Effect.asVoid)
     }
   }
 
@@ -122,7 +130,7 @@ const makeApplicationRegistryClient = Effect.gen(function* () {
                 _tag: 'Failed' as const,
                 disposition,
                 error: failure,
-                operationId: entry.command.request.operationId,
+                operationId: registryCommandOperationId(entry.command),
               })
             )
         },
@@ -130,7 +138,7 @@ const makeApplicationRegistryClient = Effect.gen(function* () {
           outbox.markSynced(entry).pipe(
             Effect.as({
               _tag: 'Synced' as const,
-              operationId: entry.command.request.operationId,
+              operationId: registryCommandOperationId(entry.command),
             })
           ),
       })
@@ -196,6 +204,18 @@ const makeApplicationRegistryClient = Effect.gen(function* () {
       normalizeHttpFailure(
         api.registry.getApplication({ params: { id: identifier } })
       ),
+    submitListingCheckFindings: (batchId, request) => {
+      const command = {
+        _tag: 'SubmitListingCheckFindings' as const,
+        batchId,
+        request,
+      }
+      return write({
+        command,
+        operationId: batchId,
+        send: normalizeHttpFailure(submitListingCheckFindings(request)),
+      })
+    },
     sync: Effect.fn('ApplicationRegistryClient.sync')(function* () {
       const entries = yield* outbox.list()
       const replayable = entries.filter(

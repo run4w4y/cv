@@ -4,11 +4,19 @@ import type {
   ApplicationCompensationInput,
   ApplicationEvent,
   ApplicationEventKind,
+  ApplicationListingCheck,
+  ApplicationListingCheckSchedule,
   ApplicationMutable,
   ApplicationNote,
   ApplicationStatus,
   ApplicationWritable,
   CampaignCapture,
+  ListingAvailability,
+  ListingCheckConfidence,
+  ListingCheckMode,
+  ListingCheckReason,
+  ListingCheckRun,
+  ListingCheckRunTrigger,
   PersonalPriority,
   TargetStage,
   UtcIsoTimestamp,
@@ -52,6 +60,7 @@ export type ApplicationListRecord = Application & {
   readonly labels: readonly string[]
   readonly latestEventAt: UtcIsoTimestamp | null
   readonly latestEventKind: ApplicationEventKind | null
+  readonly latestApplicationUrl: string | null
   readonly noteCount: number
 }
 
@@ -130,4 +139,45 @@ export type PersistedNote = Pick<
   readonly operationId: string
   readonly recordedAt: UtcIsoTimestamp
   readonly operationRequestSignature: string
+}
+
+export type ListingCheckRunCounts = Pick<
+  ListingCheckRun,
+  | 'checkedCount'
+  | 'closedCount'
+  | 'errorCount'
+  | 'openCount'
+  | 'reviewCount'
+  | 'selectedCount'
+>
+
+export type PersistedListingCheck = ApplicationListingCheck & {
+  readonly archiveApplication: boolean
+  readonly closedCandidateAt: string | null
+  readonly consecutiveClosedChecks: number
+  readonly eventId: string | null
+  readonly listingAvailability: ListingAvailability
+  readonly recordedAt: string
+}
+
+export type StartListingCheckRun = {
+  readonly id: string
+  readonly mode: ListingCheckMode
+  readonly selectedCount: number
+  readonly startedAt: string
+  readonly trigger: ListingCheckRunTrigger
+}
+
+export type ClaimedListingCheckSchedule = ApplicationListingCheckSchedule & {
+  readonly leaseToken: string
+  readonly leaseUntil: string
+}
+
+export type ListingCheckProjection = {
+  readonly availability: ListingAvailability
+  readonly checkedAt: string
+  readonly closedCandidateAt: string | null
+  readonly confidence: ListingCheckConfidence
+  readonly consecutiveClosedChecks: number
+  readonly reasonCode: ListingCheckReason
 }

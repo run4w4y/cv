@@ -3,12 +3,14 @@ import {
   ApplicationEventKindSchema,
   ApplicationEventSchema,
   ApplicationLabelSchema,
+  ApplicationListingCheckSchema,
   ApplicationNoteSchema,
   ApplicationSchema,
   ApplicationStatusSchema,
   CampaignCaptureSchema,
   CurrencyCodeSchema,
   PersonalPrioritySchema,
+  ListingCheckRunSchema,
   TargetStageSchema,
   UtcIsoTimestampSchema,
 } from '@cv/application-registry-entity'
@@ -22,6 +24,7 @@ export type {
   ListApplicationsQuery,
   ListEventsQuery,
   PatchApplicationCommand as PatchApplicationRequest,
+  SubmitListingCheckFindingsCommand as SubmitListingCheckFindingsRequest,
   RegistryApplicationInput as UpsertApplicationRequest,
 } from './commands'
 export {
@@ -31,6 +34,7 @@ export {
   ListApplicationsQuerySchema,
   ListEventsQuerySchema,
   PatchApplicationCommandSchema as PatchApplicationRequestSchema,
+  SubmitListingCheckFindingsCommandSchema as SubmitListingCheckFindingsRequestSchema,
   RegistryApplicationInputSchema as UpsertApplicationRequestSchema,
 } from './commands'
 
@@ -39,6 +43,10 @@ import { FollowUpStateSchema } from './commands'
 const NonEmptyString = Schema.Trim.pipe(Schema.check(Schema.isNonEmpty()))
 
 export const ApplicationIdentifierParamsSchema = Schema.Struct({
+  id: NonEmptyString,
+})
+
+export const ListingCheckRunIdentifierParamsSchema = Schema.Struct({
   id: NonEmptyString,
 })
 
@@ -55,6 +63,7 @@ export const ApplicationListItemSchema = Schema.Struct({
   labels: Schema.Array(NonEmptyString),
   latestEventAt: Schema.NullOr(UtcIsoTimestampSchema),
   latestEventKind: Schema.NullOr(ApplicationEventKindSchema),
+  latestApplicationUrl: Schema.NullOr(NonEmptyString),
   noteCount: Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0))),
 })
 
@@ -139,6 +148,32 @@ export const ListApplicationCapturesResponseSchema = Schema.Struct({
 
 export type ListApplicationCapturesResponse = Schema.Schema.Type<
   typeof ListApplicationCapturesResponseSchema
+>
+
+export const ListApplicationListingChecksResponseSchema = Schema.Struct({
+  items: Schema.Array(ApplicationListingCheckSchema),
+})
+
+export type ListApplicationListingChecksResponse = Schema.Schema.Type<
+  typeof ListApplicationListingChecksResponseSchema
+>
+
+export const SubmitListingCheckFindingsResponseSchema = Schema.Struct({
+  archivedCount: Schema.Int.pipe(
+    Schema.check(Schema.isGreaterThanOrEqualTo(0))
+  ),
+  checks: Schema.Array(ApplicationListingCheckSchema),
+  rejected: Schema.Array(
+    Schema.Struct({ applicationId: NonEmptyString, message: NonEmptyString })
+  ),
+  replayedCount: Schema.Int.pipe(
+    Schema.check(Schema.isGreaterThanOrEqualTo(0))
+  ),
+  run: ListingCheckRunSchema,
+})
+
+export type SubmitListingCheckFindingsResponse = Schema.Schema.Type<
+  typeof SubmitListingCheckFindingsResponseSchema
 >
 
 export const ListApplicationEventsResponseSchema = Schema.Struct({

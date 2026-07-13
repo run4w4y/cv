@@ -8,8 +8,10 @@ import {
 import type {
   Application,
   ApplicationEvent,
+  ApplicationListingCheck,
   ApplicationNote,
   CampaignCapture,
+  ListingCheckRun,
 } from '@cv/application-registry-entity'
 import {
   type AddApplicationNoteInput,
@@ -19,6 +21,7 @@ import {
   CompensationsService,
   type CreateCampaignCaptureInput,
   EventsService,
+  ListingChecksService,
 } from '@cv/application-registry-service'
 import { Effect, Layer, type Scope } from 'effect'
 import { HttpClientRequest, HttpServer } from 'effect/unstable/http'
@@ -56,6 +59,12 @@ const application: Application = {
   role: 'Engineer',
   location: null,
   lastContactAt: null,
+  listingAvailability: 'unchecked',
+  listingCheckedAt: null,
+  listingClosedCandidateAt: null,
+  listingConfidence: null,
+  listingConsecutiveClosedChecks: 0,
+  listingReasonCode: null,
   openStatus: null,
   personalPriority: null,
   recommendedAction: null,
@@ -90,6 +99,7 @@ const applicationListItem = {
   labels: ['priority'],
   latestEventAt: event.occurredAt,
   latestEventKind: event.kind,
+  latestApplicationUrl: 'https://example.test/apply',
   noteCount: 1,
 }
 
@@ -138,6 +148,48 @@ const note: ApplicationNote = {
   kind: 'general',
   source: 'test',
   updatedAt: application.updatedAt,
+}
+
+const listingCheck: ApplicationListingCheck = {
+  applicationId: application.id,
+  checkedAt: application.updatedAt,
+  checkerVersion: '1',
+  confidence: 'high',
+  contentHash: null,
+  evidence: [
+    {
+      code: 'provider_open',
+      detail: 'Provider reports the posting as open.',
+      sourceUrl: null,
+    },
+  ],
+  finalUrl: application.canonicalUrl,
+  httpStatus: 200,
+  id: 'listing-check-1',
+  nextCheckAt: '2026-07-11T00:00:00.000Z',
+  operationId: 'listing-check-operation-1',
+  outcome: 'open',
+  provider: 'generic',
+  receivedAt: application.updatedAt,
+  reasonCode: 'provider_open',
+  recommendedAction: 'keep',
+  requestedUrl: application.canonicalUrl,
+  runId: null,
+}
+
+const listingCheckRun: ListingCheckRun = {
+  checkedCount: 1,
+  closedCount: 0,
+  completedAt: application.updatedAt,
+  errorCount: 0,
+  id: 'listing-check-run-1',
+  mode: 'report',
+  openCount: 1,
+  reviewCount: 0,
+  selectedCount: 1,
+  startedAt: application.createdAt,
+  state: 'completed',
+  trigger: 'cli',
 }
 
 const request: CreateCampaignCaptureRequest = {
@@ -220,6 +272,20 @@ const makeRegistryLayer = (
           nextCursor: null,
         }),
       listByApplication: () => Effect.succeed({ items: [event] }),
+    }),
+    Layer.succeed(ListingChecksService, {
+      findRun: () => Effect.succeed(listingCheckRun),
+      listByApplication: () => Effect.succeed({ items: [listingCheck] }),
+      runDue: () =>
+        Effect.succeed({ checks: [listingCheck], run: listingCheckRun }),
+      submitFindings: () =>
+        Effect.succeed({
+          archivedCount: 0,
+          checks: [listingCheck],
+          rejected: [],
+          replayedCount: 0,
+          run: listingCheckRun,
+        }),
     })
   )
 
@@ -357,6 +423,55 @@ describe('application registry HttpApi', () => {
 
     expect(observed?.operationId).toBe('note-operation-1')
     expect(response).toEqual({ note, replayed: false })
+  })
+
+  test('submits locally collected findings through the authenticated contract', async () => {
+    const response = await runApiTest(
+      Effect.gen(function* () {
+        const client = yield* HttpApiTest.groups(ApplicationRegistryApi, [
+          'registry',
+        ])
+        return yield* client.registry.submitListingCheckFindings({
+          payload: {
+            expectedCount: 1,
+            finalBatch: true,
+            findings: [
+              {
+                applicationId: application.id,
+                canonicalUrl: application.canonicalUrl,
+                observation: {
+                  checkedAt: listingCheck.checkedAt,
+                  checkerVersion: listingCheck.checkerVersion,
+                  confidence: listingCheck.confidence,
+                  contentHash: listingCheck.contentHash,
+                  evidence: listingCheck.evidence,
+                  finalUrl: listingCheck.finalUrl,
+                  httpStatus: listingCheck.httpStatus,
+                  outcome: listingCheck.outcome,
+                  provider: listingCheck.provider,
+                  reasonCode: listingCheck.reasonCode,
+                  requestedUrl: listingCheck.requestedUrl,
+                },
+                operationId: listingCheck.operationId,
+                target: {
+                  company: application.company,
+                  role: application.role,
+                  url: application.canonicalUrl,
+                },
+              },
+            ],
+            mode: 'report',
+            runId: listingCheckRun.id,
+            startedAt: listingCheckRun.startedAt,
+          },
+        })
+      }).pipe((effect) =>
+        provideApiTestLayer(effect, makeRegistryLayer(), true)
+      )
+    )
+
+    expect(response.run.trigger).toBe('cli')
+    expect(response.checks).toHaveLength(1)
   })
 
   test('rejects registry calls without bearer authentication', async () => {
