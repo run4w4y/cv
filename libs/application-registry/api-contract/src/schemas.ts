@@ -9,8 +9,8 @@ import {
   ApplicationStatusSchema,
   CampaignCaptureSchema,
   CurrencyCodeSchema,
-  PersonalPrioritySchema,
   ListingCheckRunSchema,
+  PersonalPrioritySchema,
   TargetStageSchema,
   UtcIsoTimestampSchema,
 } from '@cv/application-registry-entity'
@@ -24,8 +24,8 @@ export type {
   ListApplicationsQuery,
   ListEventsQuery,
   PatchApplicationCommand as PatchApplicationRequest,
-  SubmitListingCheckFindingsCommand as SubmitListingCheckFindingsRequest,
   RegistryApplicationInput as UpsertApplicationRequest,
+  SubmitListingCheckFindingsCommand as SubmitListingCheckFindingsRequest,
 } from './commands'
 export {
   AddApplicationNoteCommandSchema as AddApplicationNoteRequestSchema,
@@ -34,8 +34,8 @@ export {
   ListApplicationsQuerySchema,
   ListEventsQuerySchema,
   PatchApplicationCommandSchema as PatchApplicationRequestSchema,
-  SubmitListingCheckFindingsCommandSchema as SubmitListingCheckFindingsRequestSchema,
   RegistryApplicationInputSchema as UpsertApplicationRequestSchema,
+  SubmitListingCheckFindingsCommandSchema as SubmitListingCheckFindingsRequestSchema,
 } from './commands'
 
 import { FollowUpStateSchema } from './commands'

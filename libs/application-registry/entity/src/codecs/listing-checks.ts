@@ -4,8 +4,8 @@ import { Schema } from 'effect'
 import { UtcIsoTimestampSchema } from '../model/constraints'
 import { ListingCheckEvidenceSchema } from '../model/listing-checks'
 import {
-  applicationListingChecks,
   applicationListingCheckSchedules,
+  applicationListingChecks,
   listingCheckRuns,
 } from '../tables/listing-checks'
 

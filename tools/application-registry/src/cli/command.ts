@@ -9,6 +9,7 @@ import { Console, Crypto, DateTime, Effect, Option } from 'effect'
 import { Argument, Command, Flag } from 'effect/unstable/cli'
 import { ApplicationRegistryClient } from '../client'
 import { readApplicationRegistryClientConfig } from '../config'
+import { runLocalListingScan } from './listing-scan'
 import {
   printApplication,
   printApplications,
@@ -18,7 +19,6 @@ import {
   printJson,
   printWriteResult,
 } from './output'
-import { runLocalListingScan } from './listing-scan'
 
 const jsonOutput = Flag.boolean('json').pipe(
   Flag.withDescription('Print machine-readable JSON.')

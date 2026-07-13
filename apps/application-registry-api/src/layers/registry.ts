@@ -3,8 +3,8 @@ import {
   FrankfurterFxRateProviderLive,
   FxRatesLive,
 } from '@cv/application-registry-fx'
-import { RegistryServicesLive } from '@cv/application-registry-service/live'
 import { ListingAvailabilityCheckerLive } from '@cv/application-registry-listing-check'
+import { RegistryServicesLive } from '@cv/application-registry-service/live'
 import { Effect, Layer } from 'effect'
 import * as FetchHttpClient from 'effect/unstable/http/FetchHttpClient'
 

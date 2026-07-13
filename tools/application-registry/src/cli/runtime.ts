@@ -1,8 +1,8 @@
-import { BunRuntime, BunServices } from '@effect/platform-bun'
 import {
   type ListingAvailabilityChecker,
   ListingAvailabilityCheckerLive,
 } from '@cv/application-registry-listing-check'
+import { BunRuntime, BunServices } from '@effect/platform-bun'
 import { Console, Effect, Layer } from 'effect'
 import { CliError, Command } from 'effect/unstable/cli'
 import * as FetchHttpClient from 'effect/unstable/http/FetchHttpClient'
