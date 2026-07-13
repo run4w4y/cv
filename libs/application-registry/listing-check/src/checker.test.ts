@@ -52,6 +52,42 @@ describe('listing availability checker', () => {
     })
   })
 
+  test('recognizes a Workable not-found redirect as provider closure', async () => {
+    const response = new Response('<title>SmartNews - Current Openings</title>')
+    Object.defineProperty(response, 'url', {
+      value: 'https://apply.workable.com/smartnews/?not_found=true',
+    })
+    const result = await runCheck(async () => response, {
+      company: 'SmartNews',
+      role: 'Senior Software Engineer, Ads Reporting',
+      url: 'https://apply.workable.com/smartnews/j/895F68C51E/',
+    })
+
+    expect(result).toMatchObject({
+      confidence: 'confirmed',
+      outcome: 'closed',
+      reasonCode: 'provider_closed',
+    })
+  })
+
+  test('keeps ordinary Workable redirects inconclusive', async () => {
+    const response = new Response('<title>SmartNews - Current Openings</title>')
+    Object.defineProperty(response, 'url', {
+      value: 'https://apply.workable.com/smartnews/',
+    })
+    const result = await runCheck(async () => response, {
+      company: 'SmartNews',
+      role: 'Senior Software Engineer, Ads Reporting',
+      url: 'https://apply.workable.com/smartnews/j/895F68C51E/',
+    })
+
+    expect(result).toMatchObject({
+      confidence: 'low',
+      outcome: 'unknown',
+      reasonCode: 'redirected_to_listing_page',
+    })
+  })
+
   test('detects a reused URL that now advertises a different role', async () => {
     const result = await runCheck(
       async () =>

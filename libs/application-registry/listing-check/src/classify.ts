@@ -61,6 +61,22 @@ const expirationTime = (value: string) => {
   return Number.isNaN(parsed) ? null : parsed
 }
 
+const isWorkableNotFoundRedirect = (
+  target: ListingCheckTarget,
+  result: ListingFetchResult
+) => {
+  if (!URL.canParse(target.url) || !URL.canParse(result.finalUrl)) return false
+
+  const requested = new URL(target.url)
+  const final = new URL(result.finalUrl)
+  return (
+    requested.hostname === 'apply.workable.com' &&
+    requested.pathname.includes('/j/') &&
+    final.hostname === requested.hostname &&
+    final.searchParams.get('not_found') === 'true'
+  )
+}
+
 export const classifyHttpStatus = (
   target: ListingCheckTarget,
   result: ListingFetchResult,
@@ -96,6 +112,21 @@ export const classifyHttpStatus = (
       ],
       outcome: 'closed',
       reasonCode: 'http_404',
+    }
+  }
+  if (isWorkableNotFoundRedirect(target, result)) {
+    return {
+      ...base,
+      confidence: 'confirmed',
+      evidence: [
+        {
+          code: 'provider_redirect',
+          detail: 'Workable reports that the requested posting was not found.',
+          sourceUrl: result.finalUrl,
+        },
+      ],
+      outcome: 'closed',
+      reasonCode: 'provider_closed',
     }
   }
 
