@@ -9,13 +9,13 @@ import type {
 } from '@cv/application-registry-entity'
 import { ListingAvailabilityChecker } from '@cv/application-registry-listing-check'
 import { BunServices } from '@effect/platform-bun'
-import { Duration, Effect, Layer } from 'effect'
+import { Duration, Effect, Layer, Option, Schema } from 'effect'
 
 import {
   ApplicationRegistryClient,
   type ApplicationRegistryClientService,
 } from '../client'
-import { runLocalListingScan } from './listing-scan'
+import { ListingScanOptionsSchema, runLocalListingScan } from './listing-scan'
 
 const application: Application = {
   applicationStatus: 'preparing',
@@ -97,6 +97,31 @@ const observationFor = (
 })
 
 describe('local listing scan', () => {
+  test('validates scan limits through the shared options schema', () => {
+    const valid = {
+      archive: false,
+      batchSize: 50,
+      concurrency: 64,
+      dryRun: true,
+      perHost: 6,
+    }
+
+    expect(
+      Option.isSome(Schema.decodeUnknownOption(ListingScanOptionsSchema)(valid))
+    ).toBe(true)
+    for (const invalid of [
+      { ...valid, batchSize: 51 },
+      { ...valid, concurrency: 0 },
+      { ...valid, perHost: 0 },
+    ]) {
+      expect(
+        Option.isNone(
+          Schema.decodeUnknownOption(ListingScanOptionsSchema)(invalid)
+        )
+      ).toBe(true)
+    }
+  })
+
   test('checks every application locally while enforcing global and per-host concurrency', async () => {
     let active = 0
     let maximumActive = 0

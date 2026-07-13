@@ -43,6 +43,8 @@ const DeferredRegistryClientLayer = Layer.succeed(ApplicationRegistryClient, {
     withConfiguredRegistryClient((client) =>
       client.appendEvent(identifier, request)
     ),
+  create: (request) =>
+    withConfiguredRegistryClient((client) => client.create(request)),
   capture: (request) =>
     withConfiguredRegistryClient((client) => client.capture(request)),
   captures: (identifier) =>
@@ -53,7 +55,30 @@ const DeferredRegistryClientLayer = Layer.succeed(ApplicationRegistryClient, {
     ),
   events: (identifier) =>
     withConfiguredRegistryClient((client) => client.events(identifier)),
+  facets: () => withConfiguredRegistryClient((client) => client.facets()),
+  health: () => withConfiguredRegistryClient((client) => client.health()),
+  labels: (identifier) =>
+    withConfiguredRegistryClient((client) => client.labels(identifier)),
   list: (query) => withConfiguredRegistryClient((client) => client.list(query)),
+  listEvents: (query) =>
+    withConfiguredRegistryClient((client) => client.listEvents(query)),
+  listingCheckRun: (identifier) =>
+    withConfiguredRegistryClient((client) =>
+      client.listingCheckRun(identifier)
+    ),
+  listingChecks: (identifier) =>
+    withConfiguredRegistryClient((client) => client.listingChecks(identifier)),
+  outbox: () => withConfiguredRegistryClient((client) => client.outbox()),
+  patch: (identifier, request) =>
+    withConfiguredRegistryClient((client) => client.patch(identifier, request)),
+  remove: (identifier, expectedVersion) =>
+    withConfiguredRegistryClient((client) =>
+      client.remove(identifier, expectedVersion)
+    ),
+  replaceLabels: (identifier, request) =>
+    withConfiguredRegistryClient((client) =>
+      client.replaceLabels(identifier, request)
+    ),
   show: (identifier) =>
     withConfiguredRegistryClient((client) => client.show(identifier)),
   submitListingCheckFindings: (batchId, request) =>
@@ -61,6 +86,8 @@ const DeferredRegistryClientLayer = Layer.succeed(ApplicationRegistryClient, {
       client.submitListingCheckFindings(batchId, request)
     ),
   sync: () => withConfiguredRegistryClient((client) => client.sync()),
+  upsert: (request) =>
+    withConfiguredRegistryClient((client) => client.upsert(request)),
 } satisfies ApplicationRegistryClientService)
 
 const ApplicationRegistryRuntimeLayer = Layer.mergeAll(

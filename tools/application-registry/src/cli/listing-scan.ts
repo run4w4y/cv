@@ -14,19 +14,30 @@ import {
   Effect,
   Ref,
   Schedule,
+  Schema,
   Semaphore,
 } from 'effect'
 import { chunk, countBy, sumBy } from 'es-toolkit'
 
 import { ApplicationRegistryClient } from '../client'
 
-export type ListingScanOptions = {
-  readonly archive: boolean
-  readonly batchSize: number
-  readonly concurrency: number
-  readonly dryRun: boolean
-  readonly perHost: number
-}
+const PositiveIntegerSchema = Schema.Int.pipe(
+  Schema.check(Schema.isGreaterThan(0))
+)
+
+export const ListingScanOptionsSchema = Schema.Struct({
+  archive: Schema.Boolean,
+  batchSize: Schema.Int.pipe(
+    Schema.check(Schema.isBetween({ minimum: 1, maximum: 50 }))
+  ),
+  concurrency: PositiveIntegerSchema,
+  dryRun: Schema.Boolean,
+  perHost: PositiveIntegerSchema,
+})
+
+export type ListingScanOptions = Schema.Schema.Type<
+  typeof ListingScanOptionsSchema
+>
 
 export type ListingScanSummary = {
   readonly archived: number
@@ -133,18 +144,11 @@ const loadAllApplications = Effect.gen(function* () {
   return [...byId.values()]
 })
 
-export const runLocalListingScan = (options: ListingScanOptions) =>
+export const runLocalListingScan = (input: ListingScanOptions) =>
   Effect.gen(function* () {
-    if (options.concurrency < 1 || options.perHost < 1) {
-      return yield* Effect.fail(
-        new Error('--concurrency and --per-host must be positive integers.')
-      )
-    }
-    if (options.batchSize < 1 || options.batchSize > 50) {
-      return yield* Effect.fail(
-        new Error('--batch-size must be between 1 and 50.')
-      )
-    }
+    const options = yield* Schema.decodeUnknownEffect(ListingScanOptionsSchema)(
+      input
+    )
 
     const client = yield* ApplicationRegistryClient
     const checker = yield* ListingAvailabilityChecker

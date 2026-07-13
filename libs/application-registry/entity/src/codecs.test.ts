@@ -112,14 +112,22 @@ describe('application registry database schemas', () => {
       source: 'web',
     })
     const mutable = Schema.decodeUnknownSync(ApplicationMutableSchema)({
+      canonicalUrl: 'https://example.test/jobs/updated',
+      company: 'Updated Example',
       details: null,
       fitScore: null,
+      location: null,
+      role: 'Staff Engineer',
+      source: 'official',
+      sourceJobId: null,
     })
 
     expect(writable.fitScore).toBeUndefined()
     expect(nullableWritable.details).toBeNull()
     expect(nullableWritable.fitScore).toBeNull()
     expect(mutable.details).toBeNull()
+    expect(mutable.company).toBe('Updated Example')
+    expect(mutable.location).toBeNull()
   })
 
   test('derives event insert optionality and lifecycle classifications once', () => {

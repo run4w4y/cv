@@ -183,6 +183,10 @@ const makeApplicationRegistryClient = Effect.gen(function* () {
         send: normalizeHttpFailure(capture(request)),
       })
     },
+    create: (request) =>
+      normalizeHttpFailure(
+        api.registry.createApplication({ payload: request })
+      ),
     captures: (identifier) =>
       normalizeHttpFailure(
         api.registry.listApplicationCaptures({ params: { id: identifier } })
@@ -198,8 +202,48 @@ const makeApplicationRegistryClient = Effect.gen(function* () {
       normalizeHttpFailure(
         api.registry.listApplicationEvents({ params: { id: identifier } })
       ),
+    facets: () => normalizeHttpFailure(api.registry.listApplicationFacets()),
+    health: () => normalizeHttpFailure(api.health()),
+    labels: (identifier) =>
+      normalizeHttpFailure(
+        api.registry.listApplicationLabels({ params: { id: identifier } })
+      ),
     list: (query) =>
       normalizeHttpFailure(api.registry.listApplications({ query })),
+    listEvents: (query) =>
+      normalizeHttpFailure(api.registry.listEvents({ query })),
+    listingCheckRun: (identifier) =>
+      normalizeHttpFailure(
+        api.registry.getListingCheckRun({ params: { id: identifier } })
+      ),
+    listingChecks: (identifier) =>
+      normalizeHttpFailure(
+        api.registry.listApplicationListingChecks({
+          params: { id: identifier },
+        })
+      ),
+    outbox: () => outbox.list(),
+    patch: (identifier, request) =>
+      normalizeHttpFailure(
+        api.registry.patchApplication({
+          params: { id: identifier },
+          payload: request,
+        })
+      ),
+    remove: (identifier, expectedVersion) =>
+      normalizeHttpFailure(
+        api.registry.deleteApplication({
+          params: { id: identifier },
+          query: { expectedVersion },
+        })
+      ),
+    replaceLabels: (identifier, request) =>
+      normalizeHttpFailure(
+        api.registry.replaceApplicationLabels({
+          params: { id: identifier },
+          payload: request,
+        })
+      ),
     show: (identifier) =>
       normalizeHttpFailure(
         api.registry.getApplication({ params: { id: identifier } })
@@ -251,6 +295,10 @@ const makeApplicationRegistryClient = Effect.gen(function* () {
         synced: results.length - failed.length,
       }
     }),
+    upsert: (request) =>
+      normalizeHttpFailure(
+        api.registry.upsertApplication({ payload: request })
+      ),
   } satisfies ApplicationRegistryClientService
 })
 

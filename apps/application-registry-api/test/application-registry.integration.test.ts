@@ -72,3 +72,68 @@ test('maps live service not-found and conflict failures to HTTP statuses', async
     'conflict'
   )
 })
+
+test('exposes create-only CRUD, cross-field search, metadata patches, and optimistic deletion', async () => {
+  const createdResponse = await harness.fetchRegistry('/v1/applications', {
+    body: JSON.stringify(applicationInput),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  })
+  assert.equal(createdResponse.status, 200)
+  const created = Schema.decodeUnknownSync(
+    Schema.Struct({ id: Schema.String, version: Schema.Number })
+  )(await createdResponse.json())
+
+  const duplicate = await harness.fetchRegistry('/v1/applications', {
+    body: JSON.stringify(applicationInput),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  })
+  assert.equal(duplicate.status, 409)
+
+  const searched = await harness.fetchRegistry(
+    '/v1/applications?q=e2e-registry&limit=100'
+  )
+  assert.equal(searched.status, 200)
+  const searchResult = Schema.decodeUnknownSync(
+    Schema.Struct({ items: Schema.Array(Schema.Struct({ id: Schema.String })) })
+  )(await searched.json())
+  assert.deepEqual(searchResult.items, [{ id: created.id }])
+
+  const patchResponse = await harness.fetchRegistry(
+    `/v1/applications/${created.id}`,
+    {
+      body: JSON.stringify({
+        canonicalUrl: 'https://example.com/jobs/e2e-registry-updated',
+        company: 'Updated Example Company',
+        expectedVersion: created.version,
+        location: 'Remote from Europe',
+        role: 'Updated Integration Engineer',
+        source: 'official',
+        sourceJobId: 'official-42',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    }
+  )
+  assert.equal(patchResponse.status, 200)
+  const patched = Schema.decodeUnknownSync(
+    Schema.Struct({
+      company: Schema.String,
+      version: Schema.Number,
+    })
+  )(await patchResponse.json())
+  assert.equal(patched.company, 'Updated Example Company')
+
+  const staleDelete = await harness.fetchRegistry(
+    `/v1/applications/${created.id}?expectedVersion=${created.version}`,
+    { method: 'DELETE' }
+  )
+  assert.equal(staleDelete.status, 409)
+
+  const removed = await harness.fetchRegistry(
+    `/v1/applications/${created.id}?expectedVersion=${patched.version}`,
+    { method: 'DELETE' }
+  )
+  assert.equal(removed.status, 204)
+})

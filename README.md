@@ -147,7 +147,7 @@ bunx nx run private-content-link:link -- \
   --locale en \
   --base-url https://cv.example.com
 bunx nx run content-types:generate
-bunx nx run application-registry:registry -- list
+bunx nx run application-registry:registry -- application list
 ```
 
 See [apps/cv/README.md](apps/cv/README.md) for the app content model, route

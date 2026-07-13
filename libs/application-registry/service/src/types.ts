@@ -76,6 +76,7 @@ export type ListApplicationsInput = {
   readonly limit?: number
   readonly location?: string
   readonly personalPriority?: PersonalPriority | readonly PersonalPriority[]
+  readonly q?: string
   readonly role?: string
   readonly targetStage?: TargetStage | readonly TargetStage[]
   readonly url?: string

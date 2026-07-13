@@ -75,11 +75,19 @@ export const patchApplication = (
 
 export const removeApplication = (
   database: RegistryQueryDatabase,
-  applicationId: string
+  applicationId: string,
+  expectedVersion?: number
 ) =>
   database
     .delete(applications)
-    .where(eq(applications.id, applicationId))
+    .where(
+      and(
+        eq(applications.id, applicationId),
+        expectedVersion === undefined
+          ? undefined
+          : eq(applications.version, expectedVersion)
+      )
+    )
     .returning({ id: applications.id })
     .pipe(
       Effect.map((rows) => rows.length > 0),

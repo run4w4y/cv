@@ -194,6 +194,70 @@ const withTemporaryOutbox = <A, E>(
   }).pipe(Effect.provide(BunServices.layer))
 
 describe('application registry client', () => {
+  test('uses generated endpoints for operator CRUD, search, and health', async () => {
+    const requests: Array<{ method: string; url: string }> = []
+    const fetch = makeFetch(async (input, init) => {
+      const request = new Request(input, init)
+      requests.push({ method: request.method, url: request.url })
+      if (request.url.endsWith('/health')) {
+        return Response.json({ ok: true })
+      }
+      if (request.method === 'GET') {
+        return Response.json({
+          checkpoint: null,
+          items: [],
+          nextCursor: null,
+        })
+      }
+      if (request.method === 'DELETE') {
+        return new Response(null, { status: 204 })
+      }
+      return Response.json(application)
+    })
+
+    const result = await Effect.runPromise(
+      withTemporaryOutbox(
+        fetch,
+        Effect.gen(function* () {
+          const client = yield* ApplicationRegistryClient
+          const created = yield* client.create(application)
+          const searched = yield* client.list({ q: 'Example Engineer' })
+          const patched = yield* client.patch(application.id, {
+            company: 'Updated Example',
+            expectedVersion: application.version,
+          })
+          yield* client.remove(application.id, application.version)
+          const health = yield* client.health()
+          return { created, health, patched, searched }
+        })
+      )
+    )
+
+    expect(result.created).toEqual(application)
+    expect(result.patched).toEqual(application)
+    expect(result.searched.items).toEqual([])
+    expect(result.health).toEqual({ ok: true })
+    expect(requests).toEqual([
+      {
+        method: 'POST',
+        url: 'https://registry.example.test/v1/applications',
+      },
+      {
+        method: 'GET',
+        url: 'https://registry.example.test/v1/applications?q=Example+Engineer',
+      },
+      {
+        method: 'PATCH',
+        url: 'https://registry.example.test/v1/applications/application-1',
+      },
+      {
+        method: 'DELETE',
+        url: 'https://registry.example.test/v1/applications/application-1?expectedVersion=1',
+      },
+      { method: 'GET', url: 'https://registry.example.test/health' },
+    ])
+  })
+
   test('submits a durable batch of locally collected listing findings', async () => {
     let requestedUrl = ''
     let requestMethod = ''

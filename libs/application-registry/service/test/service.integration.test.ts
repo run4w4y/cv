@@ -5,7 +5,7 @@ import { makeRegistryCrudLive } from '@cv/application-registry-crud/live'
 import { RegistryMiniflareHarness } from '@cv/application-registry-crud/test-support'
 import { FxRates } from '@cv/application-registry-fx'
 import { ListingAvailabilityChecker } from '@cv/application-registry-listing-check'
-import { Duration, Effect, Layer, ManagedRuntime } from 'effect'
+import { Duration, Effect, Layer, ManagedRuntime, Result } from 'effect'
 
 import { ApplicationsService, ListingChecksService } from '../src'
 import { RegistryServicesLive } from '../src/live'
@@ -102,6 +102,63 @@ test('runs application defaults, patches, labels, and checkpoints over D1', asyn
   assert.equal(result.patched.fitScore, 91)
   assert.equal(result.patched.recommendedAction, 'Apply this week')
   assert.equal(result.patched.version, 2)
+})
+
+test('creates without replacement, searches identity fields, patches metadata, and deletes optimistically', async () => {
+  const result = await runtime.runPromise(
+    Effect.gen(function* () {
+      const applications = yield* ApplicationsService
+      const input = {
+        ...makeApplicationInput('operator-crud'),
+        sourceJobId: 'searchable-source-id-42',
+      }
+      const created = yield* applications.create(input)
+      const duplicate = yield* Effect.result(applications.create(input))
+      const search = yield* applications.list({
+        limit: 10,
+        q: 'source-id-42',
+      })
+      const patched = yield* applications.patch(created.id, {
+        canonicalUrl: 'https://example.test/jobs/operator-crud-updated',
+        company: 'Updated Operator Company',
+        expectedVersion: created.version,
+        location: 'Tokyo',
+        role: 'Staff Effect Engineer',
+        source: 'official-careers',
+        sourceJobId: 'updated-source-id',
+      })
+      const staleDelete = yield* Effect.result(
+        applications.remove(created.id, created.version)
+      )
+      yield* applications.remove(created.id, patched.version)
+      const removed = yield* Effect.result(applications.find(created.id))
+      return { created, duplicate, patched, removed, search, staleDelete }
+    })
+  )
+
+  assert.equal(result.created.version, 1)
+  assert.equal(
+    Result.isFailure(result.duplicate) ? result.duplicate.failure._tag : null,
+    'RegistryConflictError'
+  )
+  assert.deepEqual(
+    result.search.items.map(({ id }) => id),
+    [result.created.id]
+  )
+  assert.equal(result.patched.company, 'Updated Operator Company')
+  assert.equal(result.patched.role, 'Staff Effect Engineer')
+  assert.equal(result.patched.source, 'official-careers')
+  assert.equal(result.patched.location, 'Tokyo')
+  assert.equal(
+    Result.isFailure(result.staleDelete)
+      ? result.staleDelete.failure._tag
+      : null,
+    'RegistryConflictError'
+  )
+  assert.equal(
+    Result.isFailure(result.removed) ? result.removed.failure._tag : null,
+    'RegistryNotFoundError'
+  )
 })
 
 test('persists an explicit status transition and replays its event command', async () => {

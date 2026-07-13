@@ -15,6 +15,9 @@ import type {
 } from '../types'
 
 export interface ApplicationsService {
+  readonly create: (
+    input: UpsertApplicationInput
+  ) => Effect.Effect<Application, ApplicationRegistryError>
   readonly facets: () => Effect.Effect<
     ApplicationFacets,
     ApplicationRegistryError
@@ -33,7 +36,8 @@ export interface ApplicationsService {
     input: PatchApplicationInput
   ) => Effect.Effect<Application, ApplicationRegistryError>
   readonly remove: (
-    identifier: string
+    identifier: string,
+    expectedVersion?: number
   ) => Effect.Effect<void, ApplicationRegistryError>
   readonly replaceLabels: (
     identifier: string,

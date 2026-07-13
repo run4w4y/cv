@@ -72,7 +72,54 @@ const make = Effect.gen(function* () {
       .pipe(Effect.flatMap((value) => requireApplication(value, identifier)))
   )
 
+  const persistedApplication = Effect.fn(
+    'ApplicationsService.persistedApplication'
+  )(function* (request: UpsertApplicationInput, applicationId: string) {
+    return {
+      ...request,
+      applicationId,
+      compensations: decorateCompensations(request.compensations),
+      recordedAt: yield* registryNow,
+    } satisfies PersistedApplication
+  })
+
   return {
+    create: Effect.fn('ApplicationsService.create')(
+      (request: UpsertApplicationInput) =>
+        Effect.gen(function* () {
+          const applicationId = newRegistryId()
+          const input = yield* persistedApplication(request, applicationId)
+          yield* applications
+            .persist(input, {
+              mode: 'replace',
+              operation: 'application create',
+            })
+            .pipe(
+              Effect.catchTag(
+                'RegistryDatabaseError',
+                (
+                  failure
+                ): Effect.Effect<
+                  void,
+                  RegistryConflictError | RegistryDatabaseError
+                > =>
+                  applications.findByJobKey(request.jobKey).pipe(
+                    Effect.flatMap((existing) =>
+                      Effect.gen(function* () {
+                        if (existing) {
+                          return yield* new RegistryConflictError({
+                            message: `Application ${request.jobKey} already exists.`,
+                          })
+                        }
+                        return yield* failure
+                      })
+                    )
+                  )
+              )
+            )
+          return yield* find(applicationId)
+        })
+    ),
     facets: Effect.fn('ApplicationsService.facets')(() =>
       applications.facets()
     ),
@@ -94,6 +141,7 @@ const make = Effect.gen(function* () {
             location: query.location,
             now,
             personalPriority: asArray(query.personalPriority),
+            q: query.q,
             role: query.role,
             targetStage: asArray(query.targetStage),
             url: query.url,
@@ -171,16 +219,28 @@ const make = Effect.gen(function* () {
           return updated
         })
     ),
-    remove: Effect.fn('ApplicationsService.remove')((identifier: string) =>
-      Effect.gen(function* () {
-        const application = yield* find(identifier)
-        const removed = yield* applications.remove(application.id)
-        if (!removed) {
-          return yield* new RegistryConflictError({
-            message: 'The application changed while it was being removed.',
-          })
-        }
-      })
+    remove: Effect.fn('ApplicationsService.remove')(
+      (identifier: string, expectedVersion?: number) =>
+        Effect.gen(function* () {
+          const application = yield* find(identifier)
+          if (
+            expectedVersion !== undefined &&
+            expectedVersion !== application.version
+          ) {
+            return yield* new RegistryConflictError({
+              message: `Application version ${application.version} does not match expected version ${expectedVersion}.`,
+            })
+          }
+          const removed = yield* applications.remove(
+            application.id,
+            expectedVersion
+          )
+          if (!removed) {
+            return yield* new RegistryConflictError({
+              message: 'The application changed while it was being removed.',
+            })
+          }
+        })
     ),
     replaceLabels: Effect.fn('ApplicationsService.replaceLabels')(
       (identifier: string, labels: readonly string[]) =>
@@ -198,12 +258,7 @@ const make = Effect.gen(function* () {
         Effect.gen(function* () {
           const existing = yield* applications.findByJobKey(request.jobKey)
           const applicationId = existing?.id ?? newRegistryId()
-          const input: PersistedApplication = {
-            ...request,
-            applicationId,
-            compensations: decorateCompensations(request.compensations),
-            recordedAt: yield* registryNow,
-          }
+          const input = yield* persistedApplication(request, applicationId)
 
           yield* applications
             .persist(input, {

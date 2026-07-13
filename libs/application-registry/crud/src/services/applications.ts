@@ -43,7 +43,8 @@ export interface ApplicationsCrud {
     input: PersistedEvent
   ) => Effect.Effect<boolean, RegistryDatabaseError>
   readonly remove: (
-    applicationId: string
+    applicationId: string,
+    expectedVersion?: number
   ) => Effect.Effect<boolean, RegistryDatabaseError>
 }
 

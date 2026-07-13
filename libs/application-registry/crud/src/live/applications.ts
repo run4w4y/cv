@@ -54,8 +54,8 @@ export const makeApplicationsCrudLive = (database: Effect.Effect<D1Database>) =>
           input
         )
       ),
-    remove: (applicationId) =>
+    remove: (applicationId, expectedVersion) =>
       withRegistryConnections(database, ({ query }) =>
-        removeApplication(query, applicationId)
+        removeApplication(query, applicationId, expectedVersion)
       ),
   })

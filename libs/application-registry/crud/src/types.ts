@@ -39,6 +39,7 @@ export type ApplicationListFilter = {
   readonly location?: string
   readonly now: UtcIsoTimestamp
   readonly personalPriority?: readonly PersonalPriority[]
+  readonly q?: string
   readonly role?: string
   readonly targetStage?: readonly TargetStage[]
   readonly url?: string

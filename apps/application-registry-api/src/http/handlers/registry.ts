@@ -49,6 +49,9 @@ export const RegistryHandlersLayer = HttpApiBuilder.group(
       const listingChecks = yield* ListingChecksService
 
       return handlers
+        .handle('createApplication', ({ payload }) =>
+          expose(applications.create(payload))
+        )
         .handle('upsertApplication', ({ payload }) =>
           expose(applications.upsert(payload))
         )
@@ -65,8 +68,8 @@ export const RegistryHandlersLayer = HttpApiBuilder.group(
         .handle('patchApplication', ({ params, payload }) =>
           expose(applications.patch(params.id, payload))
         )
-        .handle('deleteApplication', ({ params }) =>
-          expose(applications.remove(params.id))
+        .handle('deleteApplication', ({ params, query }) =>
+          expose(applications.remove(params.id, query.expectedVersion))
         )
         .handle('listApplicationCaptures', ({ params }) =>
           expose(captures.listByApplication(params.id))

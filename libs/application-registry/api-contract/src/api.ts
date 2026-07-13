@@ -24,8 +24,10 @@ import {
   ApplicationAnnotationsResponseSchema,
   ApplicationFacetsResponseSchema,
   ApplicationIdentifierParamsSchema,
+  CreateApplicationRequestSchema,
   CreateCampaignCaptureRequestSchema,
   CreateCampaignCaptureResponseSchema,
+  DeleteApplicationQuerySchema,
   DeleteApplicationResponseSchema,
   HealthResponseSchema,
   ListApplicationCapturesResponseSchema,
@@ -70,6 +72,13 @@ export class PublicApi extends HttpApiGroup.make('public', {
 ) {}
 
 export class RegistryApi extends HttpApiGroup.make('registry')
+  .add(
+    HttpApiEndpoint.post('createApplication', '/applications', {
+      error: registryEndpointErrors,
+      payload: CreateApplicationRequestSchema,
+      success: ApplicationResponseSchema,
+    })
+  )
   .add(
     HttpApiEndpoint.put('upsertApplication', '/applications', {
       error: registryEndpointErrors,
@@ -116,6 +125,7 @@ export class RegistryApi extends HttpApiGroup.make('registry')
     HttpApiEndpoint.delete('deleteApplication', '/applications/:id', {
       error: registryEndpointErrors,
       params: ApplicationIdentifierParamsSchema,
+      query: DeleteApplicationQuerySchema,
       success: DeleteApplicationResponseSchema,
     })
   )

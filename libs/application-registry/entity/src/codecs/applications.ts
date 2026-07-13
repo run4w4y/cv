@@ -7,12 +7,17 @@ import {
 import { Schema } from 'effect'
 import { omit, pick } from 'es-toolkit/object'
 
-import { FitScoreSchema, UtcIsoTimestampSchema } from '../model/constraints'
+import {
+  ApplicationVersionSchema,
+  FitScoreSchema,
+  UtcIsoTimestampSchema,
+} from '../model/constraints'
 import { OpportunityDetailsSchema } from '../model/details'
 import { applications } from '../tables/applications'
 import { optionalNullableInsertField } from './optional-nullable-insert-field'
 
 const applicationSelectRefinements = {
+  version: () => ApplicationVersionSchema,
   details: () => OpportunityDetailsSchema,
   fitScore: () => FitScoreSchema,
   followUpAt: () => UtcIsoTimestampSchema,
@@ -93,6 +98,12 @@ export type ApplicationWritable = Schema.Schema.Type<
 >
 
 export const applicationMutableKeys = [
+  'source',
+  'sourceJobId',
+  'canonicalUrl',
+  'company',
+  'role',
+  'location',
   'applicationStatus',
   'targetStage',
   'personalPriority',

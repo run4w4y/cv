@@ -438,6 +438,7 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
   await Effect.runPromise(
     registry.registry.deleteApplication({
       params: { id: secondary.id },
+      query: {},
     })
   )
   const removed = await Effect.runPromise(

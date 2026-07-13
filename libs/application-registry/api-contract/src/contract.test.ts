@@ -3,6 +3,7 @@ import { Option, Schema } from 'effect'
 import {
   AddApplicationNoteCommandSchema,
   AppendApplicationEventCommandSchema,
+  DeleteApplicationQuerySchema as CommandDeleteApplicationQuerySchema,
   ListApplicationsQuerySchema as CommandListApplicationsQuerySchema,
   ListEventsQuerySchema as CommandListEventsQuerySchema,
   CreateCampaignCaptureCommandSchema,
@@ -13,7 +14,9 @@ import { applicationRegistryOpenApi } from './openapi'
 import {
   AddApplicationNoteRequestSchema,
   AppendApplicationEventRequestSchema,
+  CreateApplicationRequestSchema,
   CreateCampaignCaptureRequestSchema,
+  DeleteApplicationQuerySchema,
   ListApplicationsQuerySchema,
   ListApplicationsResponseSchema,
   ListEventsQuerySchema,
@@ -24,6 +27,7 @@ import {
 describe('application registry HTTP contract', () => {
   test('reuses the canonical request schemas by identity', () => {
     expect(UpsertApplicationRequestSchema).toBe(RegistryApplicationInputSchema)
+    expect(CreateApplicationRequestSchema).toBe(RegistryApplicationInputSchema)
     expect(PatchApplicationRequestSchema).toBe(PatchApplicationCommandSchema)
     expect(AddApplicationNoteRequestSchema).toBe(
       AddApplicationNoteCommandSchema
@@ -36,6 +40,9 @@ describe('application registry HTTP contract', () => {
     )
     expect(ListApplicationsQuerySchema).toBe(CommandListApplicationsQuerySchema)
     expect(ListEventsQuerySchema).toBe(CommandListEventsQuerySchema)
+    expect(DeleteApplicationQuerySchema).toBe(
+      CommandDeleteApplicationQuerySchema
+    )
   })
 
   test('distinguishes page continuation from the synchronization checkpoint', () => {
@@ -49,12 +56,25 @@ describe('application registry HTTP contract', () => {
     expect(page.nextCursor).toBeNull()
   })
 
+  test('accepts zero as an optimistic expected version', () => {
+    const patch = Schema.decodeUnknownSync(PatchApplicationRequestSchema)({
+      expectedVersion: 0,
+    })
+    const deletion = Schema.decodeUnknownSync(DeleteApplicationQuerySchema)({
+      expectedVersion: '0',
+    })
+
+    expect(patch.expectedVersion).toBe(0)
+    expect(deletion.expectedVersion).toBe(0)
+  })
+
   test('accepts single and repeated dashboard query filters', () => {
     const single = Schema.decodeUnknownSync(ListApplicationsQuerySchema)({
       applicationStatus: 'applied',
       currency: 'USD',
       followUpState: 'overdue',
       limit: '100',
+      q: 'effect engineer',
     })
     const repeated = Schema.decodeUnknownSync(ListApplicationsQuerySchema)({
       applicationStatus: ['applied', 'technical_screen'],
@@ -77,6 +97,7 @@ describe('application registry HTTP contract', () => {
     expect(single.applicationStatus).toBe('applied')
     expect(single.currency).toBe('USD')
     expect(single.limit).toBe(100)
+    expect(single.q).toBe('effect engineer')
     expect(repeated.applicationStatus).toEqual(['applied', 'technical_screen'])
     expect(repeated.fitScoreMax).toBe(100)
     expect(repeated.fitScoreMin).toBe(80)

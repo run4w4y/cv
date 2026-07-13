@@ -55,21 +55,25 @@ revisions, rather than UUID ordering, power synchronization.
 `GET /openapi.json` exposes the OpenAPI document generated from the same
 declaration used by handlers and the internal Effect client.
 
-- `PUT /v1/applications`: upsert a registry projection by job key.
+- `POST /v1/applications`: create a registry projection and return conflict when
+  its job key already exists.
+- `PUT /v1/applications`: explicitly upsert a registry projection by job key.
 - `POST /v1/captures`: atomically create/update an application, append its
   `campaign_prepared` event, and store the generated campaign capture.
 - `GET /v1/applications`: cursor-paginated application table data. Each row
   includes labels, a compensation summary, follow-up state, latest event
   metadata, and note/capture counts. `currency=USD` (or another ISO code)
   converts the displayed summary; `currency=original` leaves it unchanged.
-  Filters cover company, role,
+  Filters cover cross-field `q`, company, role,
   location, one or more lifecycle statuses, target stages, priorities, labels,
   follow-up states, and exact canonical URL.
 - `GET /v1/applications/facets`: sorted observed companies, statuses, target
   stages, priorities, and labels for dashboard controls.
 - `GET /v1/applications/:id`: fetch by application ID or exact job key.
-- `PATCH /v1/applications/:id`: update research and lifecycle fields.
-- `DELETE /v1/applications/:id`: remove an application aggregate.
+- `PATCH /v1/applications/:id`: update source identity metadata, research, and
+  lifecycle fields with optional optimistic version checking.
+- `DELETE /v1/applications/:id`: remove an application aggregate, optionally
+  guarded by `expectedVersion`.
 - `GET /v1/applications/:id/captures`: recover campaign submission details and
   artifact metadata stored for the application.
 - `GET /v1/applications/:id/compensations`: return original compensation and,

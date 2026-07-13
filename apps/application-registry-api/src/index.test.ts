@@ -53,7 +53,7 @@ describe('application registry worker', () => {
     )
     const wrongMethod = await worker.fetch(
       new Request('https://registry.example.test/v1/applications', {
-        method: 'POST',
+        method: 'PATCH',
       }),
       env,
       context

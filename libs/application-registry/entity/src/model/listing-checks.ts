@@ -1,13 +1,14 @@
 import { Schema } from 'effect'
 
-import { UtcIsoTimestampSchema } from './constraints'
+import {
+  NonEmptyTrimmedStringSchema as NonEmptyString,
+  UtcIsoTimestampSchema,
+} from './constraints'
 import {
   ListingCheckConfidenceSchema,
   ListingCheckOutcomeSchema,
   ListingCheckReasonSchema,
 } from './values'
-
-const NonEmptyString = Schema.Trim.pipe(Schema.check(Schema.isNonEmpty()))
 
 export const ListingCheckEvidenceSchema = Schema.Struct({
   code: Schema.NonEmptyString,

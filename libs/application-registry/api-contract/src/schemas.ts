@@ -20,6 +20,7 @@ import {
   CurrencyCodeSchema,
   type ListingCheckRun,
   ListingCheckRunSchema,
+  NonEmptyTrimmedStringSchema as NonEmptyString,
   type PersonalPriority,
   PersonalPrioritySchema,
   type TargetStage,
@@ -33,26 +34,29 @@ export type {
   AddApplicationNoteCommand as AddApplicationNoteRequest,
   AppendApplicationEventCommand as AppendApplicationEventRequest,
   CreateCampaignCaptureCommand as CreateCampaignCaptureRequest,
+  DeleteApplicationQuery,
   ListApplicationsQuery,
   ListEventsQuery,
   PatchApplicationCommand as PatchApplicationRequest,
   RegistryApplicationInput as UpsertApplicationRequest,
+  RegistryApplicationInput as CreateApplicationRequest,
   SubmitListingCheckFindingsCommand as SubmitListingCheckFindingsRequest,
 } from './commands'
 export {
   AddApplicationNoteCommandSchema as AddApplicationNoteRequestSchema,
   AppendApplicationEventCommandSchema as AppendApplicationEventRequestSchema,
   CreateCampaignCaptureCommandSchema as CreateCampaignCaptureRequestSchema,
+  DeleteApplicationQuerySchema,
   ListApplicationsQuerySchema,
   ListEventsQuerySchema,
+  ListLimitValueSchema,
   PatchApplicationCommandSchema as PatchApplicationRequestSchema,
   RegistryApplicationInputSchema as UpsertApplicationRequestSchema,
+  RegistryApplicationInputSchema as CreateApplicationRequestSchema,
   SubmitListingCheckFindingsCommandSchema as SubmitListingCheckFindingsRequestSchema,
 } from './commands'
 
 import { type FollowUpState, FollowUpStateSchema } from './commands'
-
-const NonEmptyString = Schema.Trim.pipe(Schema.check(Schema.isNonEmpty()))
 
 export const ApplicationIdentifierParamsSchema = Schema.Struct({
   id: NonEmptyString,
@@ -342,5 +346,6 @@ export const ListEventsResponseSchema: Schema.Codec<ListEventsResponse> =
   )
 
 export const HealthResponseSchema = Schema.Struct({ ok: Schema.Boolean })
+export type HealthResponse = Schema.Schema.Type<typeof HealthResponseSchema>
 
 export const DeleteApplicationResponseSchema = HttpApiSchema.NoContent

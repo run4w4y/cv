@@ -252,6 +252,7 @@ export const listApplications = (
     const limit = query.limit
     const company = query.company?.trim().toLocaleLowerCase('en-US')
     const location = query.location?.trim()
+    const q = query.q?.trim()
     const role = query.role?.trim()
     const baseQuery = database
       .select(applicationPublicColumns)
@@ -277,6 +278,17 @@ export const listApplications = (
             ? undefined
             : lte(applications.fitScore, query.fitScoreMax),
           location ? like(applications.location, `%${location}%`) : undefined,
+          q
+            ? or(
+                like(applications.jobKey, `%${q}%`),
+                like(applications.source, `%${q}%`),
+                like(applications.sourceJobId, `%${q}%`),
+                like(applications.canonicalUrl, `%${q}%`),
+                like(applications.company, `%${q}%`),
+                like(applications.role, `%${q}%`),
+                like(applications.location, `%${q}%`)
+              )
+            : undefined,
           role ? like(applications.role, `%${role}%`) : undefined,
           query.label && query.label.length > 0
             ? exists(

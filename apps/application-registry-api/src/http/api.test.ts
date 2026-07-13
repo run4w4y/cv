@@ -233,6 +233,7 @@ const makeRegistryLayer = (
       list: () => Effect.succeed({ labels: [], notes: [] }),
     }),
     Layer.succeed(ApplicationsService, {
+      create: () => Effect.succeed(application),
       facets: () =>
         Effect.succeed({
           applicationStatuses: [application.applicationStatus],

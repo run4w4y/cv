@@ -10,12 +10,14 @@ import {
   appendableApplicationEventKindValues,
   CampaignCaptureSchema,
   CurrencyCodeSchema,
+  ExpectedApplicationVersionSchema,
   FitScoreSchema,
   InformationalApplicationEventKindSchema,
   informationalApplicationEventKindValues,
   ListingCheckModeSchema,
   ListingCheckTargetSchema,
   ListingObservationSchema,
+  NonEmptyTrimmedStringSchema as NonEmptyString,
   PersonalPrioritySchema,
   StatusChangingApplicationEventKindSchema,
   statusChangingApplicationEventKindValues,
@@ -25,7 +27,6 @@ import {
 import { Schema, SchemaGetter } from 'effect'
 import { pick } from 'es-toolkit/object'
 
-const NonEmptyString = Schema.Trim.pipe(Schema.check(Schema.isNonEmpty()))
 const NullableNonEmptyString = Schema.NullOr(NonEmptyString)
 
 export const RegistryApplicationInputSchema = Schema.Struct({
@@ -44,7 +45,7 @@ export type RegistryApplicationInput = Schema.Schema.Type<
 
 export const PatchApplicationCommandSchema = Schema.Struct({
   ...ApplicationMutableSchema.fields,
-  expectedVersion: Schema.optional(Schema.Int),
+  expectedVersion: Schema.optional(ExpectedApplicationVersionSchema),
 })
 
 export type PatchApplicationCommand = Schema.Schema.Type<
@@ -148,8 +149,12 @@ export type SubmitListingCheckFindingsCommand = Schema.Schema.Type<
   typeof SubmitListingCheckFindingsCommandSchema
 >
 
+export const ListLimitValueSchema = Schema.Int.pipe(
+  Schema.check(Schema.isBetween({ minimum: 1, maximum: 100 }))
+)
+
 const ListLimitSchema = Schema.NumberFromString.pipe(
-  Schema.check(Schema.isInt(), Schema.isBetween({ minimum: 1, maximum: 100 }))
+  Schema.decodeTo(ListLimitValueSchema)
 )
 
 const FitScoreFromStringSchema = Schema.NumberFromString.pipe(
@@ -204,6 +209,7 @@ const ListApplicationsQueryFieldsSchema = Schema.Struct({
   personalPriority: Schema.optional(
     Schema.Union([PersonalPrioritySchema, Schema.Array(PersonalPrioritySchema)])
   ),
+  q: Schema.optional(NonEmptyString),
   role: Schema.optional(NonEmptyString),
   targetStage: Schema.optional(
     Schema.Union([TargetStageSchema, Schema.Array(TargetStageSchema)])
@@ -234,6 +240,18 @@ export const ListApplicationsQuerySchema =
 
 export type ListApplicationsQuery = Schema.Schema.Type<
   typeof ListApplicationsQuerySchema
+>
+
+export const DeleteApplicationQuerySchema = Schema.Struct({
+  expectedVersion: Schema.optional(
+    Schema.NumberFromString.pipe(
+      Schema.decodeTo(ExpectedApplicationVersionSchema)
+    )
+  ),
+})
+
+export type DeleteApplicationQuery = Schema.Schema.Type<
+  typeof DeleteApplicationQuerySchema
 >
 
 export const ListEventsQuerySchema = Schema.Struct({

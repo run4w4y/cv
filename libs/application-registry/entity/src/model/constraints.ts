@@ -2,6 +2,10 @@ import { Schema } from 'effect'
 
 export type JsonValue = Schema.Schema.Type<typeof Schema.Json>
 
+export const NonEmptyTrimmedStringSchema = Schema.Trim.pipe(
+  Schema.check(Schema.isNonEmpty())
+)
+
 const utcIsoTimestampPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u
 
 export const UtcIsoTimestampSchema = Schema.String.pipe(
@@ -15,6 +19,14 @@ export const CurrencyCodeSchema = Schema.String.pipe(
 )
 
 export type CurrencyCode = Schema.Schema.Type<typeof CurrencyCodeSchema>
+
+export const ApplicationVersionSchema = Schema.Int.pipe(
+  Schema.check(Schema.isGreaterThanOrEqualTo(1))
+)
+
+export const ExpectedApplicationVersionSchema = Schema.Int.pipe(
+  Schema.check(Schema.isGreaterThanOrEqualTo(0))
+)
 
 export const FitScoreSchema = Schema.Int.pipe(
   Schema.check(

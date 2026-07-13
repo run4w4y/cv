@@ -5,13 +5,20 @@ export {
 export * from './model'
 export {
   addApplicationNote,
+  createApplication,
   listApplicationAnnotations,
   listApplicationCaptures,
   listApplicationCompensations,
   listApplicationEvents,
+  listApplicationFacets,
   listApplications,
+  listRegistryEvents,
+  patchApplication,
+  removeApplication,
+  replaceApplicationLabels,
   showApplication,
   syncApplicationRegistry,
+  upsertApplication,
 } from './operations'
 export {
   type RegistryFailureDisposition,
