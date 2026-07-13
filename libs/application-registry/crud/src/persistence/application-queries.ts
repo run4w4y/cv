@@ -21,6 +21,7 @@ import {
   isNull,
   like,
   lt,
+  lte,
   max,
   or,
   type SQL,
@@ -244,6 +245,12 @@ export const listApplications = (
           query.personalPriority && query.personalPriority.length > 0
             ? inArray(applications.personalPriority, query.personalPriority)
             : undefined,
+          query.fitScoreMin === undefined
+            ? undefined
+            : gte(applications.fitScore, query.fitScoreMin),
+          query.fitScoreMax === undefined
+            ? undefined
+            : lte(applications.fitScore, query.fitScoreMax),
           location ? like(applications.location, `%${location}%`) : undefined,
           role ? like(applications.role, `%${role}%`) : undefined,
           query.label && query.label.length > 0

@@ -146,6 +146,7 @@ test('filters before pagination and returns dashboard details and facets', async
       },
     ],
     followUpAt: '2026-07-12T11:00:00.000Z',
+    fitScore: 85,
     jobKey: 'test:dashboard-past',
     labels: ['remote', 'priority'],
     location: 'Remote',
@@ -160,6 +161,7 @@ test('filters before pagination and returns dashboard details and facets', async
     canonicalUrl: 'https://example.test/jobs/dashboard-future',
     company: 'Beta Corp',
     followUpAt: '2026-07-12T13:00:00.000Z',
+    fitScore: 45,
     jobKey: 'test:dashboard-future',
     labels: ['remote'],
     personalPriority: 'low',
@@ -200,8 +202,18 @@ test('filters before pagination and returns dashboard details and facets', async
         limit: 10,
         now: recordedAt,
       })
+      const highFit = yield* applications.list({
+        fitScoreMin: 80,
+        limit: 10,
+        now: recordedAt,
+      })
+      const lowFit = yield* applications.list({
+        fitScoreMax: 50,
+        limit: 10,
+        now: recordedAt,
+      })
       const facets = yield* applications.facets()
-      return { facets, page, upcoming }
+      return { facets, highFit, lowFit, page, upcoming }
     })
   )
 
@@ -216,6 +228,14 @@ test('filters before pagination and returns dashboard details and facets', async
   assert.equal(result.page.items[0]?.latestEventKind, 'note_added')
   assert.deepEqual(
     result.upcoming.items.map(({ id }) => id),
+    [futureFollowUp.applicationId]
+  )
+  assert.deepEqual(
+    result.highFit.items.map(({ id }) => id),
+    [pastFollowUp.applicationId]
+  )
+  assert.deepEqual(
+    result.lowFit.items.map(({ id }) => id),
     [futureFollowUp.applicationId]
   )
   assert.deepEqual(result.facets, {

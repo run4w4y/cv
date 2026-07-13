@@ -4,7 +4,8 @@ import {
   type ApplicationRegistryHttpClientService,
   makeApplicationRegistryHttpClient,
 } from '@cv/application-registry-api-client'
-import { Effect, Redacted } from 'effect'
+import { ListApplicationsResponseSchema } from '@cv/application-registry-api-contract'
+import { Effect, Redacted, Schema } from 'effect'
 import * as FetchHttpClient from 'effect/unstable/http/FetchHttpClient'
 
 import { applicationInput, captureInput } from './fixtures'
@@ -109,6 +110,34 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
   assert.equal(patched.applicationStatus, 'preparing')
   assert.equal(patched.fitScore, 90)
   assert.equal(patched.version, created.version + 1)
+
+  const exactFit = await Effect.runPromise(
+    registry.registry.listApplications({
+      query: { fitScoreMax: 90, fitScoreMin: 90 },
+    })
+  )
+  assert.deepEqual(
+    exactFit.items.map((item) => item.id),
+    [applicationId]
+  )
+
+  const aboveFit = await Effect.runPromise(
+    registry.registry.listApplications({ query: { fitScoreMin: 91 } })
+  )
+  assert.deepEqual(aboveFit.items, [])
+
+  const blankFitResponse = await fetch(
+    new URL('/v1/applications?fitScoreMin=&fitScoreMax=', harness.url),
+    { headers: { authorization: `Bearer ${registryTestToken}` } }
+  )
+  assert.equal(blankFitResponse.status, 200)
+  const blankFitPage = Schema.decodeUnknownSync(ListApplicationsResponseSchema)(
+    await blankFitResponse.json()
+  )
+  assert.deepEqual(
+    blankFitPage.items.map((item) => item.id),
+    [applicationId]
+  )
 
   const staleVersion = await Effect.runPromise(
     Effect.flip(

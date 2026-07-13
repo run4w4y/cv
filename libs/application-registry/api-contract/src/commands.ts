@@ -10,6 +10,7 @@ import {
   appendableApplicationEventKindValues,
   CampaignCaptureSchema,
   CurrencyCodeSchema,
+  FitScoreSchema,
   InformationalApplicationEventKindSchema,
   informationalApplicationEventKindValues,
   PersonalPrioritySchema,
@@ -18,7 +19,7 @@ import {
   TargetStageSchema,
   UtcIsoTimestampSchema,
 } from '@cv/application-registry-entity'
-import { Schema } from 'effect'
+import { Schema, SchemaGetter } from 'effect'
 import { pick } from 'es-toolkit/object'
 
 const NonEmptyString = Schema.Trim.pipe(Schema.check(Schema.isNonEmpty()))
@@ -121,6 +122,22 @@ const ListLimitSchema = Schema.NumberFromString.pipe(
   Schema.check(Schema.isInt(), Schema.isBetween({ minimum: 1, maximum: 100 }))
 )
 
+const FitScoreFromStringSchema = Schema.NumberFromString.pipe(
+  Schema.decodeTo(FitScoreSchema)
+)
+
+const OptionalFitScoreQueryValueSchema = Schema.Union([
+  Schema.Literal(''),
+  FitScoreFromStringSchema,
+]).pipe(
+  Schema.decodeTo(Schema.UndefinedOr(FitScoreSchema), {
+    decode: SchemaGetter.transform((value) =>
+      value === '' ? undefined : value
+    ),
+    encode: SchemaGetter.transform((value) => value ?? ''),
+  })
+)
+
 export const CompensationDisplayCurrencySchema = Schema.Union([
   Schema.Literal('original'),
   CurrencyCodeSchema,
@@ -134,7 +151,7 @@ export const FollowUpStateSchema = Schema.Literals([
 
 export type FollowUpState = Schema.Schema.Type<typeof FollowUpStateSchema>
 
-export const ListApplicationsQuerySchema = Schema.Struct({
+const ListApplicationsQueryFieldsSchema = Schema.Struct({
   after: Schema.optional(NonEmptyString),
   applicationStatus: Schema.optional(
     Schema.Union([
@@ -144,6 +161,8 @@ export const ListApplicationsQuerySchema = Schema.Struct({
   ),
   company: Schema.optional(NonEmptyString),
   currency: Schema.optional(CompensationDisplayCurrencySchema),
+  fitScoreMax: Schema.optional(OptionalFitScoreQueryValueSchema),
+  fitScoreMin: Schema.optional(OptionalFitScoreQueryValueSchema),
   followUpState: Schema.optional(
     Schema.Union([FollowUpStateSchema, Schema.Array(FollowUpStateSchema)])
   ),
@@ -161,6 +180,27 @@ export const ListApplicationsQuerySchema = Schema.Struct({
   ),
   url: Schema.optional(NonEmptyString),
 })
+
+type ListApplicationsQueryFields = Schema.Schema.Type<
+  typeof ListApplicationsQueryFieldsSchema
+>
+
+export const ListApplicationsQuerySchema =
+  ListApplicationsQueryFieldsSchema.pipe(
+    Schema.check(
+      Schema.makeFilter((query: ListApplicationsQueryFields) =>
+        query.fitScoreMin !== undefined &&
+        query.fitScoreMax !== undefined &&
+        query.fitScoreMin > query.fitScoreMax
+          ? {
+              issue:
+                'fitScoreMax must be greater than or equal to fitScoreMin.',
+              path: ['fitScoreMax'],
+            }
+          : undefined
+      )
+    )
+  )
 
 export type ListApplicationsQuery = Schema.Schema.Type<
   typeof ListApplicationsQuerySchema

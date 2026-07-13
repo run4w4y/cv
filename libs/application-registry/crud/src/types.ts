@@ -23,6 +23,8 @@ export type ApplicationListFilter = {
   readonly afterRevision?: number
   readonly applicationStatus?: readonly ApplicationStatus[]
   readonly company?: string
+  readonly fitScoreMax?: number
+  readonly fitScoreMin?: number
   readonly followUpState?: readonly FollowUpState[]
   readonly label?: readonly string[]
   readonly limit: number

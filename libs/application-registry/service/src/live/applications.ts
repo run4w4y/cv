@@ -86,6 +86,8 @@ const make = Effect.gen(function* () {
             afterRevision: cursor?.revision,
             applicationStatus: asArray(query.applicationStatus),
             company: query.company,
+            fitScoreMax: query.fitScoreMax,
+            fitScoreMin: query.fitScoreMin,
             followUpState: asArray(query.followUpState),
             label: asArray(query.label),
             limit: query.limit ?? 50,

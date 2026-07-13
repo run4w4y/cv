@@ -88,7 +88,7 @@ jobs:
             .title == "CV Applications" and
             ([.panels[] | .targets[]? | select(
               .url == "${registry_api_url}/v1/applications"
-            )] | map(.refId) == ["A", "B", "C", "D1", "D2"]) and
+            )] | map(.refId) == ["E", "A", "B", "C", "D1", "D2"]) and
             ([.panels[] | .targets[]? | select(
               .url == "${registry_api_url}/v1/events"
             )] | length == 1) and
@@ -112,7 +112,9 @@ jobs:
               .url == "${registry_api_url}/v1/applications"
             )] | all(
               any(.url_options.params[]?; .key == "currency" and .value == "$${compensationCurrency}") and
-              all(.url_options.params[]?; .key != "view" and .key != "fitScoreMin" and .key != "fitScoreMax")
+              any(.url_options.params[]?; .key == "fitScoreMin" and .value == "$${fitScoreMin}") and
+              any(.url_options.params[]?; .key == "fitScoreMax" and .value == "$${fitScoreMax}") and
+              all(.url_options.params[]?; .key != "view")
             )) and
             ([.panels[] | .targets[]? | select(.datasource.uid == "-- Dashboard --")] | all(
               .panelId == 20 and .withTransforms == true
@@ -124,7 +126,11 @@ jobs:
               .transformations[0].options.include == "$${view}" and
               any(.transformations[]; .id == "sortBy" and .options.sort[0].field == "viewSort") and
               ([.transformations[] | select(.id == "filterByValue") | .options.filters[]? | .config.id] |
-                index("greaterOrEqual") != null and index("lowerOrEqual") != null)
+                index("greaterOrEqual") == null and index("lowerOrEqual") == null)
+            ) and
+            (.templating.list[] | select(.name == "view") |
+              .current.value == "E" and
+              (.options | map(.value)) == ["E", "A", "B", "C", "D1|D2"]
             ) and
             (.templating.list | map(.name) == [
               "view",
