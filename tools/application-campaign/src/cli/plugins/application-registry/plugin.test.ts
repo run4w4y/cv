@@ -15,6 +15,8 @@ import {
   type ApplicationRegistryCampaignCaptureRequest,
   type ApplicationRegistryCampaignClient,
   applicationRegistryAnalysisResultKey,
+  applicationRegistryConflictResolutionsKey,
+  applicationRegistryFitAssessmentResultKey,
   makeApplicationRegistryCampaignPlugin,
 } from './index'
 
@@ -24,8 +26,25 @@ const client = (
   capture: ApplicationRegistryCampaignClient['capture']
 ): ApplicationRegistryCampaignClient => ({
   capture,
+  list: () => unexpected,
   sync: () => unexpected,
 })
+
+const fitAssessment = {
+  dimensions: {
+    coreExperience: 21,
+    hardRequirements: 34,
+    practicalEligibility: 8,
+    preferredSignals: 7,
+    seniorityAndScope: 13,
+  },
+  gaps: ['The posting does not confirm every preferred platform skill.'],
+  hardBlockers: [],
+  rationale: 'The CV directly supports the core platform requirements.',
+  rubricVersion: 'application-fit-v1',
+  score: 83,
+  strengths: ['Direct distributed TypeScript platform experience.'],
+} as const
 
 const recommendation: PreparedCampaign['recommendation'] = {
   coverLetter: { body: 'Letter', subject: 'Subject' },
@@ -145,14 +164,17 @@ describe('application registry campaign plugin', () => {
     })
 
     expect(
-      failTarget.steps.find((step) => step.scope === 'run')?.failurePolicy
-    ).toBe('warn')
+      failTarget.steps
+        .filter((step) => step.scope === 'run')
+        .map((step) => step.failurePolicy)
+    ).toEqual(['warn', 'fail-run'])
     expect(
       failTarget.steps
         .filter((step) => step.scope === 'target')
         .map((step) => step.failurePolicy)
     ).toEqual(['fail-target', 'fail-target'])
     expect(failRun.steps.map((step) => step.failurePolicy)).toEqual([
+      'fail-run',
       'fail-run',
       'fail-run',
       'fail-run',
@@ -211,6 +233,11 @@ describe('application registry campaign plugin', () => {
         }),
         workflowOutput(targetPreparedCampaignKey, campaign),
         workflowOutput(applicationRegistryAnalysisResultKey, registryAnalysis),
+        workflowOutput(applicationRegistryConflictResolutionsKey, {}),
+        workflowOutput(
+          applicationRegistryFitAssessmentResultKey,
+          fitAssessment
+        ),
       ])
     )
     const capture = plugin.steps.find(
@@ -219,6 +246,7 @@ describe('application registry campaign plugin', () => {
 
     expect(plugin.steps.map((step) => step.id)).toEqual([
       'application-registry.sync',
+      'application-registry.resolve-conflicts',
       'application-registry.analysis',
       'application-registry.capture',
     ])
@@ -237,6 +265,8 @@ describe('application registry campaign plugin', () => {
       jobContentHash: '0'.repeat(64),
       jobKey: 'url:https://jobs.example.com/engineer',
       compensations: registryAnalysis.compensations,
+      fitAssessment,
+      fitScore: 83,
       remotePolicy: 'Remote',
       submissionDetails,
       targetStage: 'apply_next',
@@ -263,6 +293,11 @@ describe('application registry campaign plugin', () => {
         workflowOutput(
           applicationRegistryAnalysisResultKey,
           emptyRegistryAnalysis
+        ),
+        workflowOutput(applicationRegistryConflictResolutionsKey, {}),
+        workflowOutput(
+          applicationRegistryFitAssessmentResultKey,
+          fitAssessment
         ),
       ])
     )

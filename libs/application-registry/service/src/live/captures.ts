@@ -4,8 +4,9 @@ import {
   OperationsCrud,
   type PersistedCapture,
 } from '@cv/application-registry-crud'
+import { normalizeApplicationCanonicalUrl } from '@cv/application-registry-entity'
 import { Effect, Layer } from 'effect'
-
+import { RegistryConflictError } from '../errors'
 import { operationRequestSignature } from '../internal/operation-request-signature'
 import {
   decorateCompensations,
@@ -86,19 +87,90 @@ const make = Effect.gen(function* () {
           const replay = yield* findValidatedOperation(operations, identity)
           if (replay) return yield* loadResult(identity, true)
 
+          const canonicalUrl = normalizeApplicationCanonicalUrl(
+            request.canonicalUrl
+          )
           const existing = yield* applications.findByJobKey(request.jobKey)
-          const applicationId = existing?.id ?? newRegistryId()
+          const canonicalMatches = existing
+            ? []
+            : yield* applications.findByCanonicalUrl(canonicalUrl)
+          const resolution = request.identityResolution
+          const resolved = yield* existing
+            ? Effect.succeed({
+                application: existing,
+                identityAlias: undefined,
+                writeMode: 'capture' as const,
+              })
+            : canonicalMatches.length === 0
+              ? Effect.succeed({
+                  application: undefined,
+                  identityAlias: undefined,
+                  writeMode: 'capture' as const,
+                })
+              : resolution?.strategy === 'keep-both'
+                ? Effect.succeed({
+                    application: undefined,
+                    identityAlias: undefined,
+                    writeMode: 'capture' as const,
+                  })
+                : resolution?.strategy === 'merge' ||
+                    resolution?.strategy === 'replace'
+                  ? Effect.gen(function* () {
+                      const target = canonicalMatches.find(
+                        (application) =>
+                          application.id === resolution.applicationId
+                      )
+                      if (!target) {
+                        return yield* new RegistryConflictError({
+                          message:
+                            'The selected identity-conflict application is no longer a candidate.',
+                        })
+                      }
+                      if (target.version !== resolution.expectedVersion) {
+                        return yield* new RegistryConflictError({
+                          message: `Application version ${target.version} does not match identity resolution version ${resolution.expectedVersion}.`,
+                        })
+                      }
+                      return {
+                        application: target,
+                        identityAlias: request.jobKey,
+                        writeMode:
+                          resolution.strategy === 'replace'
+                            ? ('replace' as const)
+                            : ('capture' as const),
+                      }
+                    })
+                  : Effect.fail(
+                      new RegistryConflictError({
+                        message: `Canonical URL ${canonicalUrl} already belongs to ${canonicalMatches
+                          .map(
+                            (application) =>
+                              `${application.id} (${application.jobKey}, version ${application.version})`
+                          )
+                          .join(
+                            ', '
+                          )}. Supply an explicit identity resolution.`,
+                      })
+                    )
+          const applicationId = resolved.application?.id ?? newRegistryId()
           const eventId = newRegistryId()
           const captureId = newRegistryId()
           const recordedAt = yield* registryNow
+          const { identityResolution: _, ...captureRequest } = request
           const input: PersistedCapture = {
-            ...request,
+            ...captureRequest,
             applicationId,
+            canonicalUrl,
             captureId,
             compensations: decorateCompensations(request.compensations),
             eventId,
+            fitAssessment: request.fitAssessment ?? null,
+            fitScore: request.fitAssessment?.score ?? request.fitScore,
+            identityAlias: resolved.identityAlias,
+            jobKey: resolved.application?.jobKey ?? request.jobKey,
             recordedAt,
             operationRequestSignature: identity.operationRequestSignature,
+            writeMode: resolved.writeMode,
           }
           const replayed = yield* persistWithRaceRecovery(identity, input)
           return yield* loadResult(identity, replayed)

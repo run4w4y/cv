@@ -10,6 +10,7 @@ import {
   campaignMaterialsModes,
   codexReasoningEfforts,
   PositiveIntegerSchema,
+  registryConflictStrategies,
 } from '../config/model'
 import { resolvePrepareCampaignOptions } from '../config/resolve'
 import { parseCommaList } from '../config/targets'
@@ -83,7 +84,23 @@ const materials = Flag.choice('materials', campaignMaterialsModes).pipe(
   ),
   Flag.optional
 )
-const model = optionalString('model', 'Codex model override.')
+const analysisModel = optionalString(
+  'analysis-model',
+  'Codex model override for first-pass job analysis and profile shortlisting.'
+)
+const analysisReasoningEffort = Flag.choice(
+  'analysis-reasoning-effort',
+  codexReasoningEfforts
+).pipe(
+  Flag.withDescription(
+    'Codex reasoning effort for first-pass job analysis and profile shortlisting.'
+  ),
+  Flag.optional
+)
+const model = optionalString(
+  'model',
+  'Codex model override for both AI stages.'
+)
 const outDir = optionalString(
   'out',
   'Campaign artifact output directory. With multiple URLs this becomes the batch output root.'
@@ -109,14 +126,34 @@ const profile = Flag.string('profile').pipe(
   ),
   Flag.optional
 )
+const recommendationModel = optionalString(
+  'recommendation-model',
+  'Codex model override for the final recommendation and applicant-facing drafts.'
+)
+const recommendationReasoningEffort = Flag.choice(
+  'recommendation-reasoning-effort',
+  codexReasoningEfforts
+).pipe(
+  Flag.withDescription(
+    'Codex reasoning effort for the final recommendation and applicant-facing drafts.'
+  ),
+  Flag.optional
+)
 const reasoningEffort = Flag.choice(
   'reasoning-effort',
   codexReasoningEfforts
 ).pipe(
-  Flag.withDescription(
-    'Codex reasoning effort for profile selection and recommendation.'
-  ),
+  Flag.withDescription('Codex reasoning effort override for both AI stages.'),
   Flag.optional
+)
+const registryConflictStrategy = Flag.choice(
+  'registry-conflict-strategy',
+  registryConflictStrategies
+).pipe(
+  Flag.withDefault('prompt'),
+  Flag.withDescription(
+    'How the application-registry plugin handles an existing canonical URL with a different identity.'
+  )
 )
 const concurrency = Flag.integer('concurrency').pipe(
   Flag.withSchema(PositiveIntegerSchema),
@@ -149,6 +186,8 @@ const setExitCodeFromResult = (result: PreparedCampaignRun) =>
 export const prepareCommand = Command.make(
   'application-campaign',
   {
+    analysisModel,
+    analysisReasoningEffort,
     audience,
     baseUrl,
     codexBin,
@@ -164,7 +203,10 @@ export const prepareCommand = Command.make(
     output,
     pdfOutDir,
     profile,
+    recommendationModel,
+    recommendationReasoningEffort,
     reasoningEffort,
+    registryConflictStrategy,
     skipBuild,
     skipPdf,
     urlFile,
@@ -179,6 +221,8 @@ export const prepareCommand = Command.make(
           onSome: (level) => level !== 'None',
         })
         const { advisor, campaign } = yield* resolvePrepareCampaignOptions({
+          analysisModel: option(options.analysisModel),
+          analysisReasoningEffort: option(options.analysisReasoningEffort),
           audience: option(options.audience),
           baseUrl: option(options.baseUrl),
           codexBin: option(options.codexBin),
@@ -196,7 +240,12 @@ export const prepareCommand = Command.make(
           outRoot: option(options.outRoot),
           pdfOutDir: option(options.pdfOutDir),
           profile: option(options.profile),
+          recommendationModel: option(options.recommendationModel),
+          recommendationReasoningEffort: option(
+            options.recommendationReasoningEffort
+          ),
           reasoningEffort: option(options.reasoningEffort),
+          registryConflictStrategy: options.registryConflictStrategy,
           skipBuild: options.skipBuild,
           skipPdf: options.skipPdf,
           urlFileContents: option(options.urlFile),

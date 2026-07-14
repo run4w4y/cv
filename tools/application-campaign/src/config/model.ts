@@ -5,7 +5,8 @@ export const defaultContentRoot = '../cv-content'
 export const defaultCampaignOutRoot = '.cv-work/applications'
 export const defaultPdfOutDir = '.cv-work/application-pdfs'
 export const defaultLocale = 'en'
-export const defaultCodexModel = 'gpt-5.5'
+export const defaultCodexAnalysisModel = 'gpt-5.6-terra'
+export const defaultCodexRecommendationModel = 'gpt-5.6-sol'
 export const defaultCampaignConcurrency = 2
 
 export const campaignMaterialsModes = ['all', 'none'] as const
@@ -15,6 +16,17 @@ export const CampaignMaterialsModeSchema = Schema.Literals(
 export type CampaignMaterialsMode = Schema.Schema.Type<
   typeof CampaignMaterialsModeSchema
 >
+
+export const registryConflictStrategies = [
+  'prompt',
+  'abort',
+  'merge',
+  'replace',
+  'keep-both',
+  'skip',
+] as const
+export type RegistryConflictStrategy =
+  (typeof registryConflictStrategies)[number]
 
 export const codexReasoningEfforts = [
   'minimal',
@@ -28,7 +40,9 @@ export type CodexReasoningEffort = Schema.Schema.Type<
   typeof CodexReasoningEffortSchema
 >
 
-export const defaultCodexReasoningEffort: CodexReasoningEffort = 'medium'
+export const defaultCodexAnalysisReasoningEffort: CodexReasoningEffort = 'low'
+export const defaultCodexRecommendationReasoningEffort: CodexReasoningEffort =
+  'low'
 
 export const PositiveIntegerSchema = Schema.Int.check(Schema.isGreaterThan(0))
 
@@ -50,6 +64,7 @@ export type PrepareCampaignOptions = {
   readonly outDir: string
   readonly pdfOutDir: string
   readonly profile?: ProfileSlug
+  readonly registryConflictStrategy?: RegistryConflictStrategy
   readonly skipBuild: boolean
   readonly skipPdf: boolean
   readonly targets: readonly PrepareCampaignTarget[]
@@ -57,6 +72,8 @@ export type PrepareCampaignOptions = {
 }
 
 export type PrepareCampaignOverrides = {
+  readonly analysisModel?: string
+  readonly analysisReasoningEffort?: CodexReasoningEffort
   readonly audience?: string
   readonly baseUrl?: WebBaseUrl
   readonly codexBin?: string
@@ -71,6 +88,9 @@ export type PrepareCampaignOverrides = {
   readonly outRoot?: string
   readonly pdfOutDir?: string
   readonly profile?: ProfileSlug
+  readonly recommendationModel?: string
+  readonly recommendationReasoningEffort?: CodexReasoningEffort
+  readonly registryConflictStrategy?: RegistryConflictStrategy
   readonly reasoningEffort?: CodexReasoningEffort
   readonly skipBuild?: boolean
   readonly skipPdf?: boolean

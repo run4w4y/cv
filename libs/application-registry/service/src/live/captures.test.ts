@@ -48,10 +48,11 @@ const captureReceipt = (captureId = capture.id) =>
 
 const live = (
   captureLayer = capturesCrudLayer(),
-  operationLayer = operationsCrudLayer()
+  operationLayer = operationsCrudLayer(),
+  applicationLayer = applicationsCrudLayer()
 ) =>
   CapturesServiceLive.pipe(
-    Layer.provide(applicationsCrudLayer()),
+    Layer.provide(applicationLayer),
     Layer.provide(captureLayer),
     Layer.provide(operationLayer)
   )
@@ -112,5 +113,150 @@ describe('CapturesService', () => {
 
     expect(result.replayed).toBe(true)
     expect(wrote).toBe(false)
+  })
+
+  test('requires an explicit resolution for a canonical URL conflict', async () => {
+    const conflict = {
+      ...request,
+      jobKey: 'url:https://example.test/jobs/one',
+    }
+    const error = await Effect.runPromise(
+      CapturesService.use((service) => service.capture(conflict)).pipe(
+        Effect.flip,
+        Effect.provide(
+          live(
+            capturesCrudLayer(),
+            operationsCrudLayer(),
+            applicationsCrudLayer({
+              findByCanonicalUrl: () => Effect.succeed([application]),
+              findByJobKey: () => Effect.succeed(undefined),
+            })
+          )
+        )
+      )
+    )
+
+    expect(error._tag).toBe('RegistryConflictError')
+  })
+
+  test.each([
+    'merge',
+    'replace',
+  ] as const)('%s resolves the conflict onto the selected application', async (strategy) => {
+    let persisted: PersistedCapture | undefined
+    let stored = false
+    const incomingJobKey = 'url:https://example.test/jobs/one'
+    const resolvedRequest: CreateCampaignCaptureInput = {
+      ...request,
+      identityResolution: {
+        applicationId: application.id,
+        expectedVersion: application.version,
+        strategy,
+      },
+      jobKey: incomingJobKey,
+    }
+    await Effect.runPromise(
+      CapturesService.use((service) => service.capture(resolvedRequest)).pipe(
+        Effect.provide(
+          live(
+            capturesCrudLayer({
+              findByOperation: () => Effect.succeed(capture),
+              persist: (input) => {
+                persisted = input
+                stored = true
+                return Effect.void
+              },
+            }),
+            operationsCrudLayer({
+              find: () =>
+                Effect.succeed(
+                  stored
+                    ? receipt({
+                        applicationId: application.id,
+                        captureId: persisted?.captureId ?? null,
+                        kind: 'campaign_capture',
+                        operationId: resolvedRequest.operationId,
+                        operationRequestSignature: operationRequestSignature(
+                          'campaign_capture',
+                          resolvedRequest
+                        ),
+                      })
+                    : undefined
+                ),
+            }),
+            applicationsCrudLayer({
+              findByCanonicalUrl: () => Effect.succeed([application]),
+              findByJobKey: () => Effect.succeed(undefined),
+            })
+          )
+        )
+      )
+    )
+
+    expect(persisted).toMatchObject({
+      applicationId: application.id,
+      identityAlias: incomingJobKey,
+      jobKey: application.jobKey,
+      writeMode: strategy === 'replace' ? 'replace' : 'capture',
+    })
+  })
+
+  test('keep-both creates an explicitly distinct application', async () => {
+    let persisted: PersistedCapture | undefined
+    let stored = false
+    const resolvedRequest: CreateCampaignCaptureInput = {
+      ...request,
+      identityResolution: {
+        reason: 'The roles are genuinely distinct.',
+        strategy: 'keep-both',
+      },
+      jobKey: 'url:https://example.test/jobs/one',
+    }
+
+    await Effect.runPromise(
+      CapturesService.use((service) => service.capture(resolvedRequest)).pipe(
+        Effect.provide(
+          live(
+            capturesCrudLayer({
+              findByOperation: () => Effect.succeed(capture),
+              persist: (input) => {
+                persisted = input
+                stored = true
+                return Effect.void
+              },
+            }),
+            operationsCrudLayer({
+              find: () =>
+                Effect.succeed(
+                  stored
+                    ? receipt({
+                        applicationId:
+                          persisted?.applicationId ?? application.id,
+                        captureId: persisted?.captureId ?? null,
+                        kind: 'campaign_capture',
+                        operationId: resolvedRequest.operationId,
+                        operationRequestSignature: operationRequestSignature(
+                          'campaign_capture',
+                          resolvedRequest
+                        ),
+                      })
+                    : undefined
+                ),
+            }),
+            applicationsCrudLayer({
+              findByCanonicalUrl: () => Effect.succeed([application]),
+              findByJobKey: () => Effect.succeed(undefined),
+            })
+          )
+        )
+      )
+    )
+
+    expect(persisted?.applicationId).not.toBe(application.id)
+    expect(persisted).toMatchObject({
+      identityAlias: undefined,
+      jobKey: resolvedRequest.jobKey,
+      writeMode: 'capture',
+    })
   })
 })

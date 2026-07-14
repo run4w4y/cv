@@ -11,6 +11,15 @@ const optional = <A>(config: Config.Config<A>) =>
   config.pipe(Config.option, Config.map(Option.getOrUndefined))
 
 export const readApplicationCampaignEnvConfig = Config.all({
+  analysisModel: optional(
+    Config.nonEmptyString('APPLICATION_CAMPAIGN_CODEX_ANALYSIS_MODEL')
+  ),
+  analysisReasoningEffort: optional(
+    Config.schema(
+      CodexReasoningEffortSchema,
+      'APPLICATION_CAMPAIGN_CODEX_ANALYSIS_REASONING_EFFORT'
+    )
+  ),
   baseUrl: optional(
     Config.schema(webBaseUrlSchema, 'APPLICATION_CAMPAIGN_BASE_URL')
   ),
@@ -36,6 +45,15 @@ export const readApplicationCampaignEnvConfig = Config.all({
   pdfOutDir: optional(Config.nonEmptyString('APPLICATION_CAMPAIGN_PDF_DIR')),
   publicCvWebBaseUrl: optional(
     Config.schema(webBaseUrlSchema, 'PUBLIC_CV_WEB_BASE_URL')
+  ),
+  recommendationModel: optional(
+    Config.nonEmptyString('APPLICATION_CAMPAIGN_CODEX_RECOMMENDATION_MODEL')
+  ),
+  recommendationReasoningEffort: optional(
+    Config.schema(
+      CodexReasoningEffortSchema,
+      'APPLICATION_CAMPAIGN_CODEX_RECOMMENDATION_REASONING_EFFORT'
+    )
   ),
   reasoningEffort: optional(
     Config.schema(

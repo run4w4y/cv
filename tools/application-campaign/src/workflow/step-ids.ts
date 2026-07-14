@@ -1,4 +1,5 @@
 export const campaignWorkflowStepIds = {
+  buildPdfAssets: 'build-pdf-assets',
   profiles: 'profiles',
   runArtifacts: 'run-artifacts',
   targets: 'targets',

@@ -83,6 +83,22 @@ const registryAnalysis = {
   submissionDetails,
 } satisfies ApplicationRegistryAnalysis
 
+const fitAssessment = {
+  dimensions: {
+    coreExperience: 21,
+    hardRequirements: 34,
+    practicalEligibility: 8,
+    preferredSignals: 7,
+    seniorityAndScope: 13,
+  },
+  gaps: ['The posting does not confirm every preferred platform skill.'],
+  hardBlockers: [],
+  rationale: 'The CV directly supports the core platform requirements.',
+  rubricVersion: 'application-fit-v1',
+  score: 83,
+  strengths: ['Direct distributed TypeScript platform experience.'],
+} as const
+
 const recommendation = {
   coverLetter: { body: '', subject: '' },
   email: { body: '', subject: '' },
@@ -200,7 +216,11 @@ describe('application registry campaign integration', () => {
             ],
           }
         }),
-      recommend: () => Effect.succeed(recommendation),
+      recommend: () =>
+        Effect.succeed({
+          extensions: { 'application-registry': fitAssessment },
+          recommendation,
+        }),
       shortlistProfiles: () =>
         Effect.die(new Error('Unexpected standalone shortlist call')),
       structured: {
@@ -217,6 +237,8 @@ describe('application registry campaign integration', () => {
             status: 'synced' as const,
           }
         }),
+      list: () =>
+        Effect.succeed({ checkpoint: null, items: [], nextCursor: null }),
       sync: () => Effect.succeed({ failed: [], synced: 0 }),
     } satisfies ApplicationRegistryCampaignClient
     const targetOutDir = join(outputRoot, 'target')
@@ -314,6 +336,8 @@ describe('application registry campaign integration', () => {
       deviceId: 'integration-test',
       details: registryAnalysis.details,
       compensations: registryAnalysis.compensations,
+      fitAssessment,
+      fitScore: 83,
       profile: 'specialist',
       remotePolicy: 'Remote',
       submissionDetails,

@@ -1,3 +1,4 @@
+import { buildPdfAssets } from '@cv/pdf-export'
 import { DateTime, Effect } from 'effect'
 import type { ApplicationAdvisor } from '../../ai/advisor'
 import {
@@ -13,6 +14,7 @@ import {
 } from '../graph'
 import { pluginWarning, uniqueIssues } from '../issues'
 import {
+  campaignPdfAssetsReadyKey,
   preparedCampaignRunKey,
   sharedCampaignInputsKey,
   targetCampaignResultsKey,
@@ -61,7 +63,13 @@ export const makeCoreRunSteps = ({
     scope: 'run',
   }
   const targets: WorkflowStep<CampaignWorkflowRuntime> = {
-    dependsOn: [profiles.id, ...targetRunDependencies],
+    dependsOn: [
+      profiles.id,
+      ...targetRunDependencies,
+      ...(routine.buildPdfAssets.status === 'ready'
+        ? [routine.buildPdfAssets.id]
+        : []),
+    ],
     execute: ({ outputs }) =>
       Effect.gen(function* () {
         const shared = yield* outputs.get(sharedCampaignInputsKey)
@@ -122,5 +130,23 @@ export const makeCoreRunSteps = ({
     scope: 'run',
   }
 
-  return [profiles, targets, runArtifacts]
+  const pdfAssetsRoutine = routine.buildPdfAssets
+  const pdfAssets: WorkflowStep<CampaignWorkflowRuntime> | undefined =
+    pdfAssetsRoutine.status === 'ready'
+      ? {
+          dependsOn: pdfAssetsRoutine.dependsOn,
+          execute: () =>
+            buildPdfAssets({
+              webBaseUrl: pdfAssetsRoutine.config.webBaseUrl,
+            }).pipe(
+              Effect.as([workflowOutput(campaignPdfAssetsReadyKey, true)])
+            ),
+          failurePolicy: 'warn',
+          id: pdfAssetsRoutine.id,
+          label: pdfAssetsRoutine.label,
+          scope: 'run',
+        }
+      : undefined
+
+  return [profiles, ...(pdfAssets ? [pdfAssets] : []), targets, runArtifacts]
 }

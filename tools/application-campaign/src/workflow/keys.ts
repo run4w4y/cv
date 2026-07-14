@@ -16,6 +16,9 @@ import type {
 export const campaignOptionsKey =
   workflowKey<PrepareCampaignOptions>('campaign.options')
 export const campaignRunIdKey = workflowKey<string>('campaign.run-id')
+export const campaignPdfAssetsReadyKey = workflowKey<true>(
+  'campaign.pdf-assets-ready'
+)
 export const sharedCampaignInputsKey = workflowKey<SharedCampaignInputs>(
   'campaign.shared-inputs'
 )

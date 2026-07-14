@@ -9,12 +9,14 @@ import {
   ArtifactManifestEntrySchema,
   SubmissionDetailsSchema,
 } from '../model/details'
+import { FitAssessmentSchema } from '../model/fit-assessment'
 import { campaignCaptures } from '../tables/captures'
 import { optionalNullableInsertField } from './optional-nullable-insert-field'
 
 const campaignCaptureSelectRefinements = {
   artifacts: () => Schema.Array(ArtifactManifestEntrySchema),
   confidence: () => ConfidenceSchema,
+  fitAssessment: () => FitAssessmentSchema,
   submissionDetails: () => SubmissionDetailsSchema,
   capturedAt: () => UtcIsoTimestampSchema,
 }
@@ -22,6 +24,7 @@ const campaignCaptureSelectRefinements = {
 const campaignCaptureInsertRefinements = {
   artifacts: Schema.Array(ArtifactManifestEntrySchema),
   confidence: optionalNullableInsertField(ConfidenceSchema),
+  fitAssessment: optionalNullableInsertField(FitAssessmentSchema),
   submissionDetails: SubmissionDetailsSchema,
   capturedAt: UtcIsoTimestampSchema,
 }

@@ -14,11 +14,12 @@ import {
   type CampaignProfileShortlist,
   CampaignProfileShortlistSchema,
   type CampaignRecommendation,
-  CampaignRecommendationSchema,
+  type CampaignRecommendationResult,
   makeCampaignJobAnalysisSchema,
+  makeCampaignRecommendationResultSchema,
 } from './schema'
 import {
-  type CodexStructuredAiOptions,
+  type CodexModelOptions,
   makeCodexStructuredAiLayer,
   StructuredAi,
   type StructuredAiService,
@@ -43,7 +44,17 @@ export type ApplicationJobAnalysisRequest = ApplicationAdvisorRequest & {
   >
 }
 
-export type CodexApplicationAdvisorOptions = CodexStructuredAiOptions
+export type ApplicationRecommendationRequest = ApplicationAdvisorRequest & {
+  readonly extensionSchemas: Readonly<
+    Record<string, Schema.ConstraintDecoder<unknown, never>>
+  >
+}
+
+export type CodexApplicationAdvisorOptions = {
+  readonly analysis: CodexModelOptions
+  readonly binaryPath?: string
+  readonly recommendation: CodexModelOptions
+}
 
 export class ApplicationAdvisor extends Context.Service<
   ApplicationAdvisor,
@@ -55,9 +66,9 @@ export class ApplicationAdvisor extends Context.Service<
       ApplicationCampaignAiError | ApplicationCampaignValidationError
     >
     readonly recommend: (
-      request: ApplicationAdvisorRequest
+      request: ApplicationRecommendationRequest
     ) => Effect.Effect<
-      CampaignRecommendation,
+      CampaignRecommendationResult,
       ApplicationCampaignAiError | ApplicationCampaignValidationError
     >
     readonly shortlistProfiles: (
@@ -70,94 +81,117 @@ export class ApplicationAdvisor extends Context.Service<
   }
 >()('ApplicationAdvisor') {}
 
-export const ApplicationAdvisorLayer = Layer.effect(
-  ApplicationAdvisor,
-  Effect.gen(function* () {
-    const structuredAi = yield* StructuredAi
+const makeApplicationAdvisorLayer = (options: CodexApplicationAdvisorOptions) =>
+  Layer.effect(
+    ApplicationAdvisor,
+    Effect.gen(function* () {
+      const structuredAi = yield* StructuredAi
 
-    return {
-      analyzeJob: (request: ApplicationJobAnalysisRequest) => {
-        const schema = makeCampaignJobAnalysisSchema(
-          Object.fromEntries(Object.entries(request.extensionSchemas))
-        )
+      return {
+        analyzeJob: (request: ApplicationJobAnalysisRequest) => {
+          const schema = makeCampaignJobAnalysisSchema(
+            Object.fromEntries(Object.entries(request.extensionSchemas))
+          )
 
-        return Effect.gen(function* () {
-          yield* logInfo('Asking Codex to analyze job and shortlist profiles', {
-            allowedProfileCount: request.allowedProfiles.length,
-            extensionCount: Object.keys(request.extensionSchemas).length,
-            hasFixedProfile: Boolean(request.fixedProfile),
-          })
-          const decoded = yield* structuredAi.run({
-            operation: 'application job analysis',
-            prompt: request.prompt,
-            schema,
-          })
-          const analysis = {
-            extensions: decoded.extensions,
-            job: decoded.job,
-            profileShortlist: decoded.profileShortlist,
-          } satisfies CampaignJobAnalysis
+          return Effect.gen(function* () {
+            yield* logInfo(
+              'Asking Codex to analyze job and shortlist profiles',
+              {
+                allowedProfileCount: request.allowedProfiles.length,
+                extensionCount: Object.keys(request.extensionSchemas).length,
+                hasFixedProfile: Boolean(request.fixedProfile),
+              }
+            )
+            const decoded = yield* structuredAi.run({
+              ...options.analysis,
+              operation: 'application job analysis',
+              prompt: request.prompt,
+              schema,
+            })
+            const analysis = {
+              extensions: decoded.extensions,
+              job: decoded.job,
+              profileShortlist: decoded.profileShortlist,
+            } satisfies CampaignJobAnalysis
 
-          yield* validateCampaignJobAnalysis(analysis, request)
-          yield* logInfo('Codex completed application job analysis', {
-            extensionCount: Object.keys(analysis.extensions).length,
-            requestedProfileCount: analysis.profileShortlist.length,
-            requestedProfiles: analysis.profileShortlist
-              .map((item) => item.profile)
-              .join(', '),
-          })
+            yield* validateCampaignJobAnalysis(analysis, request)
+            yield* logInfo('Codex completed application job analysis', {
+              extensionCount: Object.keys(analysis.extensions).length,
+              requestedProfileCount: analysis.profileShortlist.length,
+              requestedProfiles: analysis.profileShortlist
+                .map((item) => item.profile)
+                .join(', '),
+            })
 
-          return analysis
-        }).pipe(
-          withTelemetrySpan('application-campaign.advisor.analyze-job', {
-            allowedProfileCount: request.allowedProfiles.length,
-            extensionCount: Object.keys(request.extensionSchemas).length,
-            hasFixedProfile: Boolean(request.fixedProfile),
-          })
-        )
-      },
-      recommend: (request: ApplicationAdvisorRequest) =>
-        Effect.gen(function* () {
-          yield* logInfo('Asking Codex for application recommendation', {
-            allowedProfileCount: request.allowedProfiles.length,
-            hasFixedProfile: Boolean(request.fixedProfile),
-          })
-          const recommendation = yield* structuredAi.run({
-            operation: 'application recommendation',
-            prompt: request.prompt,
-            schema: CampaignRecommendationSchema,
-          })
-          yield* validateCampaignRecommendation(recommendation, request)
-          yield* logInfo('Codex selected application profile', {
-            confidence: recommendation.recommendation.confidence,
-            profile: recommendation.recommendation.profile,
-          })
+            return analysis
+          }).pipe(
+            withTelemetrySpan('application-campaign.advisor.analyze-job', {
+              allowedProfileCount: request.allowedProfiles.length,
+              extensionCount: Object.keys(request.extensionSchemas).length,
+              hasFixedProfile: Boolean(request.fixedProfile),
+            })
+          )
+        },
+        recommend: (request: ApplicationRecommendationRequest) =>
+          Effect.gen(function* () {
+            yield* logInfo('Asking Codex for application recommendation', {
+              allowedProfileCount: request.allowedProfiles.length,
+              hasFixedProfile: Boolean(request.fixedProfile),
+            })
+            const schema = makeCampaignRecommendationResultSchema(
+              Object.fromEntries(Object.entries(request.extensionSchemas))
+            )
+            const decoded = yield* structuredAi.run({
+              ...options.recommendation,
+              operation: 'application recommendation',
+              prompt: request.prompt,
+              schema,
+            })
+            const recommendation = {
+              coverLetter: decoded.coverLetter,
+              email: decoded.email,
+              followUpQuestions: decoded.followUpQuestions,
+              job: decoded.job,
+              matchedEvidence: decoded.matchedEvidence,
+              recommendation: decoded.recommendation,
+            } satisfies CampaignRecommendation
+            yield* validateCampaignRecommendation(recommendation, request)
+            yield* logInfo('Codex selected application profile', {
+              confidence: recommendation.recommendation.confidence,
+              profile: recommendation.recommendation.profile,
+            })
 
-          return recommendation
-        }).pipe(
-          withTelemetrySpan('application-campaign.advisor.recommend', {
-            allowedProfileCount: request.allowedProfiles.length,
-            hasFixedProfile: Boolean(request.fixedProfile),
-          })
-        ),
-      shortlistProfiles: (request: ApplicationAdvisorRequest) =>
-        Effect.gen(function* () {
-          const shortlist = yield* structuredAi.run({
-            operation: 'application profile shortlist',
-            prompt: request.prompt,
-            schema: CampaignProfileShortlistSchema,
-          })
+            return { extensions: decoded.extensions, recommendation }
+          }).pipe(
+            withTelemetrySpan('application-campaign.advisor.recommend', {
+              allowedProfileCount: request.allowedProfiles.length,
+              hasFixedProfile: Boolean(request.fixedProfile),
+            })
+          ),
+        shortlistProfiles: (request: ApplicationAdvisorRequest) =>
+          Effect.gen(function* () {
+            const shortlist = yield* structuredAi.run({
+              ...options.analysis,
+              operation: 'application profile shortlist',
+              prompt: request.prompt,
+              schema: CampaignProfileShortlistSchema,
+            })
 
-          return yield* validateCampaignProfileShortlist(shortlist, request)
-        }),
-      structured: structuredAi,
-    }
-  })
-)
+            return yield* validateCampaignProfileShortlist(shortlist, request)
+          }),
+        structured: structuredAi,
+      }
+    })
+  )
 
 export const makeCodexApplicationAdvisorLayer = (
   options: CodexApplicationAdvisorOptions
 ) =>
-  ApplicationAdvisorLayer.pipe(
-    Layer.provide(makeCodexStructuredAiLayer(options))
+  makeApplicationAdvisorLayer(options).pipe(
+    Layer.provide(
+      makeCodexStructuredAiLayer({
+        ...options.analysis,
+        binaryPath: options.binaryPath,
+      })
+    )
   )

@@ -10,6 +10,7 @@ import {
 } from 'drizzle-orm/sqlite-core'
 
 import type { ArtifactManifestEntry, SubmissionDetails } from '../model/details'
+import type { FitAssessment } from '../model/fit-assessment'
 import { applications } from './applications'
 
 export const campaignCaptures = sqliteTable(
@@ -23,6 +24,9 @@ export const campaignCaptures = sqliteTable(
     profile: text('profile').notNull(),
     audience: text('audience'),
     confidence: real('confidence'),
+    fitAssessment: text('fit_assessment', {
+      mode: 'json',
+    }).$type<FitAssessment>(),
     submissionDetails: text('submission_details', { mode: 'json' })
       .$type<SubmissionDetails>()
       .notNull(),
@@ -44,6 +48,10 @@ export const campaignCaptures = sqliteTable(
     check(
       'campaign_captures_confidence_check',
       sql`${table.confidence} is null or (${table.confidence} >= 0 and ${table.confidence} <= 1)`
+    ),
+    check(
+      'campaign_captures_fit_assessment_json_check',
+      sql`${table.fitAssessment} is null or json_valid(${table.fitAssessment})`
     ),
     check(
       'campaign_captures_submission_details_json_check',

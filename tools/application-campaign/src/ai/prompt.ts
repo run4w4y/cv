@@ -29,6 +29,7 @@ type RecommendationPromptContext = {
   readonly jobAnalysis: string
   readonly locale: string
   readonly materialsInstruction: string
+  readonly extensionInstructions: string
   readonly profileInstruction: string
   readonly profileShortlist: string
   readonly profiles: string
@@ -120,6 +121,7 @@ export const renderRecommendationPrompt = ({
   materialsMode,
   profileMarkdown,
   profileShortlist,
+  extensionInstructions,
 }: {
   readonly fixedAudience?: string
   readonly fixedProfile?: string
@@ -128,6 +130,7 @@ export const renderRecommendationPrompt = ({
   readonly materialsMode: CampaignMaterialsMode
   readonly profileMarkdown: string
   readonly profileShortlist?: CampaignProfileShortlist
+  readonly extensionInstructions?: string
 }) =>
   Effect.gen(function* () {
     yield* logInfo('Rendering final recommendation prompt', {
@@ -148,6 +151,9 @@ export const renderRecommendationPrompt = ({
         : 'No separate first-pass analysis was needed because the profile was already determined. Analyze the full posting directly in this pass.',
       locale,
       materialsInstruction: recommendationMaterialsInstruction(materialsMode),
+      extensionInstructions:
+        extensionInstructions?.trim() ||
+        'No campaign plugins requested final recommendation fields. Return an empty extensions object.',
       profileInstruction: recommendationProfileInstruction(fixedProfile),
       profiles: profileMarkdown,
       profileShortlist: profileShortlist

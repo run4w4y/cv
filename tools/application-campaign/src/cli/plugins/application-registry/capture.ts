@@ -1,8 +1,10 @@
-import type {
-  ArtifactManifestEntry,
-  OpportunityDetails,
+import {
+  type ArtifactManifestEntry,
+  normalizeApplicationCanonicalUrl,
+  type OpportunityDetails,
 } from '@cv/application-registry-entity'
 import { type Context, type Crypto, DateTime, Effect, Encoding } from 'effect'
+import { ApplicationCampaignValidationError } from '../../../errors'
 import type {
   WorkflowFailurePolicy,
   WorkflowStep,
@@ -15,27 +17,17 @@ import {
   targetPreparedCampaignKey,
 } from '../../../workflow/keys'
 import { campaignWorkflowStepIds } from '../../../workflow/step-ids'
-import { applicationRegistryAnalysisResultKey } from './analysis'
+import {
+  applicationRegistryAnalysisResultKey,
+  applicationRegistryFitAssessmentResultKey,
+  isValidApplicationRegistryFitAssessment,
+} from './analysis'
 import type {
   ApplicationRegistryCampaignCaptureRequest,
   ApplicationRegistryCampaignClient,
 } from './client'
+import { applicationRegistryConflictResolutionsKey } from './conflicts'
 import { applicationRegistrySyncStepId } from './sync'
-
-const canonicalJobUrl = (value: string) => {
-  const url = new URL(value)
-  url.hash = ''
-  for (const name of [...url.searchParams.keys()]) {
-    if (
-      name.toLowerCase().startsWith('utm_') ||
-      ['fbclid', 'gclid'].includes(name.toLowerCase())
-    ) {
-      url.searchParams.delete(name)
-    }
-  }
-  url.searchParams.sort()
-  return url.toString()
-}
 
 const artifactMediaType = (path: string) => {
   if (path.endsWith('.json')) return 'application/json'
@@ -80,18 +72,37 @@ export const makeRegistryCaptureStep = ({
   ],
   execute: ({ outputs }) =>
     Effect.gen(function* () {
-      const [campaign, decisions, job, manifest, runId, registryAnalysis] =
-        yield* Effect.all([
-          outputs.get(targetPreparedCampaignKey),
-          outputs.get(targetDecisionsKey),
-          outputs.get(targetJobKey),
-          outputs.get(targetArtifactManifestKey),
-          outputs.get(campaignRunIdKey),
-          outputs.get(applicationRegistryAnalysisResultKey),
-        ])
+      const [
+        campaign,
+        decisions,
+        fitAssessment,
+        job,
+        manifest,
+        runId,
+        registryAnalysis,
+      ] = yield* Effect.all([
+        outputs.get(targetPreparedCampaignKey),
+        outputs.get(targetDecisionsKey),
+        outputs.get(applicationRegistryFitAssessmentResultKey),
+        outputs.get(targetJobKey),
+        outputs.get(targetArtifactManifestKey),
+        outputs.get(campaignRunIdKey),
+        outputs.get(applicationRegistryAnalysisResultKey),
+      ])
+      if (!isValidApplicationRegistryFitAssessment(fitAssessment)) {
+        return yield* new ApplicationCampaignValidationError({
+          message:
+            'Application registry fit assessment dimensions must sum to fitScore.',
+        })
+      }
       const operationId = yield* crypto.randomUUIDv7
       const capturedAt = DateTime.formatIso(yield* DateTime.now)
-      const canonicalUrl = canonicalJobUrl(job.url)
+      const canonicalUrl = normalizeApplicationCanonicalUrl(job.url)
+      const conflictResolutions = yield* outputs.get(
+        applicationRegistryConflictResolutionsKey
+      )
+      const targetResolution = conflictResolutions[canonicalUrl]
+      if (targetResolution?.action === 'skip') return []
       const source = new URL(canonicalUrl).hostname
       const jobKey = `url:${canonicalUrl}`
       const contentHash = yield* crypto.digest(
@@ -116,10 +127,15 @@ export const makeRegistryCaptureStep = ({
           ? registryAnalysis.details
           : undefined,
         deviceId,
-        fitScore: null,
+        fitAssessment,
+        fitScore: fitAssessment.score,
         followUpAt: null,
         jobContentHash: Encoding.encodeHex(contentHash),
         jobKey,
+        identityResolution:
+          targetResolution?.action === 'capture'
+            ? targetResolution.identityResolution
+            : undefined,
         location: campaign.recommendation.job.location || null,
         lastContactAt: null,
         operationId,

@@ -58,6 +58,7 @@ export type FollowUpState = 'none' | 'overdue' | 'upcoming'
 export type ApplicationListRecord = Application & {
   readonly captureCount: number
   readonly compensations: readonly ApplicationCompensation[]
+  readonly identityAliases: readonly string[]
   readonly labels: readonly string[]
   readonly latestEventAt: UtcIsoTimestamp | null
   readonly latestEventKind: ApplicationEventKind | null
@@ -108,6 +109,7 @@ type PersistedCaptureFields = Pick<
   | 'campaignRunId'
   | 'capturedAt'
   | 'confidence'
+  | 'fitAssessment'
   | 'jobContentHash'
   | 'operationId'
   | 'profile'
@@ -119,7 +121,9 @@ export type PersistedCapture = PersistedApplication &
     readonly captureId: string
     readonly deviceId: string | null
     readonly eventId: string
+    readonly identityAlias?: string
     readonly operationRequestSignature: string
+    readonly writeMode: ApplicationWriteMode
   }
 
 export type PersistedEvent = Pick<

@@ -1,5 +1,6 @@
 import {
   applicationCompensations,
+  applicationIdentityAliases,
   applicationLabels,
   applications,
   applicationWritableKeys,
@@ -134,6 +135,15 @@ export const opportunityStatements = (
   mode: ApplicationWriteMode
 ): readonly BatchItem<'sqlite'>[] => [
   applicationUpsertStatement(database, input, mode),
+  ...('identityAlias' in input && input.identityAlias
+    ? [
+        database.insert(applicationIdentityAliases).values({
+          applicationId: input.applicationId,
+          createdAt: input.recordedAt,
+          jobKey: input.identityAlias,
+        }),
+      ]
+    : []),
   ...replacementStatements(
     database,
     input.applicationId,

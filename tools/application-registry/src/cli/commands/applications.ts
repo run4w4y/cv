@@ -29,6 +29,10 @@ import {
 } from '../flags'
 import { ApplicationRegistryCliInputError, decodeJsonInput } from '../input'
 import { printApplication, printApplications, printJson } from '../output'
+import {
+  registryDeduplicationFlags,
+  runRegistryDeduplication,
+} from '../deduplicate'
 
 const after = optionalStringFlag('after').pipe(
   Flag.withDescription('Continue after an API cursor.')
@@ -246,6 +250,16 @@ export const applicationFacetsCommand = Command.make(
     )
 ).pipe(Command.withDescription('List application filter facets.'))
 
+export const applicationDeduplicateCommand = Command.make(
+  'deduplicate',
+  registryDeduplicationFlags,
+  runRegistryDeduplication
+).pipe(
+  Command.withDescription(
+    'Find duplicate canonical URLs and resolve each conflict explicitly.'
+  )
+)
+
 const applicationRoot = Command.make('application').pipe(
   Command.withDescription('Create, query, update, and delete applications.')
 )
@@ -259,6 +273,7 @@ export const applicationCommand = applicationRoot.pipe(
     applicationUpsertCommand,
     applicationUpdateCommand,
     applicationDeleteCommand,
+    applicationDeduplicateCommand,
     applicationFacetsCommand,
   ])
 )

@@ -30,7 +30,7 @@ The CLI owns the generated Effect client, API schemas, configuration, errors,
 and durable outbox.
 
 ```text
-application-registry application list|search|get|create|upsert|update|delete|facets
+application-registry application list|search|get|create|upsert|update|delete|deduplicate|facets
 application-registry annotation list
 application-registry label list|set|add|remove
 application-registry notes add
@@ -55,6 +55,12 @@ Create is create-only and conflicts on an existing job key; upsert is the
 explicit replacement operation. Delete requires `--yes` and optionally accepts
 `--expected-version`.
 
+`application deduplicate` groups records by normalized canonical URL and asks
+which record to keep for every conflict. Non-interactive runs can use
+`--strategy keep-newest`, `keep-oldest`, or `keep-both`; `--dry-run` prints the
+plan, and destructive execution requires `--yes`. Deletions use each record's
+current version so a concurrent edit fails safely.
+
 Examples:
 
 ```bash
@@ -63,6 +69,7 @@ bunx nx run application-registry:registry -- application search 'Effect Engineer
 bunx nx run application-registry:registry -- application get <id-or-job-key> --json
 bunx nx run application-registry:registry -- application create --input application.json --json
 bunx nx run application-registry:registry -- application update <id-or-job-key> --input patch.json --json
+bunx nx run application-registry:registry -- application deduplicate --dry-run --strategy keep-newest --json
 bunx nx run application-registry:registry -- event append <id-or-job-key> --input event.json --json
 bunx nx run application-registry:registry -- listing scan --concurrency 96 --per-host 8
 bunx nx run application-registry:registry -- outbox sync --json

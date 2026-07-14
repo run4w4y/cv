@@ -2,6 +2,7 @@ import { Codex, type CodexOptions, type ThreadOptions } from '@openai/codex-sdk'
 import { Context, Effect, Layer, Schema } from 'effect'
 import { FileSystem } from 'effect/FileSystem'
 import { Path } from 'effect/Path'
+import { OpenAiStructuredOutput } from 'effect/unstable/ai'
 import type { CodexReasoningEffort } from '../config/model'
 import {
   ApplicationCampaignAiError,
@@ -9,15 +10,20 @@ import {
 } from '../errors'
 import { logDebug, logInfo, withTelemetrySpan } from '../telemetry'
 
-export type CodexStructuredAiOptions = {
-  readonly binaryPath?: string
+export type CodexModelOptions = {
   readonly model: string
   readonly reasoningEffort: CodexReasoningEffort
 }
 
+export type CodexStructuredAiOptions = CodexModelOptions & {
+  readonly binaryPath?: string
+}
+
 export type StructuredAiRequest<A> = {
+  readonly model?: string
   readonly operation: string
   readonly prompt: string
+  readonly reasoningEffort?: CodexReasoningEffort
   readonly schema: Schema.ConstraintDecoder<A, never>
 }
 
@@ -34,6 +40,10 @@ export class StructuredAi extends Context.Service<
   StructuredAi,
   StructuredAiService
 >()('@cv/application-campaign/StructuredAi') {}
+
+export const makeCodexStructuredOutput = <A>(
+  schema: Schema.ConstraintDecoder<A, never>
+) => OpenAiStructuredOutput.toCodecOpenAI(schema)
 
 const codexEnvironmentKeys = [
   'CODEX_ACCESS_TOKEN',
@@ -213,15 +223,23 @@ export const makeCodexStructuredAiLayer = (options: CodexStructuredAiOptions) =>
       return {
         run: <A>(request: StructuredAiRequest<A>) =>
           Effect.gen(function* () {
+            const requestOptions = {
+              ...options,
+              model: request.model ?? options.model,
+              reasoningEffort:
+                request.reasoningEffort ?? options.reasoningEffort,
+            } satisfies CodexStructuredAiOptions
+            const structuredOutput = makeCodexStructuredOutput(request.schema)
+
             yield* logInfo('Requesting structured Codex output', {
-              model: options.model,
+              model: requestOptions.model,
               operation: request.operation,
               promptChars: request.prompt.length,
-              reasoningEffort: options.reasoningEffort,
+              reasoningEffort: requestOptions.reasoningEffort,
             })
-            const raw = yield* runCodex(fileSystem, path, options, {
+            const raw = yield* runCodex(fileSystem, path, requestOptions, {
               operation: request.operation,
-              outputSchema: Schema.toJsonSchemaDocument(request.schema).schema,
+              outputSchema: structuredOutput.jsonSchema,
               prompt: request.prompt,
             })
             yield* logDebug('Received structured Codex output', {
@@ -230,7 +248,7 @@ export const makeCodexStructuredAiLayer = (options: CodexStructuredAiOptions) =>
             })
 
             return yield* Schema.decodeUnknownEffect(
-              Schema.fromJsonString(request.schema),
+              Schema.fromJsonString(structuredOutput.codec),
               { errors: 'all' }
             )(raw).pipe(
               Effect.mapError(
@@ -243,9 +261,10 @@ export const makeCodexStructuredAiLayer = (options: CodexStructuredAiOptions) =>
             )
           }).pipe(
             withTelemetrySpan('application-campaign.ai.structured', {
-              model: options.model,
+              model: request.model ?? options.model,
               operation: request.operation,
-              reasoningEffort: options.reasoningEffort,
+              reasoningEffort:
+                request.reasoningEffort ?? options.reasoningEffort,
             })
           ),
       } satisfies StructuredAiService

@@ -171,7 +171,9 @@ export const formatCampaignPlan = (routine: CampaignRoutine) => {
   const ready = routine.steps.filter((step) => step.status === 'ready').length
   const lines = [
     `Plan (${ready} runnable, ${routine.steps.length - ready} skipped)`,
+    ...routine.pluginSteps.map((step) => planStep(step, '  ')),
     planStep(routine.profiles, '  '),
+    planStep(routine.buildPdfAssets, '  '),
     planStep(routine.targetsStep, '  '),
   ]
 

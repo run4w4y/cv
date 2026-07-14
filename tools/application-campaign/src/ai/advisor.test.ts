@@ -3,10 +3,10 @@ import {
   buildCodexOptions,
   buildCodexProcessEnv,
   buildCodexThreadOptions,
-  type CodexApplicationAdvisorOptions,
 } from './advisor'
+import type { CodexStructuredAiOptions } from './structured'
 
-const advisorOptions: CodexApplicationAdvisorOptions = {
+const advisorOptions: CodexStructuredAiOptions = {
   binaryPath: '/opt/codex',
   model: 'gpt-5.4',
   reasoningEffort: 'high',

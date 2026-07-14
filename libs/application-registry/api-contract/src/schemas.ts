@@ -75,6 +75,7 @@ export type ApplicationListItem = Application & {
   readonly captureCount: number
   readonly compensationSummary: string | null
   readonly followUpState: FollowUpState
+  readonly identityAliases: readonly string[]
   readonly labels: readonly string[]
   readonly latestEventAt: string | null
   readonly latestEventKind: ApplicationEventKind | null
@@ -91,6 +92,7 @@ export const ApplicationListItemSchema: Schema.Codec<ApplicationListItem> =
       ),
       compensationSummary: Schema.NullOr(NonEmptyString),
       followUpState: FollowUpStateSchema,
+      identityAliases: Schema.Array(NonEmptyString),
       labels: Schema.Array(NonEmptyString),
       latestEventAt: Schema.NullOr(UtcIsoTimestampSchema),
       latestEventKind: Schema.NullOr(ApplicationEventKindSchema),

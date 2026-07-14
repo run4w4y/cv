@@ -61,6 +61,7 @@ const applications: readonly ApplicationListItem[] = Array.from(
     captureCount: 0,
     compensationSummary: null,
     followUpState: 'none',
+    identityAliases: [],
     id: `application-${index}`,
     jobKey: `web:${index}`,
     labels: [],

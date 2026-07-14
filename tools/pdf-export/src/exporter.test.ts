@@ -50,6 +50,7 @@ describe('PDF exporter programmatic API', () => {
       webBaseUrl: new URL('https://cv.example.com'),
     } satisfies ProfilePdfBatchExportRequest
     const layer = Layer.succeed(PdfExporter, {
+      buildAssets: () => Effect.void,
       exportProfile: () => Effect.die('unused'),
       exportProfiles: (input) => {
         received = input

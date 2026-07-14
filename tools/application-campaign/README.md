@@ -15,7 +15,9 @@ over bounded profile-layer summaries. That pass always runs, including
 fixed-profile jobs, so plugins can extract additional operational data. The
 final pass receives the selected profiles' inherited base and targeted source
 layers, plus shared authored support modules, and produces the recommendation
-and optional application materials.
+and optional application materials. By default, the first pass uses
+`gpt-5.6-terra` with low reasoning effort and the final pass uses
+`gpt-5.6-sol` with low reasoning effort.
 
 It writes campaign artifacts under `.cv-work/applications/` by default and can
 also mint a private CV link and export the matching PDF. The one tool project
@@ -109,6 +111,10 @@ compensation in each posting's original currency and integer minor units. After
 artifacts commit, it sends one idempotent capture through the registry client.
 The client writes to its durable local outbox before attempting the network
 request, so an unavailable Worker queues the capture for later replay.
+The registry plugin also adds an evidence-backed `application-fit-v1`
+assessment to the final recommendation call. Its dimension scores, rationale,
+strengths, gaps, and blockers are stored on the campaign capture, while the
+0–100 total is copied to the application record for filtering.
 
 ## Options
 
@@ -130,19 +136,39 @@ request, so an unavailable Worker queues the capture for later replay.
   `auto`; explicit Effect `--log-level` diagnostics use plain output.
 - `--pdf-dir <path>`: directory where generated private PDFs are written.
 - `--codex-bin <path>`: Codex executable override passed to the Codex SDK.
-- `--model <name>`: Codex model override.
+- `--analysis-model <name>`: Codex model for first-pass job analysis and
+  profile shortlisting.
+- `--analysis-reasoning-effort <effort>`: reasoning effort for first-pass job
+  analysis and profile shortlisting.
+- `--recommendation-model <name>`: Codex model for the final recommendation
+  and applicant-facing drafts.
+- `--recommendation-reasoning-effort <effort>`: reasoning effort for the final
+  recommendation and applicant-facing drafts.
+- `--model <name>`: backward-compatible model override for both AI stages.
+- `--reasoning-effort <effort>`: backward-compatible reasoning-effort override
+  for both AI stages.
+- `--registry-conflict-strategy <strategy>`: resolve an existing normalized URL
+  with a different registry identity using `prompt`, `abort`, `merge`,
+  `replace`, `keep-both`, or `skip`. The default is `prompt`; non-interactive
+  prompt mode aborts safely.
 - `--materials <all|none>`: generate or skip cover letter and email drafts.
 - `--concurrency <count>`: number of job URLs to process concurrently.
 - `--generate` / `--no-generate`: mint a private CV link and export the
   matching PDF. Generation is enabled by default.
 - `--skip-pdf`: mint the private link but skip PDF export.
-- `--skip-build`: reuse the existing CV build for private PDF export.
+- `--skip-build`: reuse the existing CV build for private PDF export. Without
+  this flag, Astro is built once for the campaign and every target reuses it.
 
 ## Environment
 
 - `APPLICATION_CAMPAIGN_BASE_URL`
+- `APPLICATION_CAMPAIGN_CODEX_ANALYSIS_MODEL`
+- `APPLICATION_CAMPAIGN_CODEX_ANALYSIS_REASONING_EFFORT`
 - `APPLICATION_CAMPAIGN_CODEX_BIN`
 - `APPLICATION_CAMPAIGN_CODEX_MODEL`
+- `APPLICATION_CAMPAIGN_CODEX_REASONING_EFFORT`
+- `APPLICATION_CAMPAIGN_CODEX_RECOMMENDATION_MODEL`
+- `APPLICATION_CAMPAIGN_CODEX_RECOMMENDATION_REASONING_EFFORT`
 - `APPLICATION_CAMPAIGN_CONCURRENCY`
 - `APPLICATION_CAMPAIGN_CONTENT_ROOT`
 - `APPLICATION_CAMPAIGN_EXCLUDED_PROFILES`
@@ -168,6 +194,13 @@ Base URL precedence is `--base-url`, `APPLICATION_CAMPAIGN_BASE_URL`,
 `CV_WEB_BASE_URL`, `PUBLIC_CV_WEB_BASE_URL`, then `https://${CV_WEB_HOST}`. If
 generation is enabled but no base URL can be resolved, the run logs a warning,
 skips private link/PDF generation, and still writes the draft artifacts.
+
+Stage-specific CLI options take precedence over the shared CLI options, then
+stage-specific environment variables, then the shared environment variables.
+The shared `--model`, `--reasoning-effort`,
+`APPLICATION_CAMPAIGN_CODEX_MODEL`, and
+`APPLICATION_CAMPAIGN_CODEX_REASONING_EFFORT` controls remain available for
+runs that intentionally use one model configuration for both stages.
 
 The operator process intentionally uses the configured production environment:
 it needs real content, tokens, links, and PDF settings. The nested Codex process

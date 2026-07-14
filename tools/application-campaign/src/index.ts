@@ -12,6 +12,7 @@ export {
   CampaignRecommendationSchema,
 } from './ai/schema'
 export type {
+  CodexModelOptions,
   StructuredAiRequest,
   StructuredAiService,
 } from './ai/structured'

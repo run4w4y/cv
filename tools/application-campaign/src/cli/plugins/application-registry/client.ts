@@ -4,6 +4,7 @@ import type { Effect } from 'effect'
 type RegistryCapture = ApplicationRegistryClientService['capture']
 type RegistryCaptureEffect = ReturnType<RegistryCapture>
 type RegistrySyncEffect = ReturnType<ApplicationRegistryClientService['sync']>
+type RegistryListEffect = ReturnType<ApplicationRegistryClientService['list']>
 
 type CampaignCaptureResult =
   | Extract<
@@ -24,6 +25,12 @@ export type ApplicationRegistryCampaignClient = {
   readonly capture: (
     request: Parameters<RegistryCapture>[0]
   ) => Effect.Effect<CampaignCaptureResult, Effect.Error<RegistryCaptureEffect>>
+  readonly list: (
+    query: Parameters<ApplicationRegistryClientService['list']>[0]
+  ) => Effect.Effect<
+    Effect.Success<RegistryListEffect>,
+    Effect.Error<RegistryListEffect>
+  >
   readonly sync: () => Effect.Effect<
     CampaignSyncResult,
     Effect.Error<RegistrySyncEffect>

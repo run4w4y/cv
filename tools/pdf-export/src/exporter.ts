@@ -241,6 +241,9 @@ const renderPublicLive = ({
 }
 
 export type PdfExporterService = {
+  readonly buildAssets: (
+    request?: PdfExportSessionOptions
+  ) => Effect.Effect<void, PdfExportError>
   readonly exportProfile: (
     request: ProfilePdfExportRequest
   ) => Effect.Effect<ProfilePdfExportResult, PdfExportError>
@@ -282,6 +285,8 @@ export const PdfExporterLive = Layer.effect(
       provideDependencies(renderProfilesLive(request))
 
     return {
+      buildAssets: (request = {}) =>
+        provideDependencies(buildAssets(sessionDefaults(request))),
       exportProfile: (request) =>
         exportProfiles({
           appRoot: request.appRoot,
@@ -313,6 +318,9 @@ export const PdfExporterLive = Layer.effect(
 
 export const exportProfilePdf = (request: ProfilePdfExportRequest) =>
   PdfExporter.pipe(Effect.flatMap((service) => service.exportProfile(request)))
+
+export const buildPdfAssets = (request?: PdfExportSessionOptions) =>
+  PdfExporter.pipe(Effect.flatMap((service) => service.buildAssets(request)))
 
 export const exportProfilePdfs = (request: ProfilePdfBatchExportRequest) =>
   PdfExporter.pipe(Effect.flatMap((service) => service.exportProfiles(request)))

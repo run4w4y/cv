@@ -16,7 +16,7 @@ export const persistCapture = (
 ) => {
   const statements = [
     allocateRevision(database.batch),
-    ...opportunityStatements(database.batch, input, 'capture'),
+    ...opportunityStatements(database.batch, input, input.writeMode),
     database.batch.insert(applicationEvents).values({
       id: input.eventId,
       applicationId: input.applicationId,
@@ -38,6 +38,7 @@ export const persistCapture = (
       profile: input.profile,
       audience: input.audience,
       confidence: input.confidence,
+      fitAssessment: input.fitAssessment,
       submissionDetails: input.submissionDetails,
       artifacts: input.artifacts,
       jobContentHash: input.jobContentHash,

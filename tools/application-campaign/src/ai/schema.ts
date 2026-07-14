@@ -63,6 +63,21 @@ export type CampaignRecommendation = Schema.Schema.Type<
   typeof CampaignRecommendationSchema
 >
 
+export type CampaignRecommendationResult = {
+  readonly extensions: Readonly<Record<string, unknown>>
+  readonly recommendation: CampaignRecommendation
+}
+
+export const makeCampaignRecommendationResultSchema = <
+  Fields extends Schema.Struct.Fields,
+>(
+  extensionFields: Fields
+) =>
+  Schema.Struct({
+    ...CampaignRecommendationSchema.fields,
+    extensions: Schema.Struct(extensionFields),
+  })
+
 export const CampaignProfileShortlistSchema = Schema.Struct({
   job: campaignJobSchema,
   profileShortlist: Schema.Array(campaignProfileShortlistItemSchema),

@@ -2,6 +2,7 @@ import {
   type Application,
   applicationCompensations,
   applicationEvents,
+  applicationIdentityAliases,
   applicationLabels,
   applicationNotes,
   applicationPublicColumns,
@@ -91,7 +92,39 @@ export const findApplicationByIdentifier = (
 export const findApplicationByJobKey = (
   database: RegistryQueryDatabase,
   jobKey: string
-) => findApplication(database, eq(applications.jobKey, jobKey))
+) =>
+  findApplication(
+    database,
+    or(
+      eq(applications.jobKey, jobKey),
+      exists(
+        database
+          .select({ applicationId: applicationIdentityAliases.applicationId })
+          .from(applicationIdentityAliases)
+          .where(
+            and(
+              eq(applicationIdentityAliases.applicationId, applications.id),
+              eq(applicationIdentityAliases.jobKey, jobKey)
+            )
+          )
+      )
+    )
+  )
+
+export const findApplicationsByCanonicalUrl = (
+  database: RegistryQueryDatabase,
+  canonicalUrl: string
+) =>
+  database
+    .select(applicationPublicColumns)
+    .from(applications)
+    .where(eq(applications.canonicalUrl, canonicalUrl))
+    .orderBy(asc(applications.createdAt), asc(applications.id))
+    .pipe(
+      Effect.mapError(
+        databaseFailure('Failed to load applications by canonical URL')
+      )
+    )
 
 const enrichApplications = (
   database: RegistryQueryDatabase,
@@ -122,6 +155,18 @@ const enrichApplications = (
         asc(applicationCompensations.applicationId),
         asc(applicationCompensations.kind),
         asc(applicationCompensations.id)
+      )
+
+    const identityAliasRows = yield* database
+      .select({
+        applicationId: applicationIdentityAliases.applicationId,
+        jobKey: applicationIdentityAliases.jobKey,
+      })
+      .from(applicationIdentityAliases)
+      .where(inArray(applicationIdentityAliases.applicationId, applicationIds))
+      .orderBy(
+        asc(applicationIdentityAliases.applicationId),
+        asc(applicationIdentityAliases.jobKey)
       )
 
     const latestEventRevisions = database
@@ -190,6 +235,13 @@ const enrichApplications = (
       labelsByApplication.set(row.applicationId, labels)
     }
 
+    const identityAliasesByApplication = new Map<string, string[]>()
+    for (const row of identityAliasRows) {
+      const aliases = identityAliasesByApplication.get(row.applicationId) ?? []
+      aliases.push(row.jobKey)
+      identityAliasesByApplication.set(row.applicationId, aliases)
+    }
+
     type CompensationRow = (typeof compensationRows)[number]
     const compensationsByApplication = new Map<string, CompensationRow[]>()
     for (const row of compensationRows) {
@@ -229,6 +281,7 @@ const enrichApplications = (
         ...application,
         captureCount: captureCountByApplication.get(application.id) ?? 0,
         compensations: compensationsByApplication.get(application.id) ?? [],
+        identityAliases: identityAliasesByApplication.get(application.id) ?? [],
         labels: labelsByApplication.get(application.id) ?? [],
         latestEventAt: latestEvent?.occurredAt ?? null,
         latestEventKind: latestEvent?.kind ?? null,

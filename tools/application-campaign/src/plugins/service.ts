@@ -4,11 +4,13 @@ import type { WorkflowStep } from '../workflow/graph'
 import type {
   CampaignAnalysisContributionRegistration,
   CampaignPlugin,
+  CampaignRecommendationContributionRegistration,
 } from './types'
 
 export type CampaignPluginsService = {
   readonly analysisContributions: readonly CampaignAnalysisContributionRegistration[]
   readonly plugins: readonly CampaignPlugin[]
+  readonly recommendationContributions: readonly CampaignRecommendationContributionRegistration[]
   readonly runSteps: readonly WorkflowStep<never>[]
   readonly targetSteps: readonly WorkflowStep<never>[]
 }
@@ -16,6 +18,7 @@ export type CampaignPluginsService = {
 const emptyPlugins: CampaignPluginsService = {
   analysisContributions: [],
   plugins: [],
+  recommendationContributions: [],
   runSteps: [],
   targetSteps: [],
 }
@@ -69,6 +72,13 @@ export const makeCampaignPluginsService = (
           })
         }
       }
+      for (const contribution of plugin.recommendationContributions ?? []) {
+        if (!stepIds.has(contribution.stepId)) {
+          return yield* new ApplicationCampaignConfigError({
+            message: `Campaign recommendation contribution "${contribution.name}" references missing step "${contribution.stepId}".`,
+          })
+        }
+      }
     }
 
     const steps = plugins.flatMap((plugin) =>
@@ -76,6 +86,9 @@ export const makeCampaignPluginsService = (
     )
     const analysisContributions = plugins.flatMap(
       (plugin) => plugin.analysisContributions ?? []
+    )
+    const recommendationContributions = plugins.flatMap(
+      (plugin) => plugin.recommendationContributions ?? []
     )
     const contributionNames = new Set<string>()
     const resultKeys = new Set<string>()
@@ -93,10 +106,27 @@ export const makeCampaignPluginsService = (
       contributionNames.add(contribution.name)
       resultKeys.add(contribution.resultKey.id)
     }
+    const recommendationNames = new Set<string>()
+    const recommendationResultKeys = new Set<string>()
+    for (const contribution of recommendationContributions) {
+      if (recommendationNames.has(contribution.name)) {
+        return yield* new ApplicationCampaignConfigError({
+          message: `Campaign recommendation contribution "${contribution.name}" is registered more than once.`,
+        })
+      }
+      if (recommendationResultKeys.has(contribution.resultKey.id)) {
+        return yield* new ApplicationCampaignConfigError({
+          message: `Campaign recommendation output key "${contribution.resultKey.id}" is registered more than once.`,
+        })
+      }
+      recommendationNames.add(contribution.name)
+      recommendationResultKeys.add(contribution.resultKey.id)
+    }
 
     return {
       analysisContributions,
       plugins,
+      recommendationContributions,
       runSteps: steps.filter((step) => step.scope === 'run'),
       targetSteps: steps.filter((step) => step.scope === 'target'),
     } satisfies CampaignPluginsService

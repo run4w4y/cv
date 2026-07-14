@@ -38,11 +38,17 @@ describe('application campaign config', () => {
     expect(campaign.pdfOutDir.endsWith('/cli-pdfs')).toBeTrue()
   })
 
-  test('defaults to a ChatGPT-compatible Codex model and medium reasoning', async () => {
+  test('defaults to the benchmarked mixed-model route', async () => {
     const { advisor, campaign } = await resolveOptions()
 
-    expect(advisor.model).toBe('gpt-5.5')
-    expect(advisor.reasoningEffort).toBe('medium')
+    expect(advisor.analysis).toEqual({
+      model: 'gpt-5.6-terra',
+      reasoningEffort: 'low',
+    })
+    expect(advisor.recommendation).toEqual({
+      model: 'gpt-5.6-sol',
+      reasoningEffort: 'low',
+    })
     expect(campaign.excludedProfiles).toBeUndefined()
     expect(campaign.generate).toBeTrue()
     expect(campaign.materials).toBe('all')
@@ -102,7 +108,7 @@ describe('application campaign config', () => {
     ).toBeTrue()
   })
 
-  test('lets explicit reasoning and materials settings override env config', async () => {
+  test('lets shared reasoning and materials settings override env config', async () => {
     const { advisor, campaign } = await resolveOptions(
       {
         ...baseOverrides,
@@ -114,8 +120,34 @@ describe('application campaign config', () => {
       }
     )
 
-    expect(advisor.reasoningEffort).toBe('high')
+    expect(advisor.analysis.reasoningEffort).toBe('high')
+    expect(advisor.recommendation.reasoningEffort).toBe('high')
     expect(campaign.materials).toBe('none')
+  })
+
+  test('supports independent model routes with CLI precedence over env', async () => {
+    const { advisor } = await resolveOptions(
+      {
+        ...baseOverrides,
+        analysisModel: 'cli-analysis',
+        recommendationReasoningEffort: 'high',
+      },
+      {
+        APPLICATION_CAMPAIGN_CODEX_ANALYSIS_MODEL: 'env-analysis',
+        APPLICATION_CAMPAIGN_CODEX_ANALYSIS_REASONING_EFFORT: 'medium',
+        APPLICATION_CAMPAIGN_CODEX_RECOMMENDATION_MODEL: 'env-recommendation',
+        APPLICATION_CAMPAIGN_CODEX_RECOMMENDATION_REASONING_EFFORT: 'low',
+      }
+    )
+
+    expect(advisor.analysis).toEqual({
+      model: 'cli-analysis',
+      reasoningEffort: 'medium',
+    })
+    expect(advisor.recommendation).toEqual({
+      model: 'env-recommendation',
+      reasoningEffort: 'high',
+    })
   })
 
   test('supports an explicitly empty profile exclusion list', async () => {

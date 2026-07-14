@@ -9,7 +9,10 @@ import { fetchJobSource } from '../../job'
 import {
   analysisExtensionSchemaFields,
   collectAnalysisPromptContributions,
+  collectRecommendationPromptContributions,
+  recommendationExtensionSchemaFields,
   renderAnalysisExtensionInstructions,
+  renderRecommendationExtensionInstructions,
 } from '../../plugins/contributions'
 import { uniqueProfileSlugs } from '../../profiles/catalog'
 import { renderProfilesMarkdown } from '../../profiles/render-full'
@@ -98,9 +101,10 @@ export const makeAnalysisSteps = (
     dependsOn: [
       fetchJob.id,
       ...uniq(
-        plugins.analysisContributions.map((registration) =>
-          id(registration.stepId)
-        )
+        [
+          ...plugins.analysisContributions,
+          ...plugins.recommendationContributions,
+        ].map((registration) => id(registration.stepId))
       ),
     ],
     execute: ({ outputs }) =>
@@ -148,7 +152,15 @@ export const makeAnalysisSteps = (
           locale: profileCatalog.defaultLocale,
           profiles: requestedProfiles,
         })
+        const recommendationContributions =
+          collectRecommendationPromptContributions(
+            outputs,
+            plugins.recommendationContributions
+          )
         const prompt = yield* renderRecommendationPrompt({
+          extensionInstructions: renderRecommendationExtensionInstructions(
+            recommendationContributions
+          ),
           fixedAudience: options.audience,
           fixedProfile,
           job,
@@ -161,12 +173,18 @@ export const makeAnalysisSteps = (
           targetRoutine.recommend,
           'Preparing recommendation with Codex'
         )
-        const rawRecommendation = yield* advisor.recommend({
+        const recommendationResult = yield* advisor.recommend({
           allowedProfiles: requestedProfiles,
+          extensionSchemas: recommendationExtensionSchemaFields(
+            recommendationContributions
+          ),
           fixedProfile,
           prompt,
         })
-        const recommendation = applyMaterialsMode(rawRecommendation, context)
+        const recommendation = applyMaterialsMode(
+          recommendationResult.recommendation,
+          context
+        )
         const decisions = resolveDecisions(recommendation, context)
 
         yield* reportCampaignProgress(
@@ -187,6 +205,16 @@ export const makeAnalysisSteps = (
           workflowOutput(targetAnalysisKey, analysis),
           workflowOutput(targetRecommendationKey, recommendation),
           workflowOutput(targetDecisionsKey, decisions),
+          ...plugins.recommendationContributions.flatMap((registration) =>
+            Object.hasOwn(recommendationResult.extensions, registration.name)
+              ? [
+                  workflowOutput(
+                    registration.resultKey,
+                    recommendationResult.extensions[registration.name]
+                  ),
+                ]
+              : []
+          ),
           ...plugins.analysisContributions.flatMap((registration) =>
             Object.hasOwn(analysis.extensions, registration.name)
               ? [

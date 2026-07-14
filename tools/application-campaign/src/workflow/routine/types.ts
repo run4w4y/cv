@@ -46,6 +46,7 @@ export type CampaignTargetRoutine = {
 }
 
 export type CampaignRoutine = {
+  readonly buildPdfAssets: RoutineStep<{ readonly webBaseUrl?: URL }>
   readonly issues: readonly CampaignIssue[]
   readonly pluginSteps: readonly ReadyRoutineStep[]
   readonly profiles: ReadyRoutineStep

@@ -209,6 +209,8 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
   assert.equal(replayedCapture.replayed, true)
   assert.equal(replayedCapture.capture.id, captured.capture.id)
   assert.equal(captured.application.id, applicationId)
+  assert.equal(captured.application.fitScore, 88)
+  assert.deepEqual(captured.capture.fitAssessment, captureInput.fitAssessment)
 
   const eventPayload = {
     deviceId: 'miniflare',

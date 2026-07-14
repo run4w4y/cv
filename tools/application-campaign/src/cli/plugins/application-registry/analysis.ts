@@ -1,12 +1,17 @@
 import {
   ApplicationCompensationInputSchema,
+  CurrencyCodeSchema,
+  FitAssessmentSchema,
+  NonNegativeMinorAmountSchema,
   OpportunityDetailsSchema,
   SubmissionDetailsSchema,
 } from '@cv/application-registry-entity'
 import { Effect, Schema } from 'effect'
 import {
   type CampaignAnalysisPromptContribution,
+  type CampaignRecommendationPromptContribution,
   defineCampaignAnalysisContribution,
+  defineCampaignRecommendationContribution,
 } from '../../../plugins/types'
 import { workflowKey, workflowOutput } from '../../../workflow/graph/key'
 import type {
@@ -14,11 +19,22 @@ import type {
   WorkflowStep,
 } from '../../../workflow/graph/types'
 import { campaignWorkflowStepIds } from '../../../workflow/step-ids'
+import { applicationRegistryConflictStepId } from './conflicts'
 
 export const applicationRegistryCampaignPluginId = 'application-registry'
 
+const ApplicationRegistryCompensationSchema = Schema.Struct({
+  currencyCode: CurrencyCodeSchema,
+  kind: ApplicationCompensationInputSchema.fields.kind,
+  maximumMinor: Schema.NullOr(NonNegativeMinorAmountSchema),
+  minimumMinor: Schema.NullOr(NonNegativeMinorAmountSchema),
+  period: ApplicationCompensationInputSchema.fields.period,
+  rawText: Schema.NullOr(Schema.String),
+  source: Schema.Literal('job-posting'),
+})
+
 export const ApplicationRegistryAnalysisSchema = Schema.Struct({
-  compensations: Schema.Array(ApplicationCompensationInputSchema),
+  compensations: Schema.Array(ApplicationRegistryCompensationSchema),
   details: OpportunityDetailsSchema,
   submissionDetails: SubmissionDetailsSchema,
 })
@@ -59,8 +75,26 @@ const analysisContributionKey = workflowKey<
   CampaignAnalysisPromptContribution<ApplicationRegistryAnalysis>
 >('application-registry.analysis.contribution')
 
+const recommendationContributionKey = workflowKey<
+  CampaignRecommendationPromptContribution<
+    Schema.Schema.Type<typeof FitAssessmentSchema>
+  >
+>('application-registry.recommendation.contribution')
+
 export const applicationRegistryAnalysisResultKey =
   workflowKey<ApplicationRegistryAnalysis>('application-registry.analysis')
+
+export const applicationRegistryFitAssessmentResultKey = workflowKey<
+  Schema.Schema.Type<typeof FitAssessmentSchema>
+>('application-registry.fit-assessment')
+
+export const isValidApplicationRegistryFitAssessment = (
+  assessment: Schema.Schema.Type<typeof FitAssessmentSchema>
+) =>
+  Object.values(assessment.dimensions).reduce(
+    (total, score) => total + score,
+    0
+  ) === assessment.score
 
 export const applicationRegistryAnalysisContribution =
   defineCampaignAnalysisContribution({
@@ -70,15 +104,43 @@ export const applicationRegistryAnalysisContribution =
     stepId: 'application-registry.analysis',
   })
 
+export const applicationRegistryRecommendationContribution =
+  defineCampaignRecommendationContribution({
+    key: recommendationContributionKey,
+    name: applicationRegistryCampaignPluginId,
+    resultKey: applicationRegistryFitAssessmentResultKey,
+    stepId: 'application-registry.analysis',
+  })
+
+const applicationRegistryRecommendationInstructions = `Assess the selected profile's fit for this opportunity using application-fit-v1.
+
+Return an integer score from 0 to 100 and the evidence behind it. Score only claims supported by the supplied CV source and posting. Unknown information is a gap, not proof of failure.
+
+The five dimension values must use these maxima and their sum must equal score:
+- hardRequirements: 0-40 for explicit must-have qualifications.
+- coreExperience: 0-25 for directly relevant technical and professional experience.
+- seniorityAndScope: 0-15 for ownership, leadership, and expected scope.
+- practicalEligibility: 0-10 for explicit location, language, work authorization, and work-mode feasibility.
+- preferredSignals: 0-10 for stated nice-to-have qualifications and differentiators.
+
+Use hardBlockers only for an explicit contradiction with a mandatory requirement, not for information the posting or CV leaves unknown. strengths and gaps must be short evidence-grounded strings. rationale must explain the score without referring to prompts, profiles being selected, or supplied context. rubricVersion must be exactly application-fit-v1.`
+
 export const makeApplicationRegistryAnalysisStep = (
   failurePolicy: WorkflowFailurePolicy
 ): WorkflowStep => ({
-  dependsOn: [campaignWorkflowStepIds.target.fetchJob],
+  dependsOn: [
+    applicationRegistryConflictStepId,
+    campaignWorkflowStepIds.target.fetchJob,
+  ],
   execute: () =>
     Effect.succeed([
       workflowOutput(analysisContributionKey, {
         instructions: applicationRegistryAnalysisInstructions,
         schema: ApplicationRegistryAnalysisSchema,
+      }),
+      workflowOutput(recommendationContributionKey, {
+        instructions: applicationRegistryRecommendationInstructions,
+        schema: FitAssessmentSchema,
       }),
     ]),
   failurePolicy,

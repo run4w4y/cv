@@ -3,6 +3,7 @@ import {
   ApplicationCompensationInputSchema,
   ApplicationEventInsertSchema,
   ApplicationEventKindSchema,
+  ApplicationIdentityResolutionSchema,
   ApplicationMutableSchema,
   ApplicationNoteSchema,
   ApplicationStatusSchema,
@@ -11,6 +12,7 @@ import {
   CampaignCaptureSchema,
   CurrencyCodeSchema,
   ExpectedApplicationVersionSchema,
+  FitAssessmentSchema,
   FitScoreSchema,
   InformationalApplicationEventKindSchema,
   informationalApplicationEventKindValues,
@@ -83,6 +85,8 @@ export const CreateCampaignCaptureCommandSchema = Schema.Struct({
   audience: NullableNonEmptyString,
   jobContentHash: NullableNonEmptyString,
   deviceId: NullableNonEmptyString,
+  fitAssessment: Schema.optional(FitAssessmentSchema),
+  identityResolution: Schema.optional(ApplicationIdentityResolutionSchema),
 })
 
 export type CreateCampaignCaptureCommand = Schema.Schema.Type<

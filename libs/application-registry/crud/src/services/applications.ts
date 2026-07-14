@@ -24,6 +24,9 @@ export interface ApplicationsCrud {
   readonly findByJobKey: (
     jobKey: string
   ) => Effect.Effect<Application | undefined, RegistryDatabaseError>
+  readonly findByCanonicalUrl: (
+    canonicalUrl: string
+  ) => Effect.Effect<readonly Application[], RegistryDatabaseError>
   readonly list: (
     filter: ApplicationListFilter
   ) => Effect.Effect<CrudPage<ApplicationListRecord>, RegistryDatabaseError>

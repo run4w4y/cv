@@ -4,6 +4,7 @@ import { withRegistryConnections } from '../internal/connection'
 import {
   findApplicationByIdentifier,
   findApplicationByJobKey,
+  findApplicationsByCanonicalUrl,
   listApplicationFacets,
   listApplications,
   patchApplication,
@@ -26,6 +27,10 @@ export const makeApplicationsCrudLive = (database: Effect.Effect<D1Database>) =>
     findByJobKey: (jobKey) =>
       withRegistryConnections(database, ({ query }) =>
         findApplicationByJobKey(query, jobKey)
+      ),
+    findByCanonicalUrl: (canonicalUrl) =>
+      withRegistryConnections(database, ({ query }) =>
+        findApplicationsByCanonicalUrl(query, canonicalUrl)
       ),
     list: (filter) =>
       withRegistryConnections(database, ({ query }) =>

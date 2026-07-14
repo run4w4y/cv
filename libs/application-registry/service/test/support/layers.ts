@@ -23,6 +23,7 @@ export const applicationsCrud = (
       targetStages: [application.targetStage],
     }),
   findByIdentifier: () => Effect.succeed(application),
+  findByCanonicalUrl: () => Effect.succeed([]),
   findByJobKey: () => Effect.succeed(application),
   list: () =>
     Effect.succeed({ hasNextPage: false, items: [applicationListRecord] }),

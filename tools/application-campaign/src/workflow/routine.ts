@@ -3,7 +3,7 @@ import { uniq } from 'es-toolkit'
 import type { PrepareCampaignOptions } from '../config/model'
 import { CampaignPlugins } from '../plugins/service'
 import { logInfo, logWarning, urlHost, withTelemetrySpan } from '../telemetry'
-import { readyRoutineStep } from './routine/builders'
+import { readyRoutineStep, skippedRoutineStep } from './routine/builders'
 import { resolveTargetRoutine } from './routine/target'
 import type { CampaignRoutine, RoutineStep } from './routine/types'
 import { campaignWorkflowStepIds } from './step-ids'
@@ -34,7 +34,10 @@ export const resolveCampaignRoutine = (options: PrepareCampaignOptions) =>
       )
     )
     const analysisStepDependencies = uniq(
-      plugins.analysisContributions.map((contribution) => contribution.stepId)
+      [
+        ...plugins.analysisContributions,
+        ...plugins.recommendationContributions,
+      ].map((contribution) => contribution.stepId)
     )
     const targets = options.targets.map((target) =>
       resolveTargetRoutine({
@@ -45,9 +48,34 @@ export const resolveCampaignRoutine = (options: PrepareCampaignOptions) =>
         target,
       })
     )
+    const hasPrivatePdf = targets.some(
+      (target) => target.privatePdf.status === 'ready'
+    )
+    const buildPdfAssets = !hasPrivatePdf
+      ? skippedRoutineStep({
+          id: campaignWorkflowStepIds.buildPdfAssets,
+          label: 'Build CV assets for PDF export',
+          reason: 'No campaign target requires PDF export.',
+        })
+      : options.skipBuild
+        ? skippedRoutineStep({
+            id: campaignWorkflowStepIds.buildPdfAssets,
+            label: 'Build CV assets for PDF export',
+            reason: 'The existing CV build will be reused.',
+          })
+        : readyRoutineStep({
+            config: { webBaseUrl: options.webBaseUrl },
+            dependsOn: [profiles.id],
+            id: campaignWorkflowStepIds.buildPdfAssets,
+            label: 'Build CV assets for PDF export',
+          })
     const targetsStep = readyRoutineStep({
       config: undefined,
-      dependsOn: [profiles.id, ...targetRunDependencies],
+      dependsOn: [
+        profiles.id,
+        ...targetRunDependencies,
+        ...(buildPdfAssets.status === 'ready' ? [buildPdfAssets.id] : []),
+      ],
       id: campaignWorkflowStepIds.targets,
       label: 'Prepare campaign targets',
     })
@@ -68,6 +96,7 @@ export const resolveCampaignRoutine = (options: PrepareCampaignOptions) =>
     const steps: readonly RoutineStep<unknown>[] = [
       ...pluginSteps,
       profiles,
+      buildPdfAssets,
       targetsStep,
       ...targets.flatMap((target) => target.steps),
       runArtifacts,
@@ -92,6 +121,7 @@ export const resolveCampaignRoutine = (options: PrepareCampaignOptions) =>
     )
 
     return {
+      buildPdfAssets,
       issues,
       pluginSteps,
       profiles,

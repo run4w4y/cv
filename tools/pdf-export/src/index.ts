@@ -6,6 +6,7 @@ export {
   PdfUsageError,
 } from './errors'
 export {
+  buildPdfAssets,
   exportProfilePdf,
   exportProfilePdfs,
   exportPublicPdfs,

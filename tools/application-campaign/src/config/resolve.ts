@@ -6,8 +6,10 @@ import { readApplicationCampaignEnvConfig } from './env'
 import {
   defaultCampaignConcurrency,
   defaultCampaignOutRoot,
-  defaultCodexModel,
-  defaultCodexReasoningEffort,
+  defaultCodexAnalysisModel,
+  defaultCodexAnalysisReasoningEffort,
+  defaultCodexRecommendationModel,
+  defaultCodexRecommendationReasoningEffort,
   defaultContentRoot,
   defaultLocale,
   defaultPdfOutDir,
@@ -92,18 +94,42 @@ export const resolvePrepareCampaignOptions = (
       outDir: runOutDir,
       pdfOutDir,
       profile,
+      registryConflictStrategy: overrides.registryConflictStrategy ?? 'prompt',
       skipBuild: overrides.skipBuild ?? false,
       skipPdf: overrides.skipPdf ?? false,
       targets,
       webBaseUrl,
     } satisfies PrepareCampaignOptions
     const advisor = {
+      analysis: {
+        model:
+          overrides.analysisModel ??
+          overrides.model ??
+          env.analysisModel ??
+          env.model ??
+          defaultCodexAnalysisModel,
+        reasoningEffort:
+          overrides.analysisReasoningEffort ??
+          overrides.reasoningEffort ??
+          env.analysisReasoningEffort ??
+          env.reasoningEffort ??
+          defaultCodexAnalysisReasoningEffort,
+      },
       binaryPath: overrides.codexBin ?? env.codexBin,
-      model: overrides.model ?? env.model ?? defaultCodexModel,
-      reasoningEffort:
-        overrides.reasoningEffort ??
-        env.reasoningEffort ??
-        defaultCodexReasoningEffort,
+      recommendation: {
+        model:
+          overrides.recommendationModel ??
+          overrides.model ??
+          env.recommendationModel ??
+          env.model ??
+          defaultCodexRecommendationModel,
+        reasoningEffort:
+          overrides.recommendationReasoningEffort ??
+          overrides.reasoningEffort ??
+          env.recommendationReasoningEffort ??
+          env.reasoningEffort ??
+          defaultCodexRecommendationReasoningEffort,
+      },
     }
 
     yield* logDebug('Resolved application campaign options', {
@@ -119,11 +145,16 @@ export const resolvePrepareCampaignOptions = (
         .join(', '),
       locale: campaign.locale,
       materials: campaign.materials,
+      analysisModel: advisor.analysis.model,
+      analysisReasoningEffort: advisor.analysis.reasoningEffort,
       outDir: campaign.outDir,
       pdfOutDir: campaign.pdfOutDir,
       skipBuild: campaign.skipBuild,
       skipPdf: campaign.skipPdf,
       targetCount: campaign.targets.length,
+      recommendationModel: advisor.recommendation.model,
+      recommendationReasoningEffort: advisor.recommendation.reasoningEffort,
+      registryConflictStrategy: campaign.registryConflictStrategy,
     })
 
     return { advisor, campaign }

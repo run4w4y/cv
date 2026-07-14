@@ -96,6 +96,7 @@ const applicationListItem = {
   captureCount: 1,
   compensationSummary: null,
   followUpState: 'none' as const,
+  identityAliases: [],
   labels: ['priority'],
   latestEventAt: event.occurredAt,
   latestEventKind: event.kind,
@@ -117,6 +118,7 @@ const capture: CampaignCapture = {
   profile: 'default',
   audience: null,
   confidence: 0.8,
+  fitAssessment: null,
   submissionDetails: {
     applicationMethod: 'web',
     applicationUrl: 'https://example.test/apply',

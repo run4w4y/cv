@@ -1,6 +1,7 @@
 export {
   findApplication,
   findApplicationByIdentifier,
+  findApplicationsByCanonicalUrl,
   findApplicationByJobKey,
   listApplicationFacets,
   listApplications,

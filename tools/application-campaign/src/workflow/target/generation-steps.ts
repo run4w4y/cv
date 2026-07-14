@@ -1,10 +1,11 @@
-import { exportProfilePdfs } from '@cv/pdf-export'
+import { exportProfilePdfs, PdfUsageError } from '@cv/pdf-export'
 import { mintPrivateContentLink } from '@cv/private-content-link'
 import { Effect } from 'effect'
 import type { ApplicationCampaignRuntime } from '../../runtime'
 import { slugify } from '../../text'
 import { type WorkflowStep, workflowOutput } from '../graph'
 import {
+  campaignPdfAssetsReadyKey,
   targetDecisionsKey,
   targetPdfPathKey,
   targetPrivateLinkKey,
@@ -54,6 +55,14 @@ export const makeGenerationSteps = (
           execute: ({ outputs }) => {
             const link = outputs.getOption(targetPrivateLinkKey)
             if (link._tag === 'None') return Effect.succeed([])
+            if (
+              !options.skipBuild &&
+              outputs.getOption(campaignPdfAssetsReadyKey)._tag === 'None'
+            ) {
+              return PdfUsageError.fail(
+                'The shared CV asset build failed; private PDF export is unavailable.'
+              )
+            }
 
             return outputs.get(targetDecisionsKey).pipe(
               Effect.flatMap((decisions) =>
@@ -67,7 +76,7 @@ export const makeGenerationSteps = (
                     },
                   ],
                   outputDir: options.pdfOutDir,
-                  skipBuild: options.skipBuild,
+                  skipBuild: true,
                   webBaseUrl: privatePdfRoutine.config.webBaseUrl,
                 })
               ),
