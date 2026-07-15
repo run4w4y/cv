@@ -14,6 +14,7 @@ import { CapturesServiceLive } from './captures'
 
 const request: CreateCampaignCaptureInput = {
   applicationStatus: application.applicationStatus,
+  applicationUrl: capture.applicationUrl,
   artifacts: capture.artifacts,
   audience: capture.audience,
   campaignRunId: capture.campaignRunId,

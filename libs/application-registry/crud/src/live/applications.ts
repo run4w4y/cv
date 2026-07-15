@@ -32,9 +32,9 @@ export const makeApplicationsCrudLive = (database: Effect.Effect<D1Database>) =>
       withRegistryConnections(database, ({ query }) =>
         findApplicationsByCanonicalUrl(query, canonicalUrl)
       ),
-    list: (filter) =>
+    list: (resolved) =>
       withRegistryConnections(database, ({ query }) =>
-        listApplications(query, filter)
+        listApplications(query, resolved)
       ),
     patch: (applicationId, patch, recordedAt) =>
       withRegistryConnections(database, (connections) =>

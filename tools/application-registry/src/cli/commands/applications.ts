@@ -1,8 +1,6 @@
 import {
   CompensationDisplayCurrencySchema,
   CreateApplicationRequestSchema,
-  FollowUpStateSchema,
-  type ListApplicationsQuery,
   type ListApplicationsResponse,
   PatchApplicationRequestSchema,
 } from '@cv/application-registry-api-contract'
@@ -12,17 +10,21 @@ import {
   personalPriorityValues,
   targetStageValues,
 } from '@cv/application-registry-entity'
-import { Console, Effect } from 'effect'
+import { Console, DateTime, Effect } from 'effect'
 import { Argument, Command, Flag } from 'effect/unstable/cli'
 
 import { ApplicationRegistryClient } from '../../client'
+import {
+  registryDeduplicationFlags,
+  runRegistryDeduplication,
+} from '../deduplicate'
 import {
   allFlag,
   applicationIdentifierArgument,
   expectedVersionFlag,
   inputFlag,
   jsonFlag,
-  listLimitFlag,
+  listPageSizeFlag,
   NonEmptyTrimmedStringSchema,
   optionalFlag,
   optionalStringFlag,
@@ -30,9 +32,10 @@ import {
 import { ApplicationRegistryCliInputError, decodeJsonInput } from '../input'
 import { printApplication, printApplications, printJson } from '../output'
 import {
-  registryDeduplicationFlags,
-  runRegistryDeduplication,
-} from '../deduplicate'
+  type ApplicationFilterOptions,
+  followUpShortcutValues,
+  makeApplicationListQuery,
+} from './application-list-query'
 
 const after = optionalStringFlag('after').pipe(
   Flag.withDescription('Continue after an API cursor.')
@@ -40,9 +43,11 @@ const after = optionalStringFlag('after').pipe(
 const company = optionalStringFlag('company')
 const location = optionalStringFlag('location')
 const role = optionalStringFlag('role')
-const label = optionalStringFlag('label')
+const label = optionalStringFlag('label').pipe(
+  Flag.map((value) => (value === undefined ? undefined : [value]))
+)
 const url = optionalStringFlag('url')
-const limit = listLimitFlag
+const size = listPageSizeFlag
 const fitScoreMin = optionalFlag(
   Flag.integer('fit-score-min').pipe(Flag.withSchema(FitScoreSchema))
 )
@@ -51,13 +56,15 @@ const fitScoreMax = optionalFlag(
 )
 const applicationStatus = optionalFlag(
   Flag.choice('status', applicationStatusValues)
-)
-const targetStage = optionalFlag(Flag.choice('target-stage', targetStageValues))
+).pipe(Flag.map((value) => (value === undefined ? undefined : [value])))
+const targetStage = optionalFlag(
+  Flag.choice('target-stage', targetStageValues)
+).pipe(Flag.map((value) => (value === undefined ? undefined : [value])))
 const personalPriority = optionalFlag(
   Flag.choice('personal-priority', personalPriorityValues)
-)
-const followUpState = optionalFlag(
-  Flag.choice('follow-up-state', FollowUpStateSchema.literals)
+).pipe(Flag.map((value) => (value === undefined ? undefined : [value])))
+const followUpShortcut = optionalFlag(
+  Flag.choice('follow-up-state', followUpShortcutValues)
 )
 const currency = optionalFlag(
   Flag.string('currency').pipe(
@@ -77,9 +84,9 @@ const filters = {
   currency,
   fitScoreMax,
   fitScoreMin,
-  followUpState,
+  followUpShortcut,
   label,
-  limit,
+  size,
   location,
   personalPriority,
   role,
@@ -89,38 +96,33 @@ const filters = {
 
 type ListOptions = {
   readonly all: boolean
-  readonly filters: ListApplicationsQuery
+  readonly filters: ApplicationFilterOptions
   readonly json: boolean
+  readonly search?: string
 }
-
-const listQuery = (
-  options: ListOptions,
-  cursor: string | undefined
-): ListApplicationsQuery => ({
-  ...options.filters,
-  after: cursor,
-  limit: options.all ? 100 : options.filters.limit,
-})
 
 const listApplications = (options: ListOptions) =>
   Effect.gen(function* () {
     const client = yield* ApplicationRegistryClient
+    const query = makeApplicationListQuery(options.filters, {
+      all: options.all,
+      referenceTime: DateTime.formatIso(yield* DateTime.now),
+      search: options.search,
+    })
     const firstCursor = options.filters.after
-    const first = yield* client.list(listQuery(options, firstCursor))
-    if (!options.all || first.nextCursor === null) return first
+    const first = yield* client.list(query(firstCursor))
+    if (!options.all || first.pageInfo.nextCursor === null) return first
 
     const items = [...first.items]
-    let checkpoint = first.checkpoint
-    let cursor: string | null = first.nextCursor
+    let pageInfo = first.pageInfo
+    let cursor: string | null = first.pageInfo.nextCursor
     while (cursor !== null) {
-      const page: ListApplicationsResponse = yield* client.list(
-        listQuery(options, cursor)
-      )
+      const page: ListApplicationsResponse = yield* client.list(query(cursor))
       items.push(...page.items)
-      checkpoint = page.checkpoint
-      cursor = page.nextCursor
+      pageInfo = page.pageInfo
+      cursor = page.pageInfo.nextCursor
     }
-    return { checkpoint, items, nextCursor: null }
+    return { items, pageInfo }
   })
 
 const renderApplications = (options: ListOptions) =>
@@ -146,8 +148,9 @@ export const applicationSearchCommand = Command.make(
   (options) =>
     renderApplications({
       all: options.all,
-      filters: { ...options.filters, q: options.query },
+      filters: options.filters,
       json: options.json,
+      search: options.query,
     })
 ).pipe(Command.withDescription('Search across application fields.'))
 

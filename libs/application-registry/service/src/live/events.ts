@@ -4,11 +4,12 @@ import {
   OperationsCrud,
   type PersistedEvent,
 } from '@cv/application-registry-crud'
+import { eventListQuery } from '@cv/application-registry-entity/query'
 import { Effect, Layer } from 'effect'
 
 import { RegistryConflictError } from '../errors'
-import { decodeCursor, encodeCursor } from '../internal/cursor'
 import { operationRequestSignature } from '../internal/operation-request-signature'
+import { resolveRegistryQuery } from '../internal/query-resolution'
 import {
   findRequiredApplication,
   findValidatedOperation,
@@ -22,11 +23,6 @@ import {
   type EventsService as EventsServiceShape,
 } from '../services/events'
 import type { AppendApplicationEventInput, ListEventsInput } from '../types'
-
-const asArray = <A>(
-  value: A | readonly A[] | undefined
-): readonly A[] | undefined =>
-  value === undefined ? undefined : Array.isArray(value) ? value : [value as A]
 
 const make = Effect.gen(function* () {
   const applications = yield* ApplicationsCrud
@@ -125,25 +121,9 @@ const make = Effect.gen(function* () {
         })
     ),
     list: Effect.fn('EventsService.list')((query: ListEventsInput) =>
-      Effect.gen(function* () {
-        const cursor = yield* decodeCursor(query.after)
-        const page = yield* events.list({
-          afterRevision: cursor?.revision,
-          from: query.from,
-          kind: asArray(query.kind),
-          limit: query.limit ?? 50,
-          to: query.to,
-        })
-        const last = page.items.at(-1)
-        const checkpoint = last
-          ? encodeCursor({ revision: last.revision })
-          : (query.after ?? null)
-        return {
-          checkpoint,
-          items: page.items,
-          nextCursor: page.hasNextPage ? checkpoint : null,
-        }
-      })
+      resolveRegistryQuery(eventListQuery, query).pipe(
+        Effect.flatMap((resolved) => events.list(resolved))
+      )
     ),
     listByApplication: Effect.fn('EventsService.listByApplication')(
       (identifier: string) =>

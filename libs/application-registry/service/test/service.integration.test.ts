@@ -7,7 +7,11 @@ import { FxRates } from '@cv/application-registry-fx'
 import { ListingAvailabilityChecker } from '@cv/application-registry-listing-check'
 import { Duration, Effect, Layer, ManagedRuntime, Result } from 'effect'
 
-import { ApplicationsService, ListingChecksService } from '../src'
+import {
+  ApplicationsService,
+  type ListApplicationsInput,
+  ListingChecksService,
+} from '../src'
 import { RegistryServicesLive } from '../src/live'
 import { makeApplicationInput, recordedAt } from './support/inputs'
 import {
@@ -90,18 +94,152 @@ afterEach(async () => {
   await harness.dispose()
 })
 
-test('runs application defaults, patches, labels, and checkpoints over D1', async () => {
+test('runs application defaults, patches, labels, and revision filters over D1', async () => {
   const result = await runtime.runPromise(applicationWorkflow)
 
   assert.equal(result.created.applicationStatus, 'not_started')
   assert.equal(result.created.version, 1)
-  assert.ok(result.checkpoint)
   assert.deepEqual(result.deltaIds, [result.created.id])
   assert.deepEqual(result.labels, ['priority', 'remote'])
   assert.deepEqual(result.storedLabels, result.labels)
   assert.equal(result.patched.fitScore, 91)
   assert.equal(result.patched.recommendedAction, 'Apply this week')
   assert.equal(result.patched.version, 2)
+})
+
+test('continues an explicit revision filter through query cursors', async () => {
+  const result = await runtime.runPromise(
+    Effect.gen(function* () {
+      const applications = yield* ApplicationsService
+      const baseline = yield* applications.upsert(
+        makeApplicationInput('revision-page-baseline')
+      )
+      const revisionFilter = [
+        {
+          type: 'condition',
+          field: 'updatedRevision',
+          operator: 'gt',
+          value: baseline.updatedRevision,
+        },
+      ] satisfies NonNullable<ListApplicationsInput['filters']>
+
+      const firstDelta = yield* applications.upsert(
+        makeApplicationInput('revision-page-first')
+      )
+      const secondDelta = yield* applications.upsert(
+        makeApplicationInput('revision-page-second')
+      )
+      const first = yield* applications.list({
+        filters: revisionFilter,
+        pagination: { size: 1 },
+      })
+      const nextCursor = first.pageInfo.nextCursor
+      if (nextCursor === null) {
+        return yield* Effect.die('Expected an opaque continuation cursor.')
+      }
+      const second = yield* applications.list({
+        filters: revisionFilter,
+        pagination: { after: nextCursor, size: 1 },
+      })
+      const changedFilter = yield* applications.list({
+        filters: [
+          ...revisionFilter,
+          {
+            type: 'condition',
+            field: 'company',
+            operator: 'contains',
+            value: 'A company that does not exist',
+          },
+        ],
+        pagination: { size: 1 },
+      })
+
+      return {
+        baseline,
+        changedFilter,
+        first,
+        firstDelta,
+        second,
+        secondDelta,
+      }
+    })
+  )
+
+  assert.deepEqual(result.changedFilter.items, [])
+  assert.deepEqual(
+    [...result.first.items, ...result.second.items].map(({ id }) => id),
+    [result.firstDelta.id, result.secondDelta.id]
+  )
+  assert.equal(result.second.pageInfo.nextCursor, null)
+})
+
+test('rejects application cursors after filter or token tampering', async () => {
+  const result = await runtime.runPromise(
+    Effect.gen(function* () {
+      const applications = yield* ApplicationsService
+      yield* applications.upsert(makeApplicationInput('cursor-first'))
+      yield* applications.upsert(makeApplicationInput('cursor-second'))
+
+      const first = yield* applications.list({
+        filters: [
+          {
+            type: 'condition',
+            field: 'company',
+            operator: 'contains',
+            value: 'Service Integration',
+          },
+        ],
+        pagination: { size: 1 },
+      })
+      if (first.pageInfo.nextCursor === null) {
+        return yield* Effect.die('Expected a second application page.')
+      }
+
+      const changedFilter = yield* Effect.result(
+        applications.list({
+          filters: [
+            {
+              type: 'condition',
+              field: 'company',
+              operator: 'contains',
+              value: 'Another Company',
+            },
+          ],
+          pagination: { after: first.pageInfo.nextCursor, size: 1 },
+        })
+      )
+      const cursor = first.pageInfo.nextCursor
+      const tampered = `${cursor.startsWith('A') ? 'B' : 'A'}${cursor.slice(1)}`
+      const changedCursor = yield* Effect.result(
+        applications.list({
+          filters: [
+            {
+              type: 'condition',
+              field: 'company',
+              operator: 'contains',
+              value: 'Service Integration',
+            },
+          ],
+          pagination: { after: tampered, size: 1 },
+        })
+      )
+
+      return { changedCursor, changedFilter }
+    })
+  )
+
+  assert.equal(
+    Result.isFailure(result.changedFilter)
+      ? result.changedFilter.failure._tag
+      : null,
+    'RegistryBadRequestError'
+  )
+  assert.equal(
+    Result.isFailure(result.changedCursor)
+      ? result.changedCursor.failure._tag
+      : null,
+    'RegistryBadRequestError'
+  )
 })
 
 test('creates without replacement, searches identity fields, patches metadata, and deletes optimistically', async () => {
@@ -115,8 +253,15 @@ test('creates without replacement, searches identity fields, patches metadata, a
       const created = yield* applications.create(input)
       const duplicate = yield* Effect.result(applications.create(input))
       const search = yield* applications.list({
-        limit: 10,
-        q: 'source-id-42',
+        filters: [
+          {
+            type: 'condition',
+            field: 'q',
+            operator: 'matches',
+            value: 'source-id-42',
+          },
+        ],
+        pagination: { size: 10 },
       })
       const patched = yield* applications.patch(created.id, {
         canonicalUrl: 'https://example.test/jobs/operator-crud-updated',

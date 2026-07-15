@@ -111,6 +111,7 @@ export const makeRegistryCaptureStep = ({
       )
       const request = {
         applicationStatus: 'preparing',
+        applicationUrl: registryAnalysis.applicationUrl,
         artifacts: campaignArtifacts(manifest.files),
         audience: decisions.audience,
         campaignRunId: runId,

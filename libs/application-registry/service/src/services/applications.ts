@@ -7,10 +7,9 @@ import { Context, type Effect } from 'effect'
 import type { ApplicationRegistryError } from '../errors'
 import type {
   ApplicationFacets,
-  ApplicationListItem,
+  ApplicationListPage,
   ListApplicationsInput,
   PatchApplicationInput,
-  RegistryPage,
   UpsertApplicationInput,
 } from '../types'
 
@@ -27,10 +26,7 @@ export interface ApplicationsService {
   ) => Effect.Effect<Application, ApplicationRegistryError>
   readonly list: (
     input: ListApplicationsInput
-  ) => Effect.Effect<
-    RegistryPage<ApplicationListItem>,
-    ApplicationRegistryError
-  >
+  ) => Effect.Effect<ApplicationListPage, ApplicationRegistryError>
   readonly patch: (
     identifier: string,
     input: PatchApplicationInput

@@ -7,10 +7,9 @@ import { Context, type Effect } from 'effect'
 import type { RegistryDatabaseError } from '../errors'
 import type {
   ApplicationFacets,
-  ApplicationListFilter,
-  ApplicationListRecord,
+  ApplicationListPage,
+  ApplicationListResolution,
   ApplicationPatch,
-  CrudPage,
   PersistApplicationOptions,
   PersistedApplication,
   PersistedEvent,
@@ -28,8 +27,8 @@ export interface ApplicationsCrud {
     canonicalUrl: string
   ) => Effect.Effect<readonly Application[], RegistryDatabaseError>
   readonly list: (
-    filter: ApplicationListFilter
-  ) => Effect.Effect<CrudPage<ApplicationListRecord>, RegistryDatabaseError>
+    query: ApplicationListResolution
+  ) => Effect.Effect<ApplicationListPage, RegistryDatabaseError>
   readonly patch: (
     applicationId: string,
     patch: ApplicationPatch,

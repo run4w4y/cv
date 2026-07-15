@@ -48,12 +48,15 @@ input and is the preferred machine interface. Mutation input is decoded with
 the same Effect Schema used by the Worker API. Commands with `--json` keep
 stdout machine-readable; errors and diagnostics remain separate.
 
-Application listing exposes every server filter and `--all` follows every
-continuation cursor. `application search` uses the API's cross-field `q` query
-over job key, source, source job ID, canonical URL, company, role, and location.
-Create is create-only and conflicts on an existing job key; upsert is the
-explicit replacement operation. Delete requires `--yes` and optionally accepts
-`--expected-version`.
+Application listing maps operator-friendly flags onto the shared filtering DSL,
+and `--all` follows every continuation cursor. `--follow-up-state` remains a CLI
+shortcut: `none`, `overdue`, and `upcoming` become primitive `followUpAt`
+filters. The CLI captures that filter's reference time once and reuses it for
+the complete cursor traversal. `application search` uses the API's cross-field
+`q` filter over job key, source, source job ID, canonical URL, company, role,
+and location. Create is create-only and conflicts on an existing job key;
+upsert is the explicit replacement operation. Delete requires `--yes` and
+optionally accepts `--expected-version`.
 
 `application deduplicate` groups records by normalized canonical URL and asks
 which record to keep for every conflict. Non-interactive runs can use

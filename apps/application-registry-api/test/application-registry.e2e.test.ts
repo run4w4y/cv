@@ -4,8 +4,7 @@ import {
   type ApplicationRegistryHttpClientService,
   makeApplicationRegistryHttpClient,
 } from '@cv/application-registry-api-client'
-import { ListApplicationsResponseSchema } from '@cv/application-registry-api-contract'
-import { Effect, Redacted, Schema } from 'effect'
+import { Effect, Redacted } from 'effect'
 import * as FetchHttpClient from 'effect/unstable/http/FetchHttpClient'
 
 import { applicationInput, captureInput } from './fixtures'
@@ -70,15 +69,56 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
   const listed = await Effect.runPromise(
     registry.registry.listApplications({
       query: {
-        applicationStatus: 'not_started',
-        company: 'Example',
-        followUpState: 'none',
-        label: 'e2e',
-        limit: 10,
-        location: 'Tokyo',
-        personalPriority: 'high',
-        role: 'Integration',
-        targetStage: 'apply_next',
+        filters: [
+          {
+            type: 'condition',
+            field: 'applicationStatus',
+            operator: 'in',
+            value: ['not_started'],
+          },
+          {
+            type: 'condition',
+            field: 'company',
+            operator: 'contains',
+            value: 'Example',
+          },
+          {
+            type: 'condition',
+            field: 'followUpAt',
+            operator: 'isNull',
+          },
+          {
+            type: 'condition',
+            field: 'labels',
+            operator: 'hasAny',
+            value: ['e2e'],
+          },
+          {
+            type: 'condition',
+            field: 'location',
+            operator: 'contains',
+            value: 'Tokyo',
+          },
+          {
+            type: 'condition',
+            field: 'personalPriority',
+            operator: 'in',
+            value: ['high'],
+          },
+          {
+            type: 'condition',
+            field: 'role',
+            operator: 'contains',
+            value: 'Integration',
+          },
+          {
+            type: 'condition',
+            field: 'targetStage',
+            operator: 'in',
+            value: ['apply_next'],
+          },
+        ],
+        pagination: { size: 10 },
       },
     })
   )
@@ -86,16 +126,13 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
     listed.items.map((application) => application.id),
     [applicationId]
   )
-  assert.equal(listed.nextCursor, null)
-  assert.ok(listed.checkpoint)
+  assert.equal(listed.pageInfo.nextCursor, null)
   assert.deepEqual(listed.items[0]?.labels, ['e2e', 'remote'])
   assert.equal(
     listed.items[0]?.compensationSummary,
     'Base salary: JPY 10,000,000–15,000,000 / year'
   )
-  assert.equal(listed.items[0]?.followUpState, 'none')
-  assert.equal(listed.items[0]?.captureCount, 0)
-  assert.equal(listed.items[0]?.noteCount, 0)
+  assert.deepEqual(listed.items[0]?.counts, { captures: 0, notes: 0 })
 
   const patched = await Effect.runPromise(
     registry.registry.patchApplication({
@@ -104,6 +141,7 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
         applicationStatus: 'preparing',
         expectedVersion: created.version,
         fitScore: 90,
+        followUpAt: '2026-07-11T12:00:00.000Z',
       },
     })
   )
@@ -113,7 +151,22 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
 
   const exactFit = await Effect.runPromise(
     registry.registry.listApplications({
-      query: { fitScoreMax: 90, fitScoreMin: 90 },
+      query: {
+        filters: [
+          {
+            type: 'condition',
+            field: 'fitScore',
+            operator: 'gte',
+            value: 90,
+          },
+          {
+            type: 'condition',
+            field: 'fitScore',
+            operator: 'lte',
+            value: 90,
+          },
+        ],
+      },
     })
   )
   assert.deepEqual(
@@ -122,22 +175,63 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
   )
 
   const aboveFit = await Effect.runPromise(
-    registry.registry.listApplications({ query: { fitScoreMin: 91 } })
+    registry.registry.listApplications({
+      query: {
+        filters: [
+          {
+            type: 'condition',
+            field: 'fitScore',
+            operator: 'gte',
+            value: 91,
+          },
+        ],
+      },
+    })
   )
   assert.deepEqual(aboveFit.items, [])
 
-  const blankFitResponse = await fetch(
-    new URL('/v1/applications?fitScoreMin=&fitScoreMax=', harness.url),
-    { headers: { authorization: `Bearer ${registryTestToken}` } }
-  )
-  assert.equal(blankFitResponse.status, 200)
-  const blankFitPage = Schema.decodeUnknownSync(ListApplicationsResponseSchema)(
-    await blankFitResponse.json()
+  const scheduledFollowUp = await Effect.runPromise(
+    registry.registry.listApplications({
+      query: {
+        filters: [
+          {
+            type: 'condition',
+            field: 'followUpAt',
+            operator: 'gte',
+            value: '2026-07-11T00:00:00.000Z',
+          },
+          {
+            type: 'condition',
+            field: 'followUpAt',
+            operator: 'lt',
+            value: '2026-07-12T00:00:00.000Z',
+          },
+        ],
+      },
+    })
   )
   assert.deepEqual(
-    blankFitPage.items.map((item) => item.id),
+    scheduledFollowUp.items.map((item) => item.id),
     [applicationId]
   )
+
+  const invalidFilterResponse = await fetch(
+    new URL(
+      `/v1/applications?${new URLSearchParams({
+        filters: JSON.stringify([
+          {
+            type: 'condition',
+            field: 'fitScore',
+            operator: 'dropTable',
+            value: 90,
+          },
+        ]),
+      })}`,
+      harness.url
+    ),
+    { headers: { authorization: `Bearer ${registryTestToken}` } }
+  )
+  assert.equal(invalidFilterResponse.status, 400)
 
   const staleVersion = await Effect.runPromise(
     Effect.flip(
@@ -240,23 +334,51 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
 
   const dashboardList = await Effect.runPromise(
     registry.registry.listApplications({
-      query: { company: 'Example Company', limit: 100 },
+      query: {
+        filters: [
+          {
+            type: 'condition',
+            field: 'company',
+            operator: 'contains',
+            value: 'Example Company',
+          },
+        ],
+        pagination: { size: 100 },
+      },
     })
   )
   assert.equal(dashboardList.items.length, 1)
   assert.deepEqual(dashboardList.items[0]?.labels, ['e2e', 'remote'])
-  assert.equal(dashboardList.items[0]?.captureCount, 1)
-  assert.equal(dashboardList.items[0]?.noteCount, 1)
-  assert.equal(dashboardList.items[0]?.latestEventKind, 'stage_changed')
-  assert.equal(dashboardList.items[0]?.latestEventAt, eventPayload.occurredAt)
+  assert.deepEqual(dashboardList.items[0]?.counts, { captures: 1, notes: 1 })
+  assert.deepEqual(dashboardList.items[0]?.latestEvent, {
+    kind: 'stage_changed',
+    occurredAt: eventPayload.occurredAt,
+  })
 
   const filteredEvents = await Effect.runPromise(
     registry.registry.listEvents({
       query: {
-        from: eventPayload.occurredAt,
-        kind: 'stage_changed',
-        limit: 100,
-        to: eventPayload.occurredAt,
+        filters: [
+          {
+            type: 'condition',
+            field: 'occurredAt',
+            operator: 'gte',
+            value: eventPayload.occurredAt,
+          },
+          {
+            type: 'condition',
+            field: 'kind',
+            operator: 'in',
+            value: ['stage_changed'],
+          },
+          {
+            type: 'condition',
+            field: 'occurredAt',
+            operator: 'lte',
+            value: eventPayload.occurredAt,
+          },
+        ],
+        pagination: { size: 100 },
       },
     })
   )
@@ -297,14 +419,22 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
   const multiStatus = await Effect.runPromise(
     registry.registry.listApplications({
       query: {
-        applicationStatus: ['applied', 'not_started'],
-        limit: 100,
+        filters: [
+          {
+            type: 'condition',
+            field: 'applicationStatus',
+            operator: 'in',
+            value: ['applied', 'not_started'],
+          },
+        ],
+        orderBy: [{ field: 'company', direction: 'desc' }],
+        pagination: { size: 100 },
       },
     })
   )
   assert.deepEqual(
-    multiStatus.items.map(({ id }) => id).sort(),
-    [applicationId, secondary.id].sort()
+    multiStatus.items.map(({ id }) => id),
+    [secondary.id, applicationId]
   )
 
   const fetchedAt = new Date().toISOString()
@@ -352,7 +482,7 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
     registry.registry.listApplications({
       query: {
         currency: 'USD',
-        limit: 100,
+        pagination: { size: 100 },
       },
     })
   )
@@ -365,26 +495,35 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
   )
 
   const firstPage = await Effect.runPromise(
-    registry.registry.listApplications({ query: { limit: 1 } })
+    registry.registry.listApplications({ query: { pagination: { size: 1 } } })
   )
   assert.equal(firstPage.items.length, 1)
-  assert.ok(firstPage.nextCursor)
-  assert.ok(firstPage.checkpoint)
+  assert.ok(firstPage.pageInfo.nextCursor)
   const secondPage = await Effect.runPromise(
     registry.registry.listApplications({
-      query: { after: firstPage.nextCursor, limit: 1 },
+      query: {
+        pagination: {
+          after: firstPage.pageInfo.nextCursor ?? undefined,
+          size: 1,
+        },
+      },
     })
   )
   assert.equal(secondPage.items.length, 1)
   assert.notEqual(secondPage.items[0]?.id, firstPage.items[0]?.id)
-  assert.equal(secondPage.nextCursor, null)
-  assert.ok(secondPage.checkpoint)
+  assert.equal(secondPage.pageInfo.nextCursor, null)
 
-  const eventCheckpoint = await Effect.runPromise(
-    registry.registry.listEvents({ query: { limit: 100 } })
+  const eventBaseline = await Effect.runPromise(
+    registry.registry.listEvents({
+      query: {
+        orderBy: [{ field: 'revision', direction: 'asc' }],
+        pagination: { size: 100 },
+      },
+    })
   )
-  assert.equal(eventCheckpoint.nextCursor, null)
-  assert.ok(eventCheckpoint.checkpoint)
+  assert.equal(eventBaseline.pageInfo.nextCursor, null)
+  const eventBaselineRevision = eventBaseline.items.at(-1)?.revision
+  assert.ok(eventBaselineRevision !== undefined)
   const delayedEvent = await Effect.runPromise(
     registry.registry.appendApplicationEvent({
       params: { id: applicationId },
@@ -395,26 +534,44 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
         occurredAt: '2020-01-01T00:00:00.000Z',
         operationId: 'e2e:event:delayed',
         payload: {
-          note: 'Arrived after the checkpoint with an old source time.',
+          note: 'Arrived after the revision baseline with an old source time.',
         },
       },
     })
   )
-  const eventsAfterCheckpoint = await Effect.runPromise(
+  const eventsAfterBaseline = await Effect.runPromise(
     registry.registry.listEvents({
-      query: { after: eventCheckpoint.checkpoint, limit: 100 },
+      query: {
+        filters: [
+          {
+            type: 'condition',
+            field: 'revision',
+            operator: 'gt',
+            value: eventBaselineRevision,
+          },
+        ],
+        orderBy: [{ field: 'revision', direction: 'asc' }],
+        pagination: { size: 100 },
+      },
     })
   )
   assert.deepEqual(
-    eventsAfterCheckpoint.items.map((item) => item.id),
+    eventsAfterBaseline.items.map((item) => item.id),
     [delayedEvent.event.id]
   )
 
-  const applicationCheckpoint = await Effect.runPromise(
-    registry.registry.listApplications({ query: { limit: 100 } })
+  const applicationBaseline = await Effect.runPromise(
+    registry.registry.listApplications({
+      query: {
+        orderBy: [{ field: 'updatedRevision', direction: 'asc' }],
+        pagination: { size: 100 },
+      },
+    })
   )
-  assert.equal(applicationCheckpoint.nextCursor, null)
-  assert.ok(applicationCheckpoint.checkpoint)
+  assert.equal(applicationBaseline.pageInfo.nextCursor, null)
+  const applicationBaselineRevision =
+    applicationBaseline.items.at(-1)?.updatedRevision
+  assert.ok(applicationBaselineRevision !== undefined)
   const current = await Effect.runPromise(
     registry.registry.getApplication({ params: { id: applicationId } })
   )
@@ -423,17 +580,28 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
       params: { id: applicationId },
       payload: {
         expectedVersion: current.version,
-        recommendedAction: 'Visible after the application checkpoint.',
+        recommendedAction: 'Visible after the application revision baseline.',
       },
     })
   )
-  const applicationsAfterCheckpoint = await Effect.runPromise(
+  const applicationsAfterBaseline = await Effect.runPromise(
     registry.registry.listApplications({
-      query: { after: applicationCheckpoint.checkpoint, limit: 100 },
+      query: {
+        filters: [
+          {
+            type: 'condition',
+            field: 'updatedRevision',
+            operator: 'gt',
+            value: applicationBaselineRevision,
+          },
+        ],
+        orderBy: [{ field: 'updatedRevision', direction: 'asc' }],
+        pagination: { size: 100 },
+      },
     })
   )
   assert.deepEqual(
-    applicationsAfterCheckpoint.items.map((item) => item.id),
+    applicationsAfterBaseline.items.map((item) => item.id),
     [applicationId]
   )
 
@@ -461,7 +629,7 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
   assert.equal(persisted.applicationStatus, 'applied')
   assert.equal(
     persisted.recommendedAction,
-    'Visible after the application checkpoint.'
+    'Visible after the application revision baseline.'
   )
 })
 
@@ -545,12 +713,12 @@ test('supports cursor-paginated application and event lists over real HTTP', asy
     do {
       const page = await Effect.runPromise(
         paginationRegistry.registry.listApplications({
-          query: { after, limit: 100 },
+          query: { pagination: { after, size: 100 } },
         })
       )
       pageSizes.push(page.items.length)
       ids.push(...page.items.map(({ id }) => id))
-      after = page.nextCursor ?? undefined
+      after = page.pageInfo.nextCursor ?? undefined
     } while (after !== undefined)
 
     assert.deepEqual(pageSizes, [100, 1])
@@ -564,12 +732,12 @@ test('supports cursor-paginated application and event lists over real HTTP', asy
     do {
       const eventPage = await Effect.runPromise(
         paginationRegistry.registry.listEvents({
-          query: { after: eventAfter, limit: 100 },
+          query: { pagination: { after: eventAfter, size: 100 } },
         })
       )
       eventPageSizes.push(eventPage.items.length)
       eventIds.push(...eventPage.items.map(({ id }) => id))
-      eventAfter = eventPage.nextCursor ?? undefined
+      eventAfter = eventPage.pageInfo.nextCursor ?? undefined
     } while (eventAfter !== undefined)
 
     assert.deepEqual(eventPageSizes, [100, 1])

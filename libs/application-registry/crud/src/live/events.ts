@@ -14,9 +14,9 @@ export const makeEventsCrudLive = (database: Effect.Effect<D1Database>) =>
       withRegistryConnections(database, ({ query }) =>
         findEventByOperation(query, operationId)
       ),
-    list: (filter) =>
+    list: (resolved) =>
       withRegistryConnections(database, ({ query }) =>
-        listEvents(query, filter)
+        listEvents(query, resolved)
       ),
     listByApplication: (applicationId) =>
       withRegistryConnections(database, ({ query }) =>

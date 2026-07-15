@@ -28,6 +28,14 @@ export const ExpectedApplicationVersionSchema = Schema.Int.pipe(
   Schema.check(Schema.isGreaterThanOrEqualTo(0))
 )
 
+/** Monotonic registry revision used by incremental synchronization. */
+export const RegistryRevisionSchema = Schema.Int.pipe(
+  Schema.check(Schema.isGreaterThanOrEqualTo(0))
+)
+
+/** Monotonic revision assigned to registry mutations. */
+export type RegistryRevision = Schema.Schema.Type<typeof RegistryRevisionSchema>
+
 export const FitScoreSchema = Schema.Int.pipe(
   Schema.check(
     Schema.isGreaterThanOrEqualTo(0),

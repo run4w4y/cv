@@ -58,17 +58,16 @@ const applications: readonly ApplicationListItem[] = Array.from(
   (_, index) => ({
     ...application,
     canonicalUrl: `https://host${index % 4}.example/jobs/${index}`,
-    captureCount: 0,
     compensationSummary: null,
-    followUpState: 'none',
+    counts: { captures: 0, notes: 0 },
     identityAliases: [],
     id: `application-${index}`,
     jobKey: `web:${index}`,
     labels: [],
-    latestApplicationUrl: `https://preferred${index}.example/apply/${index}`,
-    latestEventAt: null,
-    latestEventKind: null,
-    noteCount: 0,
+    latestCapture: {
+      applicationUrl: `https://preferred${index}.example/apply/${index}`,
+    },
+    latestEvent: null,
     updatedRevision: index + 1,
   })
 )
@@ -170,9 +169,14 @@ describe('local listing scan', () => {
     const client = Layer.succeed(ApplicationRegistryClient, {
       list: () =>
         Effect.succeed({
-          checkpoint: null,
           items: applications,
-          nextCursor: null,
+          pageInfo: {
+            kind: 'cursor',
+            size: 50,
+            hasNextPage: false,
+            hasPreviousPage: false,
+            nextCursor: null,
+          },
         }),
     } as unknown as ApplicationRegistryClientService)
 
@@ -219,9 +223,14 @@ describe('local listing scan', () => {
     const client = Layer.succeed(ApplicationRegistryClient, {
       list: () =>
         Effect.succeed({
-          checkpoint: null,
           items: [retryApplication],
-          nextCursor: null,
+          pageInfo: {
+            kind: 'cursor',
+            size: 50,
+            hasNextPage: false,
+            hasPreviousPage: false,
+            nextCursor: null,
+          },
         }),
     } as unknown as ApplicationRegistryClientService)
 
@@ -252,9 +261,14 @@ describe('local listing scan', () => {
     const client = Layer.succeed(ApplicationRegistryClient, {
       list: () =>
         Effect.succeed({
-          checkpoint: null,
           items: [],
-          nextCursor: null,
+          pageInfo: {
+            kind: 'cursor',
+            size: 50,
+            hasNextPage: false,
+            hasPreviousPage: false,
+            nextCursor: null,
+          },
         }),
       submitListingCheckFindings: (
         batchId: string,

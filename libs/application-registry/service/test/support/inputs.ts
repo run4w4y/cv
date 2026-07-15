@@ -23,7 +23,6 @@ const submissionDetails = {
   additionalInstructions: null,
   applicationMethod: 'web form',
   applicationQuestions: [],
-  applicationUrl: 'https://example.test/apply',
   contactEmail: null,
   coverLetterInstructions: null,
   deadline: null,
@@ -43,6 +42,7 @@ export const makeCaptureInput = (
 ): CreateCampaignCaptureInput => ({
   ...makeApplicationInput(suffix),
   artifacts: [],
+  applicationUrl: 'https://example.test/apply',
   audience: null,
   campaignRunId: `service-run-${suffix}`,
   capturedAt: recordedAt,

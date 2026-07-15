@@ -38,6 +38,7 @@ export const persistCapture = (
       profile: input.profile,
       audience: input.audience,
       confidence: input.confidence,
+      applicationUrl: input.applicationUrl,
       fitAssessment: input.fitAssessment,
       submissionDetails: input.submissionDetails,
       artifacts: input.artifacts,

@@ -84,8 +84,7 @@ const make = Effect.gen(function* () {
   const observe = (application: Application) =>
     Effect.gen(function* () {
       const captureItems = yield* captures.listByApplication(application.id)
-      const authoritativeUrl =
-        captureItems.at(-1)?.submissionDetails.applicationUrl ?? null
+      const authoritativeUrl = captureItems.at(-1)?.applicationUrl ?? null
       if (
         authoritativeUrl !== null &&
         authoritativeUrl !== application.canonicalUrl
@@ -342,7 +341,7 @@ const make = Effect.gen(function* () {
                   application.id
                 )
                 const expectedUrl =
-                  captureItems.at(-1)?.submissionDetails.applicationUrl ??
+                  captureItems.at(-1)?.applicationUrl ??
                   application.canonicalUrl
                 if (
                   application.canonicalUrl !== finding.canonicalUrl ||

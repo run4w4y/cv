@@ -25,6 +25,8 @@
   },
   "dependencies": {
     "@cv/application-registry-entity": "workspace:*",
+    "@cv/drizzle-query": "workspace:*",
+    "@cv/drizzle-query-effect": "workspace:*",
     "@effect/sql-d1": "4.0.0-beta.91",
     "drizzle-orm": "1.0.0-rc.4",
     "effect": "4.0.0-beta.91",

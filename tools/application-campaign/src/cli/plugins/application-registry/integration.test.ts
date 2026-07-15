@@ -40,7 +40,6 @@ const submissionDetails = {
   additionalInstructions: null,
   applicationMethod: 'Web form',
   applicationQuestions: ['Why this role?'],
-  applicationUrl: 'https://jobs.example.com/apply',
   contactEmail: null,
   coverLetterInstructions: 'Address the platform team.',
   deadline: null,
@@ -55,6 +54,7 @@ const submissionDetails = {
 }
 
 const registryAnalysis = {
+  applicationUrl: 'https://jobs.example.com/apply',
   compensations: [
     {
       currencyCode: 'JPY',
@@ -238,7 +238,16 @@ describe('application registry campaign integration', () => {
           }
         }),
       list: () =>
-        Effect.succeed({ checkpoint: null, items: [], nextCursor: null }),
+        Effect.succeed({
+          items: [],
+          pageInfo: {
+            kind: 'cursor',
+            size: 100,
+            hasNextPage: false,
+            hasPreviousPage: false,
+            nextCursor: null,
+          },
+        }),
       sync: () => Effect.succeed({ failed: [], synced: 0 }),
     } satisfies ApplicationRegistryCampaignClient
     const targetOutDir = join(outputRoot, 'target')

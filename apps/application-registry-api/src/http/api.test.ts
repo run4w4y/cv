@@ -21,6 +21,7 @@ import {
   CompensationsService,
   type CreateCampaignCaptureInput,
   EventsService,
+  type ListApplicationsInput,
   ListingChecksService,
 } from '@cv/application-registry-service'
 import { Effect, Layer, type Scope } from 'effect'
@@ -93,15 +94,12 @@ const event: ApplicationEvent = {
 
 const applicationListItem = {
   ...application,
-  captureCount: 1,
   compensationSummary: null,
-  followUpState: 'none' as const,
+  counts: { captures: 1, notes: 1 },
   identityAliases: [],
   labels: ['priority'],
-  latestEventAt: event.occurredAt,
-  latestEventKind: event.kind,
-  latestApplicationUrl: 'https://example.test/apply',
-  noteCount: 1,
+  latestCapture: { applicationUrl: 'https://example.test/apply' },
+  latestEvent: { kind: event.kind, occurredAt: event.occurredAt },
 }
 
 const eventListItem = {
@@ -117,11 +115,11 @@ const capture: CampaignCapture = {
   campaignRunId: 'run-1',
   profile: 'default',
   audience: null,
+  applicationUrl: 'https://example.test/apply',
   confidence: 0.8,
   fitAssessment: null,
   submissionDetails: {
     applicationMethod: 'web',
-    applicationUrl: 'https://example.test/apply',
     contactEmail: null,
     deadline: null,
     employmentType: null,
@@ -196,6 +194,7 @@ const listingCheckRun: ListingCheckRun = {
 
 const request: CreateCampaignCaptureRequest = {
   applicationStatus: application.applicationStatus,
+  applicationUrl: capture.applicationUrl,
   jobKey: application.jobKey,
   source: application.source,
   sourceJobId: null,
@@ -224,7 +223,8 @@ const RegistryAuthorizationClientLayer = HttpApiMiddleware.layerClient(
 
 const makeRegistryLayer = (
   onCapture: (payload: CreateCampaignCaptureInput) => void = () => undefined,
-  onNote: (payload: AddApplicationNoteInput) => void = () => undefined
+  onNote: (payload: AddApplicationNoteInput) => void = () => undefined,
+  onListApplications: (query: ListApplicationsInput) => void = () => undefined
 ) =>
   Layer.mergeAll(
     Layer.succeed(AnnotationsService, {
@@ -245,12 +245,19 @@ const makeRegistryLayer = (
           targetStages: [application.targetStage],
         }),
       find: () => Effect.succeed(application),
-      list: () =>
-        Effect.succeed({
-          checkpoint: 'revision=1',
+      list: (query) => {
+        onListApplications(query)
+        return Effect.succeed({
           items: [applicationListItem],
-          nextCursor: null,
-        }),
+          pageInfo: {
+            kind: 'cursor',
+            size: 50,
+            hasNextPage: false,
+            hasPreviousPage: false,
+            nextCursor: null,
+          },
+        })
+      },
       patch: () => Effect.succeed(application),
       remove: () => Effect.succeed(undefined),
       replaceLabels: () => Effect.succeed([]),
@@ -270,9 +277,14 @@ const makeRegistryLayer = (
       append: () => Effect.succeed({ application, event, replayed: false }),
       list: () =>
         Effect.succeed({
-          checkpoint: 'revision=1',
           items: [eventListItem],
-          nextCursor: null,
+          pageInfo: {
+            kind: 'cursor',
+            size: 50,
+            hasNextPage: false,
+            hasPreviousPage: false,
+            nextCursor: null,
+          },
         }),
       listByApplication: () => Effect.succeed({ items: [event] }),
     }),
@@ -395,6 +407,54 @@ describe('application registry HttpApi', () => {
       personalPriorities: [],
       targetStages: ['backlog'],
     })
+  })
+
+  test('decodes the definition-derived application query through the HTTP contract', async () => {
+    let observed: ListApplicationsInput | undefined
+    const query = {
+      filters: [
+        {
+          type: 'group',
+          combinator: 'or',
+          children: [
+            {
+              type: 'condition',
+              field: 'company',
+              operator: 'contains',
+              value: 'Example',
+            },
+            {
+              type: 'condition',
+              field: 'labels',
+              operator: 'hasAny',
+              value: ['priority'],
+            },
+          ],
+        },
+      ],
+      orderBy: [{ field: 'company', direction: 'desc' }],
+      pagination: { size: 10 },
+    } as const
+
+    const response = await runApiTest(
+      Effect.gen(function* () {
+        const client = yield* HttpApiTest.groups(ApplicationRegistryApi, [
+          'registry',
+        ])
+        return yield* client.registry.listApplications({ query })
+      }).pipe((effect) =>
+        provideApiTestLayer(
+          effect,
+          makeRegistryLayer(undefined, undefined, (input) => {
+            observed = input
+          }),
+          true
+        )
+      )
+    )
+
+    expect(response.items).toEqual([applicationListItem])
+    expect(observed).toEqual(query)
   })
 
   test('carries one note operation ID through the generated HTTP contract', async () => {

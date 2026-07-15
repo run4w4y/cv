@@ -24,6 +24,7 @@ export const campaignCaptures = sqliteTable(
     profile: text('profile').notNull(),
     audience: text('audience'),
     confidence: real('confidence'),
+    applicationUrl: text('application_url'),
     fitAssessment: text('fit_assessment', {
       mode: 'json',
     }).$type<FitAssessment>(),

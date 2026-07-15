@@ -34,6 +34,7 @@ const ApplicationRegistryCompensationSchema = Schema.Struct({
 })
 
 export const ApplicationRegistryAnalysisSchema = Schema.Struct({
+  applicationUrl: Schema.NullOr(Schema.String),
   compensations: Schema.Array(ApplicationRegistryCompensationSchema),
   details: OpportunityDetailsSchema,
   submissionDetails: SubmissionDetailsSchema,
@@ -43,12 +44,12 @@ export type ApplicationRegistryAnalysis = Schema.Schema.Type<
   typeof ApplicationRegistryAnalysisSchema
 >
 
-const applicationRegistryAnalysisInstructions = `Extract the registry metadata and operational details for this opportunity. Return one object with submissionDetails, details, and compensations.
+const applicationRegistryAnalysisInstructions = `Extract the registry metadata and operational details for this opportunity. Return one object with applicationUrl, submissionDetails, details, and compensations.
 
 - Use null for every unstated scalar field and [] for every unstated list. Do not infer requirements that the posting does not state.
 
 For submissionDetails:
-- applicationMethod and applicationUrl describe where/how to apply; contactEmail is the application or recruiter address when one is provided.
+- applicationUrl is the top-level canonical destination for applying. applicationMethod describes how to apply; contactEmail is the application or recruiter address when one is provided.
 - applicationQuestions must contain every explicit question or requested written response.
 - requiredDocuments must include explicitly requested CV, portfolio, references, certificates, or similar documents.
 - coverLetterInstructions contains the posting's exact cover-letter or motivation-note requirements.

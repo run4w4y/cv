@@ -2,15 +2,15 @@ import type { ApplicationEvent } from '@cv/application-registry-entity'
 import { Context, type Effect } from 'effect'
 
 import type { RegistryDatabaseError } from '../errors'
-import type { CrudPage, EventListFilter, RegistryEventListItem } from '../types'
+import type { EventListPage, EventListResolution } from '../types'
 
 export interface EventsCrud {
   readonly findByOperation: (
     operationId: string
   ) => Effect.Effect<ApplicationEvent | undefined, RegistryDatabaseError>
   readonly list: (
-    filter: EventListFilter
-  ) => Effect.Effect<CrudPage<RegistryEventListItem>, RegistryDatabaseError>
+    query: EventListResolution
+  ) => Effect.Effect<EventListPage, RegistryDatabaseError>
   readonly listByApplication: (
     applicationId: string
   ) => Effect.Effect<readonly ApplicationEvent[], RegistryDatabaseError>

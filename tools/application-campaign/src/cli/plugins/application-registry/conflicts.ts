@@ -175,7 +175,17 @@ export const makeRegistryConflictStep = ({
       for (const target of options.targets) {
         const canonicalUrl = normalizeApplicationCanonicalUrl(target.url.href)
         const jobKey = `url:${canonicalUrl}`
-        const response = yield* client.list({ limit: 100, url: canonicalUrl })
+        const response = yield* client.list({
+          filters: [
+            {
+              type: 'condition',
+              field: 'canonicalUrl',
+              operator: 'eq',
+              value: canonicalUrl,
+            },
+          ],
+          pagination: { size: 100 },
+        })
         if (
           response.items.length === 0 ||
           response.items.some(

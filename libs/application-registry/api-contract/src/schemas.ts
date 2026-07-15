@@ -3,8 +3,6 @@ import {
   type ApplicationCompensation,
   ApplicationCompensationSchema,
   type ApplicationEvent,
-  type ApplicationEventKind,
-  ApplicationEventKindSchema,
   ApplicationEventSchema,
   type ApplicationLabel,
   ApplicationLabelSchema,
@@ -27,6 +25,22 @@ import {
   TargetStageSchema,
   UtcIsoTimestampSchema,
 } from '@cv/application-registry-entity'
+import {
+  ApplicationListItemSchema,
+  RegistryEventListItemSchema,
+} from '@cv/application-registry-entity/query'
+
+export {
+  type ApplicationListItem,
+  ApplicationListItemSchema,
+  type RegistryEventListItem,
+  RegistryEventListItemSchema,
+} from '@cv/application-registry-entity/query'
+
+import {
+  CursorPageInfoSchema,
+  queryPageSchema,
+} from '@cv/drizzle-query-effect/schema'
 import { Schema } from 'effect'
 import { HttpApiSchema } from 'effect/unstable/httpapi'
 
@@ -49,14 +63,12 @@ export {
   DeleteApplicationQuerySchema,
   ListApplicationsQuerySchema,
   ListEventsQuerySchema,
-  ListLimitValueSchema,
+  PaginationSizeSchema,
   PatchApplicationCommandSchema as PatchApplicationRequestSchema,
   RegistryApplicationInputSchema as UpsertApplicationRequestSchema,
   RegistryApplicationInputSchema as CreateApplicationRequestSchema,
   SubmitListingCheckFindingsCommandSchema as SubmitListingCheckFindingsRequestSchema,
 } from './commands'
-
-import { type FollowUpState, FollowUpStateSchema } from './commands'
 
 export const ApplicationIdentifierParamsSchema = Schema.Struct({
   id: NonEmptyString,
@@ -66,56 +78,15 @@ export const ListingCheckRunIdentifierParamsSchema = Schema.Struct({
   id: NonEmptyString,
 })
 
-const RevisionPageFields = {
-  checkpoint: Schema.NullOr(NonEmptyString),
-  nextCursor: Schema.NullOr(NonEmptyString),
-}
+/** Standard cursor-page response returned by application listing. */
+export const ListApplicationsResponseSchema = queryPageSchema(
+  ApplicationListItemSchema,
+  CursorPageInfoSchema
+)
 
-export type ApplicationListItem = Application & {
-  readonly captureCount: number
-  readonly compensationSummary: string | null
-  readonly followUpState: FollowUpState
-  readonly identityAliases: readonly string[]
-  readonly labels: readonly string[]
-  readonly latestEventAt: string | null
-  readonly latestEventKind: ApplicationEventKind | null
-  readonly latestApplicationUrl: string | null
-  readonly noteCount: number
-}
-
-export const ApplicationListItemSchema: Schema.Codec<ApplicationListItem> =
-  Schema.revealCodec(
-    Schema.Struct({
-      ...ApplicationSchema.fields,
-      captureCount: Schema.Int.pipe(
-        Schema.check(Schema.isGreaterThanOrEqualTo(0))
-      ),
-      compensationSummary: Schema.NullOr(NonEmptyString),
-      followUpState: FollowUpStateSchema,
-      identityAliases: Schema.Array(NonEmptyString),
-      labels: Schema.Array(NonEmptyString),
-      latestEventAt: Schema.NullOr(UtcIsoTimestampSchema),
-      latestEventKind: Schema.NullOr(ApplicationEventKindSchema),
-      latestApplicationUrl: Schema.NullOr(NonEmptyString),
-      noteCount: Schema.Int.pipe(
-        Schema.check(Schema.isGreaterThanOrEqualTo(0))
-      ),
-    })
-  )
-
-export type ListApplicationsResponse = {
-  readonly items: readonly ApplicationListItem[]
-  readonly checkpoint: string | null
-  readonly nextCursor: string | null
-}
-
-export const ListApplicationsResponseSchema: Schema.Codec<ListApplicationsResponse> =
-  Schema.revealCodec(
-    Schema.Struct({
-      items: Schema.Array(ApplicationListItemSchema),
-      ...RevisionPageFields,
-    })
-  )
+export type ListApplicationsResponse = Schema.Schema.Type<
+  typeof ListApplicationsResponseSchema
+>
 
 export type ApplicationFacetsResponse = {
   readonly applicationStatuses: readonly ApplicationStatus[]
@@ -320,32 +291,15 @@ export const ListApplicationCompensationsResponseSchema: Schema.Codec<ListApplic
     })
   )
 
-export type RegistryEventListItem = ApplicationEvent &
-  Pick<Application, 'canonicalUrl' | 'company' | 'role'>
+/** Standard cursor-page response returned by registry-wide event listing. */
+export const ListEventsResponseSchema = queryPageSchema(
+  RegistryEventListItemSchema,
+  CursorPageInfoSchema
+)
 
-export const RegistryEventListItemSchema: Schema.Codec<RegistryEventListItem> =
-  Schema.revealCodec(
-    Schema.Struct({
-      ...ApplicationEventSchema.fields,
-      canonicalUrl: ApplicationSchema.fields.canonicalUrl,
-      company: ApplicationSchema.fields.company,
-      role: ApplicationSchema.fields.role,
-    })
-  )
-
-export type ListEventsResponse = {
-  readonly items: readonly RegistryEventListItem[]
-  readonly checkpoint: string | null
-  readonly nextCursor: string | null
-}
-
-export const ListEventsResponseSchema: Schema.Codec<ListEventsResponse> =
-  Schema.revealCodec(
-    Schema.Struct({
-      items: Schema.Array(RegistryEventListItemSchema),
-      ...RevisionPageFields,
-    })
-  )
+export type ListEventsResponse = Schema.Schema.Type<
+  typeof ListEventsResponseSchema
+>
 
 export const HealthResponseSchema = Schema.Struct({ ok: Schema.Boolean })
 export type HealthResponse = Schema.Schema.Type<typeof HealthResponseSchema>

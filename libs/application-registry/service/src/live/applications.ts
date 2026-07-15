@@ -8,6 +8,7 @@ import type {
   CurrencyCode,
   FxRate,
 } from '@cv/application-registry-entity'
+import { applicationListQuery } from '@cv/application-registry-entity/query'
 import { FxRates } from '@cv/application-registry-fx'
 import { Effect, Layer } from 'effect'
 import { uniq } from 'es-toolkit'
@@ -19,7 +20,7 @@ import {
 } from '../errors'
 import { toApplicationListItem } from '../internal/application-list-item'
 import { convertCompensationForDisplay } from '../internal/compensation-conversion'
-import { decodeCursor, encodeCursor } from '../internal/cursor'
+import { resolveRegistryQuery } from '../internal/query-resolution'
 import {
   decorateCompensations,
   newRegistryId,
@@ -35,11 +36,6 @@ import type {
   PatchApplicationInput,
   UpsertApplicationInput,
 } from '../types'
-
-const asArray = <A>(
-  value: A | readonly A[] | undefined
-): readonly A[] | undefined =>
-  value === undefined ? undefined : Array.isArray(value) ? value : [value as A]
 
 const convertForSummary = (
   original: ApplicationCompensation,
@@ -127,34 +123,17 @@ const make = Effect.gen(function* () {
     list: Effect.fn('ApplicationsService.list')(
       (query: ListApplicationsInput) =>
         Effect.gen(function* () {
-          const cursor = yield* decodeCursor(query.after)
-          const now = yield* registryNow
-          const page = yield* applications.list({
-            afterRevision: cursor?.revision,
-            applicationStatus: asArray(query.applicationStatus),
-            company: query.company,
-            fitScoreMax: query.fitScoreMax,
-            fitScoreMin: query.fitScoreMin,
-            followUpState: asArray(query.followUpState),
-            label: asArray(query.label),
-            limit: query.limit ?? 50,
-            location: query.location,
-            now,
-            personalPriority: asArray(query.personalPriority),
-            q: query.q,
-            role: query.role,
-            targetStage: asArray(query.targetStage),
-            url: query.url,
-          })
-          const last = page.items.at(-1)
-          const checkpoint = last
-            ? encodeCursor({ revision: last.updatedRevision })
-            : (query.after ?? null)
+          const { currency, ...request } = query
+          const resolved = yield* resolveRegistryQuery(
+            applicationListQuery,
+            request
+          )
+          const page = yield* applications.list(resolved)
 
           const quoteCurrency =
-            query.currency === undefined || query.currency === 'original'
+            currency === undefined || currency === 'original'
               ? undefined
-              : query.currency
+              : currency
           const rates = quoteCurrency
             ? new Map(
                 yield* Effect.forEach(
@@ -176,16 +155,15 @@ const make = Effect.gen(function* () {
                   convertForSummary(original, quoteCurrency, rates)
                 ).pipe(
                   Effect.map((displayed) =>
-                    toApplicationListItem(item, now, displayed)
+                    toApplicationListItem(item, displayed)
                   )
                 )
-              : Effect.succeed(toApplicationListItem(item, now))
+              : Effect.succeed(toApplicationListItem(item))
           )
 
           return {
-            checkpoint,
+            ...page,
             items,
-            nextCursor: page.hasNextPage ? checkpoint : null,
           }
         })
     ),

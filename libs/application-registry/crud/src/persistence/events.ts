@@ -3,11 +3,12 @@ import {
   applications,
   campaignCaptures,
 } from '@cv/application-registry-entity'
-import { and, asc, eq, getColumns, gt, gte, inArray, lte } from 'drizzle-orm'
+import { finalizeQuery } from '@cv/drizzle-query-effect'
+import { asc, eq, getColumns } from 'drizzle-orm'
 import { Effect } from 'effect'
 import { databaseFailure, type RegistryDatabaseError } from '../errors'
 import type { RegistryQueryDatabase } from '../internal/connection'
-import type { CrudPage, EventListFilter, RegistryEventListItem } from '../types'
+import type { EventListPage, EventListResolution } from '../types'
 
 export const findEventByOperation = (
   database: RegistryQueryDatabase,
@@ -36,48 +37,29 @@ export const listApplicationEvents = (
 
 export const listEvents = (
   database: RegistryQueryDatabase,
-  query: EventListFilter
-): Effect.Effect<CrudPage<RegistryEventListItem>, RegistryDatabaseError> =>
+  resolved: EventListResolution
+): Effect.Effect<EventListPage, RegistryDatabaseError> =>
   Effect.gen(function* () {
-    const limit = query.limit
-    const baseQuery = database
-      .select({
-        ...getColumns(applicationEvents),
-        canonicalUrl: applications.canonicalUrl,
-        company: applications.company,
-        role: applications.role,
-      })
-      .from(applicationEvents)
-      .innerJoin(
-        applications,
-        eq(applicationEvents.applicationId, applications.id)
+    const rows = yield* resolved
+      .apply(
+        database
+          .select({
+            ...getColumns(applicationEvents),
+            canonicalUrl: applications.canonicalUrl,
+            company: applications.company,
+            role: applications.role,
+            ...resolved.requiredSelection,
+          })
+          .from(applicationEvents)
+          .innerJoin(
+            applications,
+            eq(applicationEvents.applicationId, applications.id)
+          )
+          .$dynamic()
       )
-      .where(
-        and(
-          query.afterRevision === undefined
-            ? undefined
-            : gt(applicationEvents.revision, query.afterRevision),
-          query.from
-            ? gte(applicationEvents.occurredAt, query.from)
-            : undefined,
-          query.to ? lte(applicationEvents.occurredAt, query.to) : undefined,
-          query.kind && query.kind.length > 0
-            ? inArray(applicationEvents.kind, query.kind)
-            : undefined
-        )
-      )
-      .orderBy(asc(applicationEvents.revision))
-
-    const rows = yield* baseQuery
-      .limit(limit + 1)
       .pipe(Effect.mapError(databaseFailure('Failed to list registry events')))
 
-    const hasNextPage = rows.length > limit
-    const items = hasNextPage ? rows.slice(0, limit) : rows
-    return {
-      hasNextPage,
-      items,
-    }
+    return yield* finalizeQuery(resolved, rows).pipe(Effect.orDie)
   })
 
 export const findCaptureByOperation = (

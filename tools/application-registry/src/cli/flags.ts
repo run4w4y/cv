@@ -1,6 +1,6 @@
 import {
   ApplicationIdentifierParamsSchema,
-  ListLimitValueSchema,
+  PaginationSizeSchema,
 } from '@cv/application-registry-api-contract'
 import {
   CurrencyCodeSchema,
@@ -46,9 +46,9 @@ export const expectedVersionFlag = optionalFlag(
   )
 )
 
-export const listLimitFlag = optionalFlag(
-  Flag.integer('limit').pipe(
-    Flag.withSchema(ListLimitValueSchema),
+export const listPageSizeFlag = optionalFlag(
+  Flag.integer('size').pipe(
+    Flag.withSchema(PaginationSizeSchema),
     Flag.withDescription('Maximum results to return (1–100).')
   )
 )

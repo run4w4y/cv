@@ -33,6 +33,34 @@ test('routes authentication and request codec failures at the Worker boundary', 
   })
   assert.equal(invalidPayload.status, 400)
   assert.equal(await invalidPayload.text(), '')
+
+  for (const filters of [
+    [
+      {
+        type: 'condition',
+        field: 'notARegistryField',
+        operator: 'eq',
+        value: 'anything',
+      },
+    ],
+    [
+      {
+        type: 'condition',
+        field: 'company',
+        operator: 'dropTable',
+        value: 'anything',
+      },
+    ],
+  ]) {
+    const invalidQuery = new URLSearchParams({
+      filters: JSON.stringify(filters),
+    })
+    const response = await harness.fetchRegistry(
+      `/v1/applications?${invalidQuery}`
+    )
+    assert.equal(response.status, 400)
+    assert.equal(await response.text(), '')
+  }
 })
 
 test('maps live service not-found and conflict failures to HTTP statuses', async () => {
@@ -91,8 +119,20 @@ test('exposes create-only CRUD, cross-field search, metadata patches, and optimi
   })
   assert.equal(duplicate.status, 409)
 
+  const searchQuery = new URLSearchParams({
+    filters: JSON.stringify([
+      {
+        type: 'condition',
+        field: 'q',
+        operator: 'matches',
+        value: 'e2e-registry',
+      },
+    ]),
+    orderBy: JSON.stringify([{ field: 'company', direction: 'asc' }]),
+    size: '100',
+  })
   const searched = await harness.fetchRegistry(
-    '/v1/applications?q=e2e-registry&limit=100'
+    `/v1/applications?${searchQuery}`
   )
   assert.equal(searched.status, 200)
   const searchResult = Schema.decodeUnknownSync(

@@ -4,7 +4,6 @@ import type {
   ApplicationCompensation,
   ApplicationCompensationInput,
   ApplicationEvent,
-  ApplicationEventKind,
   ApplicationIdentityResolution,
   ApplicationLabel,
   ApplicationListingCheck,
@@ -25,12 +24,13 @@ import type {
   StatusChangingApplicationEventKind,
   TargetStage,
 } from '@cv/application-registry-entity'
-
-export type RegistryPage<A> = {
-  readonly checkpoint: string | null
-  readonly items: readonly A[]
-  readonly nextCursor: string | null
-}
+import type {
+  ApplicationListItem,
+  ApplicationListQueryRequest,
+  EventListQueryRequest,
+  RegistryEventListItem,
+} from '@cv/application-registry-entity/query'
+import type { CursorPageInfo, QueryPage } from '@cv/drizzle-query'
 
 export type RegistryItems<A> = { readonly items: readonly A[] }
 
@@ -65,37 +65,14 @@ export type PatchApplicationInput = ApplicationMutable & {
   readonly expectedVersion?: number
 }
 
-export type ListApplicationsInput = {
-  readonly after?: string
-  readonly applicationStatus?: ApplicationStatus | readonly ApplicationStatus[]
-  readonly company?: string
+export type ListApplicationsInput = ApplicationListQueryRequest & {
   readonly currency?: CurrencyCode | 'original'
-  readonly fitScoreMax?: number
-  readonly fitScoreMin?: number
-  readonly followUpState?: FollowUpState | readonly FollowUpState[]
-  readonly label?: string | readonly string[]
-  readonly limit?: number
-  readonly location?: string
-  readonly personalPriority?: PersonalPriority | readonly PersonalPriority[]
-  readonly q?: string
-  readonly role?: string
-  readonly targetStage?: TargetStage | readonly TargetStage[]
-  readonly url?: string
 }
 
-export type FollowUpState = 'none' | 'overdue' | 'upcoming'
+export type { ApplicationListItem }
 
-export type ApplicationListItem = Application & {
-  readonly captureCount: number
-  readonly compensationSummary: string | null
-  readonly followUpState: FollowUpState
-  readonly identityAliases: readonly string[]
-  readonly labels: readonly string[]
-  readonly latestEventAt: string | null
-  readonly latestEventKind: ApplicationEventKind | null
-  readonly latestApplicationUrl: string | null
-  readonly noteCount: number
-}
+/** Cursor page returned by application list operations. */
+export type ApplicationListPage = QueryPage<ApplicationListItem, CursorPageInfo>
 
 export type ApplicationFacets = {
   readonly applicationStatuses: readonly ApplicationStatus[]
@@ -119,6 +96,7 @@ type CampaignCaptureInputFields = Pick<
   | 'campaignRunId'
   | 'capturedAt'
   | 'confidence'
+  | 'applicationUrl'
   | 'jobContentHash'
   | 'profile'
   | 'submissionDetails'
@@ -156,19 +134,12 @@ export type AppendApplicationEventInput =
       readonly nextApplicationStatus?: never
     })
 
-export type ListEventsInput = {
-  readonly after?: string
-  readonly from?: string
-  readonly kind?: ApplicationEventKind | readonly ApplicationEventKind[]
-  readonly limit?: number
-  readonly to?: string
-}
+export type ListEventsInput = EventListQueryRequest
 
-export type RegistryEventListItem = ApplicationEvent & {
-  readonly canonicalUrl: string
-  readonly company: string
-  readonly role: string
-}
+export type { RegistryEventListItem }
+
+/** Cursor page returned by registry-wide event list operations. */
+export type EventListPage = QueryPage<RegistryEventListItem, CursorPageInfo>
 
 export type ConvertedCompensation = {
   readonly currencyCode: CurrencyCode

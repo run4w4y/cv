@@ -64,7 +64,7 @@ const mergeEvidence = (
 const targetFor = (application: ApplicationListItem): ListingCheckTarget => ({
   company: application.company,
   role: application.role,
-  url: application.latestApplicationUrl ?? application.canonicalUrl,
+  url: application.latestCapture?.applicationUrl ?? application.canonicalUrl,
 })
 
 const retryable = (observation: ListingObservation) =>
@@ -130,16 +130,18 @@ const loadAllApplications = Effect.gen(function* () {
   const seenCursors = new Set<string>()
 
   for (;;) {
-    const page = yield* client.list({ after, limit: 100 })
+    const page = yield* client.list({ pagination: { after, size: 100 } })
     for (const application of page.items) byId.set(application.id, application)
-    if (!page.nextCursor) break
-    if (seenCursors.has(page.nextCursor)) {
+    if (!page.pageInfo.nextCursor) break
+    if (seenCursors.has(page.pageInfo.nextCursor)) {
       return yield* Effect.fail(
-        new Error(`Application pagination repeated cursor ${page.nextCursor}.`)
+        new Error(
+          `Application pagination repeated cursor ${page.pageInfo.nextCursor}.`
+        )
       )
     }
-    seenCursors.add(page.nextCursor)
-    after = page.nextCursor
+    seenCursors.add(page.pageInfo.nextCursor)
+    after = page.pageInfo.nextCursor
   }
   return [...byId.values()]
 })

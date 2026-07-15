@@ -82,7 +82,6 @@ const submissionDetails = {
   additionalInstructions: null,
   applicationMethod: 'Web form',
   applicationQuestions: [],
-  applicationUrl: 'https://jobs.example.com/apply',
   contactEmail: null,
   coverLetterInstructions: null,
   deadline: null,
@@ -97,6 +96,7 @@ const submissionDetails = {
 }
 
 const registryAnalysis = {
+  applicationUrl: 'https://jobs.example.com/apply',
   compensations: [
     {
       currencyCode: 'USD',
@@ -126,6 +126,7 @@ const registryAnalysis = {
 } satisfies ApplicationRegistryAnalysis
 
 const emptyRegistryAnalysis = {
+  applicationUrl: null,
   compensations: [],
   details: {
     applyFromAbroad: null,

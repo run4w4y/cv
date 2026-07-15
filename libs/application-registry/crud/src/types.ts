@@ -3,7 +3,6 @@ import type {
   ApplicationCompensation,
   ApplicationCompensationInput,
   ApplicationEvent,
-  ApplicationEventKind,
   ApplicationListingCheck,
   ApplicationListingCheckSchedule,
   ApplicationMutable,
@@ -21,50 +20,51 @@ import type {
   TargetStage,
   UtcIsoTimestamp,
 } from '@cv/application-registry-entity'
+import type {
+  applicationListQuery,
+  eventListQuery,
+  RegistryEventListItem,
+} from '@cv/application-registry-entity/query'
+import type {
+  CursorPageInfo,
+  QueryPage,
+  QueryResolutionOf,
+} from '@cv/drizzle-query'
 
-export type CrudPage<A> = {
-  readonly hasNextPage: boolean
-  readonly items: readonly A[]
+export type ApplicationListResolution = QueryResolutionOf<
+  typeof applicationListQuery
+>
+
+export type EventListResolution = QueryResolutionOf<typeof eventListQuery>
+
+export type ApplicationListCounts = {
+  readonly captures: number
+  readonly notes: number
 }
 
-export type ApplicationListFilter = {
-  readonly afterRevision?: number
-  readonly applicationStatus?: readonly ApplicationStatus[]
-  readonly company?: string
-  readonly fitScoreMax?: number
-  readonly fitScoreMin?: number
-  readonly followUpState?: readonly FollowUpState[]
-  readonly label?: readonly string[]
-  readonly limit: number
-  readonly location?: string
-  readonly now: UtcIsoTimestamp
-  readonly personalPriority?: readonly PersonalPriority[]
-  readonly q?: string
-  readonly role?: string
-  readonly targetStage?: readonly TargetStage[]
-  readonly url?: string
-}
+export type ApplicationListLatestEvent = Pick<
+  ApplicationEvent,
+  'kind' | 'occurredAt'
+>
 
-export type EventListFilter = {
-  readonly afterRevision?: number
-  readonly from?: UtcIsoTimestamp
-  readonly kind?: readonly ApplicationEventKind[]
-  readonly limit: number
-  readonly to?: UtcIsoTimestamp
-}
-
-export type FollowUpState = 'none' | 'overdue' | 'upcoming'
+export type ApplicationListLatestCapture = Pick<
+  CampaignCapture,
+  'applicationUrl'
+>
 
 export type ApplicationListRecord = Application & {
-  readonly captureCount: number
   readonly compensations: readonly ApplicationCompensation[]
+  readonly counts: ApplicationListCounts
   readonly identityAliases: readonly string[]
   readonly labels: readonly string[]
-  readonly latestEventAt: UtcIsoTimestamp | null
-  readonly latestEventKind: ApplicationEventKind | null
-  readonly latestApplicationUrl: string | null
-  readonly noteCount: number
+  readonly latestCapture: ApplicationListLatestCapture | null
+  readonly latestEvent: ApplicationListLatestEvent | null
 }
+
+export type ApplicationListPage = QueryPage<
+  ApplicationListRecord,
+  CursorPageInfo
+>
 
 export type ApplicationFacets = {
   readonly applicationStatuses: readonly ApplicationStatus[]
@@ -74,11 +74,7 @@ export type ApplicationFacets = {
   readonly targetStages: readonly TargetStage[]
 }
 
-export type RegistryEventListItem = ApplicationEvent & {
-  readonly canonicalUrl: string
-  readonly company: string
-  readonly role: string
-}
+export type EventListPage = QueryPage<RegistryEventListItem, CursorPageInfo>
 
 export type ApplicationPatch = ApplicationMutable & {
   readonly expectedVersion?: number
@@ -109,6 +105,7 @@ type PersistedCaptureFields = Pick<
   | 'campaignRunId'
   | 'capturedAt'
   | 'confidence'
+  | 'applicationUrl'
   | 'fitAssessment'
   | 'jobContentHash'
   | 'operationId'

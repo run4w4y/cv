@@ -25,13 +25,24 @@ The package separates the three concerns involved in the entity model:
   optionality while adding constraints SQLite metadata cannot express, such as
   UTC timestamps and structured JSON. A single, narrowly scoped helper works
   around nullable insert refinements in `drizzle-orm@1.0.0-rc.4`.
+- `src/relations.ts` owns the complete Drizzle relation graph used by relational
+  reads. `src/query` owns the table-derived application and event list
+  definitions shared by persistence and transport schema derivation.
+
+JSON columns are reserved for structured values that are always consumed as a
+whole, such as capture artifacts, fit assessments, submission instructions,
+listing-check evidence, and event-specific payloads. Values used independently
+for filtering, ordering, joining, or projection remain ordinary typed columns.
+In particular, the captured application URL is stored as
+`campaign_captures.applicationUrl`, not hidden inside submission JSON.
 
 The model also owns the appendable, status-changing, and informational event
 kind subsets. The service types and HTTP union derive from those same values,
 so lifecycle semantics cannot drift between the two boundaries.
 
-The package root is the only public import surface and exports each model,
-codec, and table module explicitly. There are no compatibility entrypoints.
+The package root exports each model, codec, relation, and table module
+explicitly. The `@cv/application-registry-entity/query` entry point exposes the
+shared query definitions without coupling callers to the HTTP contract.
 `src/tables/index.ts` exists only as Drizzle Kit's complete migration schema.
 
 Drizzle Kit reads `src/tables/index.ts`. After a table change, generate and

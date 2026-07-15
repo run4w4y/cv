@@ -1,0 +1,52 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "drizzle-query-effect",
+  "projectType": "library",
+  "sourceRoot": "libs/drizzle-query-effect/src",
+  "tags": ["scope:shared", "type:core", "visibility:private"],
+  "targets": {
+    "build": {
+      "executor": "nx:noop",
+      "outputs": ["{projectRoot}/dist"],
+      "dependsOn": [
+        {
+          "projects": "self",
+          "target": "build:js"
+        }
+      ]
+    },
+    "build:tsc": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/drizzle-query-effect/src/index.ts",
+        "outputPath": "libs/drizzle-query-effect/dist",
+        "rootDir": "libs/drizzle-query-effect/src",
+        "tsConfig": "libs/drizzle-query-effect/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "build:js": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": "self",
+          "target": "build:tsc"
+        }
+      ],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "color": true,
+        "command": "vite build --config libs/drizzle-query-effect/vite.lib.config.ts"
+      }
+    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {
+      "dependsOn": ["build"]
+    },
+    "typecheck": {},
+    "format": {},
+    "format:check": {}
+  }
+}

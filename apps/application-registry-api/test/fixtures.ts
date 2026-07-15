@@ -56,6 +56,7 @@ export const applicationInput: UpsertApplicationRequest = {
 export const captureInput: CreateCampaignCaptureRequest = {
   ...applicationInput,
   artifacts: [],
+  applicationUrl: 'https://example.com/jobs/e2e-registry/apply',
   audience: null,
   campaignRunId: 'e2e-run',
   capturedAt: '2026-07-10T12:00:00.000Z',
@@ -83,7 +84,6 @@ export const captureInput: CreateCampaignCaptureRequest = {
     additionalInstructions: null,
     applicationMethod: 'web form',
     applicationQuestions: [],
-    applicationUrl: 'https://example.com/jobs/e2e-registry/apply',
     contactEmail: null,
     coverLetterInstructions: null,
     deadline: null,

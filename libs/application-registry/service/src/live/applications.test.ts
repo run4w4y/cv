@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import type { PersistedApplication } from '@cv/application-registry-crud'
+import type {
+  ApplicationsCrud,
+  PersistedApplication,
+} from '@cv/application-registry-crud'
 import { FxRates } from '@cv/application-registry-fx'
 import { Effect, Layer } from 'effect'
 import { TestClock } from 'effect/testing'
@@ -36,20 +39,101 @@ const live = (applicationLayer = applicationsCrudLayer()) =>
   )
 
 describe('ApplicationsService', () => {
-  test('decodes cursors before querying CRUD', async () => {
-    let afterRevision: number | undefined
+  test('resolves and forwards generic application filters', async () => {
+    let observedQuery: Parameters<ApplicationsCrud['list']>[0] | undefined
     const page = await Effect.runPromise(
       ApplicationsService.use((service) =>
-        service.list({ after: 'revision=2', limit: 10 })
+        service.list({
+          filters: [
+            {
+              type: 'condition',
+              field: 'updatedRevision',
+              operator: 'gt',
+              value: 1,
+            },
+          ],
+          pagination: { size: 10 },
+        })
+      ).pipe(
+        Effect.provide(
+          live(
+            applicationsCrudLayer({
+              list: (query) => {
+                observedQuery = query
+                return Effect.succeed({
+                  items: [applicationListRecord],
+                  pageInfo: {
+                    kind: 'cursor',
+                    size: 10,
+                    hasNextPage: false,
+                    hasPreviousPage: true,
+                    nextCursor: null,
+                  },
+                })
+              },
+            })
+          )
+        )
+      )
+    )
+
+    expect(observedQuery?.filtering.where).toBeDefined()
+    expect(observedQuery?.pagination.size).toBe(10)
+    expect(observedQuery?.ordering.terms).toEqual([
+      expect.objectContaining({ field: 'updatedRevision', direction: 'asc' }),
+    ])
+    expect(page.pageInfo.nextCursor).toBeNull()
+  })
+
+  test('returns an empty standard query page unchanged', async () => {
+    let observedQuery: Parameters<ApplicationsCrud['list']>[0] | undefined
+    const applicationLayer = applicationsCrudLayer({
+      list: (query) => {
+        observedQuery = query
+        return Effect.succeed({
+          items: [],
+          pageInfo: {
+            kind: 'cursor',
+            size: 1,
+            hasNextPage: false,
+            hasPreviousPage: true,
+            nextCursor: null,
+          },
+        })
+      },
+    })
+
+    const page = await Effect.runPromise(
+      ApplicationsService.use((service) =>
+        service.list({ pagination: { size: 1 } })
+      ).pipe(Effect.provide(live(applicationLayer)))
+    )
+
+    expect(observedQuery?.filtering.where).toBeUndefined()
+    expect(page.items).toEqual([])
+    expect(page.pageInfo.nextCursor).toBeNull()
+  })
+
+  test('forwards the numeric page size and exposes the next cursor', async () => {
+    let observedSize: number | undefined
+    const page = await Effect.runPromise(
+      ApplicationsService.use((service) =>
+        service.list({ pagination: { size: 100 } })
       ).pipe(
         Effect.provide(
           live(
             applicationsCrudLayer({
               list: (filter) => {
-                afterRevision = filter.afterRevision
+                observedSize = filter.pagination?.size
                 return Effect.succeed({
-                  hasNextPage: false,
                   items: [applicationListRecord],
+                  pageInfo: {
+                    kind: 'cursor',
+                    size: 100,
+                    hasNextPage: true,
+                    hasPreviousPage: false,
+                    nextCursor: 'inner-next',
+                  },
                 })
               },
             })
@@ -58,75 +142,53 @@ describe('ApplicationsService', () => {
       )
     )
 
-    expect(afterRevision).toBe(2)
-    expect(page.checkpoint).toBe('revision=3')
-    expect(page.nextCursor).toBeNull()
-  })
-
-  test('forwards the numeric page limit and exposes the next cursor', async () => {
-    let observedLimit: number | undefined
-    const page = await Effect.runPromise(
-      ApplicationsService.use((service) => service.list({ limit: 100 })).pipe(
-        Effect.provide(
-          live(
-            applicationsCrudLayer({
-              list: (filter) => {
-                observedLimit = filter.limit
-                return Effect.succeed({
-                  hasNextPage: true,
-                  items: [applicationListRecord],
-                })
-              },
-            })
-          )
-        )
-      )
-    )
-
-    expect(observedLimit).toBe(100)
+    expect(observedSize).toBe(100)
     expect(page.items).toHaveLength(1)
-    expect(page.nextCursor).toBe('revision=3')
+    expect(page.pageInfo.nextCursor).toBe('inner-next')
   })
 
-  test('decorates list rows for the dashboard at one request-time instant', async () => {
+  test('decorates list rows for the dashboard', async () => {
     const page = await Effect.runPromise(
-      Effect.gen(function* () {
-        yield* TestClock.setTime(Date.parse(recordedAt))
-        return yield* ApplicationsService.use((service) =>
-          service.list({ currency: 'USD' })
-        )
-      }).pipe(
-        Effect.provide([
+      ApplicationsService.use((service) =>
+        service.list({ currency: 'USD' })
+      ).pipe(
+        Effect.provide(
           live(
             applicationsCrudLayer({
               list: () =>
                 Effect.succeed({
-                  hasNextPage: false,
                   items: [
                     {
                       ...applicationListRecord,
                       compensations: [compensation],
+                      counts: { captures: 1, notes: 2 },
                       followUpAt: '2026-07-12T11:00:00.000Z',
                       labels: ['priority'],
-                      latestEventAt: recordedAt,
-                      latestEventKind: 'stage_changed',
-                      noteCount: 2,
+                      latestEvent: {
+                        kind: 'stage_changed',
+                        occurredAt: recordedAt,
+                      },
                     },
                   ],
+                  pageInfo: {
+                    kind: 'cursor',
+                    size: 50,
+                    hasNextPage: false,
+                    hasPreviousPage: false,
+                    nextCursor: null,
+                  },
                 }),
             })
-          ),
-          TestClock.layer(),
-        ])
+          )
+        )
       )
     )
 
     expect(page.items[0]).toMatchObject({
       compensationSummary: 'Base salary: USD 200,000–240,000 / year',
-      followUpState: 'overdue',
       labels: ['priority'],
-      latestEventKind: 'stage_changed',
-      noteCount: 2,
+      latestEvent: { kind: 'stage_changed', occurredAt: recordedAt },
+      counts: { captures: 1, notes: 2 },
     })
   })
 

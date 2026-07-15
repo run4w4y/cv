@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@cv/application-registry-entity": "workspace:*",
+    "@cv/drizzle-query-effect": "workspace:*",
     "effect": "4.0.0-beta.91",
     "es-toolkit": "^1.43.0"
   }

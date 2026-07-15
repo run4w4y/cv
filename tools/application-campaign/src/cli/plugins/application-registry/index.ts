@@ -9,10 +9,10 @@ export type {
   ApplicationRegistryCampaignClient,
 } from './client'
 export {
+  type ApplicationRegistryTargetResolution,
+  applicationRegistryConflictResolutionsKey,
+} from './conflicts'
+export {
   type ApplicationRegistryCampaignPluginOptions,
   makeApplicationRegistryCampaignPlugin,
 } from './plugin'
-export {
-  applicationRegistryConflictResolutionsKey,
-  type ApplicationRegistryTargetResolution,
-} from './conflicts'

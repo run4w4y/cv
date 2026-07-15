@@ -4,7 +4,7 @@ import type {
   CurrencyCode,
 } from '@cv/application-registry-entity'
 
-import type { ApplicationListItem, FollowUpState } from '../types'
+import type { ApplicationListItem } from '../types'
 
 const currencyFractionDigits = (currencyCode: CurrencyCode) =>
   new Intl.NumberFormat('en-US', {
@@ -68,15 +68,8 @@ export const formatCompensationSummary = (
         )
         .join('; ')
 
-export const resolveFollowUpState = (
-  followUpAt: string | null,
-  now: string
-): FollowUpState =>
-  followUpAt === null ? 'none' : followUpAt < now ? 'overdue' : 'upcoming'
-
 export const toApplicationListItem = (
   record: ApplicationListRecord,
-  now: string,
   displayedCompensations?: readonly ApplicationCompensation[]
 ): ApplicationListItem => {
   const { compensations, ...application } = record
@@ -85,6 +78,5 @@ export const toApplicationListItem = (
     compensationSummary: formatCompensationSummary(
       displayedCompensations ?? compensations
     ),
-    followUpState: resolveFollowUpState(application.followUpAt, now),
   }
 }

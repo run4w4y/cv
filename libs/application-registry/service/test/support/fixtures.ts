@@ -87,6 +87,7 @@ export const capture: CampaignCapture = {
   applicationId: application.id,
   artifacts: [],
   audience: null,
+  applicationUrl: application.canonicalUrl,
   campaignRunId: 'run-1',
   capturedAt: recordedAt,
   confidence: 0.8,
@@ -99,7 +100,6 @@ export const capture: CampaignCapture = {
     additionalInstructions: null,
     applicationMethod: 'web',
     applicationQuestions: [],
-    applicationUrl: application.canonicalUrl,
     contactEmail: null,
     coverLetterInstructions: null,
     deadline: null,
@@ -130,14 +130,12 @@ export const compensation: ApplicationCompensation = {
 
 export const applicationListRecord: ApplicationListRecord = {
   ...application,
-  captureCount: 0,
   compensations: [],
+  counts: { captures: 0, notes: 0 },
   identityAliases: [],
   labels: [],
-  latestEventAt: null,
-  latestEventKind: null,
-  latestApplicationUrl: null,
-  noteCount: 0,
+  latestCapture: null,
+  latestEvent: null,
 }
 
 export const fxRate: FxRate = {

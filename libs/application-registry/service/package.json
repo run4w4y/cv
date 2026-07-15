@@ -24,6 +24,8 @@
     "@cv/application-registry-entity": "workspace:*",
     "@cv/application-registry-fx": "workspace:*",
     "@cv/application-registry-listing-check": "workspace:*",
+    "@cv/drizzle-query": "workspace:*",
+    "@cv/drizzle-query-effect": "workspace:*",
     "effect": "4.0.0-beta.91",
     "es-toolkit": "^1.43.0"
   },

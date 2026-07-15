@@ -1,30 +1,17 @@
 import {
-  type Application,
-  applicationCompensations,
-  applicationEvents,
   applicationIdentityAliases,
   applicationLabels,
-  applicationNotes,
   applicationPublicColumns,
   applications,
-  campaignCaptures,
 } from '@cv/application-registry-entity'
+import { finalizeQuery } from '@cv/drizzle-query-effect'
 import {
   and,
   asc,
-  count,
   desc,
   eq,
   exists,
-  gt,
-  gte,
-  inArray,
   isNotNull,
-  isNull,
-  like,
-  lt,
-  lte,
-  max,
   or,
   type SQL,
 } from 'drizzle-orm'
@@ -33,38 +20,10 @@ import { databaseFailure, type RegistryDatabaseError } from '../errors'
 import type { RegistryQueryDatabase } from '../internal/connection'
 import type {
   ApplicationFacets,
-  ApplicationListFilter,
+  ApplicationListPage,
   ApplicationListRecord,
-  CrudPage,
-  FollowUpState,
+  ApplicationListResolution,
 } from '../types'
-
-const cursorCondition = (afterRevision: number | undefined) =>
-  afterRevision === undefined
-    ? undefined
-    : gt(applications.updatedRevision, afterRevision)
-
-const followUpCondition = (
-  states: readonly FollowUpState[] | undefined,
-  now: string
-) => {
-  if (!states || states.length === 0 || new Set(states).size === 3) {
-    return undefined
-  }
-
-  const conditions: SQL[] = []
-  for (const state of new Set(states)) {
-    if (state === 'none') conditions.push(isNull(applications.followUpAt))
-    if (state === 'overdue') {
-      conditions.push(lt(applications.followUpAt, now))
-    }
-    if (state === 'upcoming') {
-      conditions.push(gte(applications.followUpAt, now))
-    }
-  }
-
-  return or(...conditions)
-}
 
 export const findApplication = (
   database: RegistryQueryDatabase,
@@ -126,254 +85,72 @@ export const findApplicationsByCanonicalUrl = (
       )
     )
 
-const enrichApplications = (
-  database: RegistryQueryDatabase,
-  items: readonly Application[]
-): Effect.Effect<readonly ApplicationListRecord[], RegistryDatabaseError> => {
-  if (items.length === 0) return Effect.succeed([])
-
-  const applicationIds = items.map(({ id }) => id)
-
-  return Effect.gen(function* () {
-    const labelRows = yield* database
-      .select({
-        applicationId: applicationLabels.applicationId,
-        label: applicationLabels.label,
-      })
-      .from(applicationLabels)
-      .where(inArray(applicationLabels.applicationId, applicationIds))
-      .orderBy(
-        asc(applicationLabels.applicationId),
-        asc(applicationLabels.label)
-      )
-
-    const compensationRows = yield* database
-      .select()
-      .from(applicationCompensations)
-      .where(inArray(applicationCompensations.applicationId, applicationIds))
-      .orderBy(
-        asc(applicationCompensations.applicationId),
-        asc(applicationCompensations.kind),
-        asc(applicationCompensations.id)
-      )
-
-    const identityAliasRows = yield* database
-      .select({
-        applicationId: applicationIdentityAliases.applicationId,
-        jobKey: applicationIdentityAliases.jobKey,
-      })
-      .from(applicationIdentityAliases)
-      .where(inArray(applicationIdentityAliases.applicationId, applicationIds))
-      .orderBy(
-        asc(applicationIdentityAliases.applicationId),
-        asc(applicationIdentityAliases.jobKey)
-      )
-
-    const latestEventRevisions = database
-      .select({
-        applicationId: applicationEvents.applicationId,
-        revision: max(applicationEvents.revision).as('revision'),
-      })
-      .from(applicationEvents)
-      .where(inArray(applicationEvents.applicationId, applicationIds))
-      .groupBy(applicationEvents.applicationId)
-      .as('latest_event_revisions')
-
-    const latestEventRows = yield* database
-      .select({
-        applicationId: applicationEvents.applicationId,
-        kind: applicationEvents.kind,
-        occurredAt: applicationEvents.occurredAt,
-      })
-      .from(applicationEvents)
-      .innerJoin(
-        latestEventRevisions,
-        and(
-          eq(
-            applicationEvents.applicationId,
-            latestEventRevisions.applicationId
-          ),
-          eq(applicationEvents.revision, latestEventRevisions.revision)
-        )
-      )
-
-    const captureCountRows = yield* database
-      .select({
-        applicationId: campaignCaptures.applicationId,
-        value: count(),
-      })
-      .from(campaignCaptures)
-      .where(inArray(campaignCaptures.applicationId, applicationIds))
-      .groupBy(campaignCaptures.applicationId)
-
-    const applicationUrlRows = yield* database
-      .select({
-        applicationId: campaignCaptures.applicationId,
-        submissionDetails: campaignCaptures.submissionDetails,
-      })
-      .from(campaignCaptures)
-      .where(inArray(campaignCaptures.applicationId, applicationIds))
-      .orderBy(
-        asc(campaignCaptures.applicationId),
-        desc(campaignCaptures.capturedAt),
-        desc(campaignCaptures.id)
-      )
-
-    const noteCountRows = yield* database
-      .select({
-        applicationId: applicationNotes.applicationId,
-        value: count(),
-      })
-      .from(applicationNotes)
-      .where(inArray(applicationNotes.applicationId, applicationIds))
-      .groupBy(applicationNotes.applicationId)
-
-    const labelsByApplication = new Map<string, string[]>()
-    for (const row of labelRows) {
-      const labels = labelsByApplication.get(row.applicationId) ?? []
-      labels.push(row.label)
-      labelsByApplication.set(row.applicationId, labels)
-    }
-
-    const identityAliasesByApplication = new Map<string, string[]>()
-    for (const row of identityAliasRows) {
-      const aliases = identityAliasesByApplication.get(row.applicationId) ?? []
-      aliases.push(row.jobKey)
-      identityAliasesByApplication.set(row.applicationId, aliases)
-    }
-
-    type CompensationRow = (typeof compensationRows)[number]
-    const compensationsByApplication = new Map<string, CompensationRow[]>()
-    for (const row of compensationRows) {
-      const compensations =
-        compensationsByApplication.get(row.applicationId) ?? []
-      compensations.push(row)
-      compensationsByApplication.set(row.applicationId, compensations)
-    }
-
-    const latestEventByApplication = new Map<
-      string,
-      (typeof latestEventRows)[number]
-    >()
-    for (const row of latestEventRows) {
-      latestEventByApplication.set(row.applicationId, row)
-    }
-
-    const captureCountByApplication = new Map(
-      captureCountRows.map((row) => [row.applicationId, row.value])
-    )
-    const latestApplicationUrlByApplication = new Map<string, string | null>()
-    for (const row of applicationUrlRows) {
-      if (!latestApplicationUrlByApplication.has(row.applicationId)) {
-        latestApplicationUrlByApplication.set(
-          row.applicationId,
-          row.submissionDetails.applicationUrl
-        )
-      }
-    }
-    const noteCountByApplication = new Map(
-      noteCountRows.map((row) => [row.applicationId, row.value])
-    )
-
-    return items.map((application) => {
-      const latestEvent = latestEventByApplication.get(application.id)
-      return {
-        ...application,
-        captureCount: captureCountByApplication.get(application.id) ?? 0,
-        compensations: compensationsByApplication.get(application.id) ?? [],
-        identityAliases: identityAliasesByApplication.get(application.id) ?? [],
-        labels: labelsByApplication.get(application.id) ?? [],
-        latestEventAt: latestEvent?.occurredAt ?? null,
-        latestEventKind: latestEvent?.kind ?? null,
-        latestApplicationUrl:
-          latestApplicationUrlByApplication.get(application.id) ?? null,
-        noteCount: noteCountByApplication.get(application.id) ?? 0,
-      }
-    })
-  }).pipe(
-    Effect.mapError(
-      databaseFailure('Failed to load application list dashboard details')
-    )
-  )
-}
-
 export const listApplications = (
   database: RegistryQueryDatabase,
-  query: ApplicationListFilter
-): Effect.Effect<CrudPage<ApplicationListRecord>, RegistryDatabaseError> =>
+  resolved: ApplicationListResolution
+): Effect.Effect<ApplicationListPage, RegistryDatabaseError> =>
   Effect.gen(function* () {
-    const limit = query.limit
-    const company = query.company?.trim().toLocaleLowerCase('en-US')
-    const location = query.location?.trim()
-    const q = query.q?.trim()
-    const role = query.role?.trim()
-    const baseQuery = database
-      .select(applicationPublicColumns)
-      .from(applications)
-      .where(
-        and(
-          company
-            ? like(applications.companyNormalized, `%${company}%`)
-            : undefined,
-          query.applicationStatus && query.applicationStatus.length > 0
-            ? inArray(applications.applicationStatus, query.applicationStatus)
-            : undefined,
-          query.targetStage && query.targetStage.length > 0
-            ? inArray(applications.targetStage, query.targetStage)
-            : undefined,
-          query.personalPriority && query.personalPriority.length > 0
-            ? inArray(applications.personalPriority, query.personalPriority)
-            : undefined,
-          query.fitScoreMin === undefined
-            ? undefined
-            : gte(applications.fitScore, query.fitScoreMin),
-          query.fitScoreMax === undefined
-            ? undefined
-            : lte(applications.fitScore, query.fitScoreMax),
-          location ? like(applications.location, `%${location}%`) : undefined,
-          q
-            ? or(
-                like(applications.jobKey, `%${q}%`),
-                like(applications.source, `%${q}%`),
-                like(applications.sourceJobId, `%${q}%`),
-                like(applications.canonicalUrl, `%${q}%`),
-                like(applications.company, `%${q}%`),
-                like(applications.role, `%${q}%`),
-                like(applications.location, `%${q}%`)
-              )
-            : undefined,
-          role ? like(applications.role, `%${role}%`) : undefined,
-          query.label && query.label.length > 0
-            ? exists(
-                database
-                  .select({ applicationId: applicationLabels.applicationId })
-                  .from(applicationLabels)
-                  .where(
-                    and(
-                      eq(applicationLabels.applicationId, applications.id),
-                      inArray(applicationLabels.label, query.label)
-                    )
-                  )
-              )
-            : undefined,
-          followUpCondition(query.followUpState, query.now),
-          query.url ? eq(applications.canonicalUrl, query.url) : undefined,
-          cursorCondition(query.afterRevision)
-        )
-      )
-      .orderBy(asc(applications.updatedRevision))
-
-    const rows = yield* baseQuery
-      .limit(limit + 1)
+    const relational = resolved.relational({
+      select: ['captureCount', 'noteCount'],
+    })
+    const rows = yield* database.query.applications
+      .findMany({
+        ...relational.config,
+        columns: { companyNormalized: false },
+        with: {
+          captures: {
+            columns: { applicationUrl: true },
+            limit: 1,
+            orderBy: (capture) => [desc(capture.capturedAt), desc(capture.id)],
+          },
+          compensations: {
+            orderBy: (compensation) => [
+              asc(compensation.kind),
+              asc(compensation.id),
+            ],
+          },
+          events: {
+            columns: { kind: true, occurredAt: true },
+            limit: 1,
+            orderBy: (event) => desc(event.revision),
+          },
+          identityAliases: {
+            columns: { jobKey: true },
+            orderBy: (identityAlias) => asc(identityAlias.jobKey),
+          },
+          labels: {
+            columns: { label: true },
+            orderBy: (label) => asc(label.label),
+          },
+        },
+      })
       .pipe(Effect.mapError(databaseFailure('Failed to list applications')))
 
-    const hasNextPage = rows.length > limit
-    const pageItems = hasNextPage ? rows.slice(0, limit) : rows
-    const items = yield* enrichApplications(database, pageItems)
-    return {
-      hasNextPage,
-      items,
-    }
+    const page = yield* finalizeQuery(relational, rows).pipe(Effect.orDie)
+    const records = page.items.map((row) => {
+      const {
+        captureCount,
+        captures,
+        compensations,
+        events,
+        identityAliases,
+        labels,
+        noteCount,
+        ...application
+      } = row
+      const latestEvent = events.at(0) ?? null
+      return {
+        ...application,
+        compensations,
+        counts: { captures: captureCount, notes: noteCount },
+        identityAliases: identityAliases.map(({ jobKey }) => jobKey),
+        labels: labels.map(({ label }) => label),
+        latestCapture: captures.at(0) ?? null,
+        latestEvent,
+      } satisfies ApplicationListRecord
+    })
+
+    return { items: records, pageInfo: page.pageInfo }
   })
 
 export const listApplicationFacets = (

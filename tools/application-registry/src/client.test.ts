@@ -204,9 +204,14 @@ describe('application registry client', () => {
       }
       if (request.method === 'GET') {
         return Response.json({
-          checkpoint: null,
           items: [],
-          nextCursor: null,
+          pageInfo: {
+            kind: 'cursor',
+            size: 50,
+            hasNextPage: false,
+            hasPreviousPage: false,
+            nextCursor: null,
+          },
         })
       }
       if (request.method === 'DELETE') {
@@ -221,7 +226,16 @@ describe('application registry client', () => {
         Effect.gen(function* () {
           const client = yield* ApplicationRegistryClient
           const created = yield* client.create(application)
-          const searched = yield* client.list({ q: 'Example Engineer' })
+          const searched = yield* client.list({
+            filters: [
+              {
+                type: 'condition',
+                field: 'q',
+                operator: 'matches',
+                value: 'Example Engineer',
+              },
+            ],
+          })
           const patched = yield* client.patch(application.id, {
             company: 'Updated Example',
             expectedVersion: application.version,
@@ -244,7 +258,7 @@ describe('application registry client', () => {
       },
       {
         method: 'GET',
-        url: 'https://registry.example.test/v1/applications?q=Example+Engineer',
+        url: 'https://registry.example.test/v1/applications?filters=%5B%7B%22type%22%3A%22condition%22%2C%22field%22%3A%22q%22%2C%22operator%22%3A%22matches%22%2C%22value%22%3A%22Example+Engineer%22%7D%5D',
       },
       {
         method: 'PATCH',

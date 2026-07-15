@@ -4,11 +4,13 @@ import {
   type ListEventsResponse,
 } from '@cv/application-registry-api-contract'
 import {
+  type ApplicationEventKind,
   applicationEventKindValues,
   UtcIsoTimestampSchema,
 } from '@cv/application-registry-entity'
 import { Effect } from 'effect'
 import { Command, Flag } from 'effect/unstable/cli'
+import { compact } from 'es-toolkit/array'
 
 import { ApplicationRegistryClient } from '../../client'
 import {
@@ -16,7 +18,7 @@ import {
   applicationIdentifierArgument,
   inputFlag,
   jsonFlag,
-  listLimitFlag,
+  listPageSizeFlag,
   optionalFlag,
   optionalStringFlag,
 } from '../flags'
@@ -28,8 +30,10 @@ const query = {
   from: optionalFlag(
     Flag.string('from').pipe(Flag.withSchema(UtcIsoTimestampSchema))
   ),
-  kind: optionalFlag(Flag.choice('kind', applicationEventKindValues)),
-  limit: listLimitFlag,
+  kind: optionalFlag(Flag.choice('kind', applicationEventKindValues)).pipe(
+    Flag.map((value) => (value === undefined ? undefined : [value]))
+  ),
+  size: listPageSizeFlag,
   to: optionalFlag(
     Flag.string('to').pipe(Flag.withSchema(UtcIsoTimestampSchema))
   ),
@@ -37,11 +41,49 @@ const query = {
 const application = optionalStringFlag('application')
 const identifier = applicationIdentifierArgument
 
+type EventFilterOptions = {
+  readonly after?: string
+  readonly from?: string
+  readonly kind?: readonly ApplicationEventKind[]
+  readonly size?: number
+  readonly to?: string
+}
+
+const eventFilters = (
+  options: EventFilterOptions
+): ListEventsQuery['filters'] =>
+  compact([
+    options.from === undefined
+      ? undefined
+      : {
+          type: 'condition' as const,
+          field: 'occurredAt' as const,
+          operator: 'gte' as const,
+          value: options.from,
+        },
+    options.kind === undefined
+      ? undefined
+      : {
+          type: 'condition' as const,
+          field: 'kind' as const,
+          operator: 'in' as const,
+          value: options.kind,
+        },
+    options.to === undefined
+      ? undefined
+      : {
+          type: 'condition' as const,
+          field: 'occurredAt' as const,
+          operator: 'lte' as const,
+          value: options.to,
+        },
+  ])
+
 type EventListOptions = {
   readonly all: boolean
   readonly application: string | undefined
   readonly json: boolean
-  readonly query: ListEventsQuery
+  readonly query: EventFilterOptions
 }
 
 export const eventListCommand = Command.make(
@@ -59,29 +101,31 @@ export const eventListCommand = Command.make(
       }
 
       const makeQuery = (cursor: string | undefined): ListEventsQuery => ({
-        ...options.query,
-        after: cursor,
-        limit: options.all ? 100 : options.query.limit,
+        filters: eventFilters(options.query),
+        pagination: {
+          after: cursor,
+          size: options.all ? 100 : options.query.size,
+        },
       })
       const first = yield* client.listEvents(makeQuery(options.query.after))
-      if (!options.all || first.nextCursor === null) {
+      if (!options.all || first.pageInfo.nextCursor === null) {
         return yield* options.json
           ? printJson(first)
           : printEvents(first.items, false)
       }
 
       const items = [...first.items]
-      let checkpoint = first.checkpoint
-      let cursor: string | null = first.nextCursor
+      let pageInfo = first.pageInfo
+      let cursor: string | null = first.pageInfo.nextCursor
       while (cursor !== null) {
         const page: ListEventsResponse = yield* client.listEvents(
           makeQuery(cursor)
         )
         items.push(...page.items)
-        checkpoint = page.checkpoint
-        cursor = page.nextCursor
+        pageInfo = page.pageInfo
+        cursor = page.pageInfo.nextCursor
       }
-      const response = { checkpoint, items, nextCursor: null }
+      const response = { items, pageInfo }
       return yield* options.json
         ? printJson(response)
         : printEvents(response.items, false)

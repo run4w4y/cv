@@ -1,6 +1,6 @@
 # Application registry API
 
-Cloudflare Worker API for the synchronized job-application registry. D1 is the
+Cloudflare Worker API for the persistent job-application registry. D1 is the
 system of record. `@cv/application-registry-entity` owns the TS-first Drizzle
 schema, inferred models, and generated migrations;
 `@cv/application-registry-crud` owns direct persistence;
@@ -35,9 +35,8 @@ connect to D1 directly.
   bounded leases and retry backoff so overlapping cron invocations do not
   process the same due item.
 - D1 assigns a monotonic revision inside each mutation batch. Application and
-  global-event cursors use revisions rather than client timestamps or UUID
-  ordering, so delayed and same-millisecond writes cannot fall behind a saved
-  cursor.
+  global-event lists use revisions for deterministic ordering rather than
+  relying on client timestamps or UUID ordering.
 - Operation receipts make outbox replay safe, including when a write committed
   but its HTTP response was lost. A canonical operation request signature
   prevents one operation ID from being reused with different content.
@@ -46,7 +45,8 @@ The database contains applications, labels, notes, events, campaign captures,
 structured compensation, exchange-rate observations, and operation receipts.
 Clients supply one stable `operationId` for capture/event/note replay. The
 server owns ordinary UUID generation for entity IDs; monotonic database
-revisions, rather than UUID ordering, power synchronization.
+revisions, rather than UUID ordering, provide stable list ordering and an
+ordinary filterable change marker.
 
 ## API
 
@@ -61,12 +61,13 @@ declaration used by handlers and the internal Effect client.
 - `POST /v1/captures`: atomically create/update an application, append its
   `campaign_prepared` event, and store the generated campaign capture.
 - `GET /v1/applications`: cursor-paginated application table data. Each row
-  includes labels, a compensation summary, follow-up state, latest event
-  metadata, and note/capture counts. `currency=USD` (or another ISO code)
-  converts the displayed summary; `currency=original` leaves it unchanged.
-  Filters cover cross-field `q`, company, role,
-  location, one or more lifecycle statuses, target stages, priorities, labels,
-  follow-up states, and exact canonical URL.
+  includes labels, a compensation summary, follow-up time, latest event
+  metadata, and note/capture counts. Related values are nested as `latestEvent`,
+  `latestCapture`, and `counts` rather than exposed as SQL-projection aliases.
+  `currency=USD` (or another ISO code) converts the displayed summary;
+  `currency=original` leaves it unchanged.
+  The definition exposes scalar columns, relations, counts, latest-value
+  expressions, and cross-field search for generic filtering and ordering.
 - `GET /v1/applications/facets`: sorted observed companies, statuses, target
   stages, priorities, and labels for dashboard controls.
 - `GET /v1/applications/:id`: fetch by application ID or exact job key.
@@ -75,7 +76,9 @@ declaration used by handlers and the internal Effect client.
 - `DELETE /v1/applications/:id`: remove an application aggregate, optionally
   guarded by `expectedVersion`.
 - `GET /v1/applications/:id/captures`: recover campaign submission details and
-  artifact metadata stored for the application.
+  artifact metadata stored for the application. The captured application URL
+  is a first-class capture field; JSON is limited to cohesive structured
+  details and artifacts.
 - `GET /v1/applications/:id/compensations`: return original compensation and,
   when `currency=USD` (or another ISO code) is supplied, converted minor-unit
   bounds with the exact rate observation used.
@@ -88,8 +91,8 @@ declaration used by handlers and the internal Effect client.
 - `POST /v1/applications/:id/notes`: atomically append a typed registry note,
   its history event, and an idempotency receipt.
 - `GET /v1/events`: cursor-paginated global event feed with application company,
-  role, and canonical URL context. `from` and `to` bound source event time
-  inclusively; `kind` accepts one or more event kinds.
+  role, and canonical URL context. Its generic fields include event kind,
+  revision, source/recorded timestamps, IDs, device, and operation.
 - `GET /v1/applications/:id/listing-checks`: return stored listing-check
   evidence and decisions newest first.
 - `POST /v1/listing-check-findings`: idempotently ingest a bounded batch of
@@ -125,13 +128,17 @@ current status and omit that field.
 Operation receipts bind that ID to the canonical request, so reuse for another
 operation or payload returns HTTP 409. `occurredAt` and `capturedAt` retain
 source history; server time owns `recordedAt` and projection timestamps.
-Persisted timestamps use canonical UTC ISO strings.
+Persisted timestamps use canonical UTC ISO strings. SQLite, and therefore D1,
+has no native timestamp storage class; lexicographically sortable ISO text
+keeps the representation portable while Effect schemas enforce the boundary
+format.
 
 The existing `/v1` API is also the Grafana data source contract; Grafana uses
 the same `REGISTRY_API_TOKEN` as other clients. There is no separate dashboard
-adapter or Grafana-only route family. Numeric `limit` values remain restricted
-to 1–100 (default 50); clients follow `nextCursor` by passing it back as `after`
-until it becomes `null`.
+adapter or Grafana-only route family. List GETs encode generic filter and order
+arrays as JSON in `filters` and `orderBy`; pagination uses flat `after` and
+`size` query parameters. Numeric sizes remain restricted to 1–100 (default
+50), and clients follow `pageInfo.nextCursor` until it becomes `null`.
 
 Compensation is stored in its original currency and integer minor units. The
 conversion endpoint reuses a rate fetched within the preceding 24 hours and
@@ -142,12 +149,13 @@ separately. Converted values are derived output, never a replacement for the
 source amount.
 
 `GET /v1/events` is the lifecycle/audit feed, not a universal replica change
-log. Its revision cursor is a lossless checkpoint for registry events.
-Application list cursors use `updatedRevision` and also advance for aggregate
-label and note mutations. Numeric page traversal uses `nextCursor`; durable
-incremental sync uses the separate `checkpoint`, including after a final page.
-The checkpoint identifies the last returned revision or preserves `after` when
-no row matches. Hard deletes intentionally do not emit tombstones.
+log. Event `revision` and application `updatedRevision` are ordinary sortable,
+filterable fields. A consumer can request rows after a known revision with a
+`gt` filter and ascending revision ordering, but this is not a separate durable
+replication protocol: responses are ordinary query pages and hard deletes do
+not emit tombstones. Follow-up categories are likewise expressed with ordinary
+`followUpAt` filters: `isNull` for no scheduled follow-up, or timestamp range
+operators such as `lt` and `gte` against a reference time chosen by the client.
 
 ## Local development
 
@@ -215,7 +223,7 @@ The integration and end-to-end suites require no Docker daemon:
 - `libs/application-registry/service/test` verifies live workflows over the same
   D1 implementation while supplying non-network test dependencies through
   Effect Layers. Business concurrency, idempotency, merge, lifecycle, rollback,
-  and checkpoint scenarios belong there.
+  revision filtering, and pagination scenarios belong there.
 - `apps/application-registry-api/test/application-registry.integration.test.ts`
   is intentionally limited to the live HTTP boundary: authentication, request
   decoding, and service-error-to-status routing against Miniflare D1.

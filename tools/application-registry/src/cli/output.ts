@@ -61,7 +61,7 @@ export const printEvents = (
 const formatCapture = (capture: CampaignCapture) =>
   [
     `${capture.capturedAt}  ${capture.profile}  run ${capture.campaignRunId}`,
-    `Apply: ${capture.submissionDetails.applicationMethod ?? '—'} ${capture.submissionDetails.applicationUrl ?? ''}`.trimEnd(),
+    `Apply: ${capture.submissionDetails.applicationMethod ?? '—'} ${capture.applicationUrl ?? ''}`.trimEnd(),
     `Deadline: ${capture.submissionDetails.deadline ?? '—'}`,
     `Artifacts: ${capture.artifacts.length}`,
   ].join('\n')

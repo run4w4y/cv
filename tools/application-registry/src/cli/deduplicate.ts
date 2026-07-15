@@ -105,16 +105,15 @@ export const decideRegistryDuplicateGroup = (
 const listAllApplications = Effect.gen(function* () {
   const client = yield* ApplicationRegistryClient
   const query = (after?: string): ListApplicationsQuery => ({
-    after,
-    limit: 100,
+    pagination: { after, size: 100 },
   })
   const first = yield* client.list(query())
   const items = [...first.items]
-  let cursor = first.nextCursor
+  let cursor = first.pageInfo.nextCursor
   while (cursor !== null) {
     const page = yield* client.list(query(cursor))
     items.push(...page.items)
-    cursor = page.nextCursor
+    cursor = page.pageInfo.nextCursor
   }
   return items
 })

@@ -37,6 +37,10 @@ export const applicationEvents = sqliteTable(
       table.occurredAt,
       table.id
     ),
+    index('application_events_application_revision_idx').on(
+      table.applicationId,
+      table.revision
+    ),
     uniqueIndex('application_events_revision_unique').on(table.revision),
     check(
       'application_events_kind_check',

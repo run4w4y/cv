@@ -36,7 +36,6 @@ export type OpportunityDetails = Schema.Schema.Type<
 
 export const SubmissionDetailsSchema = Schema.Struct({
   applicationMethod: NullableText,
-  applicationUrl: NullableText,
   contactEmail: NullableText,
   deadline: NullableText,
   employmentType: NullableText,

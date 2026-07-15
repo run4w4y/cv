@@ -26,7 +26,16 @@ export const applicationsCrud = (
   findByCanonicalUrl: () => Effect.succeed([]),
   findByJobKey: () => Effect.succeed(application),
   list: () =>
-    Effect.succeed({ hasNextPage: false, items: [applicationListRecord] }),
+    Effect.succeed({
+      items: [applicationListRecord],
+      pageInfo: {
+        kind: 'cursor',
+        size: 50,
+        hasNextPage: false,
+        hasPreviousPage: false,
+        nextCursor: null,
+      },
+    }),
   patch: () => Effect.succeed(application),
   persist: () => Effect.void,
   persistEvent: () => Effect.succeed(true),
@@ -69,7 +78,17 @@ export const compensationsCrudLayer = (
 export const eventsCrudLayer = (overrides: Partial<EventsCrud> = {}) =>
   Layer.succeed(EventsCrud, {
     findByOperation: () => Effect.succeed(undefined),
-    list: () => Effect.succeed({ hasNextPage: false, items: [] }),
+    list: () =>
+      Effect.succeed({
+        items: [],
+        pageInfo: {
+          kind: 'cursor',
+          size: 50,
+          hasNextPage: false,
+          hasPreviousPage: false,
+          nextCursor: null,
+        },
+      }),
     listByApplication: () => Effect.succeed([]),
     ...overrides,
   })

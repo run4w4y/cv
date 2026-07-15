@@ -20,7 +20,7 @@ export const applicationWorkflow = Effect.gen(function* () {
   const created = yield* applications.upsert(
     makeApplicationInput('application')
   )
-  const initialPage = yield* applications.list({ limit: 10 })
+  const initialRevision = created.updatedRevision
   const patched = yield* applications.patch(created.id, {
     expectedVersion: created.version,
     fitScore: 91,
@@ -32,13 +32,19 @@ export const applicationWorkflow = Effect.gen(function* () {
     'priority',
   ])
   const delta = yield* applications.list({
-    after: initialPage.checkpoint ?? undefined,
-    limit: 10,
+    filters: [
+      {
+        type: 'condition',
+        field: 'updatedRevision',
+        operator: 'gt',
+        value: initialRevision,
+      },
+    ],
+    pagination: { size: 10 },
   })
   const storedAnnotations = yield* annotations.list(created.id)
 
   return {
-    checkpoint: initialPage.checkpoint,
     created: {
       applicationStatus: created.applicationStatus,
       id: created.id,

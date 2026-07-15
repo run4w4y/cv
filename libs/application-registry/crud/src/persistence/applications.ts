@@ -1,8 +1,8 @@
 export {
   findApplication,
   findApplicationByIdentifier,
-  findApplicationsByCanonicalUrl,
   findApplicationByJobKey,
+  findApplicationsByCanonicalUrl,
   listApplicationFacets,
   listApplications,
 } from './application-queries'

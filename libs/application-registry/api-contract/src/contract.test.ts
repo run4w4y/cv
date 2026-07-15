@@ -20,6 +20,7 @@ import {
   ListApplicationsQuerySchema,
   ListApplicationsResponseSchema,
   ListEventsQuerySchema,
+  ListEventsResponseSchema,
   PatchApplicationRequestSchema,
   UpsertApplicationRequestSchema,
 } from './schemas'
@@ -45,15 +46,25 @@ describe('application registry HTTP contract', () => {
     )
   })
 
-  test('distinguishes page continuation from the synchronization checkpoint', () => {
-    const page = Schema.decodeUnknownSync(ListApplicationsResponseSchema)({
-      checkpoint: 'revision:42',
+  test('uses standard query pages for list responses', () => {
+    const input = {
       items: [],
-      nextCursor: null,
-    })
+      pageInfo: {
+        kind: 'cursor',
+        size: 50,
+        hasNextPage: false,
+        hasPreviousPage: false,
+        nextCursor: null,
+      },
+    } as const
 
-    expect(page.checkpoint).toBe('revision:42')
-    expect(page.nextCursor).toBeNull()
+    const applications = Schema.decodeUnknownSync(
+      ListApplicationsResponseSchema
+    )(input)
+    const events = Schema.decodeUnknownSync(ListEventsResponseSchema)(input)
+
+    expect(applications).toEqual(input)
+    expect(events).toEqual(input)
   })
 
   test('accepts zero as an optimistic expected version', () => {
@@ -68,46 +79,70 @@ describe('application registry HTTP contract', () => {
     expect(deletion.expectedVersion).toBe(0)
   })
 
-  test('accepts single and repeated dashboard query filters', () => {
-    const single = Schema.decodeUnknownSync(ListApplicationsQuerySchema)({
-      applicationStatus: 'applied',
-      currency: 'USD',
-      followUpState: 'overdue',
-      limit: '100',
-      q: 'effect engineer',
-    })
-    const repeated = Schema.decodeUnknownSync(ListApplicationsQuerySchema)({
-      applicationStatus: ['applied', 'technical_screen'],
-      fitScoreMax: '100',
-      fitScoreMin: '80',
-      personalPriority: ['high', 'medium'],
-      targetStage: ['apply_next', 'verify_first'],
-    })
-    const blankFitRange = Schema.decodeUnknownSync(ListApplicationsQuerySchema)(
+  test('derives typed filters, ordering, and pagination from query definitions', () => {
+    const applicationFilters = [
       {
-        fitScoreMax: '',
-        fitScoreMin: '',
-      }
-    )
-    const events = Schema.decodeUnknownSync(ListEventsQuerySchema)({
-      from: '2026-07-01T00:00:00.000Z',
-      kind: ['stage_changed', 'research_updated'],
-      to: '2026-07-31T23:59:59.999Z',
+        type: 'condition',
+        field: 'applicationStatus',
+        operator: 'in',
+        value: ['applied', 'technical_screen'],
+      },
+      {
+        type: 'group',
+        combinator: 'or',
+        children: [
+          {
+            type: 'condition',
+            field: 'company',
+            operator: 'contains',
+            value: 'Acme',
+          },
+          {
+            type: 'condition',
+            field: 'q',
+            operator: 'matches',
+            value: 'effect engineer',
+          },
+        ],
+      },
+    ] as const
+    const applications = Schema.decodeUnknownSync(ListApplicationsQuerySchema)({
+      filters: JSON.stringify(applicationFilters),
+      orderBy: JSON.stringify([
+        { field: 'fitScore', direction: 'desc', nulls: 'last' },
+      ]),
+      currency: 'USD',
+      size: '100',
     })
-    expect(single.applicationStatus).toBe('applied')
-    expect(single.currency).toBe('USD')
-    expect(single.limit).toBe(100)
-    expect(single.q).toBe('effect engineer')
-    expect(repeated.applicationStatus).toEqual(['applied', 'technical_screen'])
-    expect(repeated.fitScoreMax).toBe(100)
-    expect(repeated.fitScoreMin).toBe(80)
-    expect(blankFitRange.fitScoreMax).toBeUndefined()
-    expect(blankFitRange.fitScoreMin).toBeUndefined()
-    expect(events.kind).toEqual(['stage_changed', 'research_updated'])
+    const events = Schema.decodeUnknownSync(ListEventsQuerySchema)({
+      filters: JSON.stringify([
+        {
+          type: 'condition',
+          field: 'occurredAt',
+          operator: 'gte',
+          value: '2026-07-01T00:00:00.000Z',
+        },
+        {
+          type: 'condition',
+          field: 'kind',
+          operator: 'in',
+          value: ['stage_changed', 'research_updated'],
+        },
+      ]),
+    })
+
+    expect(applications.filters).toEqual(applicationFilters)
+    expect(applications.orderBy).toEqual([
+      { field: 'fitScore', direction: 'desc', nulls: 'last' },
+    ])
+    expect(applications.pagination).toEqual({ size: 100 })
+    expect(applications.currency).toBe('USD')
+    expect(events.filters).toHaveLength(2)
+
     expect(
       Option.isNone(
         Schema.decodeUnknownOption(ListApplicationsQuerySchema)({
-          limit: '101',
+          size: '101',
         })
       )
     ).toBe(true)
@@ -121,23 +156,43 @@ describe('application registry HTTP contract', () => {
     expect(
       Option.isNone(
         Schema.decodeUnknownOption(ListApplicationsQuerySchema)({
-          limit: 'all',
+          size: 'all',
         })
       )
     ).toBe(true)
-    for (const invalidFitRange of [
-      { fitScoreMin: '-1' },
-      { fitScoreMax: '101' },
-      { fitScoreMin: '91.5' },
-      { fitScoreMax: '80', fitScoreMin: '90' },
+    for (const filters of [
+      [{ type: 'condition', field: 'missing', operator: 'eq', value: 'x' }],
+      [{ type: 'condition', field: 'fitScore', operator: 'gte', value: '90' }],
+      [{ type: 'condition', field: 'q', operator: 'eq', value: 'x' }],
     ]) {
       expect(
         Option.isNone(
-          Schema.decodeUnknownOption(ListApplicationsQuerySchema)(
-            invalidFitRange
-          )
+          Schema.decodeUnknownOption(ListApplicationsQuerySchema)({
+            filters: JSON.stringify(filters),
+          })
         )
       ).toBe(true)
+    }
+  })
+
+  test('expresses revision scans through ordinary filters and ordering', () => {
+    for (const [schema, orderingField] of [
+      [ListApplicationsQuerySchema, 'updatedRevision'],
+      [ListEventsQuerySchema, 'revision'],
+    ] as const) {
+      const decoded = Schema.decodeUnknownOption(schema)({
+        filters: JSON.stringify([
+          {
+            type: 'condition',
+            field: orderingField,
+            operator: 'gt',
+            value: 42,
+          },
+        ]),
+        orderBy: JSON.stringify([{ field: orderingField, direction: 'asc' }]),
+      })
+
+      expect(Option.isSome(decoded)).toBe(true)
     }
   })
 

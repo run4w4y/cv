@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
 import { afterEach, beforeEach, test } from 'node:test'
 import type { FxRate } from '@cv/application-registry-entity'
+import {
+  applicationListQuery,
+  eventListQuery,
+} from '@cv/application-registry-entity/query'
 import { Effect } from 'effect'
 
 import {
@@ -19,6 +23,14 @@ import { RegistryMiniflareHarness } from '../src/test-support'
 let harness: RegistryMiniflareHarness
 
 const recordedAt = '2026-07-12T12:00:00.000Z'
+
+const resolveApplicationList = (
+  request: Parameters<typeof applicationListQuery.resolve>[0]
+) => applicationListQuery.resolve(request)
+
+const resolveEventList = (
+  request: Parameters<typeof eventListQuery.resolve>[0]
+) => eventListQuery.resolve(request)
 
 const application: PersistedApplication = {
   applicationId: 'crud-application-1',
@@ -109,7 +121,9 @@ test('executes application CRUD and database defaults through slice services', a
         { category: null, expectedVersion: 1, fitScore: 42 },
         '2026-07-12T13:00:00.000Z'
       )
-      const page = yield* applications.list({ limit: 10, now: recordedAt })
+      const page = yield* applications.list(
+        resolveApplicationList({ pagination: { size: 10 } })
+      )
       return { created, page, updated }
     })
   )
@@ -128,7 +142,7 @@ test('executes application CRUD and database defaults through slice services', a
     result.page.items.map(({ id }) => id),
     ['crud-application-1']
   )
-  assert.equal(result.page.hasNextPage, false)
+  assert.equal(result.page.pageInfo.hasNextPage, false)
 })
 
 test('filters before pagination and returns dashboard details and facets', async () => {
@@ -190,33 +204,181 @@ test('filters before pagination and returns dashboard details and facets', async
         note('crud-dashboard-note')
       )
 
-      const page = yield* applications.list({
-        applicationStatus: ['applied'],
-        company: 'alpha',
-        followUpState: ['overdue'],
-        label: ['remote'],
-        limit: 10,
-        location: 'remote',
-        now: recordedAt,
-        personalPriority: ['high'],
-        role: 'platform',
-        targetStage: ['apply_next'],
-      })
-      const upcoming = yield* applications.list({
-        followUpState: ['upcoming'],
-        limit: 10,
-        now: recordedAt,
-      })
-      const highFit = yield* applications.list({
-        fitScoreMin: 80,
-        limit: 10,
-        now: recordedAt,
-      })
-      const lowFit = yield* applications.list({
-        fitScoreMax: 50,
-        limit: 10,
-        now: recordedAt,
-      })
+      yield* Effect.promise(() =>
+        harness.database.batch([
+          harness.database
+            .prepare(
+              `insert into application_identity_aliases (
+                job_key,
+                application_id,
+                created_at
+              ) values (?1, ?2, ?3)`
+            )
+            .bind(
+              'test:dashboard-past:z-alias',
+              pastFollowUp.applicationId,
+              recordedAt
+            ),
+          harness.database
+            .prepare(
+              `insert into application_identity_aliases (
+                job_key,
+                application_id,
+                created_at
+              ) values (?1, ?2, ?3)`
+            )
+            .bind(
+              'test:dashboard-past:a-alias',
+              pastFollowUp.applicationId,
+              recordedAt
+            ),
+          harness.database
+            .prepare(
+              `insert into campaign_captures (
+                id,
+                application_id,
+                campaign_run_id,
+                profile,
+                application_url,
+                submission_details,
+                artifacts,
+                captured_at,
+                operation_id
+              ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`
+            )
+            .bind(
+              'crud-dashboard-capture-old',
+              pastFollowUp.applicationId,
+              'crud-dashboard-run',
+              'default',
+              'https://example.test/jobs/dashboard-past/apply-old',
+              JSON.stringify({}),
+              JSON.stringify([]),
+              '2026-07-12T10:00:00.000Z',
+              'crud-dashboard-capture-operation-old'
+            ),
+          harness.database
+            .prepare(
+              `insert into campaign_captures (
+                id,
+                application_id,
+                campaign_run_id,
+                profile,
+                application_url,
+                submission_details,
+                artifacts,
+                captured_at,
+                operation_id
+              ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`
+            )
+            .bind(
+              'crud-dashboard-capture-new',
+              pastFollowUp.applicationId,
+              'crud-dashboard-run',
+              'default',
+              'https://example.test/jobs/dashboard-past/apply-new',
+              JSON.stringify({}),
+              JSON.stringify([]),
+              '2026-07-12T11:00:00.000Z',
+              'crud-dashboard-capture-operation-new'
+            ),
+        ])
+      )
+
+      const page = yield* applications.list(
+        resolveApplicationList({
+          filters: [
+            {
+              type: 'condition',
+              field: 'applicationStatus',
+              operator: 'in',
+              value: ['applied'],
+            },
+            {
+              type: 'condition',
+              field: 'company',
+              operator: 'contains',
+              value: 'alpha',
+            },
+            {
+              type: 'condition',
+              field: 'followUpAt',
+              operator: 'lt',
+              value: recordedAt,
+            },
+            {
+              type: 'condition',
+              field: 'labels',
+              operator: 'hasAny',
+              value: ['remote'],
+            },
+            {
+              type: 'condition',
+              field: 'location',
+              operator: 'contains',
+              value: 'remote',
+            },
+            {
+              type: 'condition',
+              field: 'personalPriority',
+              operator: 'in',
+              value: ['high'],
+            },
+            {
+              type: 'condition',
+              field: 'role',
+              operator: 'contains',
+              value: 'platform',
+            },
+            {
+              type: 'condition',
+              field: 'targetStage',
+              operator: 'in',
+              value: ['apply_next'],
+            },
+          ],
+          pagination: { size: 10 },
+        })
+      )
+      const upcoming = yield* applications.list(
+        resolveApplicationList({
+          filters: [
+            {
+              type: 'condition',
+              field: 'followUpAt',
+              operator: 'gte',
+              value: recordedAt,
+            },
+          ],
+          pagination: { size: 10 },
+        })
+      )
+      const highFit = yield* applications.list(
+        resolveApplicationList({
+          filters: [
+            {
+              type: 'condition',
+              field: 'fitScore',
+              operator: 'gte',
+              value: 80,
+            },
+          ],
+          pagination: { size: 10 },
+        })
+      )
+      const lowFit = yield* applications.list(
+        resolveApplicationList({
+          filters: [
+            {
+              type: 'condition',
+              field: 'fitScore',
+              operator: 'lte',
+              value: 50,
+            },
+          ],
+          pagination: { size: 10 },
+        })
+      )
       const facets = yield* applications.facets()
       return { facets, highFit, lowFit, page, upcoming }
     })
@@ -227,10 +389,34 @@ test('filters before pagination and returns dashboard details and facets', async
     [pastFollowUp.applicationId]
   )
   assert.deepEqual(result.page.items[0]?.labels, ['priority', 'remote'])
-  assert.equal(result.page.items[0]?.compensations.length, 1)
-  assert.equal(result.page.items[0]?.noteCount, 1)
-  assert.equal(result.page.items[0]?.captureCount, 0)
-  assert.equal(result.page.items[0]?.latestEventKind, 'note_added')
+  assert.deepEqual(result.page.items[0]?.identityAliases, [
+    'test:dashboard-past:a-alias',
+    'test:dashboard-past:z-alias',
+  ])
+  assert.deepEqual(result.page.items[0]?.compensations, [
+    {
+      applicationId: pastFollowUp.applicationId,
+      createdAt: recordedAt,
+      currencyCode: 'USD',
+      id: 'crud-dashboard-compensation',
+      kind: 'base_salary',
+      maximumMinor: 15_000_000,
+      minimumMinor: 12_000_000,
+      period: 'year',
+      rawText: null,
+      source: 'crud-test',
+      updatedAt: recordedAt,
+    },
+  ])
+  assert.deepEqual(result.page.items[0]?.counts, { captures: 2, notes: 1 })
+  assert.deepEqual(result.page.items[0]?.latestEvent, {
+    kind: 'note_added',
+    occurredAt: recordedAt,
+  })
+  assert.equal(
+    result.page.items[0]?.latestCapture?.applicationUrl,
+    'https://example.test/jobs/dashboard-past/apply-new'
+  )
   assert.deepEqual(
     result.upcoming.items.map(({ id }) => id),
     [futureFollowUp.applicationId]
@@ -252,7 +438,7 @@ test('filters before pagination and returns dashboard details and facets', async
   })
 })
 
-test('paginates every application and event with numeric limits', async () => {
+test('paginates every application and event with numeric page sizes', async () => {
   const itemCount = 101
   const applicationStatements = Array.from(
     { length: itemCount },
@@ -323,20 +509,28 @@ test('paginates every application and event with numeric limits', async () => {
     Effect.gen(function* () {
       const applications = yield* ApplicationsCrud
       const events = yield* EventsCrud
-      const firstApplicationPage = yield* applications.list({
-        limit: 100,
-        now: recordedAt,
-      })
-      const secondApplicationPage = yield* applications.list({
-        afterRevision: 100,
-        limit: 100,
-        now: recordedAt,
-      })
-      const firstEventPage = yield* events.list({ limit: 100 })
-      const secondEventPage = yield* events.list({
-        afterRevision: 100,
-        limit: 100,
-      })
+      const firstApplicationPage = yield* applications.list(
+        resolveApplicationList({ pagination: { size: 100 } })
+      )
+      const secondApplicationPage = yield* applications.list(
+        resolveApplicationList({
+          pagination: {
+            after: firstApplicationPage.pageInfo.nextCursor ?? undefined,
+            size: 100,
+          },
+        })
+      )
+      const firstEventPage = yield* events.list(
+        resolveEventList({ pagination: { size: 100 } })
+      )
+      const secondEventPage = yield* events.list(
+        resolveEventList({
+          pagination: {
+            after: firstEventPage.pageInfo.nextCursor ?? undefined,
+            size: 100,
+          },
+        })
+      )
       return {
         firstApplicationPage,
         firstEventPage,
@@ -347,17 +541,17 @@ test('paginates every application and event with numeric limits', async () => {
   )
 
   assert.equal(result.firstApplicationPage.items.length, 100)
-  assert.equal(result.firstApplicationPage.hasNextPage, true)
+  assert.equal(result.firstApplicationPage.pageInfo.hasNextPage, true)
   assert.equal(
-    result.firstApplicationPage.items[0]?.latestEventKind,
+    result.firstApplicationPage.items[0]?.latestEvent?.kind,
     'research_updated'
   )
   assert.equal(result.secondApplicationPage.items.length, 1)
-  assert.equal(result.secondApplicationPage.hasNextPage, false)
+  assert.equal(result.secondApplicationPage.pageInfo.hasNextPage, false)
   assert.equal(result.firstEventPage.items.length, 100)
-  assert.equal(result.firstEventPage.hasNextPage, true)
+  assert.equal(result.firstEventPage.pageInfo.hasNextPage, true)
   assert.equal(result.secondEventPage.items.length, 1)
-  assert.equal(result.secondEventPage.hasNextPage, false)
+  assert.equal(result.secondEventPage.pageInfo.hasNextPage, false)
 })
 
 test('rolls back an atomic note write when its operation receipt conflicts', async () => {
