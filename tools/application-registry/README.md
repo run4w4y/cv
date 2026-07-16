@@ -91,11 +91,12 @@ Applications that have already been submitted remain in their lifecycle state
 for manual review.
 
 Writes are placed in the typed local outbox before they are sent. Entries are
-retained for audit with `synced`, `retry`, `blocked`, or `dead-letter` state.
-`outbox sync` only replays pending/retry entries. Authentication failures are
-blocked; invalid payloads, conflicts, and response-contract failures are
-dead-lettered; transport, throttling, and transient server failures use bounded
-Effect retry before remaining queued.
+removed after the server confirms them; the active outbox retains only
+`pending`, `retry`, `blocked`, or `dead-letter` work. `outbox sync` only replays
+pending/retry entries. Authentication failures are blocked; invalid payloads,
+conflicts, and response-contract failures are dead-lettered; transport,
+throttling, and transient server failures use bounded Effect retry before
+remaining queued.
 
 Lifecycle changes, listing-finding batches, and first-class notes enter the
 durable typed outbox before the network request. `notes add` writes a `general`

@@ -13,7 +13,7 @@ const NonNegativeInteger = Schema.Int.pipe(
   Schema.check(Schema.isGreaterThanOrEqualTo(0))
 )
 
-export const registryOutboxEntryVersion = 2 as const
+export const registryOutboxEntryVersion = 3 as const
 
 export const AppendApplicationEventCommandSchema = Schema.Struct({
   _tag: Schema.Literal('AppendApplicationEvent'),
@@ -52,7 +52,6 @@ export const RegistryOutboxDispositionSchema = Schema.Literals([
   'retry',
   'blocked',
   'dead-letter',
-  'synced',
 ])
 
 export type RegistryOutboxDisposition = Schema.Schema.Type<
@@ -77,7 +76,7 @@ export type EnqueueRegistryCommand = {
 }
 
 export type RegistryOutboxFailure = {
-  readonly disposition: Exclude<RegistryOutboxDisposition, 'pending' | 'synced'>
+  readonly disposition: Exclude<RegistryOutboxDisposition, 'pending'>
   readonly message: string
 }
 
@@ -93,9 +92,9 @@ export type RegistryOutboxService = {
     entry: RegistryOutboxEntry,
     failure: RegistryOutboxFailure
   ) => Effect.Effect<RegistryOutboxEntry, ApplicationRegistryOutboxError>
-  readonly markSynced: (
+  readonly complete: (
     entry: RegistryOutboxEntry
-  ) => Effect.Effect<RegistryOutboxEntry, ApplicationRegistryOutboxError>
+  ) => Effect.Effect<void, ApplicationRegistryOutboxError>
 }
 
 export class RegistryOutbox extends Context.Service<

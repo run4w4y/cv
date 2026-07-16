@@ -11,7 +11,7 @@ import type { RegistryOutboxDisposition } from '../outbox'
 
 export type RegistryFailureDisposition = Exclude<
   RegistryOutboxDisposition,
-  'pending' | 'synced'
+  'pending'
 >
 
 export const registryFailureDisposition = (

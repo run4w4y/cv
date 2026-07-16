@@ -450,7 +450,6 @@ describe('application registry client', () => {
     expect(result.sync).toMatchObject({
       attempted: 1,
       failed: [{ disposition: 'retry', operationId: 'note-operation-1' }],
-      retainedSynced: 0,
       synced: 0,
     })
     expect(requests).toBe(6)
@@ -500,7 +499,6 @@ describe('application registry client', () => {
     expect(result.sync).toMatchObject({
       attempted: 1,
       failed: [],
-      retainedSynced: 1,
       synced: 1,
     })
     expect(operationIds).toEqual([
@@ -530,7 +528,8 @@ describe('application registry client', () => {
           )
           const sync = yield* client.sync()
           const empty = yield* client.sync()
-          return { empty, sync, write }
+          const retained = yield* client.outbox()
+          return { empty, retained, sync, write }
         })
       )
     )
@@ -541,7 +540,6 @@ describe('application registry client', () => {
       blocked: 0,
       deadLetter: 0,
       failed: [],
-      retainedSynced: 1,
       synced: 1,
     })
     expect(result.empty).toEqual({
@@ -549,9 +547,9 @@ describe('application registry client', () => {
       blocked: 0,
       deadLetter: 0,
       failed: [],
-      retainedSynced: 1,
       synced: 0,
     })
+    expect(result.retained).toEqual([])
     expect(requests).toBe(4)
   })
 

@@ -213,12 +213,18 @@ const makeRegistryOutbox = (directory: string) =>
           })
         }
       ),
-      markSynced: Effect.fn('RegistryOutbox.markSynced')(function* (entry) {
-        return yield* write({
-          ...entry,
-          disposition: 'synced',
-          lastFailure: null,
-        })
+      complete: Effect.fn('RegistryOutbox.complete')(function* (entry) {
+        const finalPath = entryPath(registryCommandOperationId(entry.command))
+        return yield* fileSystem
+          .remove(finalPath, { force: true })
+          .pipe(
+            Effect.mapError(
+              fileError(
+                finalPath,
+                `Could not remove completed registry outbox entry ${finalPath}`
+              )
+            )
+          )
       }),
     } satisfies RegistryOutboxService
   })

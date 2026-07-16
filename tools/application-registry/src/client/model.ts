@@ -61,7 +61,6 @@ export type RegistrySyncResult = {
   readonly blocked: number
   readonly deadLetter: number
   readonly failed: readonly RegistrySyncFailure[]
-  readonly retainedSynced: number
   readonly synced: number
 }
 

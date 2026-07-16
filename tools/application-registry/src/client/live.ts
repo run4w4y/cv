@@ -93,7 +93,7 @@ const makeApplicationRegistryClient = Effect.gen(function* () {
         Effect.matchEffect({
           onSuccess: (response) =>
             outbox
-              .markSynced(entry)
+              .complete(entry)
               .pipe(Effect.as({ response, status: 'synced' } as const)),
           onFailure: (error) => {
             const disposition = registryFailureDisposition(error)
@@ -135,7 +135,7 @@ const makeApplicationRegistryClient = Effect.gen(function* () {
             )
         },
         onSuccess: () =>
-          outbox.markSynced(entry).pipe(
+          outbox.complete(entry).pipe(
             Effect.as({
               _tag: 'Synced' as const,
               operationId: registryCommandOperationId(entry.command),
@@ -289,9 +289,6 @@ const makeApplicationRegistryClient = Effect.gen(function* () {
           (entry) => entry.disposition === 'dead-letter'
         ).length,
         failed,
-        retainedSynced: retained.filter(
-          (entry) => entry.disposition === 'synced'
-        ).length,
         synced: results.length - failed.length,
       }
     }),
