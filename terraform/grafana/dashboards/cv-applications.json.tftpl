@@ -56,7 +56,9 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -81,7 +83,9 @@
           "id": "filterFieldsByName",
           "options": {
             "include": {
-              "names": ["id"]
+              "names": [
+                "id"
+              ]
             }
           }
         },
@@ -90,7 +94,9 @@
           "options": {
             "includeTimeField": false,
             "mode": "reduceFields",
-            "reducers": ["count"]
+            "reducers": [
+              "count"
+            ]
           }
         }
       ],
@@ -126,7 +132,9 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -169,7 +177,9 @@
           "id": "filterFieldsByName",
           "options": {
             "include": {
-              "names": ["id"]
+              "names": [
+                "id"
+              ]
             }
           }
         },
@@ -178,7 +188,9 @@
           "options": {
             "includeTimeField": false,
             "mode": "reduceFields",
-            "reducers": ["count"]
+            "reducers": [
+              "count"
+            ]
           }
         }
       ],
@@ -214,7 +226,9 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -257,7 +271,9 @@
           "id": "filterFieldsByName",
           "options": {
             "include": {
-              "names": ["id"]
+              "names": [
+                "id"
+              ]
             }
           }
         },
@@ -266,7 +282,9 @@
           "options": {
             "includeTimeField": false,
             "mode": "reduceFields",
-            "reducers": ["count"]
+            "reducers": [
+              "count"
+            ]
           }
         }
       ],
@@ -302,7 +320,9 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -345,7 +365,9 @@
           "id": "filterFieldsByName",
           "options": {
             "include": {
-              "names": ["id"]
+              "names": [
+                "id"
+              ]
             }
           }
         },
@@ -354,7 +376,9 @@
           "options": {
             "includeTimeField": false,
             "mode": "reduceFields",
-            "reducers": ["count"]
+            "reducers": [
+              "count"
+            ]
           }
         }
       ],
@@ -390,7 +414,9 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -433,7 +459,9 @@
           "id": "filterFieldsByName",
           "options": {
             "include": {
-              "names": ["id"]
+              "names": [
+                "id"
+              ]
             }
           }
         },
@@ -442,7 +470,9 @@
           "options": {
             "includeTimeField": false,
             "mode": "reduceFields",
-            "reducers": ["count"]
+            "reducers": [
+              "count"
+            ]
           }
         }
       ],
@@ -478,7 +508,9 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -510,7 +542,7 @@
                     "value": "overdue"
                   }
                 },
-                "fieldName": "followUpState"
+                "fieldName": "followUpTiming"
               }
             ],
             "match": "all",
@@ -521,7 +553,9 @@
           "id": "filterFieldsByName",
           "options": {
             "include": {
-              "names": ["id"]
+              "names": [
+                "id"
+              ]
             }
           }
         },
@@ -530,7 +564,9 @@
           "options": {
             "includeTimeField": false,
             "mode": "reduceFields",
-            "reducers": ["count"]
+            "reducers": [
+              "count"
+            ]
           }
         }
       ],
@@ -679,7 +715,10 @@
           "id": "filterFieldsByName",
           "options": {
             "include": {
-              "names": ["applicationStatus", "id"]
+              "names": [
+                "applicationStatus",
+                "id"
+              ]
             }
           }
         },
@@ -692,7 +731,9 @@
                 "operation": "groupby"
               },
               "id": {
-                "aggregations": ["count"],
+                "aggregations": [
+                  "count"
+                ],
                 "operation": "aggregate"
               }
             }
@@ -841,7 +882,10 @@
           "id": "filterFieldsByName",
           "options": {
             "include": {
-              "names": ["targetStage", "id"]
+              "names": [
+                "targetStage",
+                "id"
+              ]
             }
           }
         },
@@ -854,7 +898,9 @@
                 "operation": "groupby"
               },
               "id": {
-                "aggregations": ["count"],
+                "aggregations": [
+                  "count"
+                ],
                 "operation": "aggregate"
               }
             }
@@ -999,7 +1045,10 @@
           "id": "filterFieldsByName",
           "options": {
             "include": {
-              "names": ["personalPriority", "id"]
+              "names": [
+                "personalPriority",
+                "id"
+              ]
             }
           }
         },
@@ -1012,7 +1061,9 @@
                 "operation": "groupby"
               },
               "id": {
-                "aggregations": ["count"],
+                "aggregations": [
+                  "count"
+                ],
                 "operation": "aggregate"
               }
             }
@@ -1080,6 +1131,18 @@
             "matcher": {
               "id": "byName",
               "options": "id"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom.viz",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "version"
             },
             "properties": [
               {
@@ -1480,12 +1543,12 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "followUpState"
+              "options": "followUpTiming"
             },
             "properties": [
               {
                 "id": "displayName",
-                "value": "Follow-up state"
+                "value": "Follow-up timing"
               },
               {
                 "id": "mappings",
@@ -1675,12 +1738,202 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "viewSort"
+              "options": "actions"
             },
             "properties": [
               {
-                "id": "custom.hideFrom.viz",
-                "value": true
+                "id": "displayName",
+                "value": "Actions"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "actions"
+                }
+              },
+              {
+                "id": "custom.filterable",
+                "value": false
+              },
+              {
+                "id": "custom.width",
+                "value": 720
+              },
+              {
+                "id": "actions",
+                "value": [
+                  {
+                    "title": "Change status",
+                    "type": "fetch",
+                    "confirmation": "Record $eventKind and move $${__data.fields[\"company\"]} — $${__data.fields[\"role\"]} to $nextStatus?",
+                    "oneClick": false,
+                    "style": {
+                      "backgroundColor": "#1f60c4"
+                    },
+                    "variables": [
+                      {
+                        "key": "eventKind",
+                        "name": "Event kind",
+                        "type": "string"
+                      },
+                      {
+                        "key": "nextStatus",
+                        "name": "Next lifecycle status",
+                        "type": "string"
+                      }
+                    ],
+                    "fetch": {
+                      "method": "POST",
+                      "url": "/api/datasources/proxy/uid/${application_registry_datasource_uid}/v1/applications/$${__data.fields[\"id\"]}/events",
+                      "headers": [
+                        [
+                          "Content-Type",
+                          "application/json"
+                        ]
+                      ],
+                      "queryParams": [],
+                      "body": "{\n  \"deviceId\": null,\n  \"expectedVersion\": $${__data.fields[\"version\"]},\n  \"kind\": \"$eventKind\",\n  \"nextApplicationStatus\": \"$nextStatus\",\n  \"occurredAt\": \"$${__to:date:iso}\",\n  \"operationId\": \"grafana-status-$${__data.fields[\"id\"]}-$${__data.fields[\"version\"]}-$eventKind-$nextStatus\",\n  \"payload\": {}\n}"
+                    }
+                  },
+                  {
+                    "title": "Add note",
+                    "type": "fetch",
+                    "confirmation": "Add a $noteKind note to $${__data.fields[\"company\"]} — $${__data.fields[\"role\"]}?",
+                    "oneClick": false,
+                    "style": {
+                      "backgroundColor": "#7c3aed"
+                    },
+                    "variables": [
+                      {
+                        "key": "noteKind",
+                        "name": "Note kind",
+                        "type": "string"
+                      },
+                      {
+                        "key": "noteBodyJson",
+                        "name": "Body as a JSON string (include quotes)",
+                        "type": "string"
+                      },
+                      {
+                        "key": "noteSourceJson",
+                        "name": "Source as a JSON string or null",
+                        "type": "string"
+                      }
+                    ],
+                    "fetch": {
+                      "method": "POST",
+                      "url": "/api/datasources/proxy/uid/${application_registry_datasource_uid}/v1/applications/$${__data.fields[\"id\"]}/notes",
+                      "headers": [
+                        [
+                          "Content-Type",
+                          "application/json"
+                        ]
+                      ],
+                      "queryParams": [],
+                      "body": "{\n  \"body\": $noteBodyJson,\n  \"kind\": \"$noteKind\",\n  \"operationId\": \"grafana-note-$${__data.fields[\"id\"]}-$${__data.fields[\"version\"]}-$noteKind\",\n  \"source\": $noteSourceJson\n}"
+                    }
+                  },
+                  {
+                    "title": "Replace labels",
+                    "type": "fetch",
+                    "confirmation": "Replace every label on $${__data.fields[\"company\"]} — $${__data.fields[\"role\"]}?",
+                    "oneClick": false,
+                    "style": {
+                      "backgroundColor": "#c2410c"
+                    },
+                    "variables": [
+                      {
+                        "key": "labelsJson",
+                        "name": "Labels as JSON, for example [\"remote\",\"priority\"]",
+                        "type": "string"
+                      }
+                    ],
+                    "fetch": {
+                      "method": "PUT",
+                      "url": "/api/datasources/proxy/uid/${application_registry_datasource_uid}/v1/applications/$${__data.fields[\"id\"]}/labels",
+                      "headers": [
+                        [
+                          "Content-Type",
+                          "application/json"
+                        ]
+                      ],
+                      "queryParams": [],
+                      "body": "{\n  \"labels\": $labelsJson\n}"
+                    }
+                  },
+                  {
+                    "title": "Log contact",
+                    "type": "fetch",
+                    "confirmation": "Record contact for $${__data.fields[\"company\"]} — $${__data.fields[\"role\"]}?",
+                    "oneClick": false,
+                    "style": {
+                      "backgroundColor": "#2e7d32"
+                    },
+                    "variables": [],
+                    "fetch": {
+                      "method": "POST",
+                      "url": "/api/datasources/proxy/uid/${application_registry_datasource_uid}/v1/applications/$${__data.fields[\"id\"]}/events",
+                      "headers": [
+                        [
+                          "Content-Type",
+                          "application/json"
+                        ]
+                      ],
+                      "queryParams": [],
+                      "body": "{\n  \"deviceId\": null,\n  \"expectedVersion\": $${__data.fields[\"version\"]},\n  \"kind\": \"contact_logged\",\n  \"occurredAt\": \"$${__to:date:iso}\",\n  \"operationId\": \"grafana-contact-$${__data.fields[\"id\"]}-$${__data.fields[\"version\"]}\",\n  \"payload\": {}\n}"
+                    }
+                  },
+                  {
+                    "title": "Research updated",
+                    "type": "fetch",
+                    "confirmation": "Record a research update for $${__data.fields[\"company\"]} — $${__data.fields[\"role\"]}?",
+                    "oneClick": false,
+                    "style": {
+                      "backgroundColor": "#6b21a8"
+                    },
+                    "variables": [],
+                    "fetch": {
+                      "method": "POST",
+                      "url": "/api/datasources/proxy/uid/${application_registry_datasource_uid}/v1/applications/$${__data.fields[\"id\"]}/events",
+                      "headers": [
+                        [
+                          "Content-Type",
+                          "application/json"
+                        ]
+                      ],
+                      "queryParams": [],
+                      "body": "{\n  \"deviceId\": null,\n  \"expectedVersion\": $${__data.fields[\"version\"]},\n  \"kind\": \"research_updated\",\n  \"occurredAt\": \"$${__to:date:iso}\",\n  \"operationId\": \"grafana-research-$${__data.fields[\"id\"]}-$${__data.fields[\"version\"]}\",\n  \"payload\": {}\n}"
+                    }
+                  },
+                  {
+                    "title": "Set follow-up",
+                    "type": "fetch",
+                    "confirmation": "Set the follow-up for $${__data.fields[\"company\"]} — $${__data.fields[\"role\"]} to $followUpAt?",
+                    "oneClick": false,
+                    "style": {
+                      "backgroundColor": "#a16207"
+                    },
+                    "variables": [
+                      {
+                        "key": "followUpAt",
+                        "name": "Follow-up time (UTC ISO timestamp)",
+                        "type": "string"
+                      }
+                    ],
+                    "fetch": {
+                      "method": "PATCH",
+                      "url": "/api/datasources/proxy/uid/${application_registry_datasource_uid}/v1/applications/$${__data.fields[\"id\"]}",
+                      "headers": [
+                        [
+                          "Content-Type",
+                          "application/json"
+                        ]
+                      ],
+                      "queryParams": [],
+                      "body": "{\n  \"expectedVersion\": $${__data.fields[\"version\"]},\n  \"followUpAt\": \"$followUpAt\"\n}"
+                    }
+                  }
+                ]
               }
             ]
           }
@@ -1707,170 +1960,13 @@
               "type": "string"
             },
             {
-              "selector": "canonicalUrl",
-              "text": "canonicalUrl",
-              "type": "string"
-            },
-            {
-              "selector": "company",
-              "text": "company",
-              "type": "string"
-            },
-            {
-              "selector": "role",
-              "text": "role",
-              "type": "string"
-            },
-            {
-              "selector": "applicationStatus",
-              "text": "applicationStatus",
-              "type": "string"
-            },
-            {
-              "selector": "targetStage",
-              "text": "targetStage",
-              "type": "string"
-            },
-            {
-              "selector": "personalPriority",
-              "text": "personalPriority",
-              "type": "string"
-            },
-            {
-              "selector": "fitScore",
-              "text": "fitScore",
+              "selector": "version",
+              "text": "version",
               "type": "number"
             },
-            {
-              "selector": "location",
-              "text": "location",
-              "type": "string"
-            },
-            {
-              "selector": "details.workMode",
-              "text": "workMode",
-              "type": "string"
-            },
-            {
-              "selector": "labels",
-              "text": "labels",
-              "type": "string"
-            },
-            {
-              "selector": "compensationSummary",
-              "text": "compensationSummary",
-              "type": "string"
-            },
-            {
-              "selector": "followUpState",
-              "text": "followUpState",
-              "type": "string"
-            },
-            {
-              "selector": "followUpAt",
-              "text": "followUpAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "appliedAt",
-              "text": "appliedAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "lastContactAt",
-              "text": "lastContactAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "updatedAt",
-              "text": "updatedAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "recommendedAction",
-              "text": "recommendedAction",
-              "type": "string"
-            },
-            {
-              "selector": "latestEvent.kind",
-              "text": "latestEventKind",
-              "type": "string"
-            },
-            {
-              "selector": "latestEvent.occurredAt",
-              "text": "latestEventAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "counts.captures",
-              "text": "captureCount",
-              "type": "number"
-            },
-            {
-              "selector": "counts.notes",
-              "text": "noteCount",
-              "type": "number"
-            },
-            {
-              "selector": "updatedRevision",
-              "text": "updatedRevision",
-              "type": "number"
-            },
-            {
-              "selector": "updatedAt",
-              "text": "viewSort",
-              "type": "timestamp"
-            }
-          ],
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "${application_registry_datasource_uid}"
-          },
-          "filters": [],
-          "format": "table",
-          "global_query_id": "",
-          "pagination_max_pages": 100,
-          "pagination_mode": "cursor",
-          "pagination_param_cursor_extraction_path": "nextCursor",
-          "pagination_param_cursor_field_name": "after",
-          "pagination_param_cursor_field_type": "query",
-          "pagination_param_size_field_name": "limit",
-          "pagination_param_size_field_type": "query",
-          "pagination_param_size_value": 100,
-          "parser": "backend",
-          "refId": "E",
-          "root_selector": "$count(items) > 0 ? items : [{\"id\":\"__grafana_empty__\"}]",
-          "source": "url",
-          "type": "json",
-          "url": "${registry_api_url}/v1/applications",
-          "url_options": {
-            "data": "",
-            "method": "GET",
-            "params": [
-              {
-                "key": "limit",
-                "value": "100"
-              },
-              {
-                "key": "currency",
-                "value": "$${compensationCurrency}"
-              },
-              {
-                "key": "fitScoreMin",
-                "value": "$${fitScoreMin}"
-              },
-              {
-                "key": "fitScoreMax",
-                "value": "$${fitScoreMax}"
-              }
-            ]
-          }
-        },
-        {
-          "columns": [
             {
               "selector": "id",
-              "text": "id",
+              "text": "actions",
               "type": "string"
             },
             {
@@ -1929,8 +2025,8 @@
               "type": "string"
             },
             {
-              "selector": "followUpState",
-              "text": "followUpState",
+              "selector": "followUpTiming",
+              "text": "followUpTiming",
               "type": "string"
             },
             {
@@ -1982,11 +2078,6 @@
               "selector": "updatedRevision",
               "text": "updatedRevision",
               "type": "number"
-            },
-            {
-              "selector": "updatedAt",
-              "text": "viewSort",
-              "type": "timestamp"
             }
           ],
           "datasource": {
@@ -1996,17 +2087,17 @@
           "filters": [],
           "format": "table",
           "global_query_id": "",
-          "pagination_max_pages": 100,
+          "pagination_max_pages": 5,
           "pagination_mode": "cursor",
-          "pagination_param_cursor_extraction_path": "nextCursor",
+          "pagination_param_cursor_extraction_path": "pageInfo.nextCursor",
           "pagination_param_cursor_field_name": "after",
           "pagination_param_cursor_field_type": "query",
-          "pagination_param_size_field_name": "limit",
+          "pagination_param_size_field_name": "size",
           "pagination_param_size_field_type": "query",
           "pagination_param_size_value": 100,
           "parser": "backend",
           "refId": "A",
-          "root_selector": "$count(items) > 0 ? items : [{\"id\":\"__grafana_empty__\"}]",
+          "root_selector": "($reference := $${__to}; $minimum := \"$${fitScoreMin}\"; $maximum := \"$${fitScoreMax}\"; $minimumValue := $minimum = \"\" ? null : $number($minimum); $maximumValue := $maximum = \"\" ? null : $number($maximum); $rows := items[($minimumValue = null ? true : (fitScore != null ? fitScore >= $minimumValue : false)) and ($maximumValue = null ? true : (fitScore != null ? fitScore <= $maximumValue : false))]; $count($rows) > 0 ? $map($rows, function($item) { $merge([$item, {\"followUpTiming\": $item.followUpAt = null or $not($exists($item.followUpAt)) ? \"none\" : $toMillis($item.followUpAt) <= $reference ? \"overdue\" : \"upcoming\"}]) }) : [{\"id\":\"__grafana_empty__\"}])",
           "source": "url",
           "type": "json",
           "url": "${registry_api_url}/v1/applications",
@@ -2015,7 +2106,7 @@
             "method": "GET",
             "params": [
               {
-                "key": "limit",
+                "key": "size",
                 "value": "100"
               },
               {
@@ -2023,804 +2114,12 @@
                 "value": "$${compensationCurrency}"
               },
               {
-                "key": "fitScoreMin",
-                "value": "$${fitScoreMin}"
+                "key": "filters",
+                "value": "$${view.filters}"
               },
               {
-                "key": "fitScoreMax",
-                "value": "$${fitScoreMax}"
-              },
-              {
-                "key": "applicationStatus",
-                "value": "applied"
-              },
-              {
-                "key": "applicationStatus",
-                "value": "recruiter_screen"
-              },
-              {
-                "key": "applicationStatus",
-                "value": "technical_screen"
-              },
-              {
-                "key": "applicationStatus",
-                "value": "take_home"
-              },
-              {
-                "key": "applicationStatus",
-                "value": "interview_loop"
-              },
-              {
-                "key": "applicationStatus",
-                "value": "paused"
-              },
-              {
-                "key": "applicationStatus",
-                "value": "offer"
-              }
-            ]
-          }
-        },
-        {
-          "columns": [
-            {
-              "selector": "id",
-              "text": "id",
-              "type": "string"
-            },
-            {
-              "selector": "canonicalUrl",
-              "text": "canonicalUrl",
-              "type": "string"
-            },
-            {
-              "selector": "company",
-              "text": "company",
-              "type": "string"
-            },
-            {
-              "selector": "role",
-              "text": "role",
-              "type": "string"
-            },
-            {
-              "selector": "applicationStatus",
-              "text": "applicationStatus",
-              "type": "string"
-            },
-            {
-              "selector": "targetStage",
-              "text": "targetStage",
-              "type": "string"
-            },
-            {
-              "selector": "personalPriority",
-              "text": "personalPriority",
-              "type": "string"
-            },
-            {
-              "selector": "fitScore",
-              "text": "fitScore",
-              "type": "number"
-            },
-            {
-              "selector": "location",
-              "text": "location",
-              "type": "string"
-            },
-            {
-              "selector": "details.workMode",
-              "text": "workMode",
-              "type": "string"
-            },
-            {
-              "selector": "labels",
-              "text": "labels",
-              "type": "string"
-            },
-            {
-              "selector": "compensationSummary",
-              "text": "compensationSummary",
-              "type": "string"
-            },
-            {
-              "selector": "followUpState",
-              "text": "followUpState",
-              "type": "string"
-            },
-            {
-              "selector": "followUpAt",
-              "text": "followUpAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "appliedAt",
-              "text": "appliedAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "lastContactAt",
-              "text": "lastContactAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "updatedAt",
-              "text": "updatedAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "recommendedAction",
-              "text": "recommendedAction",
-              "type": "string"
-            },
-            {
-              "selector": "latestEvent.kind",
-              "text": "latestEventKind",
-              "type": "string"
-            },
-            {
-              "selector": "latestEvent.occurredAt",
-              "text": "latestEventAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "counts.captures",
-              "text": "captureCount",
-              "type": "number"
-            },
-            {
-              "selector": "counts.notes",
-              "text": "noteCount",
-              "type": "number"
-            },
-            {
-              "selector": "updatedRevision",
-              "text": "updatedRevision",
-              "type": "number"
-            },
-            {
-              "selector": "fitScore",
-              "text": "viewSort",
-              "type": "number"
-            }
-          ],
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "${application_registry_datasource_uid}"
-          },
-          "filters": [],
-          "format": "table",
-          "global_query_id": "",
-          "pagination_max_pages": 100,
-          "pagination_mode": "cursor",
-          "pagination_param_cursor_extraction_path": "nextCursor",
-          "pagination_param_cursor_field_name": "after",
-          "pagination_param_cursor_field_type": "query",
-          "pagination_param_size_field_name": "limit",
-          "pagination_param_size_field_type": "query",
-          "pagination_param_size_value": 100,
-          "parser": "backend",
-          "refId": "B",
-          "root_selector": "$count(items) > 0 ? items : [{\"id\":\"__grafana_empty__\"}]",
-          "source": "url",
-          "type": "json",
-          "url": "${registry_api_url}/v1/applications",
-          "url_options": {
-            "data": "",
-            "method": "GET",
-            "params": [
-              {
-                "key": "limit",
-                "value": "100"
-              },
-              {
-                "key": "currency",
-                "value": "$${compensationCurrency}"
-              },
-              {
-                "key": "fitScoreMin",
-                "value": "$${fitScoreMin}"
-              },
-              {
-                "key": "fitScoreMax",
-                "value": "$${fitScoreMax}"
-              },
-              {
-                "key": "applicationStatus",
-                "value": "not_started"
-              },
-              {
-                "key": "applicationStatus",
-                "value": "preparing"
-              },
-              {
-                "key": "applicationStatus",
-                "value": "applied"
-              },
-              {
-                "key": "applicationStatus",
-                "value": "recruiter_screen"
-              },
-              {
-                "key": "applicationStatus",
-                "value": "technical_screen"
-              },
-              {
-                "key": "applicationStatus",
-                "value": "take_home"
-              },
-              {
-                "key": "applicationStatus",
-                "value": "interview_loop"
-              },
-              {
-                "key": "applicationStatus",
-                "value": "paused"
-              },
-              {
-                "key": "applicationStatus",
-                "value": "offer"
-              },
-              {
-                "key": "targetStage",
-                "value": "apply_next"
-              },
-              {
-                "key": "targetStage",
-                "value": "verify_first"
-              },
-              {
-                "key": "targetStage",
-                "value": "secondary"
-              },
-              {
-                "key": "targetStage",
-                "value": "backlog"
-              },
-              {
-                "key": "targetStage",
-                "value": "watch_after_move"
-              }
-            ]
-          }
-        },
-        {
-          "columns": [
-            {
-              "selector": "id",
-              "text": "id",
-              "type": "string"
-            },
-            {
-              "selector": "canonicalUrl",
-              "text": "canonicalUrl",
-              "type": "string"
-            },
-            {
-              "selector": "company",
-              "text": "company",
-              "type": "string"
-            },
-            {
-              "selector": "role",
-              "text": "role",
-              "type": "string"
-            },
-            {
-              "selector": "applicationStatus",
-              "text": "applicationStatus",
-              "type": "string"
-            },
-            {
-              "selector": "targetStage",
-              "text": "targetStage",
-              "type": "string"
-            },
-            {
-              "selector": "personalPriority",
-              "text": "personalPriority",
-              "type": "string"
-            },
-            {
-              "selector": "fitScore",
-              "text": "fitScore",
-              "type": "number"
-            },
-            {
-              "selector": "location",
-              "text": "location",
-              "type": "string"
-            },
-            {
-              "selector": "details.workMode",
-              "text": "workMode",
-              "type": "string"
-            },
-            {
-              "selector": "labels",
-              "text": "labels",
-              "type": "string"
-            },
-            {
-              "selector": "compensationSummary",
-              "text": "compensationSummary",
-              "type": "string"
-            },
-            {
-              "selector": "followUpState",
-              "text": "followUpState",
-              "type": "string"
-            },
-            {
-              "selector": "followUpAt",
-              "text": "followUpAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "appliedAt",
-              "text": "appliedAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "lastContactAt",
-              "text": "lastContactAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "updatedAt",
-              "text": "updatedAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "recommendedAction",
-              "text": "recommendedAction",
-              "type": "string"
-            },
-            {
-              "selector": "latestEvent.kind",
-              "text": "latestEventKind",
-              "type": "string"
-            },
-            {
-              "selector": "latestEvent.occurredAt",
-              "text": "latestEventAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "counts.captures",
-              "text": "captureCount",
-              "type": "number"
-            },
-            {
-              "selector": "counts.notes",
-              "text": "noteCount",
-              "type": "number"
-            },
-            {
-              "selector": "updatedRevision",
-              "text": "updatedRevision",
-              "type": "number"
-            },
-            {
-              "selector": "fitScore",
-              "text": "viewSort",
-              "type": "number"
-            }
-          ],
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "${application_registry_datasource_uid}"
-          },
-          "filters": [],
-          "format": "table",
-          "global_query_id": "",
-          "pagination_max_pages": 100,
-          "pagination_mode": "cursor",
-          "pagination_param_cursor_extraction_path": "nextCursor",
-          "pagination_param_cursor_field_name": "after",
-          "pagination_param_cursor_field_type": "query",
-          "pagination_param_size_field_name": "limit",
-          "pagination_param_size_field_type": "query",
-          "pagination_param_size_value": 100,
-          "parser": "backend",
-          "refId": "C",
-          "root_selector": "$count(items) > 0 ? items : [{\"id\":\"__grafana_empty__\"}]",
-          "source": "url",
-          "type": "json",
-          "url": "${registry_api_url}/v1/applications",
-          "url_options": {
-            "data": "",
-            "method": "GET",
-            "params": [
-              {
-                "key": "limit",
-                "value": "100"
-              },
-              {
-                "key": "currency",
-                "value": "$${compensationCurrency}"
-              },
-              {
-                "key": "fitScoreMin",
-                "value": "$${fitScoreMin}"
-              },
-              {
-                "key": "fitScoreMax",
-                "value": "$${fitScoreMax}"
-              },
-              {
-                "key": "applicationStatus",
-                "value": "not_started"
-              },
-              {
-                "key": "targetStage",
-                "value": "apply_next"
-              },
-              {
-                "key": "targetStage",
-                "value": "verify_first"
-              },
-              {
-                "key": "targetStage",
-                "value": "secondary"
-              },
-              {
-                "key": "targetStage",
-                "value": "backlog"
-              },
-              {
-                "key": "targetStage",
-                "value": "watch_after_move"
-              }
-            ]
-          }
-        },
-        {
-          "columns": [
-            {
-              "selector": "id",
-              "text": "id",
-              "type": "string"
-            },
-            {
-              "selector": "canonicalUrl",
-              "text": "canonicalUrl",
-              "type": "string"
-            },
-            {
-              "selector": "company",
-              "text": "company",
-              "type": "string"
-            },
-            {
-              "selector": "role",
-              "text": "role",
-              "type": "string"
-            },
-            {
-              "selector": "applicationStatus",
-              "text": "applicationStatus",
-              "type": "string"
-            },
-            {
-              "selector": "targetStage",
-              "text": "targetStage",
-              "type": "string"
-            },
-            {
-              "selector": "personalPriority",
-              "text": "personalPriority",
-              "type": "string"
-            },
-            {
-              "selector": "fitScore",
-              "text": "fitScore",
-              "type": "number"
-            },
-            {
-              "selector": "location",
-              "text": "location",
-              "type": "string"
-            },
-            {
-              "selector": "details.workMode",
-              "text": "workMode",
-              "type": "string"
-            },
-            {
-              "selector": "labels",
-              "text": "labels",
-              "type": "string"
-            },
-            {
-              "selector": "compensationSummary",
-              "text": "compensationSummary",
-              "type": "string"
-            },
-            {
-              "selector": "followUpState",
-              "text": "followUpState",
-              "type": "string"
-            },
-            {
-              "selector": "followUpAt",
-              "text": "followUpAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "appliedAt",
-              "text": "appliedAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "lastContactAt",
-              "text": "lastContactAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "updatedAt",
-              "text": "updatedAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "recommendedAction",
-              "text": "recommendedAction",
-              "type": "string"
-            },
-            {
-              "selector": "latestEvent.kind",
-              "text": "latestEventKind",
-              "type": "string"
-            },
-            {
-              "selector": "latestEvent.occurredAt",
-              "text": "latestEventAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "counts.captures",
-              "text": "captureCount",
-              "type": "number"
-            },
-            {
-              "selector": "counts.notes",
-              "text": "noteCount",
-              "type": "number"
-            },
-            {
-              "selector": "updatedRevision",
-              "text": "updatedRevision",
-              "type": "number"
-            },
-            {
-              "selector": "updatedAt",
-              "text": "viewSort",
-              "type": "timestamp"
-            }
-          ],
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "${application_registry_datasource_uid}"
-          },
-          "filters": [],
-          "format": "table",
-          "global_query_id": "",
-          "pagination_max_pages": 100,
-          "pagination_mode": "cursor",
-          "pagination_param_cursor_extraction_path": "nextCursor",
-          "pagination_param_cursor_field_name": "after",
-          "pagination_param_cursor_field_type": "query",
-          "pagination_param_size_field_name": "limit",
-          "pagination_param_size_field_type": "query",
-          "pagination_param_size_value": 100,
-          "parser": "backend",
-          "refId": "D1",
-          "root_selector": "$count(items) > 0 ? items : [{\"id\":\"__grafana_empty__\"}]",
-          "source": "url",
-          "type": "json",
-          "url": "${registry_api_url}/v1/applications",
-          "url_options": {
-            "data": "",
-            "method": "GET",
-            "params": [
-              {
-                "key": "limit",
-                "value": "100"
-              },
-              {
-                "key": "currency",
-                "value": "$${compensationCurrency}"
-              },
-              {
-                "key": "fitScoreMin",
-                "value": "$${fitScoreMin}"
-              },
-              {
-                "key": "fitScoreMax",
-                "value": "$${fitScoreMax}"
-              },
-              {
-                "key": "applicationStatus",
-                "value": "rejected"
-              },
-              {
-                "key": "applicationStatus",
-                "value": "withdrawn"
-              },
-              {
-                "key": "applicationStatus",
-                "value": "archived"
-              }
-            ]
-          }
-        },
-        {
-          "columns": [
-            {
-              "selector": "id",
-              "text": "id",
-              "type": "string"
-            },
-            {
-              "selector": "canonicalUrl",
-              "text": "canonicalUrl",
-              "type": "string"
-            },
-            {
-              "selector": "company",
-              "text": "company",
-              "type": "string"
-            },
-            {
-              "selector": "role",
-              "text": "role",
-              "type": "string"
-            },
-            {
-              "selector": "applicationStatus",
-              "text": "applicationStatus",
-              "type": "string"
-            },
-            {
-              "selector": "targetStage",
-              "text": "targetStage",
-              "type": "string"
-            },
-            {
-              "selector": "personalPriority",
-              "text": "personalPriority",
-              "type": "string"
-            },
-            {
-              "selector": "fitScore",
-              "text": "fitScore",
-              "type": "number"
-            },
-            {
-              "selector": "location",
-              "text": "location",
-              "type": "string"
-            },
-            {
-              "selector": "details.workMode",
-              "text": "workMode",
-              "type": "string"
-            },
-            {
-              "selector": "labels",
-              "text": "labels",
-              "type": "string"
-            },
-            {
-              "selector": "compensationSummary",
-              "text": "compensationSummary",
-              "type": "string"
-            },
-            {
-              "selector": "followUpState",
-              "text": "followUpState",
-              "type": "string"
-            },
-            {
-              "selector": "followUpAt",
-              "text": "followUpAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "appliedAt",
-              "text": "appliedAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "lastContactAt",
-              "text": "lastContactAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "updatedAt",
-              "text": "updatedAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "recommendedAction",
-              "text": "recommendedAction",
-              "type": "string"
-            },
-            {
-              "selector": "latestEvent.kind",
-              "text": "latestEventKind",
-              "type": "string"
-            },
-            {
-              "selector": "latestEvent.occurredAt",
-              "text": "latestEventAt",
-              "type": "timestamp"
-            },
-            {
-              "selector": "counts.captures",
-              "text": "captureCount",
-              "type": "number"
-            },
-            {
-              "selector": "counts.notes",
-              "text": "noteCount",
-              "type": "number"
-            },
-            {
-              "selector": "updatedRevision",
-              "text": "updatedRevision",
-              "type": "number"
-            },
-            {
-              "selector": "updatedAt",
-              "text": "viewSort",
-              "type": "timestamp"
-            }
-          ],
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "${application_registry_datasource_uid}"
-          },
-          "filters": [],
-          "format": "table",
-          "global_query_id": "",
-          "pagination_max_pages": 100,
-          "pagination_mode": "cursor",
-          "pagination_param_cursor_extraction_path": "nextCursor",
-          "pagination_param_cursor_field_name": "after",
-          "pagination_param_cursor_field_type": "query",
-          "pagination_param_size_field_name": "limit",
-          "pagination_param_size_field_type": "query",
-          "pagination_param_size_value": 100,
-          "parser": "backend",
-          "refId": "D2",
-          "root_selector": "$count(items) > 0 ? items : [{\"id\":\"__grafana_empty__\"}]",
-          "source": "url",
-          "type": "json",
-          "url": "${registry_api_url}/v1/applications",
-          "url_options": {
-            "data": "",
-            "method": "GET",
-            "params": [
-              {
-                "key": "limit",
-                "value": "100"
-              },
-              {
-                "key": "currency",
-                "value": "$${compensationCurrency}"
-              },
-              {
-                "key": "fitScoreMin",
-                "value": "$${fitScoreMin}"
-              },
-              {
-                "key": "fitScoreMax",
-                "value": "$${fitScoreMax}"
-              },
-              {
-                "key": "targetStage",
-                "value": "closed_skip"
+                "key": "orderBy",
+                "value": "$${view.orderBy}"
               }
             ]
           }
@@ -2828,173 +2127,6 @@
       ],
       "title": "Applications — $${view:text}",
       "transformations": [
-        {
-          "id": "filterByRefId",
-          "options": {
-            "include": "$${view}"
-          }
-        },
-        {
-          "id": "groupBy",
-          "options": {
-            "fields": {
-              "applicationStatus": {
-                "aggregations": ["last"],
-                "operation": "aggregate"
-              },
-              "appliedAt": {
-                "aggregations": ["last"],
-                "operation": "aggregate"
-              },
-              "canonicalUrl": {
-                "aggregations": ["last"],
-                "operation": "aggregate"
-              },
-              "captureCount": {
-                "aggregations": ["last"],
-                "operation": "aggregate"
-              },
-              "company": {
-                "aggregations": ["last"],
-                "operation": "aggregate"
-              },
-              "compensationSummary": {
-                "aggregations": ["last"],
-                "operation": "aggregate"
-              },
-              "fitScore": {
-                "aggregations": ["last"],
-                "operation": "aggregate"
-              },
-              "followUpAt": {
-                "aggregations": ["last"],
-                "operation": "aggregate"
-              },
-              "followUpState": {
-                "aggregations": ["last"],
-                "operation": "aggregate"
-              },
-              "id": {
-                "aggregations": [],
-                "operation": "groupby"
-              },
-              "labels": {
-                "aggregations": ["last"],
-                "operation": "aggregate"
-              },
-              "lastContactAt": {
-                "aggregations": ["last"],
-                "operation": "aggregate"
-              },
-              "latestEventAt": {
-                "aggregations": ["last"],
-                "operation": "aggregate"
-              },
-              "latestEventKind": {
-                "aggregations": ["last"],
-                "operation": "aggregate"
-              },
-              "location": {
-                "aggregations": ["last"],
-                "operation": "aggregate"
-              },
-              "noteCount": {
-                "aggregations": ["last"],
-                "operation": "aggregate"
-              },
-              "personalPriority": {
-                "aggregations": ["last"],
-                "operation": "aggregate"
-              },
-              "recommendedAction": {
-                "aggregations": ["last"],
-                "operation": "aggregate"
-              },
-              "role": {
-                "aggregations": ["last"],
-                "operation": "aggregate"
-              },
-              "targetStage": {
-                "aggregations": ["last"],
-                "operation": "aggregate"
-              },
-              "updatedAt": {
-                "aggregations": ["last"],
-                "operation": "aggregate"
-              },
-              "updatedRevision": {
-                "aggregations": ["last"],
-                "operation": "aggregate"
-              },
-              "workMode": {
-                "aggregations": ["last"],
-                "operation": "aggregate"
-              },
-              "viewSort": {
-                "aggregations": ["last"],
-                "operation": "aggregate"
-              }
-            }
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {},
-            "includeByName": {},
-            "indexByName": {
-              "id": 0,
-              "company (last)": 1,
-              "role (last)": 2,
-              "applicationStatus (last)": 3,
-              "targetStage (last)": 4,
-              "personalPriority (last)": 5,
-              "fitScore (last)": 6,
-              "location (last)": 7,
-              "workMode (last)": 8,
-              "labels (last)": 9,
-              "compensationSummary (last)": 10,
-              "followUpState (last)": 11,
-              "followUpAt (last)": 12,
-              "appliedAt (last)": 13,
-              "lastContactAt (last)": 14,
-              "updatedAt (last)": 15,
-              "recommendedAction (last)": 16,
-              "latestEventKind (last)": 17,
-              "latestEventAt (last)": 18,
-              "captureCount (last)": 19,
-              "noteCount (last)": 20,
-              "canonicalUrl (last)": 21,
-              "updatedRevision (last)": 22,
-              "viewSort (last)": 23
-            },
-            "renameByName": {
-              "applicationStatus (last)": "applicationStatus",
-              "appliedAt (last)": "appliedAt",
-              "canonicalUrl (last)": "canonicalUrl",
-              "captureCount (last)": "captureCount",
-              "company (last)": "company",
-              "compensationSummary (last)": "compensationSummary",
-              "fitScore (last)": "fitScore",
-              "followUpAt (last)": "followUpAt",
-              "followUpState (last)": "followUpState",
-              "labels (last)": "labels",
-              "lastContactAt (last)": "lastContactAt",
-              "latestEventAt (last)": "latestEventAt",
-              "latestEventKind (last)": "latestEventKind",
-              "location (last)": "location",
-              "noteCount (last)": "noteCount",
-              "personalPriority (last)": "personalPriority",
-              "recommendedAction (last)": "recommendedAction",
-              "role (last)": "role",
-              "targetStage (last)": "targetStage",
-              "updatedAt (last)": "updatedAt",
-              "updatedRevision (last)": "updatedRevision",
-              "workMode (last)": "workMode",
-              "viewSort (last)": "viewSort"
-            }
-          }
-        },
         {
           "id": "filterByValue",
           "options": {
@@ -3068,19 +2200,38 @@
           }
         },
         {
-          "id": "sortBy",
+          "id": "organize",
           "options": {
-            "fields": {},
-            "sort": [
-              {
-                "desc": true,
-                "field": "viewSort"
-              },
-              {
-                "desc": true,
-                "field": "updatedAt"
-              }
-            ]
+            "excludeByName": {},
+            "includeByName": {},
+            "indexByName": {
+              "actions": 0,
+              "company": 1,
+              "role": 2,
+              "applicationStatus": 3,
+              "targetStage": 4,
+              "personalPriority": 5,
+              "fitScore": 6,
+              "location": 7,
+              "workMode": 8,
+              "labels": 9,
+              "compensationSummary": 10,
+              "followUpTiming": 11,
+              "followUpAt": 12,
+              "appliedAt": 13,
+              "lastContactAt": 14,
+              "updatedAt": 15,
+              "recommendedAction": 16,
+              "latestEventKind": 17,
+              "latestEventAt": 18,
+              "captureCount": 19,
+              "noteCount": 20,
+              "canonicalUrl": 21,
+              "updatedRevision": 22,
+              "version": 23,
+              "id": 24
+            },
+            "renameByName": {}
           }
         }
       ],
@@ -3269,7 +2420,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "followUpState"
+              "options": "followUpTiming"
             },
             "properties": [
               {
@@ -3364,7 +2515,7 @@
                     "value": "^(overdue|upcoming)$"
                   }
                 },
-                "fieldName": "followUpState"
+                "fieldName": "followUpTiming"
               }
             ],
             "match": "all",
@@ -3381,7 +2532,7 @@
                 "role",
                 "applicationStatus",
                 "personalPriority",
-                "followUpState",
+                "followUpTiming",
                 "followUpAt"
               ]
             }
@@ -3582,12 +2733,12 @@
           "filters": [],
           "format": "table",
           "global_query_id": "",
-          "pagination_max_pages": 100,
+          "pagination_max_pages": 5,
           "pagination_mode": "cursor",
-          "pagination_param_cursor_extraction_path": "nextCursor",
+          "pagination_param_cursor_extraction_path": "pageInfo.nextCursor",
           "pagination_param_cursor_field_name": "after",
           "pagination_param_cursor_field_type": "query",
-          "pagination_param_size_field_name": "limit",
+          "pagination_param_size_field_name": "size",
           "pagination_param_size_field_type": "query",
           "pagination_param_size_value": 100,
           "parser": "backend",
@@ -3601,16 +2752,16 @@
             "method": "GET",
             "params": [
               {
-                "key": "limit",
+                "key": "size",
                 "value": "100"
               },
               {
-                "key": "from",
-                "value": "$${__timeFrom:date:iso}"
+                "key": "filters",
+                "value": "[{\"type\":\"condition\",\"field\":\"occurredAt\",\"operator\":\"gte\",\"value\":\"$${__from:date:iso}\"},{\"type\":\"condition\",\"field\":\"occurredAt\",\"operator\":\"lte\",\"value\":\"$${__to:date:iso}\"}]"
               },
               {
-                "key": "to",
-                "value": "$${__timeTo:date:iso}"
+                "key": "orderBy",
+                "value": "[{\"field\":\"occurredAt\",\"direction\":\"desc\"}]"
               }
             ]
           }
@@ -3676,16 +2827,24 @@
       "type": "table"
     }
   ],
-  "refresh": "5m",
+  "refresh": "30s",
   "schemaVersion": 41,
-  "tags": ["cv", "applications", "registry"],
+  "tags": [
+    "cv",
+    "applications",
+    "registry"
+  ],
   "templating": {
     "list": [
       {
         "current": {
           "selected": true,
           "text": "All",
-          "value": "E"
+          "value": "all",
+          "properties": {
+            "filters": "[]",
+            "orderBy": "[{\"field\":\"updatedAt\",\"direction\":\"desc\"}]"
+          }
         },
         "hide": 0,
         "includeAll": false,
@@ -3696,32 +2855,53 @@
           {
             "selected": true,
             "text": "All",
-            "value": "E"
+            "value": "all",
+            "properties": {
+              "filters": "[]",
+              "orderBy": "[{\"field\":\"updatedAt\",\"direction\":\"desc\"}]"
+            }
           },
           {
             "selected": false,
             "text": "Active",
-            "value": "A"
+            "value": "active",
+            "properties": {
+              "filters": "[{\"type\":\"condition\",\"field\":\"applicationStatus\",\"operator\":\"in\",\"value\":[\"applied\",\"recruiter_screen\",\"technical_screen\",\"take_home\",\"interview_loop\",\"paused\",\"offer\"]}]",
+              "orderBy": "[{\"field\":\"updatedAt\",\"direction\":\"desc\"}]"
+            }
           },
           {
             "selected": false,
             "text": "Interest",
-            "value": "B"
+            "value": "interest",
+            "properties": {
+              "filters": "[{\"type\":\"group\",\"combinator\":\"and\",\"children\":[{\"type\":\"condition\",\"field\":\"applicationStatus\",\"operator\":\"in\",\"value\":[\"not_started\",\"preparing\",\"applied\",\"recruiter_screen\",\"technical_screen\",\"take_home\",\"interview_loop\",\"paused\",\"offer\"]},{\"type\":\"condition\",\"field\":\"targetStage\",\"operator\":\"in\",\"value\":[\"apply_next\",\"verify_first\",\"secondary\",\"backlog\",\"watch_after_move\"]}]}]",
+              "orderBy": "[{\"field\":\"fitScore\",\"direction\":\"desc\",\"nulls\":\"last\"}]"
+            }
           },
           {
             "selected": false,
             "text": "To apply",
-            "value": "C"
+            "value": "to-apply",
+            "properties": {
+              "filters": "[{\"type\":\"group\",\"combinator\":\"and\",\"children\":[{\"type\":\"condition\",\"field\":\"applicationStatus\",\"operator\":\"eq\",\"value\":\"not_started\"},{\"type\":\"condition\",\"field\":\"targetStage\",\"operator\":\"in\",\"value\":[\"apply_next\",\"verify_first\",\"secondary\",\"backlog\",\"watch_after_move\"]}]}]",
+              "orderBy": "[{\"field\":\"fitScore\",\"direction\":\"desc\",\"nulls\":\"last\"}]"
+            }
           },
           {
             "selected": false,
             "text": "Archive",
-            "value": "D1|D2"
+            "value": "archive",
+            "properties": {
+              "filters": "[{\"type\":\"group\",\"combinator\":\"or\",\"children\":[{\"type\":\"condition\",\"field\":\"applicationStatus\",\"operator\":\"in\",\"value\":[\"rejected\",\"withdrawn\",\"archived\"]},{\"type\":\"condition\",\"field\":\"targetStage\",\"operator\":\"eq\",\"value\":\"closed_skip\"}]}]",
+              "orderBy": "[{\"field\":\"updatedAt\",\"direction\":\"desc\"}]"
+            }
           }
         ],
-        "query": "All : E,Active : A,Interest : B,To apply : C,Archive : D1|D2",
+        "query": "[{\"value\":\"all\",\"text\":\"All\",\"filters\":\"[]\",\"orderBy\":\"[{\\\"field\\\":\\\"updatedAt\\\",\\\"direction\\\":\\\"desc\\\"}]\"},{\"value\":\"active\",\"text\":\"Active\",\"filters\":\"[{\\\"type\\\":\\\"condition\\\",\\\"field\\\":\\\"applicationStatus\\\",\\\"operator\\\":\\\"in\\\",\\\"value\\\":[\\\"applied\\\",\\\"recruiter_screen\\\",\\\"technical_screen\\\",\\\"take_home\\\",\\\"interview_loop\\\",\\\"paused\\\",\\\"offer\\\"]}]\",\"orderBy\":\"[{\\\"field\\\":\\\"updatedAt\\\",\\\"direction\\\":\\\"desc\\\"}]\"},{\"value\":\"interest\",\"text\":\"Interest\",\"filters\":\"[{\\\"type\\\":\\\"group\\\",\\\"combinator\\\":\\\"and\\\",\\\"children\\\":[{\\\"type\\\":\\\"condition\\\",\\\"field\\\":\\\"applicationStatus\\\",\\\"operator\\\":\\\"in\\\",\\\"value\\\":[\\\"not_started\\\",\\\"preparing\\\",\\\"applied\\\",\\\"recruiter_screen\\\",\\\"technical_screen\\\",\\\"take_home\\\",\\\"interview_loop\\\",\\\"paused\\\",\\\"offer\\\"]},{\\\"type\\\":\\\"condition\\\",\\\"field\\\":\\\"targetStage\\\",\\\"operator\\\":\\\"in\\\",\\\"value\\\":[\\\"apply_next\\\",\\\"verify_first\\\",\\\"secondary\\\",\\\"backlog\\\",\\\"watch_after_move\\\"]}]}]\",\"orderBy\":\"[{\\\"field\\\":\\\"fitScore\\\",\\\"direction\\\":\\\"desc\\\",\\\"nulls\\\":\\\"last\\\"}]\"},{\"value\":\"to-apply\",\"text\":\"To apply\",\"filters\":\"[{\\\"type\\\":\\\"group\\\",\\\"combinator\\\":\\\"and\\\",\\\"children\\\":[{\\\"type\\\":\\\"condition\\\",\\\"field\\\":\\\"applicationStatus\\\",\\\"operator\\\":\\\"eq\\\",\\\"value\\\":\\\"not_started\\\"},{\\\"type\\\":\\\"condition\\\",\\\"field\\\":\\\"targetStage\\\",\\\"operator\\\":\\\"in\\\",\\\"value\\\":[\\\"apply_next\\\",\\\"verify_first\\\",\\\"secondary\\\",\\\"backlog\\\",\\\"watch_after_move\\\"]}]}]\",\"orderBy\":\"[{\\\"field\\\":\\\"fitScore\\\",\\\"direction\\\":\\\"desc\\\",\\\"nulls\\\":\\\"last\\\"}]\"},{\"value\":\"archive\",\"text\":\"Archive\",\"filters\":\"[{\\\"type\\\":\\\"group\\\",\\\"combinator\\\":\\\"or\\\",\\\"children\\\":[{\\\"type\\\":\\\"condition\\\",\\\"field\\\":\\\"applicationStatus\\\",\\\"operator\\\":\\\"in\\\",\\\"value\\\":[\\\"rejected\\\",\\\"withdrawn\\\",\\\"archived\\\"]},{\\\"type\\\":\\\"condition\\\",\\\"field\\\":\\\"targetStage\\\",\\\"operator\\\":\\\"eq\\\",\\\"value\\\":\\\"closed_skip\\\"}]}]\",\"orderBy\":\"[{\\\"field\\\":\\\"updatedAt\\\",\\\"direction\\\":\\\"desc\\\"}]\"}]",
         "skipUrlSync": false,
-        "type": "custom"
+        "type": "custom",
+        "valuesFormat": "json"
       },
       {
         "current": {

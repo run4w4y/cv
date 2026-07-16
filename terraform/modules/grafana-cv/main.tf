@@ -33,14 +33,13 @@ resource "grafana_data_source" "application_registry" {
   access_mode = "proxy"
 
   json_data_encoded = jsonencode({
-    auth_method               = "bearerToken"
     allowedHosts              = [trimsuffix(var.registry_api_url, "/")]
-    allowDangerousHTTPMethods = false
+    allowDangerousHTTPMethods = true
   })
 
-  secure_json_data_encoded = jsonencode({
-    bearerToken = var.registry_api_token
-  })
+  http_headers = {
+    Authorization = "Bearer ${var.registry_api_token}"
+  }
 }
 
 resource "grafana_dashboard" "cv_analytics" {

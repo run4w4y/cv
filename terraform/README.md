@@ -196,19 +196,31 @@ terragrunt apply
 The applications dashboard provides lifecycle KPIs, status/stage/priority
 breakdowns, a complete applications table, follow-up queue, and
 time-ranged recent activity. The table has Grafana-owned Active, Interest, To
-apply, and Archive presets. They compose the registry API's generic lifecycle
-and target-stage filters, merge the two Archive queries, and apply their own
-fit-score or last-updated ordering after pagination. Company, lifecycle, stage,
-priority, label, and numeric fit-score controls further filter the selected
-view. Lifecycle and target-stage values are color-coded. The compensation
+apply, and Archive presets. One multi-property Grafana variable supplies each
+preset's generic registry filters and ordering to a single applications query.
+Company, lifecycle, stage, priority, and label controls filter the assembled
+view in Grafana. Numeric fit-score bounds are applied while the paged response
+is assembled, and an empty bound preserves applications without a score.
+Follow-up timing is derived from `followUpAt` against one dashboard request
+timestamp. Lifecycle and target-stage values are color-coded. The compensation
 currency control asks the applications endpoint to convert displayed summaries
 while preserving original stored values.
 
 Empty registries retain table schemas and zero-valued KPIs. The applications
 and recent-activity queries use Infinity cursor pagination with 100 rows per
-request, following the existing endpoints' `nextCursor` through the `after`
-query parameter for up to 100 pages. Grafana's plugin-wide pagination maximum
-must permit the same page count.
+request, following `pageInfo.nextCursor` through the `after` query parameter for
+up to five continuation pages.
+
+The applications table also exposes confirmed row actions for lifecycle
+events, notes, labels, contact and research events, and follow-up scheduling.
+They use the application version shown in the row for optimistic concurrency
+where the registry command supports it. Note bodies and sources are entered as
+JSON strings, labels as a JSON string array, and event/status values use the
+registry contract's literal names. Actions call the registry through Grafana's
+same-origin datasource proxy, which keeps the shared bearer token in the
+provisioned datasource rather than the dashboard JSON. The dashboard refreshes
+every 30 seconds after mutations; refresh manually when the updated row is
+needed immediately.
 
 ## Cloudflare Permissions
 
