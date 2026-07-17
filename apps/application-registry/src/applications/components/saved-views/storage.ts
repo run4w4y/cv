@@ -4,8 +4,6 @@ import {
   serializeQueryFilterNodes,
 } from '@cv/drizzle-query-ui'
 import { Option, Schema } from 'effect'
-
-import { parseCompensationDisplayCurrency } from '../../model/currency'
 import type { SavedViewsStorage } from '../../../table-workspace/saved-view-menu'
 import {
   decodeStoredJson,
@@ -13,6 +11,7 @@ import {
   TableDensitySchema,
   VisibilityStateSchema,
 } from '../../../table-workspace/saved-view-schema'
+import { parseCompensationDisplayCurrency } from '../../model/currency'
 import {
   APPLICATION_SAVED_VIEWS_SCHEMA_VERSION,
   APPLICATION_SAVED_VIEWS_STORAGE_KEY,

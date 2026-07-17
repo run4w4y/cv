@@ -5,7 +5,7 @@ import {
 } from '@cv/application-registry-entity'
 import { useFormControlProps } from '@cv/internal-forms'
 import { useFormContext } from 'react-hook-form'
-
+import { formatLabel } from '../../../../lib/format'
 import type {
   ApplicationRowEditFormInput,
   ApplicationRowEditFormOutput,
@@ -14,7 +14,6 @@ import {
   CurrencyCombobox,
   type CurrencyComboboxProps,
 } from '../../currency-combobox'
-import { formatLabel } from '../../../../lib/format'
 
 const optionsFrom = (values: readonly string[]) =>
   values.map((value) => ({ label: formatLabel(value), value }))

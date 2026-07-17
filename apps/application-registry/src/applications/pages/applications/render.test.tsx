@@ -1,16 +1,15 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
+import type { ApplicationListItem } from '@cv/application-registry-api-contract'
 import { cleanup, fireEvent, waitFor } from '@testing-library/react'
 import { NuqsAdapter } from 'nuqs/adapters/react-router/v7'
 import { BrowserRouter } from 'react-router'
-
-import type { ApplicationListItem } from '@cv/application-registry-api-contract'
 import { renderWithRegistry } from '../../../test/render-with-registry'
-import { ApplicationsPage } from './render'
 import {
   type ApplicationSavedViewState,
   persistApplicationSavedViews,
   persistApplicationWorkspaceState,
 } from '../../components/saved-views'
+import { ApplicationsPage } from './render'
 
 const originalFetch = globalThis.fetch
 

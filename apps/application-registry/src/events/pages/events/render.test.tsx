@@ -11,11 +11,11 @@ import { BrowserRouter } from 'react-router'
 
 import { HeaderActionsProvider } from '../../../shell/header-actions'
 import { renderWithRegistry } from '../../../test/render-with-registry'
-import { EventsPage } from './render'
 import {
   EVENTS_SAVED_VIEWS_SCHEMA_VERSION,
   persistEventsSavedViews,
 } from '../../components/saved-views'
+import { EventsPage } from './render'
 
 const originalFetch = globalThis.fetch
 

@@ -18,8 +18,8 @@ import {
 import { AlertCircle, ChevronDown, ExternalLink, RotateCcw } from 'lucide-react'
 
 import { formatDateTime, formatLabel } from '../../../lib/format'
-import { ListingResolutionOptions } from './resolution-options'
 import { StatusBadge } from '../status-badge'
+import { ListingResolutionOptions } from './resolution-options'
 import {
   type SaveListingResolution,
   useListingAvailabilityReview,

@@ -1,3 +1,4 @@
+import type { ApplicationListItem } from '@cv/application-registry-api-contract'
 import {
   Empty,
   EmptyDescription,
@@ -23,12 +24,10 @@ import {
 } from '@tanstack/react-table'
 import { ArrowDown, ArrowUp, ArrowUpDown, Inbox } from 'lucide-react'
 import * as React from 'react'
-
-import type { ApplicationListItem } from '@cv/application-registry-api-contract'
 import { HeaderActions } from '../../../shell/header-actions'
 import { useInfiniteScroll } from '../../../table-workspace/use-infinite-scroll'
-import { ApplicationRowEditor } from './row-editor'
 import { createApplicationColumns } from './columns'
+import { ApplicationRowEditor } from './row-editor'
 import { type TableDensity, TableSettings } from './settings'
 
 const densityClasses: Readonly<Record<TableDensity, string>> = {

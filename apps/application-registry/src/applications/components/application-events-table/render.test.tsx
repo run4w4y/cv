@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { cleanup, render, within } from '@testing-library/react'
-
 import type { RegistryEventListItem } from '@cv/application-registry-api-contract'
+import { cleanup, render, within } from '@testing-library/react'
 import { ApplicationEventsTable } from './render'
 
 afterEach(cleanup)

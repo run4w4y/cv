@@ -3,8 +3,8 @@ import type {
   ListEventsResponse,
 } from '@cv/application-registry-api-contract'
 import { Effect, Option, Stream } from 'effect'
-import * as Atom from 'effect/unstable/reactivity/Atom'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
+import * as Atom from 'effect/unstable/reactivity/Atom'
 import * as Reactivity from 'effect/unstable/reactivity/Reactivity'
 import { uniqBy } from 'es-toolkit'
 

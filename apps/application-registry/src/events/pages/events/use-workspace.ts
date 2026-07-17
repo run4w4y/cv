@@ -13,16 +13,15 @@ import {
 import { parseAsString, useQueryStates } from 'nuqs'
 import * as React from 'react'
 import { useSearchParams } from 'react-router'
-
+import {
+  canonicalFiltersParser,
+  useCanonicalQueryFilters,
+} from '../../../table-workspace/query-filters'
 import type {
   EventsSavedViewState,
   EventsTableDensity,
 } from '../../components/saved-views'
 import { eventFilterFieldPresentation } from '../../model/filter-fields'
-import {
-  canonicalFiltersParser,
-  useCanonicalQueryFilters,
-} from '../../../table-workspace/query-filters'
 import {
   defaultEventSorting,
   parseEventSorting,

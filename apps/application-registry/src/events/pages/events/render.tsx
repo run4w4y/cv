@@ -1,10 +1,9 @@
 import { eventListQuery } from '@cv/application-registry-entity/query'
 import { Alert, AlertDescription, AlertTitle, Button } from '@cv/internal-ui'
 import { AlertCircle } from 'lucide-react'
-
+import { QueryWorkspaceToolbar } from '../../../table-workspace/query-toolbar'
 import { EventsTable } from '../../components/events-table'
 import { eventFilterFieldPresentation } from '../../model/filter-fields'
-import { QueryWorkspaceToolbar } from '../../../table-workspace/query-toolbar'
 import { useEventsList } from './use-list'
 import { useEventsWorkspace } from './use-workspace'
 

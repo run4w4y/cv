@@ -1,9 +1,8 @@
+import type { RegistryEventListItem } from '@cv/application-registry-api-contract'
 import { Badge } from '@cv/internal-ui'
 import type { ColumnDef } from '@tanstack/react-table'
 import { ExternalLink } from 'lucide-react'
-
 import { formatDateTime } from '../../../lib/format'
-import type { RegistryEventListItem } from '@cv/application-registry-api-contract'
 import { EventKindBadge } from '../event-kind-badge'
 import { EventPayload } from '../event-payload'
 

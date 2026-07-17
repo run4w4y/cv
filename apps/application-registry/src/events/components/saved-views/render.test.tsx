@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
+import type { RegistryEventListItem } from '@cv/application-registry-api-contract'
 import {
   functionalUpdate,
   getCoreRowModel,
@@ -7,8 +8,6 @@ import {
 } from '@tanstack/react-table'
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import * as React from 'react'
-
-import type { RegistryEventListItem } from '@cv/application-registry-api-contract'
 import { eventColumns } from '../events-table/columns'
 import {
   EVENTS_SAVED_VIEWS_SCHEMA_VERSION,

@@ -5,8 +5,8 @@ import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import * as React from 'react'
 
 import {
-  eventsAtom,
   type EventsListRequest,
+  eventsAtom,
   refreshEventLists,
 } from '../../data'
 import type { useEventsWorkspace } from './use-workspace'

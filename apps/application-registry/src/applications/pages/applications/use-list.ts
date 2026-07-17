@@ -5,8 +5,8 @@ import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import * as React from 'react'
 
 import {
-  applicationsAtom,
   type ApplicationsListRequest,
+  applicationsAtom,
   refreshApplicationLists,
 } from '../../data'
 import type { useApplicationsWorkspace } from './use-workspace'

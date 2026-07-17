@@ -6,11 +6,11 @@ import {
   cn,
 } from '@cv/internal-ui'
 import { useAtomValue } from '@effect/atom-react'
+import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import { ArrowLeft, FileText } from 'lucide-react'
 import * as React from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
-
+import { HeaderActions } from '../../../shell/header-actions'
 import {
   ApplicationEditDialog,
   DeleteApplicationDialog,
@@ -23,7 +23,6 @@ import {
   applicationEventsAtom,
 } from '../../data'
 import type { CompensationDisplayCurrency } from '../../model/currency'
-import { HeaderActions } from '../../../shell/header-actions'
 import {
   ApplicationCompensation,
   ApplicationDetailsSkeleton,

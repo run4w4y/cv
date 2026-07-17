@@ -1,3 +1,4 @@
+import type { RegistryEventListItem } from '@cv/application-registry-api-contract'
 import {
   Empty,
   EmptyDescription,
@@ -28,16 +29,14 @@ import {
   LoaderCircle,
 } from 'lucide-react'
 import { useNavigate } from 'react-router'
-
-import type { RegistryEventListItem } from '@cv/application-registry-api-contract'
 import { HeaderActions } from '../../../shell/header-actions'
 import { useInfiniteScroll } from '../../../table-workspace/use-infinite-scroll'
-import { eventColumns } from './columns'
 import {
   type EventsSavedViewState,
   type EventsTableDensity,
   EventsViewMenu,
 } from '../saved-views'
+import { eventColumns } from './columns'
 
 const densityClasses: Readonly<Record<EventsTableDensity, string>> = {
   compact: 'py-2',

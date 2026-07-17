@@ -1,5 +1,4 @@
 import { applicationListQuery } from '@cv/application-registry-entity/query'
-import { useAtomValue } from '@effect/atom-react'
 import {
   Alert,
   AlertDescription,
@@ -10,15 +9,15 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from '@cv/internal-ui'
-import { AlertCircle, Search, X } from 'lucide-react'
+import { useAtomValue } from '@effect/atom-react'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
-
+import { AlertCircle, Search, X } from 'lucide-react'
+import { QueryWorkspaceToolbar } from '../../../table-workspace/query-toolbar'
 import { ApplicationsTable } from '../../components/application-table'
 import { CurrencyCombobox } from '../../components/currency-combobox'
 import { NewApplicationDialog } from '../../components/new-application'
 import { ApplicationSavedViews } from '../../components/saved-views'
 import { applicationFacetsAtom } from '../../data'
-import { QueryWorkspaceToolbar } from '../../../table-workspace/query-toolbar'
 import { useApplicationsList } from './use-list'
 import { useApplicationsWorkspace } from './use-workspace'
 

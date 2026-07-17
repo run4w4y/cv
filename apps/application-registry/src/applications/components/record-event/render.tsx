@@ -16,8 +16,8 @@ import {
 import { useAtom, useAtomSet } from '@effect/atom-react'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
 import { Schema } from 'effect'
-import * as Atom from 'effect/unstable/reactivity/Atom'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
+import * as Atom from 'effect/unstable/reactivity/Atom'
 import { Activity, AlertCircle } from 'lucide-react'
 import * as React from 'react'
 import { useForm } from 'react-hook-form'
@@ -210,5 +210,5 @@ export const RecordEventDialog = ({
   )
 }
 
-export { recordEventRequest }
 export type { RecordEventValues }
+export { recordEventRequest }

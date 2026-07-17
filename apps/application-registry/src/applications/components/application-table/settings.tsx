@@ -1,3 +1,4 @@
+import type { ApplicationListItem } from '@cv/application-registry-api-contract'
 import {
   Button,
   DropdownMenu,
@@ -10,8 +11,6 @@ import {
 } from '@cv/internal-ui'
 import type { Table as TanStackTable } from '@tanstack/react-table'
 import { Check, Rows3, Settings2 } from 'lucide-react'
-
-import type { ApplicationListItem } from '@cv/application-registry-api-contract'
 
 export type TableDensity = 'compact' | 'comfortable' | 'spacious'
 

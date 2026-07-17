@@ -8,8 +8,8 @@ import {
 } from '../../../table-workspace/saved-view-menu'
 import {
   EVENTS_SAVED_VIEWS_STORAGE_KEY,
-  type EventsSavedViewsStorage,
   type EventsSavedViewState,
+  type EventsSavedViewsStorage,
   type EventsTableDensity,
 } from './model'
 import {

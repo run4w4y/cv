@@ -1,3 +1,4 @@
+import type { ApplicationEvent } from '@cv/application-registry-entity'
 import {
   Alert,
   AlertDescription,
@@ -15,7 +16,6 @@ import {
   TableHeader,
   TableRow,
 } from '@cv/internal-ui'
-import type { ApplicationEvent } from '@cv/application-registry-entity'
 import { AlertCircle, History } from 'lucide-react'
 
 import { EventKindBadge } from '../../../events/components/event-kind-badge'

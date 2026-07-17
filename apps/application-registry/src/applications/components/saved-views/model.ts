@@ -1,12 +1,11 @@
 import type { FilterNode } from '@cv/drizzle-query'
 import type { SortingState, VisibilityState } from '@tanstack/react-table'
-
-import type { CompensationDisplayCurrency } from '../../model/currency'
 import type {
   SavedView,
   SavedViewsStorage,
   TableDensity,
 } from '../../../table-workspace/saved-view-menu'
+import type { CompensationDisplayCurrency } from '../../model/currency'
 
 export const APPLICATION_SAVED_VIEWS_SCHEMA_VERSION = 3
 export const APPLICATION_SAVED_VIEWS_STORAGE_KEY = `@cv/application-registry/saved-views@${APPLICATION_SAVED_VIEWS_SCHEMA_VERSION}`

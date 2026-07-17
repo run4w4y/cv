@@ -14,7 +14,11 @@ import {
 import { createParser, parseAsString, useQueryStates } from 'nuqs'
 import * as React from 'react'
 import { useSearchParams } from 'react-router'
-
+import {
+  canonicalFiltersParser,
+  useCanonicalQueryFilters,
+} from '../../../table-workspace/query-filters'
+import { useDebouncedDraft } from '../../../table-workspace/use-debounced-value'
 import type { TableDensity } from '../../components/application-table'
 import {
   type ApplicationSavedViewState,
@@ -23,11 +27,6 @@ import {
 } from '../../components/saved-views'
 import { parseCompensationDisplayCurrency } from '../../model/currency'
 import { createApplicationFilterFieldPresentation } from '../../model/filter-fields'
-import {
-  canonicalFiltersParser,
-  useCanonicalQueryFilters,
-} from '../../../table-workspace/query-filters'
-import { useDebouncedDraft } from '../../../table-workspace/use-debounced-value'
 import {
   defaultApplicationSorting,
   parseApplicationSorting,

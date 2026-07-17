@@ -1,12 +1,11 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
+import type { RegistryEventListItem } from '@cv/application-registry-api-contract'
 import type { SortingState } from '@tanstack/react-table'
 import { cleanup, render, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
-
-import type { RegistryEventListItem } from '@cv/application-registry-api-contract'
 import { HeaderActionsProvider } from '../../../shell/header-actions'
-import { EventsTable } from './render'
 import type { EventsSavedViewState } from '../saved-views'
+import { EventsTable } from './render'
 
 afterEach(() => {
   cleanup()

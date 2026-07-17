@@ -5,8 +5,8 @@ import {
   render,
 } from '@testing-library/react'
 import * as AtomRegistry from 'effect/unstable/reactivity/AtomRegistry'
-import * as React from 'react'
 import type { ReactElement } from 'react'
+import * as React from 'react'
 
 export const TestRegistryProvider = ({
   children,

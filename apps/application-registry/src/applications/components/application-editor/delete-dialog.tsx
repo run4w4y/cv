@@ -15,8 +15,8 @@ import {
   Button,
 } from '@cv/internal-ui'
 import { useAtom, useAtomSet } from '@effect/atom-react'
-import * as Atom from 'effect/unstable/reactivity/Atom'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
+import * as Atom from 'effect/unstable/reactivity/Atom'
 import { AlertCircle, RefreshCw, Trash2 } from 'lucide-react'
 import * as React from 'react'
 

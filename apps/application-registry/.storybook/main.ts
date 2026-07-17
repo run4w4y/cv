@@ -1,6 +1,6 @@
+import babel from '@rolldown/plugin-babel'
 import type { StorybookConfig } from '@storybook/react-vite'
 import tailwindcss from '@tailwindcss/vite'
-import babel from '@rolldown/plugin-babel'
 import { reactCompilerPreset } from '@vitejs/plugin-react'
 import { mergeConfig } from 'vite'
 

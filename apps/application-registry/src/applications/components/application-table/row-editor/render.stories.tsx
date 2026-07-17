@@ -1,8 +1,7 @@
+import type { ApplicationListItem } from '@cv/application-registry-api-contract'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import type { ReactNode } from 'react'
 import * as React from 'react'
-
-import type { ApplicationListItem } from '@cv/application-registry-api-contract'
 import { ApplicationsTable } from '..'
 
 const application: ApplicationListItem = {

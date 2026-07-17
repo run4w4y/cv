@@ -1,9 +1,8 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
+import type { ApplicationListItem } from '@cv/application-registry-api-contract'
 import type { SortingState } from '@tanstack/react-table'
 import { cleanup, fireEvent, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
-
-import type { ApplicationListItem } from '@cv/application-registry-api-contract'
 import { renderWithRegistry } from '../../../test/render-with-registry'
 import { ApplicationsTable } from './render'
 

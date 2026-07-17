@@ -1,2 +1,2 @@
 export { ApplicationsTable } from './render'
-export { TableSettings, type TableDensity } from './settings'
+export { type TableDensity, TableSettings } from './settings'

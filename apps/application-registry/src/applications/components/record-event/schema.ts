@@ -1,9 +1,9 @@
 import type { AppendApplicationEventRequest } from '@cv/application-registry-api-contract'
 import {
+  type AppendableApplicationEventKind,
+  AppendableApplicationEventKindSchema,
   type Application,
   ApplicationStatusSchema,
-  AppendableApplicationEventKindSchema,
-  type AppendableApplicationEventKind,
   type JsonValue,
   type StatusChangingApplicationEventKind,
   statusChangingApplicationEventKindValues,

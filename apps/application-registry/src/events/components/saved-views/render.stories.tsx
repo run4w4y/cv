@@ -1,3 +1,4 @@
+import type { RegistryEventListItem } from '@cv/application-registry-api-contract'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import {
   functionalUpdate,
@@ -6,8 +7,6 @@ import {
   type VisibilityState,
 } from '@tanstack/react-table'
 import * as React from 'react'
-
-import type { RegistryEventListItem } from '@cv/application-registry-api-contract'
 import { eventColumns } from '../events-table/columns'
 import {
   type EventsSavedViewState,

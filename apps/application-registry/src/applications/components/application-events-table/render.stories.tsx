@@ -1,6 +1,5 @@
-import type { Meta, StoryObj } from '@storybook/react-vite'
-
 import type { RegistryEventListItem } from '@cv/application-registry-api-contract'
+import type { Meta, StoryObj } from '@storybook/react-vite'
 import { ApplicationEventsTable } from './render'
 
 const events: readonly RegistryEventListItem[] = [
