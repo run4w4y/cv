@@ -24,7 +24,7 @@ const boundCursorValue = (term: CursorSeekTerm): unknown => {
 
 const equalToCursorValue = (term: CursorSeekTerm, value: unknown): SQL => {
   if (term.value === null) {
-    return isNull(term.expression)
+    return isNull(term.nullExpression)
   }
 
   return eq(term.expression, value)
@@ -35,7 +35,7 @@ const afterCursorValue = (
   value: unknown
 ): SQL | undefined => {
   if (term.value === null) {
-    return term.nulls === 'first' ? isNotNull(term.expression) : undefined
+    return term.nulls === 'first' ? isNotNull(term.nullExpression) : undefined
   }
 
   const comparison =
@@ -44,8 +44,28 @@ const afterCursorValue = (
       : lt(term.expression, value)
 
   return term.nullable && term.nulls === 'last'
-    ? (or(comparison, isNull(term.expression)) ?? comparison)
+    ? (or(comparison, isNull(term.nullExpression)) ?? comparison)
     : comparison
+}
+
+const nestedSeek = (
+  terms: readonly CursorSeekTerm[],
+  index: number
+): SQL | undefined => {
+  const term = terms[index]
+  if (term === undefined) return undefined
+
+  const value = boundCursorValue(term)
+  const after = afterCursorValue(term, value)
+  const suffix = nestedSeek(terms, index + 1)
+  const equalSuffix =
+    suffix === undefined
+      ? undefined
+      : (and(equalToCursorValue(term, value), suffix) ?? suffix)
+
+  if (after === undefined) return equalSuffix
+  if (equalSuffix === undefined) return after
+  return or(after, equalSuffix) ?? after
 }
 
 /**
@@ -61,19 +81,5 @@ export const buildCursorSeek = (
     return undefined
   }
 
-  const branches: SQL[] = []
-  const prefix: SQL[] = []
-
-  for (const term of terms) {
-    const value = boundCursorValue(term)
-    const after = afterCursorValue(term, value)
-
-    if (after !== undefined) {
-      branches.push(and(...prefix, after) ?? after)
-    }
-
-    prefix.push(equalToCursorValue(term, value))
-  }
-
-  return or(...branches) ?? falseCondition()
+  return nestedSeek(terms, 0) ?? falseCondition()
 }

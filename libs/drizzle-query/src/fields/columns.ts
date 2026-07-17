@@ -101,6 +101,7 @@ const makeColumnField = <Name extends string, Column extends AnyColumn>(
       : {
           enabled: false,
           expression: column,
+          nullExpression: column,
           cursorType: {
             type: cursorTypeFor(kind, orderedString),
             nullable,

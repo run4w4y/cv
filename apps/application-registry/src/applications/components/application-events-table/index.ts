@@ -1,0 +1,1 @@
+export { ApplicationEventsTable } from './render'

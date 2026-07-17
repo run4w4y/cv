@@ -1,0 +1,40 @@
+@import "tailwindcss";
+@import "shadcn/tailwind.css";
+@import "@cv/internal-ui/theme.css";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+@source "../../../libs/internal-ui/src";
+@source "../../../libs/drizzle-query-ui/src";
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+#root {
+  isolation: isolate;
+}
+
+body {
+  min-height: 100dvh;
+  margin: 0;
+  overflow: hidden;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+a,
+input {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  color: var(--primary-foreground);
+  background: var(--primary);
+}

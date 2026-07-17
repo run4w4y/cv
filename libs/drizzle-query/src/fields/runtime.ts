@@ -22,6 +22,12 @@ export type FieldOrigin = 'column' | 'expression' | 'relation' | 'virtual'
 export type SortRuntime = {
   readonly enabled: boolean
   readonly expression: SQLWrapper
+  /**
+   * Expression whose SQL nullability defines this sort term. This stays on
+   * the source value when `expression` is lowered to a semantic enum rank, so
+   * null ordering does not have to repeat the complete rank expression.
+   */
+  readonly nullExpression: SQLWrapper
   readonly cursorType: CursorValueDescriptor
   readonly unique: boolean
   readonly nullable: boolean

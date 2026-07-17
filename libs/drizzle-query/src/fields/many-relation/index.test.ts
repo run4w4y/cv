@@ -325,27 +325,32 @@ describe('correlated relationship fields', () => {
     ).toEqual([1, 2, 3])
   })
 
-  test('deduplicates repeated hasAll values before compiling predicates', async () => {
+  test('passes repeated values through every many-relation list operator', async () => {
     await withDatabase(async (database) => {
-      const resolved = relationQuery.resolve({
-        filters: [
-          condition({
-            type: 'condition',
-            field: 'tags',
-            operator: 'hasAll',
-            value: ['vip', 'vip'],
-          }),
-        ],
-      })
-      const statement = resolved
-        .apply(
-          database.select({ id: applications.id }).from(applications).$dynamic()
-        )
-        .toSQL()
+      for (const operator of ['hasAny', 'hasAll', 'hasNone'] as const) {
+        const resolved = relationQuery.resolve({
+          filters: [
+            condition({
+              type: 'condition',
+              field: 'tags',
+              operator,
+              value: ['vip', 'vip'],
+            }),
+          ],
+        })
+        const statement = resolved
+          .apply(
+            database
+              .select({ id: applications.id })
+              .from(applications)
+              .$dynamic()
+          )
+          .toSQL()
 
-      expect(statement.params.filter((value) => value === 'vip')).toHaveLength(
-        1
-      )
+        expect(
+          statement.params.filter((value) => value === 'vip')
+        ).toHaveLength(2)
+      }
     })
   })
 

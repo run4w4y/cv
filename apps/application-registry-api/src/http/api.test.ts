@@ -23,6 +23,7 @@ import {
   EventsService,
   type ListApplicationsInput,
   ListingChecksService,
+  type ResolveListingAvailabilityInput,
 } from '@cv/application-registry-service'
 import { Effect, Layer, type Scope } from 'effect'
 import { HttpClientRequest, HttpServer } from 'effect/unstable/http'
@@ -94,7 +95,7 @@ const event: ApplicationEvent = {
 
 const applicationListItem = {
   ...application,
-  compensationSummary: null,
+  annualCompensation: null,
   counts: { captures: 1, notes: 1 },
   identityAliases: [],
   labels: ['priority'],
@@ -224,7 +225,9 @@ const RegistryAuthorizationClientLayer = HttpApiMiddleware.layerClient(
 const makeRegistryLayer = (
   onCapture: (payload: CreateCampaignCaptureInput) => void = () => undefined,
   onNote: (payload: AddApplicationNoteInput) => void = () => undefined,
-  onListApplications: (query: ListApplicationsInput) => void = () => undefined
+  onListApplications: (query: ListApplicationsInput) => void = () => undefined,
+  onResolveListing: (input: ResolveListingAvailabilityInput) => void = () =>
+    undefined
 ) =>
   Layer.mergeAll(
     Layer.succeed(AnnotationsService, {
@@ -238,11 +241,8 @@ const makeRegistryLayer = (
       create: () => Effect.succeed(application),
       facets: () =>
         Effect.succeed({
-          applicationStatuses: [application.applicationStatus],
           companies: [application.company],
           labels: ['priority'],
-          personalPriorities: [],
-          targetStages: [application.targetStage],
         }),
       find: () => Effect.succeed(application),
       list: (query) => {
@@ -259,6 +259,12 @@ const makeRegistryLayer = (
         })
       },
       patch: () => Effect.succeed(application),
+      updateManaged: () =>
+        Effect.succeed({
+          annualCompensation: null,
+          application,
+          labels: ['priority'],
+        }),
       remove: () => Effect.succeed(undefined),
       replaceLabels: () => Effect.succeed([]),
       upsert: () => Effect.succeed(application),
@@ -272,6 +278,8 @@ const makeRegistryLayer = (
     }),
     Layer.succeed(CompensationsService, {
       listByApplication: () => Effect.succeed({ items: [] }),
+      replaceAnnual: () =>
+        Effect.succeed({ annualCompensation: null, application }),
     }),
     Layer.succeed(EventsService, {
       append: () => Effect.succeed({ application, event, replayed: false }),
@@ -291,6 +299,15 @@ const makeRegistryLayer = (
     Layer.succeed(ListingChecksService, {
       findRun: () => Effect.succeed(listingCheckRun),
       listByApplication: () => Effect.succeed({ items: [listingCheck] }),
+      resolveAvailability: (_identifier, input) => {
+        onResolveListing(input)
+        return Effect.succeed({
+          application,
+          archived: false,
+          check: listingCheck,
+          replayed: false,
+        })
+      },
       runDue: () =>
         Effect.succeed({ checks: [listingCheck], run: listingCheckRun }),
       submitFindings: () =>
@@ -388,6 +405,59 @@ describe('application registry HttpApi', () => {
     ])
   })
 
+  test('decodes the annual compensation replacement command', async () => {
+    const response = await runApiTest(
+      Effect.gen(function* () {
+        const client = yield* HttpApiTest.groups(ApplicationRegistryApi, [
+          'registry',
+        ])
+        return yield* client.registry.replaceAnnualCompensation({
+          params: { id: application.id },
+          payload: {
+            annualCompensation: {
+              currencyCode: 'USD',
+              minimumMinor: 15_000_000,
+              maximumMinor: 18_000_000,
+            },
+            expectedVersion: application.version,
+          },
+        })
+      }).pipe((effect) =>
+        provideApiTestLayer(effect, makeRegistryLayer(), true)
+      )
+    )
+
+    expect(response).toEqual({ annualCompensation: null, application })
+  })
+
+  test('decodes one managed application update command', async () => {
+    const response = await runApiTest(
+      Effect.gen(function* () {
+        const client = yield* HttpApiTest.groups(ApplicationRegistryApi, [
+          'registry',
+        ])
+        return yield* client.registry.updateManagedApplication({
+          params: { id: application.id },
+          payload: {
+            annualCompensation: null,
+            applicationStatus: 'offer',
+            expectedVersion: application.version,
+            labels: ['priority'],
+            operationId: 'managed-update-1',
+          },
+        })
+      }).pipe((effect) =>
+        provideApiTestLayer(effect, makeRegistryLayer(), true)
+      )
+    )
+
+    expect(response).toEqual({
+      annualCompensation: null,
+      application,
+      labels: ['priority'],
+    })
+  })
+
   test('serves application facets through the static applications route', async () => {
     const response = await runApiTest(
       Effect.gen(function* () {
@@ -401,11 +471,8 @@ describe('application registry HttpApi', () => {
     )
 
     expect(response).toEqual({
-      applicationStatuses: ['preparing'],
       companies: ['Example'],
       labels: ['priority'],
-      personalPriorities: [],
-      targetStages: ['backlog'],
     })
   })
 
@@ -535,6 +602,41 @@ describe('application registry HttpApi', () => {
 
     expect(response.run.trigger).toBe('cli')
     expect(response.checks).toHaveLength(1)
+  })
+
+  test('resolves listing availability through the authenticated contract', async () => {
+    let observed: ResolveListingAvailabilityInput | undefined
+    const response = await runApiTest(
+      Effect.gen(function* () {
+        const client = yield* HttpApiTest.groups(ApplicationRegistryApi, [
+          'registry',
+        ])
+        return yield* client.registry.resolveApplicationListingAvailability({
+          params: { id: application.id },
+          payload: {
+            expectedVersion: application.version,
+            operationId: 'manual-review-1',
+            resolution: 'open',
+          },
+        })
+      }).pipe((effect) =>
+        provideApiTestLayer(
+          effect,
+          makeRegistryLayer(undefined, undefined, undefined, (input) => {
+            observed = input
+          }),
+          true
+        )
+      )
+    )
+
+    expect(observed).toEqual({
+      expectedVersion: application.version,
+      operationId: 'manual-review-1',
+      resolution: 'open',
+    })
+    expect(response.application.id).toBe(application.id)
+    expect(response.archived).toBe(false)
   })
 
   test('rejects registry calls without bearer authentication', async () => {

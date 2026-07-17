@@ -20,7 +20,14 @@ const records = sqliteTable('records', {
 const scopedRecords = sqliteTable('scoped_records', {
   tenant: text('tenant').notNull(),
   sequence: integer('sequence').notNull(),
+  category: text('category').notNull(),
   score: integer('score').notNull(),
+})
+
+const nullableCompositeRecords = sqliteTable('nullable_composite_records', {
+  id: integer('id').primaryKey(),
+  bucket: text('bucket'),
+  score: integer('score'),
 })
 
 type RecordRow = typeof records.$inferSelect
@@ -68,12 +75,23 @@ const compositeCursorRecords = defineQuery(
   ({ col }) => [
     col.tenant.sortable(),
     col.sequence.sortable(),
+    col.category.sortable(),
     col.score.sortable(),
   ],
   {
     pagination: cursorPagination({ defaultSize: 2, maxSize: 10 }),
     uniqueBy: [['tenant', 'sequence']],
   }
+)
+
+const nullableCompositeCursorRecords = defineQuery(
+  nullableCompositeRecords,
+  ({ col }) => [
+    col.id.sortable({ unique: true }),
+    col.bucket.sortable(),
+    col.score.sortable(),
+  ],
+  { pagination: cursorPagination({ defaultSize: 1, maxSize: 10 }) }
 )
 
 const cursorTypeContracts = (): void => {
@@ -118,6 +136,57 @@ const cursorScenarios = [
   { direction: 'desc', nulls: 'last' },
 ] as const
 
+const nullableCompositeRows: (typeof nullableCompositeRecords.$inferSelect)[] =
+  [
+    { id: 1, bucket: null, score: null },
+    { id: 2, bucket: null, score: 1 },
+    { id: 3, bucket: null, score: 2 },
+    { id: 4, bucket: 'alpha', score: null },
+    { id: 5, bucket: 'alpha', score: 1 },
+    { id: 6, bucket: 'alpha', score: 1 },
+    { id: 7, bucket: 'alpha', score: 2 },
+    { id: 8, bucket: 'beta', score: null },
+    { id: 9, bucket: 'beta', score: 1 },
+    { id: 10, bucket: 'beta', score: 2 },
+  ]
+
+const compareNullableValues = (
+  left: string | number | null,
+  right: string | number | null,
+  direction: 'asc' | 'desc',
+  nulls: 'first' | 'last'
+): number => {
+  if (left === right) return 0
+  if (left === null) return nulls === 'first' ? -1 : 1
+  if (right === null) return nulls === 'first' ? 1 : -1
+
+  const comparison = left < right ? -1 : 1
+  return direction === 'asc' ? comparison : -comparison
+}
+
+const expectedNullableCompositeIds = (
+  bucketOrder: (typeof cursorScenarios)[number],
+  scoreOrder: (typeof cursorScenarios)[number]
+): number[] =>
+  [...nullableCompositeRows]
+    .sort(
+      (left, right) =>
+        compareNullableValues(
+          left.bucket ?? null,
+          right.bucket ?? null,
+          bucketOrder.direction,
+          bucketOrder.nulls
+        ) ||
+        compareNullableValues(
+          left.score ?? null,
+          right.score ?? null,
+          scoreOrder.direction,
+          scoreOrder.nulls
+        ) ||
+        left.id - right.id
+    )
+    .map((row) => row.id)
+
 const expectedIds = (
   direction: 'asc' | 'desc',
   nulls: 'first' | 'last'
@@ -147,16 +216,17 @@ describe('cursor pagination', () => {
       create table scoped_records (
         tenant text not null,
         sequence integer not null,
+        category text not null,
         score integer not null
       )
     `)
     const db = drizzle({ client: sqlite })
     const rows: (typeof scopedRecords.$inferInsert)[] = [
-      { tenant: 'beta', sequence: 2, score: 10 },
-      { tenant: 'alpha', sequence: 2, score: 10 },
-      { tenant: 'beta', sequence: 1, score: 10 },
-      { tenant: 'alpha', sequence: 1, score: 5 },
-      { tenant: 'alpha', sequence: 3, score: 10 },
+      { tenant: 'beta', sequence: 2, category: 'blue', score: 10 },
+      { tenant: 'alpha', sequence: 2, category: 'blue', score: 10 },
+      { tenant: 'beta', sequence: 1, category: 'amber', score: 10 },
+      { tenant: 'alpha', sequence: 1, category: 'blue', score: 5 },
+      { tenant: 'alpha', sequence: 3, category: 'amber', score: 10 },
     ]
 
     try {
@@ -213,6 +283,155 @@ describe('cursor pagination', () => {
       sqlite.close()
     }
   })
+
+  test('traverses a mixed-direction four-term ordering exactly once', async () => {
+    const sqlite = new Database(':memory:')
+    sqlite.exec(`
+      create table scoped_records (
+        tenant text not null,
+        sequence integer not null,
+        category text not null,
+        score integer not null
+      )
+    `)
+    const db = drizzle({ client: sqlite })
+    const rows: (typeof scopedRecords.$inferInsert)[] = [
+      { tenant: 'beta', sequence: 2, category: 'blue', score: 10 },
+      { tenant: 'alpha', sequence: 2, category: 'blue', score: 10 },
+      { tenant: 'beta', sequence: 1, category: 'amber', score: 10 },
+      { tenant: 'alpha', sequence: 1, category: 'blue', score: 5 },
+      { tenant: 'alpha', sequence: 3, category: 'amber', score: 10 },
+    ]
+
+    try {
+      await db.insert(scopedRecords).values(rows)
+      const visited: string[] = []
+      let after: string | undefined
+
+      for (let pageIndex = 0; pageIndex <= rows.length; pageIndex += 1) {
+        const resolved = compositeCursorRecords.resolve({
+          orderBy: [
+            { field: 'category', direction: 'desc' },
+            { field: 'score', direction: 'asc' },
+          ],
+          pagination: {
+            size: 1,
+            ...(after === undefined ? {} : { after }),
+          },
+        })
+
+        expect(resolved.ordering.terms.map((term) => term.field)).toEqual([
+          'category',
+          'score',
+          'tenant',
+          'sequence',
+        ])
+
+        const query = db
+          .select({
+            tenant: scopedRecords.tenant,
+            sequence: scopedRecords.sequence,
+            category: scopedRecords.category,
+            score: scopedRecords.score,
+            ...resolved.requiredSelection,
+          })
+          .from(scopedRecords)
+          .$dynamic()
+        const page = resolved.finalize(await resolved.apply(query).all())
+        visited.push(
+          ...page.items.map(
+            (row) =>
+              `${row.category}:${row.score}:${row.tenant}:${row.sequence}`
+          )
+        )
+
+        if (!page.pageInfo.hasNextPage) break
+        after = requireCursor(page.pageInfo.nextCursor)
+      }
+
+      expect(visited).toEqual([
+        'blue:5:alpha:1',
+        'blue:10:alpha:2',
+        'blue:10:beta:2',
+        'amber:10:alpha:3',
+        'amber:10:beta:1',
+      ])
+      expect(new Set(visited).size).toBe(rows.length)
+    } finally {
+      sqlite.close()
+    }
+  })
+
+  for (const bucketOrder of cursorScenarios) {
+    for (const scoreOrder of cursorScenarios) {
+      test(`traverses two nullable terms exactly once: bucket ${bucketOrder.direction}/${bucketOrder.nulls}, score ${scoreOrder.direction}/${scoreOrder.nulls}`, async () => {
+        const sqlite = new Database(':memory:')
+        sqlite.exec(`
+          create table nullable_composite_records (
+            id integer primary key not null,
+            bucket text,
+            score integer
+          )
+        `)
+        const db = drizzle({ client: sqlite })
+        const visited: number[] = []
+        let after: string | undefined
+
+        try {
+          await db
+            .insert(nullableCompositeRecords)
+            .values(nullableCompositeRows)
+
+          for (
+            let pageIndex = 0;
+            pageIndex <= nullableCompositeRows.length;
+            pageIndex += 1
+          ) {
+            const resolved = nullableCompositeCursorRecords.resolve({
+              orderBy: [
+                {
+                  field: 'bucket',
+                  direction: bucketOrder.direction,
+                  nulls: bucketOrder.nulls,
+                },
+                {
+                  field: 'score',
+                  direction: scoreOrder.direction,
+                  nulls: scoreOrder.nulls,
+                },
+              ],
+              pagination: {
+                size: 1,
+                ...(after === undefined ? {} : { after }),
+              },
+            })
+            const query = db
+              .select({
+                id: nullableCompositeRecords.id,
+                bucket: nullableCompositeRecords.bucket,
+                score: nullableCompositeRecords.score,
+                ...resolved.requiredSelection,
+              })
+              .from(nullableCompositeRecords)
+              .$dynamic()
+            const page = resolved.finalize(await resolved.apply(query).all())
+
+            visited.push(...page.items.map((row) => row.id))
+            if (!page.pageInfo.hasNextPage) break
+            after = requireCursor(page.pageInfo.nextCursor)
+          }
+
+          expect(visited).toEqual(
+            expectedNullableCompositeIds(bucketOrder, scoreOrder)
+          )
+          expect(visited).toHaveLength(nullableCompositeRows.length)
+          expect(new Set(visited).size).toBe(nullableCompositeRows.length)
+        } finally {
+          sqlite.close()
+        }
+      })
+    }
+  }
 
   for (const scenario of cursorScenarios) {
     test(`${scenario.direction} with nulls ${scenario.nulls} traverses each row once`, async () => {

@@ -1,0 +1,43 @@
+{
+  "name": "internal-forms",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/internal-forms/src",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/internal-forms/src/index.ts",
+        "outputPath": "libs/internal-forms/dist",
+        "rootDir": "libs/internal-forms/src",
+        "tsConfig": "libs/internal-forms/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "format": {},
+    "format:check": {},
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {
+      "options": {
+        "command": "bun test --preload libs/internal-forms/test/setup.ts libs/internal-forms/src"
+      }
+    },
+    "typecheck": {},
+    "storybook:dev": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "storybook dev --config-dir libs/internal-forms/.storybook --port 4404"
+      }
+    },
+    "storybook:build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{projectRoot}/storybook-static"],
+      "options": {
+        "command": "storybook build --config-dir libs/internal-forms/.storybook --output-dir libs/internal-forms/storybook-static"
+      }
+    }
+  }
+}

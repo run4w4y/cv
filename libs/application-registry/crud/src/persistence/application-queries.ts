@@ -5,18 +5,13 @@ import {
   applications,
 } from '@cv/application-registry-entity'
 import { finalizeQuery } from '@cv/drizzle-query-effect'
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  exists,
-  isNotNull,
-  or,
-  type SQL,
-} from 'drizzle-orm'
+import { and, asc, desc, eq, exists, or, type SQL } from 'drizzle-orm'
 import { Effect } from 'effect'
-import { databaseFailure, type RegistryDatabaseError } from '../errors'
+import {
+  databaseFailure,
+  type RegistryDatabaseError,
+  type RegistryQueryTooComplexError,
+} from '../errors'
 import type { RegistryQueryDatabase } from '../internal/connection'
 import type {
   ApplicationFacets,
@@ -24,6 +19,7 @@ import type {
   ApplicationListRecord,
   ApplicationListResolution,
 } from '../types'
+import { enforceD1ParameterBudget } from './query-budget'
 
 export const findApplication = (
   database: RegistryQueryDatabase,
@@ -88,43 +84,49 @@ export const findApplicationsByCanonicalUrl = (
 export const listApplications = (
   database: RegistryQueryDatabase,
   resolved: ApplicationListResolution
-): Effect.Effect<ApplicationListPage, RegistryDatabaseError> =>
+): Effect.Effect<
+  ApplicationListPage,
+  RegistryDatabaseError | RegistryQueryTooComplexError
+> =>
   Effect.gen(function* () {
     const relational = resolved.relational({
       select: ['captureCount', 'noteCount'],
     })
-    const rows = yield* database.query.applications
-      .findMany({
-        ...relational.config,
-        columns: { companyNormalized: false },
-        with: {
-          captures: {
-            columns: { applicationUrl: true },
-            limit: 1,
-            orderBy: (capture) => [desc(capture.capturedAt), desc(capture.id)],
-          },
-          compensations: {
-            orderBy: (compensation) => [
-              asc(compensation.kind),
-              asc(compensation.id),
-            ],
-          },
-          events: {
-            columns: { kind: true, occurredAt: true },
-            limit: 1,
-            orderBy: (event) => desc(event.revision),
-          },
-          identityAliases: {
-            columns: { jobKey: true },
-            orderBy: (identityAlias) => asc(identityAlias.jobKey),
-          },
-          labels: {
-            columns: { label: true },
-            orderBy: (label) => asc(label.label),
-          },
+    const query = database.query.applications.findMany({
+      ...relational.config,
+      columns: { companyNormalized: false },
+      with: {
+        captures: {
+          columns: { applicationUrl: true },
+          limit: 1,
+          orderBy: (capture) => [desc(capture.capturedAt), desc(capture.id)],
         },
-      })
-      .pipe(Effect.mapError(databaseFailure('Failed to list applications')))
+        compensations: {
+          orderBy: (compensation) => [
+            asc(compensation.kind),
+            asc(compensation.id),
+          ],
+        },
+        events: {
+          columns: { kind: true, occurredAt: true },
+          limit: 1,
+          orderBy: (event) => desc(event.revision),
+        },
+        identityAliases: {
+          columns: { jobKey: true },
+          orderBy: (identityAlias) => asc(identityAlias.jobKey),
+        },
+        labels: {
+          columns: { label: true },
+          orderBy: (label) => asc(label.label),
+        },
+      },
+    })
+
+    yield* enforceD1ParameterBudget(query, 'Application list query')
+    const rows = yield* query.pipe(
+      Effect.mapError(databaseFailure('Failed to list applications'))
+    )
 
     const page = yield* finalizeQuery(relational, rows).pipe(Effect.orDie)
     const records = page.items.map((row) => {
@@ -162,34 +164,13 @@ export const listApplicationFacets = (
       .from(applications)
       .orderBy(asc(applications.company))
 
-    const applicationStatuses = yield* database
-      .selectDistinct({ value: applications.applicationStatus })
-      .from(applications)
-      .orderBy(asc(applications.applicationStatus))
-
-    const targetStages = yield* database
-      .selectDistinct({ value: applications.targetStage })
-      .from(applications)
-      .orderBy(asc(applications.targetStage))
-
-    const personalPriorities = yield* database
-      .selectDistinct({ value: applications.personalPriority })
-      .from(applications)
-      .where(isNotNull(applications.personalPriority))
-      .orderBy(asc(applications.personalPriority))
-
     const labels = yield* database
       .selectDistinct({ value: applicationLabels.label })
       .from(applicationLabels)
       .orderBy(asc(applicationLabels.label))
 
     return {
-      applicationStatuses: applicationStatuses.map(({ value }) => value),
       companies: companies.map(({ value }) => value),
       labels: labels.map(({ value }) => value),
-      personalPriorities: personalPriorities.flatMap(({ value }) =>
-        value === null ? [] : [value]
-      ),
-      targetStages: targetStages.map(({ value }) => value),
     }
   }).pipe(Effect.mapError(databaseFailure('Failed to list application facets')))

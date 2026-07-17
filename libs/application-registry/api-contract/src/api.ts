@@ -1,8 +1,6 @@
 import {
-  type Application,
   type ApplicationLabel,
   ApplicationLabelSchema,
-  ApplicationSchema,
   type ListingCheckRun,
   ListingCheckRunSchema,
 } from '@cv/application-registry-entity'
@@ -24,6 +22,7 @@ import {
   ApplicationAnnotationsResponseSchema,
   ApplicationFacetsResponseSchema,
   ApplicationIdentifierParamsSchema,
+  ApplicationResponseSchema,
   CreateApplicationRequestSchema,
   CreateCampaignCaptureRequestSchema,
   CreateCampaignCaptureResponseSchema,
@@ -42,9 +41,15 @@ import {
   ListEventsResponseSchema,
   ListingCheckRunIdentifierParamsSchema,
   PatchApplicationRequestSchema,
+  ReplaceAnnualCompensationRequestSchema,
+  ReplaceAnnualCompensationResponseSchema,
   ReplaceApplicationLabelsRequestSchema,
+  ResolveListingAvailabilityRequestSchema,
+  ResolveListingAvailabilityResponseSchema,
   SubmitListingCheckFindingsRequestSchema,
   SubmitListingCheckFindingsResponseSchema,
+  UpdateManagedApplicationRequestSchema,
+  UpdateManagedApplicationResponseSchema,
   UpsertApplicationRequestSchema,
 } from './schemas'
 
@@ -55,8 +60,6 @@ const registryEndpointErrors = [
   InternalServerErrorSchema,
 ] as const
 
-const ApplicationResponseSchema: Schema.Codec<Application> =
-  Schema.revealCodec(ApplicationSchema)
 const ApplicationLabelArrayResponseSchema: Schema.Codec<
   readonly ApplicationLabel[]
 > = Schema.revealCodec(Schema.Array(ApplicationLabelSchema))
@@ -122,6 +125,18 @@ export class RegistryApi extends HttpApiGroup.make('registry')
     })
   )
   .add(
+    HttpApiEndpoint.patch(
+      'updateManagedApplication',
+      '/applications/:id/management',
+      {
+        error: registryEndpointErrors,
+        params: ApplicationIdentifierParamsSchema,
+        payload: UpdateManagedApplicationRequestSchema,
+        success: UpdateManagedApplicationResponseSchema,
+      }
+    )
+  )
+  .add(
     HttpApiEndpoint.delete('deleteApplication', '/applications/:id', {
       error: registryEndpointErrors,
       params: ApplicationIdentifierParamsSchema,
@@ -149,6 +164,18 @@ export class RegistryApi extends HttpApiGroup.make('registry')
         params: ApplicationIdentifierParamsSchema,
         query: ListApplicationCompensationsQuerySchema,
         success: ListApplicationCompensationsResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.put(
+      'replaceAnnualCompensation',
+      '/applications/:id/annual-compensation',
+      {
+        error: registryEndpointErrors,
+        params: ApplicationIdentifierParamsSchema,
+        payload: ReplaceAnnualCompensationRequestSchema,
+        success: ReplaceAnnualCompensationResponseSchema,
       }
     )
   )
@@ -220,6 +247,18 @@ export class RegistryApi extends HttpApiGroup.make('registry')
         error: registryEndpointErrors,
         params: ApplicationIdentifierParamsSchema,
         success: ListApplicationListingChecksResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.put(
+      'resolveApplicationListingAvailability',
+      '/applications/:id/listing-availability',
+      {
+        error: registryEndpointErrors,
+        params: ApplicationIdentifierParamsSchema,
+        payload: ResolveListingAvailabilityRequestSchema,
+        success: ResolveListingAvailabilityResponseSchema,
       }
     )
   )

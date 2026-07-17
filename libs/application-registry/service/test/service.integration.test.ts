@@ -386,6 +386,119 @@ test('ingests local findings idempotently and applies archival policy on the bac
   assert.deepEqual(result.replay.rejected, [])
 })
 
+test('manually resolves suspected listings as open or closed with an audit check', async () => {
+  const result = await runtime.runPromise(
+    Effect.gen(function* () {
+      const applications = yield* ApplicationsService
+      const listingChecks = yield* ListingChecksService
+      const openCandidate = yield* applications.upsert(
+        makeApplicationInput('manual-open-review')
+      )
+      const closedCandidate = yield* applications.upsert(
+        makeApplicationInput('manual-closed-review')
+      )
+
+      const makeSuspected = (
+        application: typeof openCandidate,
+        runId: string
+      ) =>
+        listingChecks.submitFindings({
+          expectedCount: 1,
+          finalBatch: true,
+          findings: [
+            {
+              applicationId: application.id,
+              canonicalUrl: application.canonicalUrl,
+              observation: {
+                checkedAt: recordedAt,
+                checkerVersion: 'test-local',
+                confidence: 'medium',
+                contentHash: null,
+                evidence: [
+                  {
+                    code: 'closed_copy',
+                    detail: 'The page says applications are closed.',
+                    sourceUrl: application.canonicalUrl,
+                  },
+                ],
+                finalUrl: application.canonicalUrl,
+                httpStatus: 200,
+                outcome: 'closed',
+                provider: 'test-provider',
+                reasonCode: 'explicit_closed_text',
+                requestedUrl: application.canonicalUrl,
+              },
+              operationId: `${runId}:finding`,
+              target: {
+                company: application.company,
+                role: application.role,
+                url: application.canonicalUrl,
+              },
+            },
+          ],
+          mode: 'report',
+          runId,
+          startedAt: recordedAt,
+        })
+
+      yield* makeSuspected(openCandidate, 'manual-open-candidate')
+      yield* makeSuspected(closedCandidate, 'manual-closed-candidate')
+      const suspectedOpen = yield* applications.find(openCandidate.id)
+      const suspectedClosed = yield* applications.find(closedCandidate.id)
+
+      const opened = yield* listingChecks.resolveAvailability(
+        suspectedOpen.id,
+        {
+          expectedVersion: suspectedOpen.version,
+          operationId: 'manual-review:open',
+          resolution: 'open',
+        }
+      )
+      const closeInput = {
+        expectedVersion: suspectedClosed.version,
+        operationId: 'manual-review:closed',
+        resolution: 'closed' as const,
+      }
+      const closed = yield* listingChecks.resolveAvailability(
+        suspectedClosed.id,
+        closeInput
+      )
+      const replayed = yield* listingChecks.resolveAvailability(
+        suspectedClosed.id,
+        closeInput
+      )
+      const conflictingReplay = yield* listingChecks
+        .resolveAvailability(suspectedClosed.id, {
+          ...closeInput,
+          resolution: 'open',
+        })
+        .pipe(Effect.flip)
+      return {
+        closed,
+        conflictingReplay,
+        opened,
+        replayed,
+        suspectedClosed,
+        suspectedOpen,
+      }
+    })
+  )
+
+  assert.equal(result.suspectedOpen.listingAvailability, 'suspected_closed')
+  assert.equal(result.suspectedClosed.listingAvailability, 'suspected_closed')
+  assert.equal(result.opened.application.listingAvailability, 'open')
+  assert.equal(result.opened.application.listingClosedCandidateAt, null)
+  assert.equal(result.opened.application.listingConsecutiveClosedChecks, 0)
+  assert.equal(result.opened.check.provider, 'manual-review')
+  assert.equal(result.opened.check.confidence, 'confirmed')
+  assert.equal(result.closed.application.listingAvailability, 'closed')
+  assert.equal(result.closed.application.applicationStatus, 'archived')
+  assert.equal(result.closed.archived, true)
+  assert.equal(result.replayed.replayed, true)
+  assert.equal(result.replayed.check.id, result.closed.check.id)
+  assert.equal(result.conflictingReplay._tag, 'RegistryConflictError')
+})
+
 test('keeps completed run counts accurate when durable batches arrive out of order', async () => {
   const result = await runtime.runPromise(
     Effect.gen(function* () {

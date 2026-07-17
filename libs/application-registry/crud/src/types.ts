@@ -7,7 +7,6 @@ import type {
   ApplicationListingCheckSchedule,
   ApplicationMutable,
   ApplicationNote,
-  ApplicationStatus,
   ApplicationWritable,
   CampaignCapture,
   ListingAvailability,
@@ -16,11 +15,10 @@ import type {
   ListingCheckReason,
   ListingCheckRun,
   ListingCheckRunTrigger,
-  PersonalPriority,
-  TargetStage,
   UtcIsoTimestamp,
 } from '@cv/application-registry-entity'
 import type {
+  AnnualCompensation,
   applicationListQuery,
   eventListQuery,
   RegistryEventListItem,
@@ -67,17 +65,33 @@ export type ApplicationListPage = QueryPage<
 >
 
 export type ApplicationFacets = {
-  readonly applicationStatuses: readonly ApplicationStatus[]
   readonly companies: readonly string[]
   readonly labels: readonly string[]
-  readonly personalPriorities: readonly PersonalPriority[]
-  readonly targetStages: readonly TargetStage[]
 }
 
 export type EventListPage = QueryPage<RegistryEventListItem, CursorPageInfo>
 
 export type ApplicationPatch = ApplicationMutable & {
   readonly expectedVersion?: number
+}
+
+export type PersistedManagedApplicationUpdate = {
+  readonly annualCompensation?: {
+    readonly replacement: PersistedAnnualCompensation | null
+  }
+  readonly event: PersistedEvent | undefined
+  readonly expectedVersion: number
+  readonly labels?: readonly string[]
+  readonly operationId: string
+  readonly operationRequestSignature: string
+  readonly patch: ApplicationMutable
+  readonly recordedAt: UtcIsoTimestamp
+}
+
+export type ManagedApplicationUpdateResult = {
+  readonly annualCompensation: AnnualCompensation | null
+  readonly application: Application
+  readonly labels: readonly string[]
 }
 
 export type ApplicationWriteMode = 'capture' | 'replace'
@@ -90,6 +104,17 @@ export interface PersistApplicationOptions {
 export type PersistedCompensation = ApplicationCompensationInput & {
   readonly id: string
 }
+
+export type PersistedAnnualCompensation = Pick<
+  ApplicationCompensation,
+  | 'currencyCode'
+  | 'id'
+  | 'kind'
+  | 'maximumMinor'
+  | 'minimumMinor'
+  | 'rawText'
+  | 'source'
+>
 
 export type PersistedApplication = ApplicationWritable & {
   readonly applicationId: string
@@ -158,7 +183,9 @@ export type PersistedListingCheck = ApplicationListingCheck & {
   readonly closedCandidateAt: string | null
   readonly consecutiveClosedChecks: number
   readonly eventId: string | null
+  readonly expectedVersion?: number
   readonly listingAvailability: ListingAvailability
+  readonly operationRequestSignature: string
   readonly recordedAt: string
 }
 

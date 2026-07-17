@@ -1,0 +1,67 @@
+{
+  "name": "internal-ui",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/internal-ui/src",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/internal-ui/src/index.ts",
+        "outputPath": "libs/internal-ui/dist",
+        "rootDir": "libs/internal-ui/src",
+        "tsConfig": "libs/internal-ui/tsconfig.build.json",
+        "generatePackageJson": false,
+        "assets": [
+          {
+            "input": "libs/internal-ui/src",
+            "glob": "theme.css",
+            "output": "."
+          }
+        ]
+      }
+    },
+    "format": {},
+    "format:check": {},
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun test --preload libs/internal-ui/test/setup.ts libs/internal-ui/src"
+      }
+    },
+    "test:e2e": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "playwright test --config libs/internal-ui/playwright.config.ts"
+      }
+    },
+    "typecheck": {},
+    "storybook:dev": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "storybook dev --config-dir libs/internal-ui/.storybook --port 4401"
+      }
+    },
+    "storybook:build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{projectRoot}/storybook-static"],
+      "options": {
+        "command": "storybook build --config-dir libs/internal-ui/.storybook --output-dir libs/internal-ui/storybook-static"
+      }
+    },
+    "storybook:static": {
+      "executor": "@nx/web:file-server",
+      "dependsOn": ["storybook:build"],
+      "options": {
+        "buildTarget": "internal-ui:storybook:build",
+        "staticFilePath": "libs/internal-ui/storybook-static",
+        "spa": true
+      }
+    }
+  }
+}

@@ -1,0 +1,179 @@
+import type {
+  ListApplicationsQuery,
+  ListApplicationsResponse,
+} from '@cv/application-registry-api-contract'
+import { Effect, Option, Stream } from 'effect'
+import * as Atom from 'effect/unstable/reactivity/Atom'
+import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
+import * as Reactivity from 'effect/unstable/reactivity/Reactivity'
+import { uniqBy } from 'es-toolkit'
+
+import { RegistryClient } from '../../lib/registry-client'
+import { applicationReactivity } from './keys'
+
+export type ApplicationsListRequest = Omit<
+  ListApplicationsQuery,
+  'pagination'
+> & {
+  readonly size: number
+}
+
+const applicationPageAtom = (
+  request: ApplicationsListRequest,
+  after: string | null
+) => {
+  const { size, ...query } = request
+  return RegistryClient.query('registry', 'listApplications', {
+    query: {
+      ...query,
+      pagination: { size, ...(after === null ? {} : { after }) },
+    },
+    reactivityKeys: [applicationReactivity.lists],
+    timeToLive: '5 minutes',
+  })
+}
+
+const createApplicationsAtom = (request: ApplicationsListRequest) =>
+  Atom.pull((get) =>
+    Stream.paginate(null as string | null, (after) =>
+      get
+        .result(applicationPageAtom(request, after), {
+          suspendOnWaiting: true,
+        })
+        .pipe(
+          Effect.map(
+            (
+              response
+            ): readonly [
+              readonly ListApplicationsResponse[],
+              Option.Option<string>,
+            ] => [
+              [response],
+              response.pageInfo.hasNextPage &&
+              response.pageInfo.nextCursor !== null
+                ? Option.some(response.pageInfo.nextCursor)
+                : Option.none(),
+            ]
+          )
+        )
+    )
+  ).pipe(
+    Atom.mapResult(({ done, items }) => ({
+      done,
+      items: uniqBy(
+        items.flatMap((page) => page.items),
+        ({ id }) => id
+      ),
+    })),
+    Atom.setIdleTTL('5 minutes')
+  )
+
+type ApplicationsPullResult =
+  ReturnType<typeof createApplicationsAtom> extends Atom.Writable<
+    infer Result,
+    void
+  >
+    ? Result
+    : never
+
+const disabledApplicationsAtom = Atom.writable<ApplicationsPullResult, void>(
+  () => AsyncResult.initial(),
+  () => undefined
+)
+
+type ApplicationsFamilyInput = ApplicationsListRequest & {
+  readonly enabled: boolean
+}
+
+const pendingApplicationRequests = new Map<string, ApplicationsFamilyInput>()
+const applicationsFamily = Atom.family((key: string) => {
+  const input = pendingApplicationRequests.get(key)
+  if (input === undefined) {
+    throw new Error(`Missing applications atom input for key ${key}.`)
+  }
+  const { enabled, ...request } = input
+  return enabled ? createApplicationsAtom(request) : disabledApplicationsAtom
+})
+
+/**
+ * Atom.family keys objects by identity. The browser URL creates equivalent
+ * request objects on rerender, so use their canonical value as the family key.
+ * This keeps subscription identity stable without component-level memo hooks.
+ */
+export const applicationsAtom = (input: ApplicationsFamilyInput) => {
+  const key = JSON.stringify(input)
+  pendingApplicationRequests.set(key, input)
+  try {
+    return applicationsFamily(key)
+  } finally {
+    pendingApplicationRequests.delete(key)
+  }
+}
+
+export const applicationFacetsAtom = RegistryClient.query(
+  'registry',
+  'listApplicationFacets',
+  {
+    reactivityKeys: [applicationReactivity.facets],
+    timeToLive: '30 minutes',
+  }
+).pipe(
+  Atom.swr({
+    staleTime: '1 minute',
+    revalidateOnMount: true,
+    revalidateOnFocus: false,
+  })
+)
+
+export const applicationAtom = Atom.family((applicationId: string) =>
+  RegistryClient.query('registry', 'getApplication', {
+    params: { id: applicationId },
+    reactivityKeys: [applicationReactivity.application(applicationId)],
+    timeToLive: '5 minutes',
+  }).pipe(
+    Atom.swr({
+      staleTime: 0,
+      revalidateOnMount: true,
+      revalidateOnFocus: false,
+    })
+  )
+)
+
+export const applicationCompensationsAtom = Atom.family(
+  ({ applicationId, currency }: { applicationId: string; currency: string }) =>
+    RegistryClient.query('registry', 'listApplicationCompensations', {
+      params: { id: applicationId },
+      query: currency === 'original' ? {} : { currency },
+      reactivityKeys: [applicationReactivity.compensations(applicationId)],
+      timeToLive: '5 minutes',
+    })
+)
+
+export const applicationEventsAtom = Atom.family((applicationId: string) =>
+  RegistryClient.query('registry', 'listApplicationEvents', {
+    params: { id: applicationId },
+    reactivityKeys: [applicationReactivity.events(applicationId)],
+    timeToLive: '2 minutes',
+  })
+)
+
+export const reloadLatestApplication = RegistryClient.runtime.fn<string>()(
+  (applicationId, get) => {
+    const query = applicationAtom(applicationId)
+    get.refresh(query)
+    return get
+      .result(query, { suspendOnWaiting: true })
+      .pipe(
+        Effect.tap(() =>
+          Reactivity.invalidate([
+            applicationReactivity.lists,
+            applicationReactivity.facets,
+          ])
+        )
+      )
+  }
+)
+
+export const refreshApplicationLists = RegistryClient.runtime.fn(() =>
+  Reactivity.invalidate([applicationReactivity.lists])
+)

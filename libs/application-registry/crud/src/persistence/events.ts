@@ -6,9 +6,14 @@ import {
 import { finalizeQuery } from '@cv/drizzle-query-effect'
 import { asc, eq, getColumns } from 'drizzle-orm'
 import { Effect } from 'effect'
-import { databaseFailure, type RegistryDatabaseError } from '../errors'
+import {
+  databaseFailure,
+  type RegistryDatabaseError,
+  type RegistryQueryTooComplexError,
+} from '../errors'
 import type { RegistryQueryDatabase } from '../internal/connection'
 import type { EventListPage, EventListResolution } from '../types'
+import { enforceD1ParameterBudget } from './query-budget'
 
 export const findEventByOperation = (
   database: RegistryQueryDatabase,
@@ -38,26 +43,32 @@ export const listApplicationEvents = (
 export const listEvents = (
   database: RegistryQueryDatabase,
   resolved: EventListResolution
-): Effect.Effect<EventListPage, RegistryDatabaseError> =>
+): Effect.Effect<
+  EventListPage,
+  RegistryDatabaseError | RegistryQueryTooComplexError
+> =>
   Effect.gen(function* () {
-    const rows = yield* resolved
-      .apply(
-        database
-          .select({
-            ...getColumns(applicationEvents),
-            canonicalUrl: applications.canonicalUrl,
-            company: applications.company,
-            role: applications.role,
-            ...resolved.requiredSelection,
-          })
-          .from(applicationEvents)
-          .innerJoin(
-            applications,
-            eq(applicationEvents.applicationId, applications.id)
-          )
-          .$dynamic()
-      )
-      .pipe(Effect.mapError(databaseFailure('Failed to list registry events')))
+    const query = resolved.apply(
+      database
+        .select({
+          ...getColumns(applicationEvents),
+          canonicalUrl: applications.canonicalUrl,
+          company: applications.company,
+          role: applications.role,
+          ...resolved.requiredSelection,
+        })
+        .from(applicationEvents)
+        .innerJoin(
+          applications,
+          eq(applicationEvents.applicationId, applications.id)
+        )
+        .$dynamic()
+    )
+
+    yield* enforceD1ParameterBudget(query, 'Registry event list query')
+    const rows = yield* query.pipe(
+      Effect.mapError(databaseFailure('Failed to list registry events'))
+    )
 
     return yield* finalizeQuery(resolved, rows).pipe(Effect.orDie)
   })

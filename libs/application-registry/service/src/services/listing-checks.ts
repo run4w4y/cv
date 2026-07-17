@@ -6,6 +6,8 @@ import { Context, type Effect } from 'effect'
 
 import type { ApplicationRegistryError } from '../errors'
 import type {
+  CheckListingResult,
+  ResolveListingAvailabilityInput,
   RunDueListingChecksInput,
   RunDueListingChecksResult,
   SubmitListingCheckFindingsInput,
@@ -22,6 +24,10 @@ export interface ListingChecksService {
     { readonly items: readonly ApplicationListingCheck[] },
     ApplicationRegistryError
   >
+  readonly resolveAvailability: (
+    identifier: string,
+    input: ResolveListingAvailabilityInput
+  ) => Effect.Effect<CheckListingResult, ApplicationRegistryError>
   readonly runDue: (
     input: RunDueListingChecksInput
   ) => Effect.Effect<RunDueListingChecksResult, ApplicationRegistryError>

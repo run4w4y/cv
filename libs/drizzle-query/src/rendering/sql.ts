@@ -76,6 +76,7 @@ export const renderQuerySql = <
       : buildCursorSeek(
           resolved.map((term, index) => ({
             expression: term.sort.expression,
+            nullExpression: term.sort.nullExpression,
             direction: term.public.direction,
             nulls: term.public.nulls,
             nullable: term.public.nullable,

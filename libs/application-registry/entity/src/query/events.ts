@@ -30,7 +30,7 @@ export const eventListQuery = defineQuery(
     col.operationId.filterable().sortable(),
   ],
   {
-    cursor: { revision: 'registry-events-list-v2' },
+    cursor: { revision: 'registry-events-list-v3' },
     defaultOrderBy: [{ field: 'revision', direction: 'asc' }],
     pagination: cursorPagination({ defaultSize: 50, maxSize: 100 }),
   }

@@ -10,6 +10,8 @@ import type {
   ApplicationListPage,
   ListApplicationsInput,
   PatchApplicationInput,
+  UpdateManagedApplicationInput,
+  UpdateManagedApplicationResult,
   UpsertApplicationInput,
 } from '../types'
 
@@ -31,13 +33,18 @@ export interface ApplicationsService {
     identifier: string,
     input: PatchApplicationInput
   ) => Effect.Effect<Application, ApplicationRegistryError>
+  readonly updateManaged: (
+    identifier: string,
+    input: UpdateManagedApplicationInput
+  ) => Effect.Effect<UpdateManagedApplicationResult, ApplicationRegistryError>
   readonly remove: (
     identifier: string,
     expectedVersion?: number
   ) => Effect.Effect<void, ApplicationRegistryError>
   readonly replaceLabels: (
     identifier: string,
-    labels: readonly string[]
+    labels: readonly string[],
+    expectedVersion?: number
   ) => Effect.Effect<readonly ApplicationLabel[], ApplicationRegistryError>
   readonly upsert: (
     input: UpsertApplicationInput

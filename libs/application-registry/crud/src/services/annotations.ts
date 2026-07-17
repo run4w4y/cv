@@ -24,8 +24,12 @@ export interface AnnotationsCrud {
   readonly replaceLabels: (
     applicationId: string,
     labels: readonly string[],
-    recordedAt: string
-  ) => Effect.Effect<readonly ApplicationLabel[], RegistryDatabaseError>
+    recordedAt: string,
+    expectedVersion?: number
+  ) => Effect.Effect<
+    readonly ApplicationLabel[] | undefined,
+    RegistryDatabaseError
+  >
 }
 
 export const AnnotationsCrud = Context.Service<AnnotationsCrud>(

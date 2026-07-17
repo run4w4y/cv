@@ -18,7 +18,7 @@ describe('content variables source', () => {
         'variables.ts': {
           default: {
             variables: {
-              legacy: 'legacy value',
+              unrelated: 'unrelated value',
             },
           },
         },
@@ -30,7 +30,7 @@ describe('content variables source', () => {
     )
 
     expect(source?.variables.current).toBe('current value')
-    expect(source?.variables.legacy).toBeUndefined()
+    expect(source?.variables.unrelated).toBeUndefined()
   })
 
   test('does not fall back to root variables.ts', () => {
@@ -40,7 +40,7 @@ describe('content variables source', () => {
         'variables.ts': {
           default: {
             variables: {
-              legacy: 'legacy value',
+              unrelated: 'unrelated value',
             },
           },
         },

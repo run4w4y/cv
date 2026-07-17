@@ -1,0 +1,1 @@
+export { EventKindBadge } from './render'

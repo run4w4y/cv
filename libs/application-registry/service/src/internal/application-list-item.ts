@@ -1,82 +1,64 @@
 import type { ApplicationListRecord } from '@cv/application-registry-crud'
-import type {
-  ApplicationCompensation,
-  CurrencyCode,
-} from '@cv/application-registry-entity'
+import type { ApplicationCompensation } from '@cv/application-registry-entity'
 
 import type { ApplicationListItem } from '../types'
 
-const currencyFractionDigits = (currencyCode: CurrencyCode) =>
-  new Intl.NumberFormat('en-US', {
-    currency: currencyCode,
-    style: 'currency',
-  }).resolvedOptions().maximumFractionDigits ?? 0
+const annualKindPriority = {
+  base_salary: 0,
+  total_compensation: 1,
+} as const
 
-const formatMinorAmount = (amount: number, currencyCode: CurrencyCode) => {
-  const fractionDigits = currencyFractionDigits(currencyCode)
-  const majorAmount = amount / 10 ** fractionDigits
-  const formatted = new Intl.NumberFormat('en-US', {
-    maximumFractionDigits: fractionDigits,
-  }).format(majorAmount)
-  return `${currencyCode} ${formatted}`
-}
+type AnnualCompensationKind = keyof typeof annualKindPriority
 
-const formatRange = ({
-  currencyCode,
-  maximumMinor,
-  minimumMinor,
-}: ApplicationCompensation) => {
-  if (minimumMinor === null) {
-    return maximumMinor === null
-      ? `${currencyCode} amount unspecified`
-      : `up to ${formatMinorAmount(maximumMinor, currencyCode)}`
-  }
-  if (maximumMinor === null) {
-    return `${formatMinorAmount(minimumMinor, currencyCode)}+`
-  }
-  if (minimumMinor === maximumMinor) {
-    return formatMinorAmount(minimumMinor, currencyCode)
-  }
+const isAnnualCompensationKind = (
+  kind: ApplicationCompensation['kind']
+): kind is AnnualCompensationKind => kind in annualKindPriority
 
-  const maximum = formatMinorAmount(maximumMinor, currencyCode).slice(
-    currencyCode.length + 1
-  )
-  return `${formatMinorAmount(minimumMinor, currencyCode)}–${maximum}`
-}
-
-const formatPeriod = (period: ApplicationCompensation['period']) =>
-  period === 'unknown'
-    ? ''
-    : period === 'one_time'
-      ? ' (one time)'
-      : ` / ${period}`
-
-const formatKind = (kind: ApplicationCompensation['kind']) => {
-  const words = kind.replaceAll('_', ' ')
-  return `${words.charAt(0).toUpperCase()}${words.slice(1)}`
-}
-
-export const formatCompensationSummary = (
+export const selectAnnualCompensation = (
   compensations: readonly ApplicationCompensation[]
-) =>
-  compensations.length === 0
+): ApplicationCompensation | undefined =>
+  compensations.reduce<ApplicationCompensation | undefined>(
+    (current, candidate) => {
+      if (
+        candidate.period !== 'year' ||
+        !isAnnualCompensationKind(candidate.kind)
+      ) {
+        return current
+      }
+      if (current === undefined) return candidate
+
+      const priority =
+        annualKindPriority[candidate.kind] -
+        annualKindPriority[current.kind as AnnualCompensationKind]
+      if (priority < 0) return candidate
+      if (priority > 0) return current
+      return candidate.id.localeCompare(current.id) < 0 ? candidate : current
+    },
+    undefined
+  )
+
+const annualCompensationFrom = (
+  compensations: readonly ApplicationCompensation[]
+): ApplicationListItem['annualCompensation'] => {
+  const selected = selectAnnualCompensation(compensations)
+
+  return selected === undefined
     ? null
-    : compensations
-        .map(
-          (compensation) =>
-            `${formatKind(compensation.kind)}: ${formatRange(compensation)}${formatPeriod(compensation.period)}`
-        )
-        .join('; ')
+    : {
+        currencyCode: selected.currencyCode,
+        maximumMinor: selected.maximumMinor,
+        minimumMinor: selected.minimumMinor,
+      }
+}
 
 export const toApplicationListItem = (
   record: ApplicationListRecord,
   displayedCompensations?: readonly ApplicationCompensation[]
 ): ApplicationListItem => {
   const { compensations, ...application } = record
+  const visibleCompensations = displayedCompensations ?? compensations
   return {
     ...application,
-    compensationSummary: formatCompensationSummary(
-      displayedCompensations ?? compensations
-    ),
+    annualCompensation: annualCompensationFrom(visibleCompensations),
   }
 }

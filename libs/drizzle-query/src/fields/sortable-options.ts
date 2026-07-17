@@ -1,6 +1,10 @@
-import { isSQLWrapper, type SQLWrapper, sql } from 'drizzle-orm'
+import { sql } from 'drizzle-orm'
 
 import { QueryError } from '../error'
+import {
+  compileDefinitionLiteral,
+  compileDefinitionRank,
+} from './definition-literal'
 import type { NullPlacement, SortRuntime } from './runtime'
 
 /** Ordering semantics shared by scalar sortable fields. */
@@ -40,11 +44,17 @@ export const applySortableOptions = (
       )
     }
 
-    const cases = values.map(
-      (value, index) =>
-        sql`when ${current.expression} = ${currentValue(current, value)} then ${index}`
-    )
-    const ranked = sql<number>`case when ${current.expression} is null then null ${sql.join(cases, sql` `)} else ${values.length} end`
+    const cases = values.map((value, index) => {
+      const definitionValue = compileDefinitionLiteral(current, value)
+      const definitionRank = compileDefinitionRank(index)
+      return sql`when ${definitionValue} then ${definitionRank}`
+    })
+    const fallbackRank = compileDefinitionRank(values.length)
+    // A simple CASE emits the source expression once per rank operation,
+    // instead of once for every enum member. Only definition-owned literals
+    // are inlined; the expression and all request/cursor values stay outside
+    // the inline fragments and therefore retain normal parameter binding.
+    const ranked = sql<number>`case when ${current.nullExpression} is null then null else case ${current.expression} ${sql.join(cases, sql` `)} else ${fallbackRank} end end`
     sort = {
       ...current,
       expression: ranked,
@@ -65,9 +75,4 @@ export const applySortableOptions = (
     unique: options.unique ?? sort.unique,
     defaultNulls: options.nulls ?? sort.defaultNulls,
   }
-}
-
-const currentValue = (sort: SortRuntime, value: string): SQLWrapper => {
-  const encoded = sort.encode?.(value) ?? value
-  return isSQLWrapper(encoded) ? encoded : sql.param(encoded)
 }

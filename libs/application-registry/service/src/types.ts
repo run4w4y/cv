@@ -20,11 +20,10 @@ import type {
   ListingCheckRun,
   ListingCheckTarget,
   ListingObservation,
-  PersonalPriority,
   StatusChangingApplicationEventKind,
-  TargetStage,
 } from '@cv/application-registry-entity'
 import type {
+  AnnualCompensation,
   ApplicationListItem,
   ApplicationListQueryRequest,
   EventListQueryRequest,
@@ -65,8 +64,22 @@ export type PatchApplicationInput = ApplicationMutable & {
   readonly expectedVersion?: number
 }
 
+export type UpdateManagedApplicationInput = ApplicationMutable & {
+  readonly annualCompensation?: AnnualCompensation | null
+  readonly expectedVersion: number
+  readonly labels?: readonly string[]
+  readonly operationId: string
+}
+
+export type UpdateManagedApplicationResult = {
+  readonly annualCompensation: AnnualCompensation | null
+  readonly application: Application
+  readonly labels: readonly string[]
+}
+
 export type ListApplicationsInput = ApplicationListQueryRequest & {
   readonly currency?: CurrencyCode | 'original'
+  readonly q?: string
 }
 
 export type { ApplicationListItem }
@@ -75,11 +88,8 @@ export type { ApplicationListItem }
 export type ApplicationListPage = QueryPage<ApplicationListItem, CursorPageInfo>
 
 export type ApplicationFacets = {
-  readonly applicationStatuses: readonly ApplicationStatus[]
   readonly companies: readonly string[]
   readonly labels: readonly string[]
-  readonly personalPriorities: readonly PersonalPriority[]
-  readonly targetStages: readonly TargetStage[]
 }
 
 export type AddApplicationNoteInput = Pick<
@@ -158,10 +168,22 @@ export type ApplicationCompensationResultItem = {
 export type ApplicationCompensationsResult =
   RegistryItems<ApplicationCompensationResultItem>
 
+export type ReplaceAnnualCompensationInput = {
+  readonly annualCompensation: AnnualCompensation | null
+  readonly expectedVersion: number
+}
+
+export type ReplaceAnnualCompensationResult = {
+  readonly annualCompensation: AnnualCompensation | null
+  readonly application: Application
+}
+
 export type RecordListingObservationInput = {
+  readonly expectedVersion?: number
   readonly mode: ListingCheckMode
   readonly observation: ListingObservation
   readonly operationId: string
+  readonly operationRequestSignature: string
   readonly runId?: string
 }
 
@@ -170,6 +192,12 @@ export type CheckListingResult = {
   readonly archived: boolean
   readonly check: ApplicationListingCheck
   readonly replayed: boolean
+}
+
+export type ResolveListingAvailabilityInput = {
+  readonly expectedVersion: number
+  readonly operationId: string
+  readonly resolution: 'open' | 'closed'
 }
 
 export type SubmitListingCheckFinding = {

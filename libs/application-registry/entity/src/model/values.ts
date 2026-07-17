@@ -237,6 +237,8 @@ export const CommandKindSchema = Schema.Literals([
   'campaign_capture',
   'application_event',
   'application_note',
+  'listing_check',
+  'managed_application_update',
 ])
 
 export const commandKindValues = CommandKindSchema.literals

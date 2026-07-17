@@ -19,8 +19,8 @@ export const explicitOrderBy = <FieldName extends string>(
 
   const rank =
     term.public.nulls === 'first'
-      ? sql`case when ${term.sort.expression} is null then 0 else 1 end`
-      : sql`case when ${term.sort.expression} is null then 1 else 0 end`
+      ? sql`case when ${term.sort.nullExpression} is null then 0 else 1 end`
+      : sql`case when ${term.sort.nullExpression} is null then 1 else 0 end`
 
   return [asc(rank), valueOrder]
 }

@@ -57,8 +57,8 @@ const applications: readonly ApplicationListItem[] = Array.from(
   { length: 20 },
   (_, index) => ({
     ...application,
+    annualCompensation: null,
     canonicalUrl: `https://host${index % 4}.example/jobs/${index}`,
-    compensationSummary: null,
     counts: { captures: 0, notes: 0 },
     identityAliases: [],
     id: `application-${index}`,

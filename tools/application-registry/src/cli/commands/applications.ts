@@ -1,4 +1,5 @@
 import {
+  type ApplicationFacetsResponse,
   CompensationDisplayCurrencySchema,
   CreateApplicationRequestSchema,
   type ListApplicationsResponse,
@@ -231,6 +232,15 @@ export const applicationDeleteCommand = Command.make(
     })
 ).pipe(Command.withDescription('Delete one registry application.'))
 
+const formatFacetValues = (values: readonly string[]) =>
+  values.join(', ') || '—'
+
+export const formatApplicationFacets = (facets: ApplicationFacetsResponse) =>
+  [
+    `Companies: ${formatFacetValues(facets.companies)}`,
+    `Labels: ${formatFacetValues(facets.labels)}`,
+  ].join('\n')
+
 export const applicationFacetsCommand = Command.make(
   'facets',
   { json: jsonFlag },
@@ -240,18 +250,10 @@ export const applicationFacetsCommand = Command.make(
       Effect.flatMap((facets) =>
         options.json
           ? printJson(facets)
-          : Console.log(
-              [
-                `Companies: ${facets.companies.join(', ')}`,
-                `Statuses: ${facets.applicationStatuses.join(', ')}`,
-                `Target stages: ${facets.targetStages.join(', ')}`,
-                `Priorities: ${facets.personalPriorities.join(', ') || '—'}`,
-                `Labels: ${facets.labels.join(', ') || '—'}`,
-              ].join('\n')
-            )
+          : Console.log(formatApplicationFacets(facets))
       )
     )
-).pipe(Command.withDescription('List application filter facets.'))
+).pipe(Command.withDescription('List dynamic application filter facets.'))
 
 export const applicationDeduplicateCommand = Command.make(
   'deduplicate',

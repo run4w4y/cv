@@ -4,6 +4,8 @@ import {
   EventsCrud,
   type ListingCheckRunCounts,
   ListingChecksCrud,
+  OperationsCrud,
+  RegistryDatabaseError,
 } from '@cv/application-registry-crud'
 import type {
   Application,
@@ -16,8 +18,10 @@ import { countBy, partition, sumBy } from 'es-toolkit'
 
 import { RegistryConflictError, RegistryNotFoundError } from '../errors'
 import { decideListingCheck } from '../internal/listing-check-policy'
+import { operationRequestSignature } from '../internal/operation-request-signature'
 import {
   findRequiredApplication,
+  findValidatedOperation,
   newRegistryId,
   registryNow,
 } from '../internal/shared'
@@ -28,6 +32,7 @@ import {
 import type {
   CheckListingResult,
   RecordListingObservationInput,
+  ResolveListingAvailabilityInput,
   RunDueListingChecksInput,
   SubmitListingCheckFindingsInput,
 } from '../types'
@@ -55,6 +60,7 @@ const make = Effect.gen(function* () {
   const checks = yield* ListingChecksCrud
   const checker = yield* ListingAvailabilityChecker
   const events = yield* EventsCrud
+  const operations = yield* OperationsCrud
 
   const loadCheckResult = (
     applicationId: string,
@@ -114,12 +120,19 @@ const make = Effect.gen(function* () {
     input: RecordListingObservationInput
   ) =>
     Effect.gen(function* () {
-      const replay = yield* checks.findByOperation(input.operationId)
-      if (replay) {
-        if (replay.applicationId !== application.id) {
-          return yield* new RegistryConflictError({
-            message:
-              'The operation id is already used by another listing check.',
+      const identity = {
+        applicationId: application.id,
+        kind: 'listing_check' as const,
+        operationId: input.operationId,
+        operationRequestSignature: input.operationRequestSignature,
+      }
+      const receipt = yield* findValidatedOperation(operations, identity)
+      if (receipt) {
+        const replay = yield* checks.findByOperation(input.operationId)
+        if (!replay) {
+          return yield* new RegistryDatabaseError({
+            cause: new Error('A listing-check receipt has no listing check.'),
+            message: `Listing check is missing for ${input.operationId}`,
           })
         }
         return yield* loadCheckResult(
@@ -128,6 +141,14 @@ const make = Effect.gen(function* () {
           true,
           application.applicationStatus
         )
+      }
+      if (
+        input.expectedVersion !== undefined &&
+        input.expectedVersion !== application.version
+      ) {
+        return yield* new RegistryConflictError({
+          message: `Application version ${application.version} does not match expected version ${input.expectedVersion}.`,
+        })
       }
 
       const recordedAt = yield* registryNow
@@ -148,18 +169,48 @@ const make = Effect.gen(function* () {
         recommendedAction: decision.action,
         runId: input.runId ?? null,
       }
-      const applied = yield* checks.persist({
-        ...persisted,
-        archiveApplication: decision.archiveApplication,
-        closedCandidateAt: decision.closedCandidateAt,
-        consecutiveClosedChecks: decision.consecutiveClosedChecks,
-        eventId: decision.archiveApplication ? newRegistryId() : null,
-        listingAvailability: decision.availability,
-        recordedAt,
-      })
-      if (!applied) {
+      const applied = yield* checks
+        .persist({
+          ...persisted,
+          archiveApplication: decision.archiveApplication,
+          closedCandidateAt: decision.closedCandidateAt,
+          consecutiveClosedChecks: decision.consecutiveClosedChecks,
+          eventId: decision.archiveApplication ? newRegistryId() : null,
+          expectedVersion: input.expectedVersion,
+          listingAvailability: decision.availability,
+          operationRequestSignature: input.operationRequestSignature,
+          recordedAt,
+        })
+        .pipe(
+          Effect.map((applied) => ({ applied, replayed: false })),
+          Effect.catchTag('RegistryDatabaseError', (failure) =>
+            findValidatedOperation(operations, identity).pipe(
+              Effect.flatMap((concurrentReceipt) =>
+                concurrentReceipt
+                  ? Effect.succeed({ applied: true, replayed: true })
+                  : Effect.fail(failure)
+              )
+            )
+          )
+        )
+      if (applied.replayed) {
+        const replay = yield* checks.findByOperation(input.operationId)
+        if (!replay) {
+          return yield* new RegistryDatabaseError({
+            cause: new Error('A listing-check receipt has no listing check.'),
+            message: `Listing check is missing for ${input.operationId}`,
+          })
+        }
+        return yield* loadCheckResult(
+          application.id,
+          replay,
+          true,
+          application.applicationStatus
+        )
+      }
+      if (!applied.applied) {
         return yield* new RegistryConflictError({
-          message: 'The application disappeared while it was being checked.',
+          message: 'The application changed while it was being checked.',
         })
       }
       return yield* loadCheckResult(
@@ -221,6 +272,50 @@ const make = Effect.gen(function* () {
           return { items: yield* checks.listByApplication(application.id) }
         })
     ),
+    resolveAvailability: Effect.fn('ListingChecksService.resolveAvailability')(
+      (identifier: string, input: ResolveListingAvailabilityInput) =>
+        Effect.gen(function* () {
+          const application = yield* findRequiredApplication(
+            applications,
+            identifier
+          )
+
+          const checkedAt = yield* registryNow
+          const open = input.resolution === 'open'
+          return yield* recordObservation(application, {
+            expectedVersion: input.expectedVersion,
+            mode: 'archive_eligible',
+            operationId: input.operationId,
+            operationRequestSignature: operationRequestSignature(
+              'listing_check',
+              { applicationId: application.id, input }
+            ),
+            observation: {
+              checkedAt,
+              checkerVersion: 'manual-review/v1',
+              confidence: 'confirmed',
+              contentHash: null,
+              evidence: [
+                {
+                  code: open
+                    ? 'manual_confirmed_open'
+                    : 'manual_confirmed_closed',
+                  detail: open
+                    ? 'A registry user confirmed that the listing is accepting applications.'
+                    : 'A registry user confirmed that the listing is no longer accepting applications.',
+                  sourceUrl: application.canonicalUrl,
+                },
+              ],
+              finalUrl: application.canonicalUrl,
+              httpStatus: null,
+              outcome: input.resolution,
+              provider: 'manual-review',
+              reasonCode: open ? 'provider_open' : 'provider_closed',
+              requestedUrl: application.canonicalUrl,
+            },
+          })
+        })
+    ),
     runDue: Effect.fn('ListingChecksService.runDue')(
       (input: RunDueListingChecksInput) =>
         Effect.gen(function* () {
@@ -251,6 +346,15 @@ const make = Effect.gen(function* () {
                   checkApplication(application, {
                     mode: input.mode,
                     operationId: `${runId}:${application.id}`,
+                    operationRequestSignature: operationRequestSignature(
+                      'listing_check',
+                      {
+                        applicationId: application.id,
+                        mode: input.mode,
+                        runId,
+                        trigger: 'scheduled',
+                      }
+                    ),
                     runId,
                   })
                 ),
@@ -359,6 +463,15 @@ const make = Effect.gen(function* () {
                   mode: input.mode,
                   observation: finding.observation,
                   operationId: finding.operationId,
+                  operationRequestSignature: operationRequestSignature(
+                    'listing_check',
+                    {
+                      finding,
+                      mode: input.mode,
+                      runId: input.runId,
+                      trigger: 'cli',
+                    }
+                  ),
                   runId: input.runId,
                 })
               }).pipe(

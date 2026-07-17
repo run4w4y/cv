@@ -1,4 +1,10 @@
-import type { AnyQueryDefinition } from '@cv/drizzle-query'
+import {
+  type AnyQueryDefinition,
+  decodeFlatQueryParams,
+  encodeFlatQueryParams,
+  type FlatQueryParams,
+  reservedQueryParameters,
+} from '@cv/drizzle-query'
 import { Schema, SchemaGetter } from 'effect'
 
 import {
@@ -13,18 +19,9 @@ import type {
   QueryParamsSchemaOptions,
 } from './types'
 
-const reservedParameters = new Set([
-  'filters',
-  'orderBy',
-  'pagination',
-  'after',
-  'page',
-  'size',
-])
-
 const assertExtras = (extras: QueryParamsExtras): void => {
   for (const name of Object.keys(extras)) {
-    if (reservedParameters.has(name)) {
+    if (reservedQueryParameters.has(name)) {
       throw new TypeError(`The query parameter "${name}" is reserved.`)
     }
   }
@@ -32,32 +29,6 @@ const assertExtras = (extras: QueryParamsExtras): void => {
 
 const numberFromString = <S extends Schema.Constraint>(schema: S) =>
   Schema.NumberFromString.pipe(Schema.decodeTo(schema))
-
-type FlatQuery = Readonly<Record<string, unknown>>
-
-const decodeFlatQuery = (
-  input: FlatQuery,
-  paginationKind: string
-): FlatQuery => {
-  const { after, page, size, ...request } = input
-  const pagination =
-    paginationKind === 'page'
-      ? page === undefined && size === undefined
-        ? undefined
-        : { page, size }
-      : after === undefined && size === undefined
-        ? undefined
-        : { after, size }
-
-  return pagination === undefined ? request : { ...request, pagination }
-}
-
-const encodeFlatQuery = (input: FlatQuery): FlatQuery => {
-  const { pagination, ...query } = input
-  return typeof pagination === 'object' && pagination !== null
-    ? { ...query, ...pagination }
-    : query
-}
 
 /**
  * Derives a bidirectional Effect Schema for HTTP query parameters.
@@ -135,20 +106,23 @@ export const queryParamsSchema = <
   })
 
   const encodedRuntime = encoded as unknown as Schema.Codec<
-    FlatQuery,
-    FlatQuery
+    FlatQueryParams,
+    FlatQueryParams
   >
   const decodedRuntime = decoded as unknown as Schema.Codec<
-    FlatQuery,
-    FlatQuery
+    FlatQueryParams,
+    FlatQueryParams
   >
 
   return encodedRuntime.pipe(
     Schema.decodeTo(decodedRuntime, {
       decode: SchemaGetter.transform((input) =>
-        decodeFlatQuery(input, definition.pagination.kind)
+        decodeFlatQueryParams(
+          input,
+          definition.pagination.kind === 'page' ? 'page' : 'cursor'
+        )
       ),
-      encode: SchemaGetter.transform(encodeFlatQuery),
+      encode: SchemaGetter.transform(encodeFlatQueryParams),
     })
   ) as unknown as Schema.Codec<
     QueryParamsRequest<Definition, Extras>,

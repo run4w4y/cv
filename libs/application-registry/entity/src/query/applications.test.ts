@@ -37,7 +37,10 @@ describe('application list query definition', () => {
         expect.objectContaining({
           name: 'company',
           filterOperatorInfo: expect.arrayContaining([
-            expect.objectContaining({ name: 'contains' }),
+            expect.objectContaining({
+              name: 'contains',
+              value: { type: 'string' },
+            }),
           ]),
           sortable: true,
         }),
@@ -54,14 +57,32 @@ describe('application list query definition', () => {
         }),
         expect.objectContaining({
           name: 'q',
-          filterOperatorInfo: [expect.objectContaining({ name: 'matches' })],
+          filterOperatorInfo: [
+            expect.objectContaining({
+              name: 'matches',
+              value: { type: 'string' },
+            }),
+          ],
         }),
         expect.objectContaining({
           name: 'followUpAt',
           filterOperatorInfo: expect.arrayContaining([
             expect.objectContaining({ name: 'isNull' }),
-            expect.objectContaining({ name: 'lt' }),
-            expect.objectContaining({ name: 'gte' }),
+            expect.objectContaining({ name: 'lt', value: { type: 'date' } }),
+            expect.objectContaining({ name: 'gte', value: { type: 'date' } }),
+            expect.objectContaining({
+              name: 'between',
+              value: {
+                type: 'tuple',
+                items: [{ type: 'date' }, { type: 'date' }],
+              },
+            }),
+          ]),
+        }),
+        expect.objectContaining({
+          name: 'createdAt',
+          filterOperatorInfo: expect.arrayContaining([
+            expect.objectContaining({ name: 'gte', value: { type: 'date' } }),
           ]),
         }),
       ])
@@ -88,9 +109,48 @@ describe('application list query definition', () => {
     })
 
     expect(rendered.sql).not.toContain(`or 1 = 1 --`)
-    expect(rendered.sql).toContain('escape ?')
+    expect(rendered.sql).toContain("escape '\\'")
     expect(rendered.params).toContain(`%\\%\\_' or 1 = 1 --%`)
     expect(rendered.params).toContain(referenceTime)
+  })
+
+  test('binds only request-owned values for full-text matching', () => {
+    const rendered = renderWhere({
+      filters: [
+        {
+          type: 'condition',
+          field: 'q',
+          operator: 'matches',
+          value: 'Effect engineer',
+        },
+      ],
+      pagination: { size: 25 },
+    })
+
+    expect(rendered.params).toEqual(
+      Array.from({ length: 7 }, () => '%Effect engineer%')
+    )
+    expect(rendered.sql.match(/escape '\\'/gu)).toHaveLength(7)
+  })
+
+  test('binds timestamp ranges from the published date tuple metadata', () => {
+    const from = '2026-07-12T09:00:00.000Z'
+    const to = '2026-07-12T17:00:00.000Z'
+    const rendered = renderWhere({
+      filters: [
+        {
+          type: 'condition',
+          field: 'followUpAt',
+          operator: 'between',
+          value: [from, to],
+        },
+      ],
+      pagination: { size: 25 },
+    })
+
+    expect(rendered.sql).toContain('between ? and ?')
+    expect(rendered.params).toContain(from)
+    expect(rendered.params).toContain(to)
   })
 
   test('supports generic ordering over computed relation fields', () => {

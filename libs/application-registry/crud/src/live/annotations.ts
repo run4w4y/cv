@@ -26,8 +26,14 @@ export const makeAnnotationsCrudLive = (database: Effect.Effect<D1Database>) =>
       withRegistryConnections(database, (connections) =>
         persistNote(connections, applicationId, input).pipe(Effect.asVoid)
       ),
-    replaceLabels: (applicationId, labels, recordedAt) =>
+    replaceLabels: (applicationId, labels, recordedAt, expectedVersion) =>
       withRegistryConnections(database, (connections) =>
-        replaceLabels(connections, applicationId, labels, recordedAt)
+        replaceLabels(
+          connections,
+          applicationId,
+          labels,
+          recordedAt,
+          expectedVersion
+        )
       ),
   })

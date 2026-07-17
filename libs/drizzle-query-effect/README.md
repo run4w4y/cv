@@ -7,7 +7,7 @@ HTTP query codecs, and browser-native query-string helpers.
 
 ```ts
 import { resolveQuery, finalizeQuery } from '@cv/drizzle-query-effect'
-import { Schema } from 'effect'
+import { Effect, Schema } from 'effect'
 import {
   fromSearchParams,
   queryParamsSchema,
@@ -38,6 +38,12 @@ const params = yield* toSearchParams(QueryParamsSchema, {
 })
 
 const request = yield* fromSearchParams(QueryParamsSchema, params)
+
+// A browser or CLI consumer chooses its own synchronous boundary when needed.
+const browserParams = Effect.runSync(toSearchParams(QueryParamsSchema, request))
+const browserRequest = Effect.runSync(
+  fromSearchParams(QueryParamsSchema, browserParams)
+)
 
 const CursorStateSchema = Schema.Struct({ asOf: Schema.String })
 const cursorState = schemaCursorState(CursorStateSchema)

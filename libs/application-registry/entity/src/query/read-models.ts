@@ -1,12 +1,46 @@
 import { Schema } from 'effect'
 import { type Application, ApplicationSchema } from '../codecs/applications'
 import { type CampaignCapture, CampaignCaptureSchema } from '../codecs/captures'
+import {
+  type ApplicationCompensation,
+  ApplicationCompensationSchema,
+} from '../codecs/compensations'
 import { type ApplicationEvent, ApplicationEventSchema } from '../codecs/events'
 import { NonEmptyTrimmedStringSchema } from '../model/constraints'
 
+/** Annual range in the list query's requested display currency. */
+export type AnnualCompensation = Pick<
+  ApplicationCompensation,
+  'currencyCode' | 'maximumMinor' | 'minimumMinor'
+>
+
+/** Runtime schema for {@link AnnualCompensation}. */
+export const AnnualCompensationSchema: Schema.Codec<AnnualCompensation> =
+  Schema.revealCodec(
+    Schema.Struct({
+      currencyCode: ApplicationCompensationSchema.fields.currencyCode,
+      maximumMinor: ApplicationCompensationSchema.fields.maximumMinor,
+      minimumMinor: ApplicationCompensationSchema.fields.minimumMinor,
+    }).pipe(
+      Schema.check(
+        Schema.makeFilter((value: AnnualCompensation) =>
+          value.minimumMinor === null ||
+          value.maximumMinor === null ||
+          value.minimumMinor <= value.maximumMinor
+            ? undefined
+            : {
+                path: ['maximumMinor'],
+                issue:
+                  'Annual compensation maximum must be greater than or equal to the minimum.',
+              }
+        )
+      )
+    )
+  )
+
 /** Application representation returned by list queries. */
 export type ApplicationListItem = Application & {
-  readonly compensationSummary: string | null
+  readonly annualCompensation: AnnualCompensation | null
   readonly counts: { readonly captures: number; readonly notes: number }
   readonly identityAliases: readonly string[]
   readonly labels: readonly string[]
@@ -19,7 +53,7 @@ export const ApplicationListItemSchema: Schema.Codec<ApplicationListItem> =
   Schema.revealCodec(
     Schema.Struct({
       ...ApplicationSchema.fields,
-      compensationSummary: Schema.NullOr(NonEmptyTrimmedStringSchema),
+      annualCompensation: Schema.NullOr(AnnualCompensationSchema),
       counts: Schema.Struct({
         captures: Schema.Int.pipe(
           Schema.check(Schema.isGreaterThanOrEqualTo(0))

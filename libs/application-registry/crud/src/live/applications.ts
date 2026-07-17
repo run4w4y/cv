@@ -10,6 +10,7 @@ import {
   patchApplication,
   persistApplication,
   removeApplication,
+  updateManagedApplication,
 } from '../persistence/applications'
 import { persistEvent } from '../persistence/event-write'
 import { ApplicationsCrud } from '../services/applications'
@@ -39,6 +40,10 @@ export const makeApplicationsCrudLive = (database: Effect.Effect<D1Database>) =>
     patch: (applicationId, patch, recordedAt) =>
       withRegistryConnections(database, (connections) =>
         patchApplication(connections, applicationId, patch, recordedAt)
+      ),
+    updateManaged: (applicationId, input) =>
+      withRegistryConnections(database, (connections) =>
+        updateManagedApplication(connections, applicationId, input)
       ),
     persist: (input, options) =>
       withRegistryConnections(database, (connections) =>

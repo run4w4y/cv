@@ -27,6 +27,9 @@ const toApiError = Match.type<ApplicationRegistryError>().pipe(
   Match.tag('RegistryConflictError', (error) =>
     ConflictError.make({ message: error.message })
   ),
+  Match.tag('RegistryQueryTooComplexError', (error) =>
+    BadRequestError.make({ message: error.message })
+  ),
   Match.tag('RegistryDatabaseError', (error) =>
     InternalServerError.make({ message: error.message })
   ),
@@ -68,6 +71,9 @@ export const RegistryHandlersLayer = HttpApiBuilder.group(
         .handle('patchApplication', ({ params, payload }) =>
           expose(applications.patch(params.id, payload))
         )
+        .handle('updateManagedApplication', ({ params, payload }) =>
+          expose(applications.updateManaged(params.id, payload))
+        )
         .handle('deleteApplication', ({ params, query }) =>
           expose(applications.remove(params.id, query.expectedVersion))
         )
@@ -76,6 +82,9 @@ export const RegistryHandlersLayer = HttpApiBuilder.group(
         )
         .handle('listApplicationCompensations', ({ params, query }) =>
           expose(compensations.listByApplication(params.id, query.currency))
+        )
+        .handle('replaceAnnualCompensation', ({ params, payload }) =>
+          expose(compensations.replaceAnnual(params.id, payload))
         )
         .handle('listApplicationEvents', ({ params }) =>
           expose(events.listByApplication(params.id))
@@ -92,7 +101,13 @@ export const RegistryHandlersLayer = HttpApiBuilder.group(
           )
         )
         .handle('replaceApplicationLabels', ({ params, payload }) =>
-          expose(applications.replaceLabels(params.id, payload.labels))
+          expose(
+            applications.replaceLabels(
+              params.id,
+              payload.labels,
+              payload.expectedVersion
+            )
+          )
         )
         .handle('addApplicationNote', ({ params, payload }) =>
           expose(annotations.addNote(params.id, payload))
@@ -100,6 +115,11 @@ export const RegistryHandlersLayer = HttpApiBuilder.group(
         .handle('listEvents', ({ query }) => expose(events.list(query)))
         .handle('listApplicationListingChecks', ({ params }) =>
           expose(listingChecks.listByApplication(params.id))
+        )
+        .handle(
+          'resolveApplicationListingAvailability',
+          ({ params, payload }) =>
+            expose(listingChecks.resolveAvailability(params.id, payload))
         )
         .handle('submitListingCheckFindings', ({ payload }) =>
           expose(listingChecks.submitFindings(payload))

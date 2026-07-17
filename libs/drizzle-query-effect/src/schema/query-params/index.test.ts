@@ -165,6 +165,36 @@ describe('definition-derived query parameters', () => {
     expect(decoded).toEqual(request)
   })
 
+  test('lets context-free consumers choose a synchronous Effect boundary', () => {
+    const schema = queryParamsSchema(cursorDefinition)
+    const request = {
+      filters: [
+        {
+          type: 'condition',
+          field: 'name',
+          operator: 'eq',
+          value: 'Ada',
+        },
+      ],
+      pagination: { after: 'opaque-token', size: 10 },
+    } as const satisfies CursorRequest
+
+    const params = Effect.runSync(toSearchParams(schema, request))
+
+    expect(Effect.runSync(fromSearchParams(schema, params))).toEqual(request)
+    expect(() =>
+      Effect.runSync(
+        fromSearchParams(
+          schema,
+          new URLSearchParams([
+            ['filters', '[]'],
+            ['filters', '[]'],
+          ])
+        )
+      )
+    ).toThrow()
+  })
+
   test('uses operand codecs before JSON serialization', async () => {
     const schema = queryParamsSchema(pageDefinition)
     const createdAt = new Date('2026-07-15T08:30:00.000Z')

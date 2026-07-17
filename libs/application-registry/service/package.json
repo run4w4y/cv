@@ -31,6 +31,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "4.20260511.1",
+    "drizzle-orm": "1.0.0-rc.4",
     "miniflare": "4.20260708.1"
   }
 }

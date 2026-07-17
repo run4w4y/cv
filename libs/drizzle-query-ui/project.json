@@ -1,0 +1,59 @@
+{
+  "name": "drizzle-query-ui",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/drizzle-query-ui/src",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/drizzle-query-ui/src/index.ts",
+        "outputPath": "libs/drizzle-query-ui/dist",
+        "rootDir": "libs/drizzle-query-ui/src",
+        "tsConfig": "libs/drizzle-query-ui/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "format": {},
+    "format:check": {},
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": ["drizzle-query", "internal-ui"],
+          "target": "build"
+        }
+      ],
+      "options": {
+        "command": "bun test --preload libs/drizzle-query-ui/test/setup.ts libs/drizzle-query-ui/src"
+      }
+    },
+    "typecheck": {},
+    "storybook:dev": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "storybook dev --config-dir libs/drizzle-query-ui/.storybook --port 4402"
+      }
+    },
+    "storybook:build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{projectRoot}/storybook-static"],
+      "options": {
+        "command": "storybook build --config-dir libs/drizzle-query-ui/.storybook --output-dir libs/drizzle-query-ui/storybook-static"
+      }
+    },
+    "storybook:static": {
+      "executor": "@nx/web:file-server",
+      "dependsOn": ["storybook:build"],
+      "options": {
+        "buildTarget": "drizzle-query-ui:storybook:build",
+        "staticFilePath": "libs/drizzle-query-ui/storybook-static",
+        "spa": true
+      }
+    }
+  }
+}

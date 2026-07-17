@@ -1,5 +1,4 @@
 import { and, type SQLWrapper, sql } from 'drizzle-orm'
-import { uniqWith } from 'es-toolkit'
 
 import {
   type BinaryFilterOperatorCompileArguments,
@@ -7,14 +6,6 @@ import {
   unaryFilterOperator,
 } from '../../filtering/operators/index'
 import type { ManyRelationFilterTools, ManyRelationOperators } from './types'
-
-const sameValue = (left: unknown, right: unknown): boolean =>
-  left instanceof Date && right instanceof Date
-    ? left.getTime() === right.getTime()
-    : Object.is(left, right)
-
-const uniqueValues = <Value>(values: readonly Value[]): readonly Value[] =>
-  uniqWith(values, sameValue)
 
 /** @internal Creates the inferred operators for one relation binding. */
 export const makeRelationOperators = <Value>(
@@ -40,7 +31,7 @@ export const makeRelationOperators = <Value>(
       value,
     }: BinaryFilterOperatorCompileArguments<readonly Value[]>) =>
       and(
-        ...uniqueValues(value).map((item) =>
+        ...value.map((item) =>
           tools.exists(sql`${tools.value} = ${bind(item)}`)
         )
       ) ?? sql`1 = 1`,

@@ -16,11 +16,8 @@ export const applicationsCrud = (
 ): ApplicationsCrud => ({
   facets: () =>
     Effect.succeed({
-      applicationStatuses: [application.applicationStatus],
       companies: [application.company],
       labels: [],
-      personalPriorities: [],
-      targetStages: [application.targetStage],
     }),
   findByIdentifier: () => Effect.succeed(application),
   findByCanonicalUrl: () => Effect.succeed([]),
@@ -37,6 +34,7 @@ export const applicationsCrud = (
       },
     }),
   patch: () => Effect.succeed(application),
+  updateManaged: () => Effect.succeed(true),
   persist: () => Effect.void,
   persistEvent: () => Effect.succeed(true),
   remove: () => Effect.succeed(true),
@@ -72,6 +70,7 @@ export const compensationsCrudLayer = (
 ) =>
   Layer.succeed(CompensationsCrud, {
     listByApplication: () => Effect.succeed([]),
+    replaceAnnual: () => Effect.succeed(true),
     ...overrides,
   })
 

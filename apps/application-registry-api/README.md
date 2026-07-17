@@ -43,10 +43,10 @@ connect to D1 directly.
 
 The database contains applications, labels, notes, events, campaign captures,
 structured compensation, exchange-rate observations, and operation receipts.
-Clients supply one stable `operationId` for capture/event/note replay. The
-server owns ordinary UUID generation for entity IDs; monotonic database
-revisions, rather than UUID ordering, provide stable list ordering and an
-ordinary filterable change marker.
+Clients supply one stable `operationId` for capture, event, note, and managed
+update replay. The server owns ordinary UUID generation for entity IDs;
+monotonic database revisions, rather than UUID ordering, provide stable list
+ordering and an ordinary filterable change marker.
 
 ## API
 
@@ -68,11 +68,16 @@ declaration used by handlers and the internal Effect client.
   `currency=original` leaves it unchanged.
   The definition exposes scalar columns, relations, counts, latest-value
   expressions, and cross-field search for generic filtering and ordering.
-- `GET /v1/applications/facets`: sorted observed companies, statuses, target
-  stages, priorities, and labels for dashboard controls.
+- `GET /v1/applications/facets`: sorted observed companies and labels for
+  dashboard controls. Closed enum choices come from the shared query metadata.
 - `GET /v1/applications/:id`: fetch by application ID or exact job key.
 - `PATCH /v1/applications/:id`: update source identity metadata, research, and
   lifecycle fields with optional optimistic version checking.
+- `PATCH /v1/applications/:id/management`: atomically update management-editable
+  fields and, when present, replace labels and annual compensation. It requires
+  `expectedVersion` and an idempotent `operationId`; a status transition also
+  appends the server-selected lifecycle event in the same revision and version
+  transition.
 - `DELETE /v1/applications/:id`: remove an application aggregate, optionally
   guarded by `expectedVersion`.
 - `GET /v1/applications/:id/captures`: recover campaign submission details and
@@ -82,12 +87,16 @@ declaration used by handlers and the internal Effect client.
 - `GET /v1/applications/:id/compensations`: return original compensation and,
   when `currency=USD` (or another ISO code) is supplied, converted minor-unit
   bounds with the exact rate observation used.
+- `PUT /v1/applications/:id/annual-compensation`: replace the annual value
+  selected for table display in its original currency, guarded by a required
+  `expectedVersion`.
 - `GET /v1/applications/:id/events`: fetch an application's event history.
 - `POST /v1/applications/:id/events`: append a lifecycle, contact, follow-up,
   or research history event. Status-changing kinds require an explicit
   `nextApplicationStatus`; informational kinds omit it.
 - `GET /v1/applications/:id/annotations`: fetch labels and notes.
-- `GET|PUT /v1/applications/:id/labels`: read or replace labels.
+- `GET|PUT /v1/applications/:id/labels`: read or replace labels. Management UI
+  writes include `expectedVersion` so a stale replacement returns HTTP 409.
 - `POST /v1/applications/:id/notes`: atomically append a typed registry note,
   its history event, and an idempotency receipt.
 - `GET /v1/events`: cursor-paginated global event feed with application company,
@@ -137,8 +146,15 @@ The existing `/v1` API is also the Grafana data source contract; Grafana uses
 the same `REGISTRY_API_TOKEN` as other clients. There is no separate dashboard
 adapter or Grafana-only route family. List GETs encode generic filter and order
 arrays as JSON in `filters` and `orderBy`; pagination uses flat `after` and
-`size` query parameters. Numeric sizes remain restricted to 1–100 (default
-50), and clients follow `pageInfo.nextCursor` until it becomes `null`.
+`size` query parameters, while application full-text search remains the flat
+`q` parameter. The browser management app and the Worker both use the concrete
+contract codec for this format instead of maintaining separate serializers.
+Numeric sizes remain restricted to 1–100 (default 50), and clients follow
+`pageInfo.nextCursor` until it becomes `null`. Before D1 execution, list queries
+whose final compiled statement exceeds D1's
+[100-bound-parameter budget](https://developers.cloudflare.com/d1/platform/limits/)
+are reported as HTTP 400 with an actionable query-complexity error rather than
+an opaque database failure.
 
 Compensation is stored in its original currency and integer minor units. The
 conversion endpoint reuses a rate fetched within the preceding 24 hours and

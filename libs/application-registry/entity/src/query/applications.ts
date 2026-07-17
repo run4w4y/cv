@@ -25,17 +25,22 @@ import { applicationEvents } from '../tables/events'
 import { applicationIdentityAliases } from '../tables/identity-aliases'
 import { timestampFilterOperators } from './timestamp-filter-operators'
 
+const applicationListCursorRevision = 'applications-list-v6'
+
 const escapeLikeLiteral = (value: string): string =>
   value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')
 
+const likeEscapeCharacter = sql`${'\\'}`.inlineParams()
+
 const literalContains = (expression: SQLWrapper, value: string): SQL =>
-  sql`${expression} like ${sql.param(`%${escapeLikeLiteral(value)}%`)} escape ${sql.param('\\')}`
+  sql`${expression} like ${sql.param(`%${escapeLikeLiteral(value)}%`)} escape ${likeEscapeCharacter}`
 
 /** Authoritative filtering, ordering, and cursor contract for application lists. */
 export const applicationListQuery = defineQuery(
   applications,
   ({ col, expr, rel }, root) => {
     const matchesQuery = schemaBinaryFilterOperator('matches', Schema.String, {
+      valueDescriptor: { type: 'string' },
       compile: ({ value }) =>
         sql`(
             ${literalContains(root.jobKey, value)} or
@@ -51,6 +56,7 @@ export const applicationListQuery = defineQuery(
       'contains',
       Schema.String,
       {
+        valueDescriptor: { type: 'string' },
         compile: ({ value }) =>
           literalContains(
             root.companyNormalized,
@@ -85,15 +91,21 @@ export const applicationListQuery = defineQuery(
       ...col({
         exclude: [
           'id',
+          'appliedAt',
           'company',
           'companyNormalized',
+          'createdAt',
           'followUpAt',
+          'lastContactAt',
           'applicationStatus',
           'targetStage',
           'personalPriority',
           'listingAvailability',
           'listingConfidence',
           'listingReasonCode',
+          'listingCheckedAt',
+          'listingClosedCandidateAt',
+          'updatedAt',
           'updatedRevision',
         ],
       }),
@@ -101,6 +113,36 @@ export const applicationListQuery = defineQuery(
         .filterable((defaults) => replaceOperator(defaults, companyContains))
         .sortable(),
       col.followUpAt
+        .filterable((defaults) =>
+          appendOperators(defaults, timestampFilterOperators)
+        )
+        .sortable(),
+      col.appliedAt
+        .filterable((defaults) =>
+          appendOperators(defaults, timestampFilterOperators)
+        )
+        .sortable(),
+      col.lastContactAt
+        .filterable((defaults) =>
+          appendOperators(defaults, timestampFilterOperators)
+        )
+        .sortable(),
+      col.listingCheckedAt
+        .filterable((defaults) =>
+          appendOperators(defaults, timestampFilterOperators)
+        )
+        .sortable(),
+      col.listingClosedCandidateAt
+        .filterable((defaults) =>
+          appendOperators(defaults, timestampFilterOperators)
+        )
+        .sortable(),
+      col.createdAt
+        .filterable((defaults) =>
+          appendOperators(defaults, timestampFilterOperators)
+        )
+        .sortable(),
+      col.updatedAt
         .filterable((defaults) =>
           appendOperators(defaults, timestampFilterOperators)
         )
@@ -161,7 +203,9 @@ export const applicationListQuery = defineQuery(
       expr
         .string(latestEventAt, { nullable: true })
         .as('latestEventAt')
-        .filterable()
+        .filterable((defaults) =>
+          appendOperators(defaults, timestampFilterOperators)
+        )
         .sortable(),
       expr
         .enum(latestEventKind, applicationEventKindValues, { nullable: true })
@@ -176,7 +220,7 @@ export const applicationListQuery = defineQuery(
     ]
   },
   {
-    cursor: { revision: 'applications-list-v5' },
+    cursor: { revision: applicationListCursorRevision },
     defaultOrderBy: [{ field: 'updatedRevision', direction: 'asc' }],
     pagination: cursorPagination({ defaultSize: 50, maxSize: 100 }),
   }

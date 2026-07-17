@@ -10,6 +10,7 @@ import { Effect } from 'effect'
 import {
   AnnotationsCrud,
   ApplicationsCrud,
+  CompensationsCrud,
   EventsCrud,
   FxRatesCrud,
   ListingChecksCrud,
@@ -81,6 +82,7 @@ const runCrud = <A, E>(
     E,
     | AnnotationsCrud
     | ApplicationsCrud
+    | CompensationsCrud
     | EventsCrud
     | FxRatesCrud
     | ListingChecksCrud
@@ -143,6 +145,320 @@ test('executes application CRUD and database defaults through slice services', a
     ['crud-application-1']
   )
   assert.equal(result.page.pageInfo.hasNextPage, false)
+})
+
+test('atomically replaces annual compensation and rejects a stale version', async () => {
+  const result = await runCrud(
+    Effect.gen(function* () {
+      const applications = yield* ApplicationsCrud
+      const compensations = yield* CompensationsCrud
+      yield* applications.persist(
+        {
+          ...application,
+          compensations: [
+            {
+              id: 'crud-annual-original',
+              kind: 'base_salary',
+              currencyCode: 'USD',
+              minimumMinor: 12_000_000,
+              maximumMinor: 15_000_000,
+              period: 'year',
+              rawText: null,
+              source: 'crud-test',
+            },
+          ],
+        },
+        {
+          mode: 'replace',
+          operation: 'annual compensation seed',
+        }
+      )
+      const replaced = yield* compensations.replaceAnnual(
+        application.applicationId,
+        1,
+        {
+          id: 'crud-annual-replacement',
+          kind: 'base_salary',
+          currencyCode: 'EUR',
+          minimumMinor: 10_000_000,
+          maximumMinor: 13_000_000,
+          rawText: null,
+          source: 'table',
+        },
+        '2026-07-12T13:00:00.000Z'
+      )
+      const stale = yield* compensations.replaceAnnual(
+        application.applicationId,
+        1,
+        null,
+        '2026-07-12T14:00:00.000Z'
+      )
+      return {
+        application: yield* applications.findByIdentifier(
+          application.applicationId
+        ),
+        compensations: yield* compensations.listByApplication(
+          application.applicationId
+        ),
+        replaced,
+        stale,
+      }
+    })
+  )
+
+  assert.equal(result.replaced, true)
+  assert.equal(result.stale, false)
+  assert.equal(result.application?.version, 2)
+  assert.deepEqual(
+    result.compensations.map(({ currencyCode, id }) => ({ currencyCode, id })),
+    [{ currencyCode: 'EUR', id: 'crud-annual-replacement' }]
+  )
+})
+
+test('clears every annual compensation variant without removing bonuses', async () => {
+  const result = await runCrud(
+    Effect.gen(function* () {
+      const applications = yield* ApplicationsCrud
+      const compensations = yield* CompensationsCrud
+      yield* applications.persist(
+        {
+          ...application,
+          compensations: [
+            {
+              id: 'crud-clear-base',
+              kind: 'base_salary',
+              currencyCode: 'USD',
+              minimumMinor: 12_000_000,
+              maximumMinor: 15_000_000,
+              period: 'year',
+              rawText: null,
+              source: 'crud-test',
+            },
+            {
+              id: 'crud-clear-total',
+              kind: 'total_compensation',
+              currencyCode: 'USD',
+              minimumMinor: 15_000_000,
+              maximumMinor: 18_000_000,
+              period: 'year',
+              rawText: null,
+              source: 'crud-test',
+            },
+            {
+              id: 'crud-preserve-bonus',
+              kind: 'bonus',
+              currencyCode: 'USD',
+              minimumMinor: 1_000_000,
+              maximumMinor: 2_000_000,
+              period: 'year',
+              rawText: null,
+              source: 'crud-test',
+            },
+          ],
+        },
+        { mode: 'replace', operation: 'annual compensation clear seed' }
+      )
+      const cleared = yield* compensations.replaceAnnual(
+        application.applicationId,
+        1,
+        null,
+        '2026-07-12T13:00:00.000Z'
+      )
+      return {
+        cleared,
+        items: yield* compensations.listByApplication(
+          application.applicationId
+        ),
+      }
+    })
+  )
+
+  assert.equal(result.cleared, true)
+  assert.deepEqual(
+    result.items.map(({ id }) => id),
+    ['crud-preserve-bonus']
+  )
+})
+
+test('atomically replaces labels and preserves them after a stale write', async () => {
+  const result = await runCrud(
+    Effect.gen(function* () {
+      const annotations = yield* AnnotationsCrud
+      const applications = yield* ApplicationsCrud
+      yield* applications.persist(application, {
+        mode: 'replace',
+        operation: 'label replacement seed',
+      })
+      const replaced = yield* annotations.replaceLabels(
+        application.applicationId,
+        ['Remote', 'TypeScript', 'Remote'],
+        '2026-07-12T13:00:00.000Z',
+        1
+      )
+      const stale = yield* annotations.replaceLabels(
+        application.applicationId,
+        ['Stale'],
+        '2026-07-12T14:00:00.000Z',
+        1
+      )
+      return {
+        application: yield* applications.findByIdentifier(
+          application.applicationId
+        ),
+        labels: yield* annotations.listLabels(application.applicationId),
+        replaced,
+        stale,
+      }
+    })
+  )
+
+  assert.deepEqual(
+    result.replaced?.map(({ label }) => label),
+    ['Remote', 'TypeScript']
+  )
+  assert.equal(result.stale, undefined)
+  assert.equal(result.application?.version, 2)
+  assert.deepEqual(
+    result.labels.map(({ label }) => label),
+    ['Remote', 'TypeScript']
+  )
+})
+
+test('updates a managed application aggregate in one version transition', async () => {
+  const result = await runCrud(
+    Effect.gen(function* () {
+      const annotations = yield* AnnotationsCrud
+      const applications = yield* ApplicationsCrud
+      const compensations = yield* CompensationsCrud
+      const events = yield* EventsCrud
+      yield* applications.persist(
+        {
+          ...application,
+          compensations: [
+            {
+              currencyCode: 'USD',
+              id: 'managed-annual-original',
+              kind: 'base_salary',
+              maximumMinor: 15_000_000,
+              minimumMinor: 12_000_000,
+              period: 'year',
+              rawText: null,
+              source: 'seed',
+            },
+          ],
+          labels: ['original'],
+        },
+        { mode: 'replace', operation: 'managed update seed' }
+      )
+
+      const updated = yield* applications.updateManaged(
+        application.applicationId,
+        {
+          annualCompensation: {
+            replacement: {
+              currencyCode: 'EUR',
+              id: 'managed-annual-replacement',
+              kind: 'base_salary',
+              maximumMinor: 18_000_000,
+              minimumMinor: 16_000_000,
+              rawText: null,
+              source: 'manual',
+            },
+          },
+          event: {
+            deviceId: null,
+            eventId: 'managed-status-event',
+            kind: 'submitted',
+            occurredAt: '2026-07-12T13:00:00.000Z',
+            operationId: 'managed-operation',
+            operationRequestSignature: 'managed-signature',
+            payload: {
+              source: 'application_registry_management',
+              previousApplicationStatus: 'not_started',
+              nextApplicationStatus: 'applied',
+            },
+            recordedAt: '2026-07-12T13:00:00.000Z',
+          },
+          expectedVersion: 1,
+          labels: ['remote', 'priority', 'remote'],
+          operationId: 'managed-operation',
+          operationRequestSignature: 'managed-signature',
+          patch: {
+            applicationStatus: 'applied',
+            company: 'Managed Company',
+            fitScore: 91,
+          },
+          recordedAt: '2026-07-12T13:00:00.000Z',
+        }
+      )
+      const stale = yield* applications.updateManaged(
+        application.applicationId,
+        {
+          annualCompensation: {
+            replacement: null,
+          },
+          event: undefined,
+          expectedVersion: 1,
+          labels: ['stale'],
+          operationId: 'managed-operation-stale',
+          operationRequestSignature: 'managed-signature-stale',
+          patch: { fitScore: 1 },
+          recordedAt: '2026-07-12T14:00:00.000Z',
+        }
+      )
+
+      return {
+        annotations: yield* annotations.listLabels(application.applicationId),
+        application: yield* applications.findByIdentifier(
+          application.applicationId
+        ),
+        compensations: yield* compensations.listByApplication(
+          application.applicationId
+        ),
+        events: yield* events.listByApplication(application.applicationId),
+        stale,
+        updated,
+      }
+    })
+  )
+
+  assert.equal(result.updated, true)
+  assert.equal(result.stale, false)
+  assert.equal(result.application?.applicationStatus, 'applied')
+  assert.equal(result.application?.company, 'Managed Company')
+  assert.equal(result.application?.fitScore, 91)
+  assert.equal(result.application?.version, 2)
+  assert.equal(result.application?.updatedRevision, 2)
+  assert.deepEqual(
+    result.annotations.map(({ label }) => label),
+    ['priority', 'remote']
+  )
+  assert.deepEqual(
+    result.compensations.map(
+      ({ currencyCode, id, maximumMinor, minimumMinor }) => ({
+        currencyCode,
+        id,
+        maximumMinor,
+        minimumMinor,
+      })
+    ),
+    [
+      {
+        currencyCode: 'EUR',
+        id: 'managed-annual-replacement',
+        maximumMinor: 18_000_000,
+        minimumMinor: 16_000_000,
+      },
+    ]
+  )
+  assert.deepEqual(
+    result.events.map(({ kind, operationId, revision }) => ({
+      kind,
+      operationId,
+      revision,
+    })),
+    [{ kind: 'submitted', operationId: 'managed-operation', revision: 2 }]
+  )
 })
 
 test('filters before pagination and returns dashboard details and facets', async () => {
@@ -430,11 +746,8 @@ test('filters before pagination and returns dashboard details and facets', async
     [futureFollowUp.applicationId]
   )
   assert.deepEqual(result.facets, {
-    applicationStatuses: ['applied', 'preparing'],
     companies: ['Alpha Corp', 'Beta Corp'],
     labels: ['priority', 'remote'],
-    personalPriorities: ['high', 'low'],
-    targetStages: ['apply_next', 'backlog'],
   })
 })
 
@@ -673,6 +986,7 @@ test('claims, records, and archives listing checks through migrated D1 tables', 
         listingAvailability: 'suspected_closed',
         nextCheckAt: '2026-07-13T12:00:00.000Z',
         operationId: 'listing-check-operation-1',
+        operationRequestSignature: 'listing-check-signature-1',
         outcome: 'closed',
         provider: 'example.test',
         receivedAt: recordedAt,
@@ -704,6 +1018,7 @@ test('claims, records, and archives listing checks through migrated D1 tables', 
         listingAvailability: 'closed',
         nextCheckAt: '2026-07-14T12:00:00.000Z',
         operationId: 'listing-check-operation-2',
+        operationRequestSignature: 'listing-check-signature-2',
         outcome: 'closed',
         provider: 'example.test',
         receivedAt: '2026-07-13T12:00:00.000Z',

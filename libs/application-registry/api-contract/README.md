@@ -22,13 +22,24 @@ event kinds omit it. This keeps the OpenAPI document, generated client, Worker,
 and service boundary aligned and prevents status from being inferred from an
 event name.
 
+The managed-application update requires `expectedVersion` and `operationId`.
+Scalar fields are patch-like; omitted `labels` and `annualCompensation` remain
+untouched, present labels replace the set, and a present null compensation
+clears the annual value. The annual range schema rejects a maximum below its
+minimum before the request reaches persistence.
+
 The generic GET wire format uses `filters=<JSON array>` and
 `orderBy=<JSON array>`. Cursor pagination remains readable as flat `after` and
 `size` parameters; the decoded TypeScript request contains them under
-`pagination`. The application-only `currency` parameter remains flat.
+`pagination`. The application-only `currency` and full-text `q` parameters
+remain flat. In particular, `q` is not injected into the encoded `filters`
+array, so a browser can forward that array to the API without rewriting it.
 `@cv/drizzle-query-effect/schema` provides the same bidirectional codec and
 `URLSearchParams` helpers to servers, generated clients, CLIs, and other
-TypeScript consumers. Numeric sizes are limited to 1–100 and default to 50.
+TypeScript consumers. This package exports synchronous application- and
+event-specific `encodeList*SearchParams` and `decodeList*SearchParams` helpers
+so consumers use the concrete contract rather than manually serializing JSON.
+Numeric sizes are limited to 1–100 and default to 50.
 Responses are ordinary `{ items, pageInfo }` query pages;
 `pageInfo.nextCursor` is supplied as the next request's `after` parameter.
 

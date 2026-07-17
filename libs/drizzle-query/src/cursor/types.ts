@@ -91,6 +91,8 @@ export interface CursorContinuationDecodeOptions<State = never> {
 
 export interface CursorSeekTerm {
   readonly expression: SQLWrapper
+  /** Expression used for null checks, which may differ from the ordered value. */
+  readonly nullExpression: SQLWrapper
   readonly direction: 'asc' | 'desc'
   readonly nulls: 'first' | 'last'
   /** Whether the expression can evaluate to SQL `null`. */

@@ -149,6 +149,25 @@ export type {
   SortableFieldName,
 } from './query/index'
 export { defineQuery, QueryDefinition } from './query/index'
+export {
+  appendQueryParam,
+  decodeFlatQueryParams,
+  encodeFlatQueryParams,
+  type FlatQueryParams,
+  maxCanonicalQueryFiltersLength,
+  maxQueryFilterDepth,
+  maxQueryFilterNodes,
+  normalizeQueryFilterNodes,
+  parseQueryFilterNodes,
+  type QueryPaginationKind,
+  type QuerySearchParamsInput,
+  queryParamsFromRecord,
+  queryParamsRecord,
+  queryParamValues,
+  replaceQueryParam,
+  reservedQueryParameters,
+  serializeQueryFilterNodes,
+} from './query-params/index'
 export type { FinalizedPage } from './rendering/result'
 export {
   type DynamicSelectBuilder,

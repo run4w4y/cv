@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "declaration": true,
+    "declarationMap": true,
+    "importHelpers": false,
+    "noEmit": false
+  },
+  "exclude": [
+    ".storybook/**/*",
+    "node_modules",
+    "dist",
+    "storybook-static",
+    "src/**/*.stories.ts",
+    "src/**/*.stories.tsx",
+    "src/**/*.test-utils.tsx",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx"
+  ]
+}

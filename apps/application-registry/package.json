@@ -1,0 +1,38 @@
+{
+  "name": "@cv/application-registry-management",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@effect/atom-react": "4.0.0-beta.91",
+    "@cv/application-registry-api-contract": "workspace:*",
+    "@cv/application-registry-entity": "workspace:*",
+    "@cv/drizzle-query": "workspace:*",
+    "@cv/drizzle-query-ui": "workspace:*",
+    "@cv/internal-forms": "workspace:*",
+    "@cv/internal-ui": "workspace:*",
+    "@fontsource-variable/geist": "^5.2.8",
+    "@fontsource-variable/geist-mono": "^5.2.7",
+    "@hookform/resolvers": "^5.4.0",
+    "@tanstack/react-table": "^8.21.3",
+    "effect": "4.0.0-beta.91",
+    "es-toolkit": "^1.43.0",
+    "lucide-react": "^1.14.0",
+    "nuqs": "^2.7.3",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-hook-form": "^7.81.0",
+    "react-router": "^7.18.1"
+  },
+  "devDependencies": {
+    "@happy-dom/global-registrator": "^18.0.1",
+    "@storybook/react-vite": "^9.0.13",
+    "@tailwindcss/vite": "^4.1.17",
+    "@testing-library/react": "^16.3.0",
+    "@vitejs/plugin-react": "^6.0.3",
+    "react-dom": "^19.0.0",
+    "storybook": "^9.0.13",
+    "tailwindcss": "^4.1.17",
+    "vite": "^8.1.3"
+  }
+}

@@ -1,0 +1,19 @@
+@import "../src/styles.css";
+
+@source "../src";
+
+html,
+body,
+#storybook-root {
+  min-height: 100%;
+}
+
+body {
+  overflow: auto;
+}
+
+.storybook-canvas {
+  isolation: isolate;
+  min-height: 12rem;
+  color: var(--foreground);
+}

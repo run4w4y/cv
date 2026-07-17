@@ -106,6 +106,23 @@ const reversedPriorityQuery = defineQuery(
   { pagination: cursorPagination({ defaultSize: 2, maxSize: 10 }) }
 )
 
+const storedPriority = sql<'urgent' | 'normal'>`${records.priorityCode}`
+
+const boundPriorityQuery = defineQuery(
+  records,
+  ({ col, expr }) => [
+    col.id.sortable({ unique: true }),
+    expr
+      .enum(storedPriority, ['urgent', 'normal'], {
+        nullable: true,
+        bind: (value) => sql.param(value === 'urgent' ? 'H' : 'L'),
+      })
+      .as('boundPriority')
+      .sortable({ values: ['urgent', 'normal'] }),
+  ],
+  { pagination: cursorPagination({ defaultSize: 2, maxSize: 10 }) }
+)
+
 const occurredAt = sql`${records.occurredAt}`.mapWith(
   (value) => new Date(String(value))
 )
@@ -367,6 +384,43 @@ describe('ranked nullable enum expressions', () => {
     } catch (cause) {
       expect(cause).toMatchObject({ code: 'cursor-mismatch' })
     }
+  })
+
+  test('inlines definition values after applying an explicit driver binder', async () => {
+    const first = boundPriorityQuery.resolve({
+      orderBy: [{ field: 'boundPriority', nulls: 'last' }],
+      pagination: { size: 2 },
+    })
+    const firstQuery = first.apply(
+      db
+        .select({ id: records.id, ...first.requiredSelection })
+        .from(records)
+        .$dynamic()
+    )
+    const firstStatement = firstQuery.toSQL()
+    const firstPage = first.finalize(await firstQuery.all())
+
+    expect(firstStatement.sql).toContain("when 'H' then 0")
+    expect(firstStatement.sql).toContain("when 'L' then 1")
+    expect(firstStatement.sql).not.toContain('? then ?')
+    expect(firstStatement.params).toEqual([3])
+    expect(firstPage.items).toEqual([{ id: 1 }, { id: 4 }])
+
+    const after = requireCursor(firstPage.pageInfo.nextCursor)
+    const second = boundPriorityQuery.resolve({
+      orderBy: [{ field: 'boundPriority', nulls: 'last' }],
+      pagination: { size: 2, after },
+    })
+    const secondStatement = second
+      .apply(
+        db
+          .select({ id: records.id, ...second.requiredSelection })
+          .from(records)
+          .$dynamic()
+      )
+      .toSQL()
+
+    expect(secondStatement.params).toEqual([0, 0, 4, 3])
   })
 
   for (const scenario of cursorScenarios) {

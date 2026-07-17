@@ -7,6 +7,8 @@ export {
   eventListQuery,
 } from './events'
 export {
+  type AnnualCompensation,
+  AnnualCompensationSchema,
   type ApplicationListItem,
   ApplicationListItemSchema,
   type RegistryEventListItem,

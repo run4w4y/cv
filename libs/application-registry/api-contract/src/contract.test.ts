@@ -7,8 +7,13 @@ import {
   ListApplicationsQuerySchema as CommandListApplicationsQuerySchema,
   ListEventsQuerySchema as CommandListEventsQuerySchema,
   CreateCampaignCaptureCommandSchema,
+  decodeListApplicationsSearchParams,
+  decodeListEventsSearchParams,
+  encodeListApplicationsSearchParams,
+  encodeListEventsSearchParams,
   PatchApplicationCommandSchema,
   RegistryApplicationInputSchema,
+  UpdateManagedApplicationCommandSchema,
 } from './commands'
 import { applicationRegistryOpenApi } from './openapi'
 import {
@@ -22,6 +27,8 @@ import {
   ListEventsQuerySchema,
   ListEventsResponseSchema,
   PatchApplicationRequestSchema,
+  ReplaceAnnualCompensationRequestSchema,
+  UpdateManagedApplicationRequestSchema,
   UpsertApplicationRequestSchema,
 } from './schemas'
 
@@ -30,6 +37,9 @@ describe('application registry HTTP contract', () => {
     expect(UpsertApplicationRequestSchema).toBe(RegistryApplicationInputSchema)
     expect(CreateApplicationRequestSchema).toBe(RegistryApplicationInputSchema)
     expect(PatchApplicationRequestSchema).toBe(PatchApplicationCommandSchema)
+    expect(UpdateManagedApplicationRequestSchema).toBe(
+      UpdateManagedApplicationCommandSchema
+    )
     expect(AddApplicationNoteRequestSchema).toBe(
       AddApplicationNoteCommandSchema
     )
@@ -79,6 +89,52 @@ describe('application registry HTTP contract', () => {
     expect(deletion.expectedVersion).toBe(0)
   })
 
+  test('requires managed update concurrency and operation identities', () => {
+    expect(
+      Option.isNone(
+        Schema.decodeUnknownOption(UpdateManagedApplicationRequestSchema)({
+          company: 'Example',
+        })
+      )
+    ).toBe(true)
+    expect(
+      Schema.decodeUnknownSync(UpdateManagedApplicationRequestSchema)({
+        company: 'Example',
+        expectedVersion: 2,
+        operationId: 'managed-update-1',
+      })
+    ).toEqual({
+      company: 'Example',
+      expectedVersion: 2,
+      operationId: 'managed-update-1',
+    })
+    expect(
+      Option.isNone(
+        Schema.decodeUnknownOption(UpdateManagedApplicationRequestSchema)({
+          annualCompensation: {
+            currencyCode: 'USD',
+            maximumMinor: 1,
+            minimumMinor: 2,
+          },
+          expectedVersion: 2,
+          operationId: 'managed-update-2',
+        })
+      )
+    ).toBe(true)
+    expect(
+      Option.isNone(
+        Schema.decodeUnknownOption(ReplaceAnnualCompensationRequestSchema)({
+          annualCompensation: {
+            currencyCode: 'USD',
+            maximumMinor: 1,
+            minimumMinor: 2,
+          },
+          expectedVersion: 2,
+        })
+      )
+    ).toBe(true)
+  })
+
   test('derives typed filters, ordering, and pagination from query definitions', () => {
     const applicationFilters = [
       {
@@ -112,6 +168,7 @@ describe('application registry HTTP contract', () => {
         { field: 'fitScore', direction: 'desc', nulls: 'last' },
       ]),
       currency: 'USD',
+      q: 'platform systems',
       size: '100',
     })
     const events = Schema.decodeUnknownSync(ListEventsQuerySchema)({
@@ -137,6 +194,7 @@ describe('application registry HTTP contract', () => {
     ])
     expect(applications.pagination).toEqual({ size: 100 })
     expect(applications.currency).toBe('USD')
+    expect(applications.q).toBe('platform systems')
     expect(events.filters).toHaveLength(2)
 
     expect(
@@ -160,6 +218,11 @@ describe('application registry HTTP contract', () => {
         })
       )
     ).toBe(true)
+    expect(
+      Option.isNone(
+        Schema.decodeUnknownOption(ListApplicationsQuerySchema)({ q: '  ' })
+      )
+    ).toBe(true)
     for (const filters of [
       [{ type: 'condition', field: 'missing', operator: 'eq', value: 'x' }],
       [{ type: 'condition', field: 'fitScore', operator: 'gte', value: '90' }],
@@ -172,6 +235,108 @@ describe('application registry HTTP contract', () => {
           })
         )
       ).toBe(true)
+    }
+  })
+
+  test('owns the exact application filter encoding used by browsers and transports', () => {
+    const filters = [
+      {
+        type: 'group',
+        combinator: 'and',
+        children: [
+          {
+            type: 'condition',
+            field: 'company',
+            operator: 'contains',
+            value: 'R&D / 東京',
+          },
+          {
+            type: 'condition',
+            field: 'applicationStatus',
+            operator: 'in',
+            value: ['applied', 'technical_screen'],
+          },
+          {
+            type: 'group',
+            combinator: 'or',
+            children: [
+              {
+                type: 'condition',
+                field: 'followUpAt',
+                operator: 'isNull',
+              },
+              {
+                type: 'condition',
+                field: 'labels',
+                operator: 'hasAny',
+                value: ['C++', 'удалённая работа'],
+              },
+            ],
+          },
+        ],
+      },
+    ] as const
+    const expectedFilters =
+      '[{"type":"group","combinator":"and","children":[{"type":"condition","field":"company","operator":"contains","value":"R&D / 東京"},{"type":"condition","field":"applicationStatus","operator":"in","value":["applied","technical_screen"]},{"type":"group","combinator":"or","children":[{"type":"condition","field":"followUpAt","operator":"isNull"},{"type":"condition","field":"labels","operator":"hasAny","value":["C++","удалённая работа"]}]}]}]'
+    const request = {
+      filters,
+      currency: 'original',
+      q: 'platform systems',
+    } as const
+
+    const params = encodeListApplicationsSearchParams(request)
+
+    expect(params.get('filters')).toBe(expectedFilters)
+    expect(params.get('q')).toBe('platform systems')
+    expect(expectedFilters).not.toContain('"field":"q"')
+    expect(decodeListApplicationsSearchParams(params)).toEqual(request)
+    expect(
+      encodeListApplicationsSearchParams({ filters: [], orderBy: [] }).size
+    ).toBe(0)
+  })
+
+  test('uses the same contract-owned codec for event filters', () => {
+    const request = {
+      filters: [
+        {
+          type: 'condition',
+          field: 'kind',
+          operator: 'in',
+          value: ['stage_changed', 'research_updated'],
+        },
+      ],
+    } as const
+
+    const params = encodeListEventsSearchParams(request)
+
+    expect(params.get('filters')).toBe(
+      '[{"type":"condition","field":"kind","operator":"in","value":["stage_changed","research_updated"]}]'
+    )
+    expect(decodeListEventsSearchParams(params)).toEqual(request)
+  })
+
+  test('rejects malformed and duplicate canonical filter parameters', () => {
+    const invalidInputs = [
+      'filters=%7Bnot-json',
+      `filters=${encodeURIComponent(JSON.stringify({ combinator: 'and' }))}`,
+      `filters=${encodeURIComponent(
+        JSON.stringify([
+          {
+            type: 'condition',
+            field: 'applicationStatus',
+            operator: 'in',
+            value: ['not-a-status'],
+          },
+        ])
+      )}`,
+      new URLSearchParams([
+        ['filters', '[]'],
+        ['filters', '[]'],
+      ]),
+    ]
+
+    for (const input of invalidInputs) {
+      expect(() => decodeListApplicationsSearchParams(input)).toThrow()
     }
   })
 
@@ -226,6 +391,9 @@ describe('application registry HTTP contract', () => {
     expect(applicationRegistryOpenApi.paths['/v1/applications']).toBeDefined()
     expect(
       applicationRegistryOpenApi.paths['/v1/applications/facets']
+    ).toBeDefined()
+    expect(
+      applicationRegistryOpenApi.paths['/v1/applications/{id}/management']
     ).toBeDefined()
     expect(applicationRegistryOpenApi.paths['/v1/captures']).toBeDefined()
   })

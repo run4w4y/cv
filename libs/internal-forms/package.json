@@ -1,0 +1,29 @@
+{
+  "name": "@cv/internal-forms",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@cv/internal-ui": "workspace:*",
+    "react": "^19.0.0",
+    "react-hook-form": "^7.81.0",
+    "tslib": "^2.8.1"
+  },
+  "devDependencies": {
+    "@happy-dom/global-registrator": "^18.0.1",
+    "@storybook/addon-docs": "^9.0.13",
+    "@storybook/react-vite": "^9.0.13",
+    "@testing-library/react": "^16.3.0",
+    "react-dom": "^19.0.0",
+    "storybook": "^9.0.13"
+  }
+}

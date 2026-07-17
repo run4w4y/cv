@@ -8,8 +8,16 @@ import type {
 import { equalityOperators } from './shared'
 import type { TextOperators } from './types'
 
-export const escapeLikeLiteral = (value: string): string =>
-  value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')
+const escapeLikeLiteral = (value: string, escapeCharacter: string): string =>
+  value
+    .replaceAll(escapeCharacter, `${escapeCharacter}${escapeCharacter}`)
+    .replaceAll('%', `${escapeCharacter}%`)
+    .replaceAll('_', `${escapeCharacter}_`)
+
+// `!` has identical LIKE escaping semantics without relying on a dialect's
+// treatment of backslashes inside SQL string literals.
+const likeEscapeCharacter = '!'
+const inlineLikeEscapeCharacter = sql`${likeEscapeCharacter}`.inlineParams()
 
 const likeExpression = (
   expression: SQLWrapper,
@@ -18,10 +26,9 @@ const likeExpression = (
   negated: boolean
 ): SQL => {
   const escapedPattern = bind(pattern)
-  const escapeCharacter = sql.param('\\')
   return negated
-    ? sql`${expression} not like ${escapedPattern} escape ${escapeCharacter}`
-    : sql`${expression} like ${escapedPattern} escape ${escapeCharacter}`
+    ? sql`${expression} not like ${escapedPattern} escape ${inlineLikeEscapeCharacter}`
+    : sql`${expression} like ${escapedPattern} escape ${inlineLikeEscapeCharacter}`
 }
 
 /** Creates the default equality, list, and literal-pattern text operators. */
@@ -39,7 +46,7 @@ export const textOperators = <
       }: BinaryFilterOperatorCompileArguments<Value>) =>
         likeExpression(
           expression,
-          `%${escapeLikeLiteral(value)}%`,
+          `%${escapeLikeLiteral(value, likeEscapeCharacter)}%`,
           bind,
           false
         ),
@@ -50,7 +57,12 @@ export const textOperators = <
         value,
         bind,
       }: BinaryFilterOperatorCompileArguments<Value>) =>
-        likeExpression(expression, `%${escapeLikeLiteral(value)}%`, bind, true),
+        likeExpression(
+          expression,
+          `%${escapeLikeLiteral(value, likeEscapeCharacter)}%`,
+          bind,
+          true
+        ),
     }),
     binaryFilterOperator('startsWith', {
       compile: ({
@@ -58,7 +70,12 @@ export const textOperators = <
         value,
         bind,
       }: BinaryFilterOperatorCompileArguments<Value>) =>
-        likeExpression(expression, `${escapeLikeLiteral(value)}%`, bind, false),
+        likeExpression(
+          expression,
+          `${escapeLikeLiteral(value, likeEscapeCharacter)}%`,
+          bind,
+          false
+        ),
     }),
     binaryFilterOperator('endsWith', {
       compile: ({
@@ -66,7 +83,12 @@ export const textOperators = <
         value,
         bind,
       }: BinaryFilterOperatorCompileArguments<Value>) =>
-        likeExpression(expression, `%${escapeLikeLiteral(value)}`, bind, false),
+        likeExpression(
+          expression,
+          `%${escapeLikeLiteral(value, likeEscapeCharacter)}`,
+          bind,
+          false
+        ),
     }),
   ]
 }

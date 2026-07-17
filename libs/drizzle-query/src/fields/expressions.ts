@@ -71,6 +71,7 @@ export const makeExpressionField = <
           : {
               enabled: false,
               expression,
+              nullExpression: expression,
               cursorType: { type: cursorType, nullable },
               unique: false,
               nullable,

@@ -44,7 +44,9 @@ test('serves health and generated OpenAPI without authentication', async () => {
   const openApi = await openApiResponse.json()
   assert.equal(openApi.openapi, '3.1.0')
   assert.ok(openApi.paths['/v1/applications'])
+  assert.ok(openApi.paths['/v1/applications/{id}/annual-compensation'])
   assert.ok(openApi.paths['/v1/applications/{id}/compensations'])
+  assert.ok(openApi.paths['/v1/applications/{id}/management'])
   assert.equal(openApi.paths['/v1/imports'], undefined)
 })
 
@@ -122,16 +124,26 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
       },
     })
   )
+  const searched = await Effect.runPromise(
+    registry.registry.listApplications({
+      query: { q: 'Integration Engineer' },
+    })
+  )
+  assert.deepEqual(
+    searched.items.map(({ id }) => id),
+    [applicationId]
+  )
   assert.deepEqual(
     listed.items.map((application) => application.id),
     [applicationId]
   )
   assert.equal(listed.pageInfo.nextCursor, null)
   assert.deepEqual(listed.items[0]?.labels, ['e2e', 'remote'])
-  assert.equal(
-    listed.items[0]?.compensationSummary,
-    'Base salary: JPY 10,000,000–15,000,000 / year'
-  )
+  assert.deepEqual(listed.items[0]?.annualCompensation, {
+    currencyCode: 'JPY',
+    maximumMinor: 15_000_000,
+    minimumMinor: 10_000_000,
+  })
   assert.deepEqual(listed.items[0]?.counts, { captures: 0, notes: 0 })
 
   const patched = await Effect.runPromise(
@@ -148,6 +160,54 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
   assert.equal(patched.applicationStatus, 'preparing')
   assert.equal(patched.fitScore, 90)
   assert.equal(patched.version, created.version + 1)
+
+  const managedPayload = {
+    annualCompensation: {
+      currencyCode: 'JPY',
+      maximumMinor: 15_000_000,
+      minimumMinor: 10_000_000,
+    },
+    applicationStatus: 'technical_screen',
+    expectedVersion: patched.version,
+    labels: ['e2e', 'remote', 'e2e'],
+    operationId: 'e2e:managed-update:1',
+  } as const
+  const managed = await Effect.runPromise(
+    registry.registry.updateManagedApplication({
+      params: { id: applicationId },
+      payload: managedPayload,
+    })
+  )
+  const replayedManaged = await Effect.runPromise(
+    registry.registry.updateManagedApplication({
+      params: { id: applicationId },
+      payload: managedPayload,
+    })
+  )
+  assert.equal(managed.application.applicationStatus, 'technical_screen')
+  assert.equal(managed.application.version, patched.version + 1)
+  assert.deepEqual(managed.labels, ['e2e', 'remote'])
+  assert.deepEqual(managed.annualCompensation, {
+    currencyCode: 'JPY',
+    maximumMinor: 15_000_000,
+    minimumMinor: 10_000_000,
+  })
+  assert.equal(replayedManaged.application.id, applicationId)
+  assert.equal(replayedManaged.application.version, managed.application.version)
+
+  const staleManaged = await Effect.runPromise(
+    Effect.flip(
+      registry.registry.updateManagedApplication({
+        params: { id: applicationId },
+        payload: {
+          expectedVersion: patched.version,
+          labels: ['stale'],
+          operationId: 'e2e:managed-update:stale',
+        },
+      })
+    )
+  )
+  assert.equal(staleManaged._tag, 'ConflictError')
 
   const exactFit = await Effect.runPromise(
     registry.registry.listApplications({
@@ -409,11 +469,8 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
     registry.registry.listApplicationFacets()
   )
   assert.deepEqual(facets, {
-    applicationStatuses: ['applied', 'not_started'],
     companies: ['Example Company', 'Secondary Company'],
     labels: ['e2e', 'remote'],
-    personalPriorities: ['high'],
-    targetStages: ['apply_next'],
   })
 
   const multiStatus = await Effect.runPromise(
@@ -489,9 +546,61 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
   const convertedApplication = convertedDashboard.items.find(
     ({ id }) => id === applicationId
   )
+  assert.deepEqual(convertedApplication?.annualCompensation, {
+    currencyCode: 'USD',
+    maximumMinor: 10_050_000,
+    minimumMinor: 6_700_000,
+  })
+
+  const compensationApplication = await Effect.runPromise(
+    registry.registry.getApplication({ params: { id: applicationId } })
+  )
+  const replacedCompensation = await Effect.runPromise(
+    registry.registry.replaceAnnualCompensation({
+      params: { id: applicationId },
+      payload: {
+        annualCompensation: {
+          currencyCode: 'USD',
+          maximumMinor: 16_000_000,
+          minimumMinor: 12_000_000,
+        },
+        expectedVersion: compensationApplication.version,
+      },
+    })
+  )
+  assert.deepEqual(replacedCompensation.annualCompensation, {
+    currencyCode: 'USD',
+    maximumMinor: 16_000_000,
+    minimumMinor: 12_000_000,
+  })
   assert.equal(
-    convertedApplication?.compensationSummary,
-    'Base salary: USD 67,000–100,500 / year'
+    replacedCompensation.application.version,
+    compensationApplication.version + 1
+  )
+  const staleCompensation = await Effect.runPromise(
+    Effect.flip(
+      registry.registry.replaceAnnualCompensation({
+        params: { id: applicationId },
+        payload: {
+          annualCompensation: null,
+          expectedVersion: compensationApplication.version,
+        },
+      })
+    )
+  )
+  assert.equal(staleCompensation._tag, 'ConflictError')
+
+  const replacedCompensationDashboard = await Effect.runPromise(
+    registry.registry.listApplications({ query: { pagination: { size: 100 } } })
+  )
+  assert.deepEqual(
+    replacedCompensationDashboard.items.find(({ id }) => id === applicationId)
+      ?.annualCompensation,
+    {
+      currencyCode: 'USD',
+      maximumMinor: 16_000_000,
+      minimumMinor: 12_000_000,
+    }
   )
 
   const firstPage = await Effect.runPromise(
@@ -725,6 +834,62 @@ test('supports cursor-paginated application and event lists over real HTTP', asy
     assert.equal(ids.length, 101)
     assert.equal(new Set(ids).size, 101)
 
+    const filteredSortedIds: string[] = []
+    let filteredSortedAfter: string | undefined
+
+    do {
+      const page = await Effect.runPromise(
+        paginationRegistry.registry.listApplications({
+          query: {
+            filters: [
+              {
+                type: 'condition',
+                field: 'applicationStatus',
+                operator: 'notIn',
+                value: ['rejected', 'withdrawn'],
+              },
+              {
+                type: 'condition',
+                field: 'listingAvailability',
+                operator: 'ne',
+                value: 'closed',
+              },
+            ],
+            orderBy: [
+              { field: 'applicationStatus', direction: 'desc' },
+              { field: 'fitScore', direction: 'desc' },
+            ],
+            pagination: { after: filteredSortedAfter, size: 50 },
+          },
+        })
+      )
+      filteredSortedIds.push(...page.items.map(({ id }) => id))
+      filteredSortedAfter = page.pageInfo.nextCursor ?? undefined
+    } while (filteredSortedAfter !== undefined)
+
+    assert.equal(filteredSortedIds.length, 101)
+    assert.equal(new Set(filteredSortedIds).size, 101)
+
+    const tooManyParameters = await Effect.runPromise(
+      Effect.flip(
+        paginationRegistry.registry.listApplications({
+          query: {
+            filters: [
+              {
+                type: 'condition',
+                field: 'id',
+                operator: 'in',
+                value: ids,
+              },
+            ],
+            pagination: { size: 1 },
+          },
+        })
+      )
+    )
+    assert.equal(tooManyParameters._tag, 'BadRequestError')
+    assert.match(tooManyParameters.message, /bound parameters/u)
+
     const eventPageSizes: number[] = []
     const eventIds: string[] = []
     let eventAfter: string | undefined
@@ -743,6 +908,25 @@ test('supports cursor-paginated application and event lists over real HTTP', asy
     assert.deepEqual(eventPageSizes, [100, 1])
     assert.equal(eventIds.length, 101)
     assert.equal(new Set(eventIds).size, 101)
+
+    const rankedEventIds: string[] = []
+    let rankedEventAfter: string | undefined
+
+    do {
+      const eventPage = await Effect.runPromise(
+        paginationRegistry.registry.listEvents({
+          query: {
+            orderBy: [{ field: 'kind', direction: 'desc' }],
+            pagination: { after: rankedEventAfter, size: 50 },
+          },
+        })
+      )
+      rankedEventIds.push(...eventPage.items.map(({ id }) => id))
+      rankedEventAfter = eventPage.pageInfo.nextCursor ?? undefined
+    } while (rankedEventAfter !== undefined)
+
+    assert.equal(rankedEventIds.length, 101)
+    assert.equal(new Set(rankedEventIds).size, 101)
   } finally {
     await paginationHarness.dispose()
   }

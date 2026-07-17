@@ -19,8 +19,9 @@ returning the first command's result.
 The public services are split by registry slice:
 
 - `ApplicationsService` owns application upsert, patch, lookup, deletion,
-  cursor pagination, dashboard row decoration and facets, plus label
-  replacement on an application.
+  cursor pagination, dashboard row decoration and facets, plus the atomic
+  management update spanning scalar fields, labels, annual compensation, and
+  server-owned status audit events.
 - `AnnotationsService` owns annotation lookup and idempotent note creation.
 - `CapturesService` owns idempotent campaign capture ingestion.
 - `EventsService` owns idempotent event append and cursor pagination.

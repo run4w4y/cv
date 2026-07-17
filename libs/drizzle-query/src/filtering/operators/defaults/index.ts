@@ -7,7 +7,7 @@ export {
   numberOperators,
 } from './scalar'
 export { comparisonOperators, equalityOperators } from './shared'
-export { escapeLikeLiteral, textOperators } from './text'
+export { textOperators } from './text'
 export type {
   BigIntOperators,
   BooleanOperators,

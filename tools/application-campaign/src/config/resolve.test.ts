@@ -125,6 +125,24 @@ describe('application campaign config', () => {
     expect(campaign.materials).toBe('none')
   })
 
+  test('falls back from stage env settings to shared env settings', async () => {
+    const { advisor } = await resolveOptions(baseOverrides, {
+      APPLICATION_CAMPAIGN_CODEX_ANALYSIS_MODEL: 'env-analysis',
+      APPLICATION_CAMPAIGN_CODEX_MODEL: 'env-shared',
+      APPLICATION_CAMPAIGN_CODEX_REASONING_EFFORT: 'medium',
+      APPLICATION_CAMPAIGN_CODEX_RECOMMENDATION_REASONING_EFFORT: 'high',
+    })
+
+    expect(advisor.analysis).toEqual({
+      model: 'env-analysis',
+      reasoningEffort: 'medium',
+    })
+    expect(advisor.recommendation).toEqual({
+      model: 'env-shared',
+      reasoningEffort: 'high',
+    })
+  })
+
   test('supports independent model routes with CLI precedence over env', async () => {
     const { advisor } = await resolveOptions(
       {

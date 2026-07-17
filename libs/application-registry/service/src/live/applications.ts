@@ -1,10 +1,14 @@
 import {
   AnnotationsCrud,
   ApplicationsCrud,
+  CompensationsCrud,
+  OperationsCrud,
   type PersistedApplication,
+  type PersistedEvent,
 } from '@cv/application-registry-crud'
 import type {
   ApplicationCompensation,
+  ApplicationStatus,
   CurrencyCode,
   FxRate,
 } from '@cv/application-registry-entity'
@@ -18,12 +22,19 @@ import {
   RegistryConflictError,
   RegistryDatabaseError,
 } from '../errors'
-import { toApplicationListItem } from '../internal/application-list-item'
+import {
+  selectAnnualCompensation,
+  toApplicationListItem,
+} from '../internal/application-list-item'
 import { convertCompensationForDisplay } from '../internal/compensation-conversion'
+import { operationRequestSignature } from '../internal/operation-request-signature'
 import { resolveRegistryQuery } from '../internal/query-resolution'
 import {
   decorateCompensations,
+  findRequiredApplication,
+  findValidatedOperation,
   newRegistryId,
+  type OperationIdentity,
   registryNow,
   requireApplication,
 } from '../internal/shared'
@@ -34,8 +45,31 @@ import {
 import type {
   ListApplicationsInput,
   PatchApplicationInput,
+  UpdateManagedApplicationInput,
   UpsertApplicationInput,
 } from '../types'
+
+const eventKindForManagedStatus = (
+  status: ApplicationStatus
+): PersistedEvent['kind'] => {
+  switch (status) {
+    case 'applied':
+      return 'submitted'
+    case 'recruiter_screen':
+    case 'technical_screen':
+    case 'take_home':
+    case 'interview_loop':
+      return 'interview_scheduled'
+    case 'offer':
+      return 'offer_received'
+    case 'rejected':
+      return 'rejected'
+    case 'withdrawn':
+      return 'withdrawn'
+    default:
+      return 'stage_changed'
+  }
+}
 
 const convertForSummary = (
   original: ApplicationCompensation,
@@ -60,7 +94,9 @@ const convertForSummary = (
 const make = Effect.gen(function* () {
   const applications = yield* ApplicationsCrud
   const annotations = yield* AnnotationsCrud
+  const compensations = yield* CompensationsCrud
   const fxRates = yield* FxRates
+  const operations = yield* OperationsCrud
 
   const find = Effect.fn('ApplicationsService.find')((identifier: string) =>
     applications
@@ -78,6 +114,30 @@ const make = Effect.gen(function* () {
       recordedAt: yield* registryNow,
     } satisfies PersistedApplication
   })
+
+  const managedResult = Effect.fn('ApplicationsService.managedResult')(
+    (applicationId: string) =>
+      Effect.gen(function* () {
+        const [application, labels, storedCompensations] = yield* Effect.all([
+          findRequiredApplication(applications, applicationId),
+          annotations.listLabels(applicationId),
+          compensations.listByApplication(applicationId),
+        ])
+        const annual = selectAnnualCompensation(storedCompensations)
+        return {
+          annualCompensation:
+            annual === undefined
+              ? null
+              : {
+                  currencyCode: annual.currencyCode,
+                  maximumMinor: annual.maximumMinor,
+                  minimumMinor: annual.minimumMinor,
+                },
+          application,
+          labels: labels.map(({ label }) => label),
+        }
+      })
+  )
 
   return {
     create: Effect.fn('ApplicationsService.create')(
@@ -123,10 +183,24 @@ const make = Effect.gen(function* () {
     list: Effect.fn('ApplicationsService.list')(
       (query: ListApplicationsInput) =>
         Effect.gen(function* () {
-          const { currency, ...request } = query
+          const { currency, q, ...request } = query
+          const keyword = q?.trim()
           const resolved = yield* resolveRegistryQuery(
             applicationListQuery,
-            request
+            keyword
+              ? {
+                  ...request,
+                  filters: [
+                    {
+                      type: 'condition',
+                      field: 'q',
+                      operator: 'matches',
+                      value: keyword,
+                    },
+                    ...(request.filters ?? []),
+                  ],
+                }
+              : request
           )
           const page = yield* applications.list(resolved)
 
@@ -197,6 +271,114 @@ const make = Effect.gen(function* () {
           return updated
         })
     ),
+    updateManaged: Effect.fn('ApplicationsService.updateManaged')(
+      (identifier: string, request: UpdateManagedApplicationInput) =>
+        Effect.gen(function* () {
+          const application = yield* find(identifier)
+          const identity: OperationIdentity = {
+            applicationId: application.id,
+            kind: 'managed_application_update',
+            operationId: request.operationId,
+            operationRequestSignature: operationRequestSignature(
+              'managed_application_update',
+              { applicationId: application.id, request }
+            ),
+          }
+          const replay = yield* findValidatedOperation(operations, identity)
+          if (replay) return yield* managedResult(application.id)
+
+          if (request.expectedVersion !== application.version) {
+            return yield* new RegistryConflictError({
+              message: `Application version ${application.version} does not match expected version ${request.expectedVersion}.`,
+            })
+          }
+
+          const {
+            annualCompensation,
+            expectedVersion,
+            labels,
+            operationId,
+            ...patch
+          } = request
+          const recordedAt = yield* registryNow
+          const currentAnnual =
+            annualCompensation === undefined
+              ? undefined
+              : selectAnnualCompensation(
+                  yield* compensations.listByApplication(application.id)
+                )
+          const replacement =
+            annualCompensation === undefined
+              ? undefined
+              : {
+                  replacement:
+                    annualCompensation === null
+                      ? null
+                      : {
+                          ...annualCompensation,
+                          id: newRegistryId(),
+                          kind: currentAnnual?.kind ?? 'base_salary',
+                          rawText: null,
+                          source: 'manual',
+                        },
+                }
+          const nextStatus = patch.applicationStatus
+          const statusEvent =
+            nextStatus === undefined ||
+            nextStatus === application.applicationStatus
+              ? undefined
+              : {
+                  deviceId: null,
+                  eventId: newRegistryId(),
+                  kind: eventKindForManagedStatus(nextStatus),
+                  occurredAt: recordedAt,
+                  operationId,
+                  operationRequestSignature: identity.operationRequestSignature,
+                  payload: {
+                    source: 'application_registry_management',
+                    previousApplicationStatus: application.applicationStatus,
+                    nextApplicationStatus: nextStatus,
+                  },
+                  recordedAt,
+                }
+
+          const applied = yield* applications
+            .updateManaged(application.id, {
+              annualCompensation: replacement,
+              event: statusEvent,
+              expectedVersion,
+              labels,
+              operationId,
+              operationRequestSignature: identity.operationRequestSignature,
+              patch,
+              recordedAt,
+            })
+            .pipe(
+              Effect.catchTag('RegistryDatabaseError', (failure) =>
+                findValidatedOperation(operations, identity).pipe(
+                  Effect.flatMap((receipt) =>
+                    receipt ? Effect.succeed(false) : Effect.fail(failure)
+                  )
+                )
+              )
+            )
+
+          if (!applied) {
+            const concurrentReplay = yield* findValidatedOperation(
+              operations,
+              identity
+            )
+            if (!concurrentReplay) {
+              return yield* new RegistryConflictError({
+                message:
+                  'The application changed while the management update was being recorded.',
+              })
+            }
+          }
+
+          return yield* managedResult(application.id)
+        })
+    ),
     remove: Effect.fn('ApplicationsService.remove')(
       (identifier: string, expectedVersion?: number) =>
         Effect.gen(function* () {
@@ -221,14 +403,33 @@ const make = Effect.gen(function* () {
         })
     ),
     replaceLabels: Effect.fn('ApplicationsService.replaceLabels')(
-      (identifier: string, labels: readonly string[]) =>
+      (
+        identifier: string,
+        labels: readonly string[],
+        expectedVersion?: number
+      ) =>
         Effect.gen(function* () {
           const application = yield* find(identifier)
-          return yield* annotations.replaceLabels(
+          if (
+            expectedVersion !== undefined &&
+            expectedVersion !== application.version
+          ) {
+            return yield* new RegistryConflictError({
+              message: `Application version ${application.version} does not match expected version ${expectedVersion}.`,
+            })
+          }
+          const replaced = yield* annotations.replaceLabels(
             application.id,
             labels,
-            yield* registryNow
+            yield* registryNow,
+            expectedVersion
           )
+          if (replaced === undefined) {
+            return yield* new RegistryConflictError({
+              message: 'The application changed while labels were being saved.',
+            })
+          }
+          return replaced
         })
     ),
     upsert: Effect.fn('ApplicationsService.upsert')(

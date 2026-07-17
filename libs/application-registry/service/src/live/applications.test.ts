@@ -2,8 +2,10 @@ import { describe, expect, test } from 'bun:test'
 import type {
   ApplicationsCrud,
   PersistedApplication,
+  PersistedManagedApplicationUpdate,
 } from '@cv/application-registry-crud'
 import { FxRates } from '@cv/application-registry-fx'
+import { SQLiteDialect } from 'drizzle-orm/sqlite-core'
 import { Effect, Layer } from 'effect'
 import { TestClock } from 'effect/testing'
 import {
@@ -15,6 +17,8 @@ import {
 import {
   annotationsCrudLayer,
   applicationsCrudLayer,
+  compensationsCrudLayer,
+  operationsCrudLayer,
 } from '../../test/support/layers'
 import { ApplicationsService } from '../services/applications'
 import { ApplicationsServiceLive } from './applications'
@@ -23,6 +27,8 @@ const live = (applicationLayer = applicationsCrudLayer()) =>
   ApplicationsServiceLive.pipe(
     Layer.provide(applicationLayer),
     Layer.provide(annotationsCrudLayer()),
+    Layer.provide(compensationsCrudLayer()),
+    Layer.provide(operationsCrudLayer()),
     Layer.provide(
       Layer.succeed(FxRates, {
         get: (baseCurrency, quoteCurrency) =>
@@ -83,6 +89,57 @@ describe('ApplicationsService', () => {
       expect.objectContaining({ field: 'updatedRevision', direction: 'asc' }),
     ])
     expect(page.pageInfo.nextCursor).toBeNull()
+  })
+
+  test('composes the flat q parameter with canonical filters', async () => {
+    let observedQuery: Parameters<ApplicationsCrud['list']>[0] | undefined
+
+    await Effect.runPromise(
+      ApplicationsService.use((service) =>
+        service.list({
+          filters: [
+            {
+              type: 'condition',
+              field: 'applicationStatus',
+              operator: 'ne',
+              value: 'rejected',
+            },
+          ],
+          q: '  principal  ',
+        })
+      ).pipe(
+        Effect.provide(
+          live(
+            applicationsCrudLayer({
+              list: (query) => {
+                observedQuery = query
+                return Effect.succeed({
+                  items: [],
+                  pageInfo: {
+                    kind: 'cursor',
+                    size: 50,
+                    hasNextPage: false,
+                    hasPreviousPage: false,
+                    nextCursor: null,
+                  },
+                })
+              },
+            })
+          )
+        )
+      )
+    )
+
+    const where = observedQuery?.filtering.where
+    if (where === undefined) {
+      throw new Error('Expected the query to contain a filtering expression')
+    }
+
+    const dialect = new SQLiteDialect()
+    const rendered = dialect.sqlToQuery(where)
+
+    expect(rendered.params).toContain('%principal%')
+    expect(rendered.params).toContain('rejected')
   })
 
   test('returns an empty standard query page unchanged', async () => {
@@ -185,7 +242,11 @@ describe('ApplicationsService', () => {
     )
 
     expect(page.items[0]).toMatchObject({
-      compensationSummary: 'Base salary: USD 200,000–240,000 / year',
+      annualCompensation: {
+        currencyCode: 'USD',
+        maximumMinor: 24_000_000,
+        minimumMinor: 20_000_000,
+      },
       labels: ['priority'],
       latestEvent: { kind: 'stage_changed', occurredAt: recordedAt },
       counts: { captures: 1, notes: 2 },
@@ -214,6 +275,60 @@ describe('ApplicationsService', () => {
 
     expect(error._tag).toBe('RegistryConflictError')
     expect(patched).toBe(false)
+  })
+
+  test('owns status audit semantics for one managed update', async () => {
+    let persisted: PersistedManagedApplicationUpdate | undefined
+    const result = await Effect.runPromise(
+      ApplicationsService.use((service) =>
+        service.updateManaged(application.id, {
+          annualCompensation: {
+            currencyCode: 'USD',
+            maximumMinor: 20_000_000,
+            minimumMinor: 18_000_000,
+          },
+          applicationStatus: 'offer',
+          expectedVersion: application.version,
+          labels: ['priority'],
+          operationId: 'managed-update-1',
+        })
+      ).pipe(
+        Effect.provide(
+          live(
+            applicationsCrudLayer({
+              updateManaged: (_applicationId, input) => {
+                persisted = input
+                return Effect.succeed(true)
+              },
+            })
+          )
+        )
+      )
+    )
+
+    expect(persisted?.patch).toEqual({ applicationStatus: 'offer' })
+    expect(persisted?.labels).toEqual(['priority'])
+    expect(persisted?.annualCompensation?.replacement).toMatchObject({
+      currencyCode: 'USD',
+      kind: 'base_salary',
+      maximumMinor: 20_000_000,
+      minimumMinor: 18_000_000,
+      source: 'manual',
+    })
+    expect(persisted?.event).toMatchObject({
+      kind: 'offer_received',
+      operationId: 'managed-update-1',
+      payload: {
+        source: 'application_registry_management',
+        previousApplicationStatus: application.applicationStatus,
+        nextApplicationStatus: 'offer',
+      },
+    })
+    expect(result).toEqual({
+      annualCompensation: null,
+      application,
+      labels: [],
+    })
   })
 
   test('allocates and persists a new application ID', async () => {

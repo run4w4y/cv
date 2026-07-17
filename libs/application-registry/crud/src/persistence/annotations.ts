@@ -2,8 +2,9 @@ import {
   applicationLabels,
   applicationNotes,
   applications,
+  registrySequence,
 } from '@cv/application-registry-entity'
-import { asc, eq, sql } from 'drizzle-orm'
+import { and, asc, eq, exists, sql } from 'drizzle-orm'
 import type { BatchItem } from 'drizzle-orm/batch'
 import { Effect } from 'effect'
 import { uniq } from 'es-toolkit'
@@ -51,13 +52,78 @@ export const replaceLabels = (
   database: RegistryConnections,
   applicationId: string,
   labels: readonly string[],
-  recordedAt: string
+  recordedAt: string,
+  expectedVersion?: number
 ) => {
   const normalized = uniq(
     labels.map((label) => label.trim()).filter(Boolean)
   ).sort()
-  const statements = [
-    allocateRevision(database.batch),
+  const hasExpectedVersion =
+    expectedVersion === undefined
+      ? undefined
+      : exists(
+          database.batch
+            .select({ id: applications.id })
+            .from(applications)
+            .where(
+              and(
+                eq(applications.id, applicationId),
+                eq(applications.version, expectedVersion)
+              )
+            )
+        )
+  const allocate =
+    expectedVersion === undefined
+      ? allocateRevision(database.batch)
+      : database.batch
+          .insert(registrySequence)
+          .select(
+            database.batch
+              .select({
+                id: sql<number>`1`.as('id'),
+                revision: sql<number>`1`.as('revision'),
+              })
+              .from(sql`(select 1)`)
+              .where(hasExpectedVersion)
+          )
+          .onConflictDoUpdate({
+            target: registrySequence.id,
+            set: { revision: sql`${registrySequence.revision} + 1` },
+          })
+  const labelInserts = normalized.map((label) =>
+    expectedVersion === undefined
+      ? database.batch.insert(applicationLabels).values({
+          applicationId,
+          label,
+          createdAt: recordedAt,
+        })
+      : database.batch.insert(applicationLabels).select(
+          database.batch
+            .select({
+              applicationId: applications.id,
+              label: sql<string>`${label}`.as('label'),
+              createdAt: sql<string>`${recordedAt}`.as('created_at'),
+            })
+            .from(applications)
+            .where(
+              and(
+                eq(applications.id, applicationId),
+                eq(applications.version, expectedVersion)
+              )
+            )
+        )
+  )
+  const statements: [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]] = [
+    allocate,
+    database.batch
+      .delete(applicationLabels)
+      .where(
+        and(
+          eq(applicationLabels.applicationId, applicationId),
+          hasExpectedVersion
+        )
+      ),
+    ...labelInserts,
     database.batch
       .update(applications)
       .set({
@@ -65,20 +131,21 @@ export const replaceLabels = (
         updatedRevision: currentRevision,
         version: sql`${applications.version} + 1`,
       })
-      .where(eq(applications.id, applicationId)),
-    database.batch
-      .delete(applicationLabels)
-      .where(eq(applicationLabels.applicationId, applicationId)),
-    ...normalized.map((label) =>
-      database.batch.insert(applicationLabels).values({
-        applicationId,
-        label,
-        createdAt: recordedAt,
-      })
-    ),
-  ] satisfies [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]
+      .where(
+        and(
+          eq(applications.id, applicationId),
+          expectedVersion === undefined
+            ? undefined
+            : eq(applications.version, expectedVersion)
+        )
+      ),
+  ]
 
   return runBatch(database.batch, 'label replacement', statements).pipe(
-    Effect.flatMap(() => listLabels(database.query, applicationId))
+    Effect.flatMap((results) =>
+      (results.at(-1)?.meta.changes ?? 0) === 0
+        ? Effect.succeed(undefined)
+        : listLabels(database.query, applicationId)
+    )
   )
 }

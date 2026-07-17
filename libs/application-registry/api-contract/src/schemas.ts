@@ -11,21 +11,18 @@ import {
   type ApplicationNote,
   ApplicationNoteSchema,
   ApplicationSchema,
-  type ApplicationStatus,
-  ApplicationStatusSchema,
   type CampaignCapture,
   CampaignCaptureSchema,
   CurrencyCodeSchema,
+  ExpectedApplicationVersionSchema,
   type ListingCheckRun,
   ListingCheckRunSchema,
   NonEmptyTrimmedStringSchema as NonEmptyString,
-  type PersonalPriority,
-  PersonalPrioritySchema,
-  type TargetStage,
-  TargetStageSchema,
   UtcIsoTimestampSchema,
 } from '@cv/application-registry-entity'
 import {
+  type AnnualCompensation,
+  AnnualCompensationSchema,
   ApplicationListItemSchema,
   RegistryEventListItemSchema,
 } from '@cv/application-registry-entity/query'
@@ -54,7 +51,9 @@ export type {
   PatchApplicationCommand as PatchApplicationRequest,
   RegistryApplicationInput as UpsertApplicationRequest,
   RegistryApplicationInput as CreateApplicationRequest,
+  ResolveListingAvailabilityCommand as ResolveListingAvailabilityRequest,
   SubmitListingCheckFindingsCommand as SubmitListingCheckFindingsRequest,
+  UpdateManagedApplicationCommand as UpdateManagedApplicationRequest,
 } from './commands'
 export {
   AddApplicationNoteCommandSchema as AddApplicationNoteRequestSchema,
@@ -67,7 +66,9 @@ export {
   PatchApplicationCommandSchema as PatchApplicationRequestSchema,
   RegistryApplicationInputSchema as UpsertApplicationRequestSchema,
   RegistryApplicationInputSchema as CreateApplicationRequestSchema,
+  ResolveListingAvailabilityCommandSchema as ResolveListingAvailabilityRequestSchema,
   SubmitListingCheckFindingsCommandSchema as SubmitListingCheckFindingsRequestSchema,
+  UpdateManagedApplicationCommandSchema as UpdateManagedApplicationRequestSchema,
 } from './commands'
 
 export const ApplicationIdentifierParamsSchema = Schema.Struct({
@@ -77,6 +78,10 @@ export const ApplicationIdentifierParamsSchema = Schema.Struct({
 export const ListingCheckRunIdentifierParamsSchema = Schema.Struct({
   id: NonEmptyString,
 })
+
+/** Canonical application response used by application read and write routes. */
+export const ApplicationResponseSchema: Schema.Codec<Application> =
+  Schema.revealCodec(ApplicationSchema)
 
 /** Standard cursor-page response returned by application listing. */
 export const ListApplicationsResponseSchema = queryPageSchema(
@@ -89,31 +94,63 @@ export type ListApplicationsResponse = Schema.Schema.Type<
 >
 
 export type ApplicationFacetsResponse = {
-  readonly applicationStatuses: readonly ApplicationStatus[]
   readonly companies: readonly string[]
   readonly labels: readonly string[]
-  readonly personalPriorities: readonly PersonalPriority[]
-  readonly targetStages: readonly TargetStage[]
 }
 
 export const ApplicationFacetsResponseSchema: Schema.Codec<ApplicationFacetsResponse> =
   Schema.revealCodec(
     Schema.Struct({
-      applicationStatuses: Schema.Array(ApplicationStatusSchema),
       companies: Schema.Array(ApplicationSchema.fields.company),
       labels: Schema.Array(NonEmptyString),
-      personalPriorities: Schema.Array(PersonalPrioritySchema),
-      targetStages: Schema.Array(TargetStageSchema),
     })
   )
 
 export const ReplaceApplicationLabelsRequestSchema = Schema.Struct({
+  expectedVersion: Schema.optional(ExpectedApplicationVersionSchema),
   labels: Schema.Array(NonEmptyString),
 })
 
 export type ReplaceApplicationLabelsRequest = Schema.Schema.Type<
   typeof ReplaceApplicationLabelsRequestSchema
 >
+
+export const ReplaceAnnualCompensationRequestSchema = Schema.Struct({
+  annualCompensation: Schema.NullOr(AnnualCompensationSchema),
+  expectedVersion: ExpectedApplicationVersionSchema,
+})
+
+export type ReplaceAnnualCompensationRequest = Schema.Schema.Type<
+  typeof ReplaceAnnualCompensationRequestSchema
+>
+
+export type ReplaceAnnualCompensationResponse = {
+  readonly annualCompensation: AnnualCompensation | null
+  readonly application: Application
+}
+
+export const ReplaceAnnualCompensationResponseSchema: Schema.Codec<ReplaceAnnualCompensationResponse> =
+  Schema.revealCodec(
+    Schema.Struct({
+      annualCompensation: Schema.NullOr(AnnualCompensationSchema),
+      application: ApplicationSchema,
+    })
+  )
+
+export type UpdateManagedApplicationResponse = {
+  readonly annualCompensation: AnnualCompensation | null
+  readonly application: Application
+  readonly labels: readonly string[]
+}
+
+export const UpdateManagedApplicationResponseSchema: Schema.Codec<UpdateManagedApplicationResponse> =
+  Schema.revealCodec(
+    Schema.Struct({
+      annualCompensation: Schema.NullOr(AnnualCompensationSchema),
+      application: ApplicationSchema,
+      labels: Schema.Array(NonEmptyString),
+    })
+  )
 
 export type ListApplicationLabelsResponse = {
   readonly items: readonly ApplicationLabel[]
@@ -196,6 +233,23 @@ export type ListApplicationListingChecksResponse = {
 export const ListApplicationListingChecksResponseSchema: Schema.Codec<ListApplicationListingChecksResponse> =
   Schema.revealCodec(
     Schema.Struct({ items: Schema.Array(ApplicationListingCheckSchema) })
+  )
+
+export type ResolveListingAvailabilityResponse = {
+  readonly application: Application
+  readonly archived: boolean
+  readonly check: ApplicationListingCheck
+  readonly replayed: boolean
+}
+
+export const ResolveListingAvailabilityResponseSchema: Schema.Codec<ResolveListingAvailabilityResponse> =
+  Schema.revealCodec(
+    Schema.Struct({
+      application: ApplicationSchema,
+      archived: Schema.Boolean,
+      check: ApplicationListingCheckSchema,
+      replayed: Schema.Boolean,
+    })
   )
 
 export type SubmitListingCheckFindingsResponse = {

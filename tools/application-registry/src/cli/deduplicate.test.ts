@@ -15,10 +15,10 @@ const application = (
   ({
     applicationStatus: 'preparing',
     appliedAt: null,
+    annualCompensation: null,
     canonicalUrl,
     category: null,
     company: 'Acme',
-    compensationSummary: null,
     counts: { captures: 0, notes: 0 },
     createdAt,
     details: null,

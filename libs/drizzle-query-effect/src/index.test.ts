@@ -14,6 +14,8 @@ describe('package entrypoints', () => {
     expect(Object.keys(publicApi)).toContain('schemaCursorState')
     expect(Object.keys(publicApi)).toContain('toSearchParams')
     expect(Object.keys(publicApi)).toContain('fromSearchParams')
+    expect(Object.keys(publicApi)).not.toContain('toSearchParamsSync')
+    expect(Object.keys(publicApi)).not.toContain('fromSearchParamsSync')
   })
 
   test('loads both package exports with native Node ESM', () => {

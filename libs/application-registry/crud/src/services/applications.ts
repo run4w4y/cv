@@ -4,7 +4,10 @@ import type {
 } from '@cv/application-registry-entity'
 import { Context, type Effect } from 'effect'
 
-import type { RegistryDatabaseError } from '../errors'
+import type {
+  RegistryDatabaseError,
+  RegistryQueryTooComplexError,
+} from '../errors'
 import type {
   ApplicationFacets,
   ApplicationListPage,
@@ -13,6 +16,7 @@ import type {
   PersistApplicationOptions,
   PersistedApplication,
   PersistedEvent,
+  PersistedManagedApplicationUpdate,
 } from '../types'
 
 export interface ApplicationsCrud {
@@ -28,12 +32,19 @@ export interface ApplicationsCrud {
   ) => Effect.Effect<readonly Application[], RegistryDatabaseError>
   readonly list: (
     query: ApplicationListResolution
-  ) => Effect.Effect<ApplicationListPage, RegistryDatabaseError>
+  ) => Effect.Effect<
+    ApplicationListPage,
+    RegistryDatabaseError | RegistryQueryTooComplexError
+  >
   readonly patch: (
     applicationId: string,
     patch: ApplicationPatch,
     recordedAt: string
   ) => Effect.Effect<Application | undefined, RegistryDatabaseError>
+  readonly updateManaged: (
+    applicationId: string,
+    input: PersistedManagedApplicationUpdate
+  ) => Effect.Effect<boolean, RegistryDatabaseError>
   readonly persist: (
     input: PersistedApplication,
     options: PersistApplicationOptions

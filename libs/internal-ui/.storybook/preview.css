@@ -1,0 +1,27 @@
+@import "tailwindcss";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+@import "../src/theme.css";
+
+@source "../src";
+
+body {
+  min-height: 100dvh;
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+.storybook-canvas {
+  isolation: isolate;
+  min-height: 100%;
+  color: var(--foreground);
+}
+
+.sbdocs,
+.sbdocs-wrapper {
+  background: var(--background);
+  color: var(--foreground);
+}
