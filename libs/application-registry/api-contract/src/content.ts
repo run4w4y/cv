@@ -1,8 +1,11 @@
 import {
+  type ContentEntry,
   ContentEntryKindSchema,
   ContentEntrySchema,
+  type ContentRevision,
   ContentRevisionSchema,
   ContentRevisionSourceSchema,
+  type CvLink,
   CvLinkSchema,
   ExpectedApplicationVersionSchema,
   FactsChannelSchema,
@@ -12,7 +15,9 @@ import {
   type FactsReleaseCatalog,
   FactsReleaseCatalogSchema,
   FactsReleaseSchema,
+  type GeneratedArtifact,
   GeneratedArtifactSchema,
+  type JobPostingSnapshot,
   JobPostingSnapshotSchema,
   NonEmptyTrimmedStringSchema as NonEmptyString,
 } from '@cv/application-registry-entity'
@@ -67,7 +72,8 @@ export type PersistJobPostingSnapshotRequest = Schema.Schema.Type<
   typeof PersistJobPostingSnapshotRequestSchema
 >
 
-export const JobPostingSnapshotResponseSchema = JobPostingSnapshotSchema
+export const JobPostingSnapshotResponseSchema: Schema.Codec<JobPostingSnapshot> =
+  Schema.revealCodec(JobPostingSnapshotSchema)
 
 // Capture has no caller-supplied payload: the authenticated registry resolves
 // the application's canonical URL and preserves the response as a snapshot.
@@ -93,7 +99,8 @@ export type EnsureContentEntryRequest = Schema.Schema.Type<
   typeof EnsureContentEntryRequestSchema
 >
 
-export const ContentEntryResponseSchema = ContentEntrySchema
+export const ContentEntryResponseSchema: Schema.Codec<ContentEntry> =
+  Schema.revealCodec(ContentEntrySchema)
 
 export const ContentEntryParamsSchema = Schema.Struct({
   entryId: NonEmptyString,
@@ -128,20 +135,39 @@ export type ApproveContentRevisionRequest = Schema.Schema.Type<
   typeof ApproveContentRevisionRequestSchema
 >
 
-export const ContentRevisionResultResponseSchema = Schema.Struct({
-  entry: ContentEntrySchema,
-  revision: ContentRevisionSchema,
-})
+export type ContentRevisionResultResponse = {
+  readonly entry: ContentEntry
+  readonly revision: ContentRevision
+}
 
-export const ReadContentRevisionResponseSchema = Schema.Struct({
-  entry: ContentEntrySchema,
-  payload: OpaquePayloadResponseSchema,
-  revision: ContentRevisionSchema,
-})
+export const ContentRevisionResultResponseSchema: Schema.Codec<ContentRevisionResultResponse> =
+  Schema.revealCodec(
+    Schema.Struct({
+      entry: ContentEntrySchema,
+      revision: ContentRevisionSchema,
+    })
+  )
 
-export const ListContentRevisionsResponseSchema = Schema.Struct({
-  items: Schema.Array(ContentRevisionSchema),
-})
+export type ReadContentRevisionResponse = ContentRevisionResultResponse & {
+  readonly payload: OpaquePayloadResponse
+}
+
+export const ReadContentRevisionResponseSchema: Schema.Codec<ReadContentRevisionResponse> =
+  Schema.revealCodec(
+    Schema.Struct({
+      entry: ContentEntrySchema,
+      payload: OpaquePayloadResponseSchema,
+      revision: ContentRevisionSchema,
+    })
+  )
+
+export const ListContentRevisionsResponseSchema: Schema.Codec<{
+  readonly items: readonly ContentRevision[]
+}> = Schema.revealCodec(
+  Schema.Struct({
+    items: Schema.Array(ContentRevisionSchema),
+  })
+)
 
 export const PublishCvRequestSchema = Schema.Struct({
   expectedContentVersion: ExpectedApplicationVersionSchema,
@@ -158,7 +184,8 @@ export type SetCvLinkAvailabilityRequest = Schema.Schema.Type<
   typeof SetCvLinkAvailabilityRequestSchema
 >
 
-export const CvLinkResponseSchema = CvLinkSchema
+export const CvLinkResponseSchema: Schema.Codec<CvLink> =
+  Schema.revealCodec(CvLinkSchema)
 
 export const DisableApplicationCvLinksRequestSchema = Schema.Struct({
   reason: NonEmptyString,
@@ -200,12 +227,21 @@ export const FailPdfArtifactRequestSchema = Schema.Struct({
   errorMessage: NonEmptyString,
 })
 
-export const GeneratedArtifactResponseSchema = GeneratedArtifactSchema
+export const GeneratedArtifactResponseSchema: Schema.Codec<GeneratedArtifact> =
+  Schema.revealCodec(GeneratedArtifactSchema)
 
-export const ReadyPdfArtifactResponseSchema = Schema.Struct({
-  artifact: GeneratedArtifactSchema,
-  payload: OpaquePayloadResponseSchema,
-})
+export type ReadyPdfArtifactResponse = {
+  readonly artifact: GeneratedArtifact
+  readonly payload: OpaquePayloadResponse
+}
+
+export const ReadyPdfArtifactResponseSchema: Schema.Codec<ReadyPdfArtifactResponse> =
+  Schema.revealCodec(
+    Schema.Struct({
+      artifact: GeneratedArtifactSchema,
+      payload: OpaquePayloadResponseSchema,
+    })
+  )
 
 export const PdfWorkflowStatusSchema = Schema.Literals([
   'queued',
