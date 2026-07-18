@@ -101,9 +101,7 @@ const responseBody = async (response: Response): Promise<unknown> => {
   }
 }
 
-const requestJson = async <
-  S extends Schema.Top & Schema.ConstraintDecoder<unknown>,
->(
+const requestJson = async <S extends Schema.ConstraintDecoder<unknown>>(
   path: string,
   schema: S,
   init?: RequestInit

@@ -182,6 +182,7 @@ jobs:
       ${{
         (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
         (github.event_name == 'workflow_dispatch' &&
+          github.ref == 'refs/heads/main' &&
           (inputs.deploy_target == 'all' || inputs.deploy_target == 'cv'))
       }}
     permissions:
@@ -201,6 +202,7 @@ jobs:
       ${{
         (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
         (github.event_name == 'workflow_dispatch' &&
+          github.ref == 'refs/heads/main' &&
           (inputs.deploy_target == 'all' || inputs.deploy_target == 'analytics'))
       }}
     permissions:
@@ -221,6 +223,7 @@ jobs:
       ${{
         (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
         (github.event_name == 'workflow_dispatch' &&
+          github.ref == 'refs/heads/main' &&
           (inputs.deploy_target == 'all' ||
             inputs.deploy_target == 'cv' ||
             inputs.deploy_target == 'registry'))

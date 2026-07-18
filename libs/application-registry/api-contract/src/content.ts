@@ -6,7 +6,10 @@ import {
   CvLinkSchema,
   ExpectedApplicationVersionSchema,
   FactsChannelSchema,
+  type FactsRelease,
+  type FactsReleaseAsset,
   FactsReleaseAssetSchema,
+  type FactsReleaseCatalog,
   FactsReleaseCatalogSchema,
   FactsReleaseSchema,
   GeneratedArtifactSchema,
@@ -250,11 +253,20 @@ export const OpaqueObjectResponseSchema = Schema.Struct({
   sha256: NonEmptyString,
 })
 
-export const RegisterFactsReleaseRequestSchema = Schema.Struct({
-  assets: Schema.Array(FactsReleaseAssetSchema),
-  catalogs: Schema.Array(FactsReleaseCatalogSchema),
-  release: FactsReleaseSchema,
-})
+export type RegisterFactsReleaseRequest = {
+  readonly assets: readonly FactsReleaseAsset[]
+  readonly catalogs: readonly FactsReleaseCatalog[]
+  readonly release: FactsRelease
+}
+
+export const RegisterFactsReleaseRequestSchema: Schema.Codec<RegisterFactsReleaseRequest> =
+  Schema.revealCodec(
+    Schema.Struct({
+      assets: Schema.Array(FactsReleaseAssetSchema),
+      catalogs: Schema.Array(FactsReleaseCatalogSchema),
+      release: FactsReleaseSchema,
+    })
+  )
 
 export const FactsReleaseRecordResponseSchema =
   RegisterFactsReleaseRequestSchema

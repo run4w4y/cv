@@ -36,12 +36,14 @@ export const reduceCvPublicationViewState = (
       return action.entryId === state.entryId
         ? { ...state, publication: action.publication }
         : state
-    case 'link-updated':
-      return state.publication?.link.id === action.link.id
+    case 'link-updated': {
+      const publication = state.publication
+      return publication?.link.id === action.link.id
         ? {
             ...state,
-            publication: { ...state.publication, link: action.link },
+            publication: { ...publication, link: action.link },
           }
         : state
+    }
   }
 }
