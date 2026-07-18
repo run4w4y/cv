@@ -128,34 +128,6 @@ const EnumEditor = ({
 export const StatusEditor = () => <EnumEditor name="applicationStatus" />
 export const TargetEditor = () => <EnumEditor name="targetStage" />
 
-export const FitScoreEditor = () => {
-  const { control } = useRowForm()
-  const { formId, pending } = useApplicationRowEditor()
-
-  return (
-    <FormField
-      control={control}
-      name="fitScore"
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel className="sr-only">Fit score</FormLabel>
-          <FormInput
-            {...field}
-            type="number"
-            min={0}
-            max={100}
-            step={1}
-            disabled={pending}
-            form={formId}
-            placeholder="0–100"
-          />
-          <FormMessage />
-        </FormItem>
-      )}
-    />
-  )
-}
-
 export const PriorityEditor = () => {
   const { control } = useRowForm()
   const { formId, pending } = useApplicationRowEditor()

@@ -47,17 +47,22 @@ const runWranglerDeploy = (secretsPath: string) =>
       }),
   })
 
-const program = Config.redacted('REGISTRY_API_TOKEN').pipe(
-  Effect.flatMap((token) =>
-    Redacted.value(token).trim().length > 0
-      ? Effect.succeed(token)
-      : Effect.fail(
-          new RegistryDeployError({
-            message: 'REGISTRY_API_TOKEN must not be empty.',
-          })
-        )
-  ),
-  Effect.flatMap((token) =>
+const requiredSecret = (name: string) =>
+  Config.redacted(name).pipe(
+    Effect.flatMap((value) =>
+      Redacted.value(value).trim().length > 0
+        ? Effect.succeed(value)
+        : Effect.fail(
+            new RegistryDeployError({ message: `${name} must not be empty.` })
+          )
+    )
+  )
+
+const program = Effect.all({
+  chatgptSessionSecret: requiredSecret('CHATGPT_SESSION_SECRET'),
+  registryApiToken: requiredSecret('REGISTRY_API_TOKEN'),
+}).pipe(
+  Effect.flatMap(({ chatgptSessionSecret, registryApiToken }) =>
     Effect.acquireUseRelease(
       Effect.tryPromise({
         try: () => mkdtemp(join(tmpdir(), 'cv-registry-deploy-')),
@@ -74,7 +79,10 @@ const program = Config.redacted('REGISTRY_API_TOKEN').pipe(
           try: () =>
             writeFile(
               secretsPath,
-              `${JSON.stringify({ REGISTRY_API_TOKEN: Redacted.value(token) })}\n`,
+              `${JSON.stringify({
+                CHATGPT_SESSION_SECRET: Redacted.value(chatgptSessionSecret),
+                REGISTRY_API_TOKEN: Redacted.value(registryApiToken),
+              })}\n`,
               { mode: 0o600 }
             ),
           catch: (cause) =>

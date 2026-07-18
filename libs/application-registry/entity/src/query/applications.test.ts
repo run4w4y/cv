@@ -24,6 +24,22 @@ describe('application list query definition', () => {
         ({ name }) => name === 'companyNormalized'
       )
     ).toBe(false)
+    const fieldNames = new Set(
+      applicationListQuery.fields.map(({ name }) => name)
+    )
+    for (const removed of [
+      'category',
+      'details',
+      'fitScore',
+      'openStatus',
+      'recommendedAction',
+      'remotePolicy',
+      'researchPriority',
+      'sourceConfidence',
+      'technologyStack',
+    ]) {
+      expect(fieldNames.has(removed)).toBe(false)
+    }
     expect(applicationListQuery.fields).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

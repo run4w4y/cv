@@ -1,6 +1,7 @@
 export { ApplicationRegistryApi, PublicApi, RegistryApi } from './api'
 export { RegistryAuthorization } from './auth'
 export * from './commands'
+export * from './content'
 export {
   type ApplicationRegistryHttpError,
   BadRequestError,

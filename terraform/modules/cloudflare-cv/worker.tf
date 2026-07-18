@@ -59,6 +59,20 @@ resource "cloudflare_workers_script_subdomain" "application_registry" {
   script_name      = var.application_registry_worker_name
   enabled          = true
   previews_enabled = false
+
+  # The management SPA's same-origin BFF injects the registry bearer token.
+  # Attach both Access applications before making that hostname reachable.
+  depends_on = [
+    cloudflare_zero_trust_access_application.application_registry_machine_api,
+    cloudflare_zero_trust_access_application.application_registry_management,
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = local.application_registry_management_access_enabled
+      error_message = "application_registry_management_access_email must be set before exposing the registry on workers.dev."
+    }
+  }
 }
 
 resource "cloudflare_workers_custom_domain" "application_registry" {
@@ -77,4 +91,30 @@ resource "cloudflare_workers_route" "application_registry" {
   zone_id = var.cloudflare_zone_id
   pattern = local.application_registry_route_pattern
   script  = var.application_registry_worker_name
+}
+
+# Wrangler owns the cv-public Worker version and its one-way named registry
+# service binding. Terraform owns only its workers.dev exposure and the exact
+# path overlay on the frozen Pages hostname.
+resource "cloudflare_workers_script_subdomain" "cv_public" {
+  count = var.enable_cv_public_worker_dev_subdomain ? 1 : 0
+
+  account_id       = var.cloudflare_account_id
+  script_name      = var.cv_public_worker_name
+  enabled          = true
+  previews_enabled = false
+}
+
+# Preserve the existing route instance when introducing the bootstrap gate.
+moved {
+  from = cloudflare_workers_route.cv_public
+  to   = cloudflare_workers_route.cv_public[0]
+}
+
+resource "cloudflare_workers_route" "cv_public" {
+  count = var.enable_cv_public_route_overlay ? 1 : 0
+
+  zone_id = var.cloudflare_zone_id
+  pattern = local.cv_public_route_pattern
+  script  = var.cv_public_worker_name
 }

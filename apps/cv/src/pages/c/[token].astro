@@ -1,0 +1,77 @@
+---
+import { env } from 'cloudflare:workers'
+import { CvDocumentRenderer } from '@cv/renderer'
+
+import { matchPublicCvRoute } from '../../lib/public-route'
+import { loadCvPublication } from '../../lib/publication'
+
+const token = matchPublicCvRoute(Astro.url.pathname)
+const publication = token
+  ? await loadCvPublication(env.CV_PUBLIC_RESOLVER, token)
+  : { tag: 'not-found' as const }
+const rendered = publication.tag === 'success' ? publication : null
+
+if (publication.tag === 'not-found') {
+  Astro.response.status = 404
+} else if (!rendered) {
+  Astro.response.status = 502
+}
+
+const title = rendered
+  ? `${rendered.document.person.name} — CV`
+  : publication.tag === 'not-found'
+    ? 'CV not found'
+    : 'CV unavailable'
+---
+
+<!doctype html>
+<html
+  dir={rendered?.document.direction ?? 'ltr'}
+  lang={rendered?.document.locale ?? 'en'}
+>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <meta name="referrer" content="no-referrer" />
+    <title>{title}</title>
+    <style is:inline>
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
+
+      .cv-public-message {
+        display: grid;
+        min-height: 100vh;
+        place-items: center;
+        padding: 2rem;
+        box-sizing: border-box;
+        font-family: system-ui, sans-serif;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    {
+      rendered ? (
+        <CvDocumentRenderer
+          document={rendered.document}
+          publicUrl={rendered.publicUrl}
+        />
+      ) : (
+        <main class="cv-public-message">
+          <div>
+            <h1>{publication.tag === 'not-found' ? 'CV not found' : 'CV unavailable'}</h1>
+            <p>
+              {publication.tag === 'not-found'
+                ? 'This CV link is unavailable or has been disabled.'
+                : 'The CV could not be rendered right now.'}
+            </p>
+          </div>
+        </main>
+      )
+    }
+  </body>
+</html>

@@ -28,7 +28,6 @@ export const createApplicationFilterFieldPresentation = (
   },
   captureCount: { label: 'Capture count' },
   createdAt: timestamp('Created time', 'When the registry record was created'),
-  fitScore: { label: 'Fit score' },
   followUpAt: timestamp(
     'Follow-up time',
     'Scheduled application follow-up timestamp'

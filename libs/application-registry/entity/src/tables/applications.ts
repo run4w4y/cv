@@ -4,13 +4,11 @@ import {
   index,
   integer,
   primaryKey,
-  real,
   sqliteTable,
   text,
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core'
 
-import type { OpportunityDetails } from '../model/details'
 import {
   applicationStatusValues,
   listingAvailabilityValues,
@@ -44,15 +42,6 @@ export const applications = sqliteTable(
     personalPriority: text('personal_priority', {
       enum: personalPriorityValues,
     }),
-    fitScore: real('fit_score'),
-    category: text('category'),
-    remotePolicy: text('remote_policy'),
-    details: text('details', { mode: 'json' }).$type<OpportunityDetails>(),
-    openStatus: text('open_status'),
-    sourceConfidence: text('source_confidence'),
-    technologyStack: text('technology_stack'),
-    recommendedAction: text('recommended_action'),
-    researchPriority: text('research_priority'),
     followUpAt: text('follow_up_at'),
     appliedAt: text('applied_at'),
     lastContactAt: text('last_contact_at'),
@@ -122,14 +111,6 @@ export const applications = sqliteTable(
     check(
       'applications_listing_closed_count_check',
       sql`${table.listingConsecutiveClosedChecks} >= 0`
-    ),
-    check(
-      'applications_fit_score_check',
-      sql`${table.fitScore} is null or (${table.fitScore} >= 0 and ${table.fitScore} <= 100)`
-    ),
-    check(
-      'applications_details_json_check',
-      sql`${table.details} is null or json_valid(${table.details})`
     ),
     check('applications_version_check', sql`${table.version} >= 1`),
   ]

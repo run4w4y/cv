@@ -7,15 +7,8 @@ permissions:
 on:
   pull_request:
   push:
-  repository_dispatch:
-    types:
-      - content-updated
   workflow_dispatch:
     inputs:
-      content_ref:
-        description: Git ref or SHA from run4w4y/cv-content.
-        required: false
-        type: string
       deploy_target:
         default: all
         description: Production target to deploy after the quality gates pass.
@@ -30,13 +23,6 @@ on:
 
 env:
   ASTRO_TELEMETRY_DISABLED: "1"
-  CONTENT_ID_SALT: cv-ci-fixture-salt
-  CONTENT_ROOT: ${{ github.workspace }}/fixtures/cv-content-e2e
-  CV_WEB_BASE_URL: https://cv.example.invalid
-  PRIVATE_CONTENT_AUDIENCE_KEY: cv-ci-fixture-audience-key
-  PRIVATE_CONTENT_ROOT_KEY: base64url:AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA
-  PUBLIC_CV_FULL_ACCESS_EMAIL: full-access.fixture@example.invalid
-  PUBLIC_CV_WEB_BASE_URL: https://cv.example.invalid
 
 jobs:
   quality:
@@ -87,7 +73,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [[ -n "${ACT:-}" || "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "repository_dispatch" ]]; then
+          if [[ -n "${ACT:-}" || "$EVENT_NAME" == "workflow_dispatch" ]]; then
             ./node_modules/.bin/nx run-many -t typecheck test:unit --parallel=6
           else
             ./node_modules/.bin/nx affected -t typecheck test:unit --parallel=6
@@ -106,7 +92,7 @@ jobs:
       - name: Set up workspace runtime
         uses: ./.github/actions/setup-runtime
 
-      - name: Build fixture CV app
+      - name: Build public CV Worker
         run: ./node_modules/.bin/nx run cv:build --skip-nx-cache
 
   analytics-build:
@@ -169,8 +155,8 @@ jobs:
       - name: Run built Worker end-to-end tests
         run: ./node_modules/.bin/nx run application-registry-api:test:e2e --skip-nx-cache
 
-  cv-e2e:
-    name: Run CV e2e tests
+  cv-worker-tests:
+    name: Test built CV Worker
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -181,34 +167,30 @@ jobs:
 
       - name: Set up workspace runtime
         uses: ./.github/actions/setup-runtime
-        with:
-          install-playwright: "true"
 
-      - name: Run browser e2e tests
-        run: ./node_modules/.bin/nx run cv:test:e2e
+      - name: Run built Worker integration tests
+        run: ./node_modules/.bin/nx run cv:test:worker --skip-nx-cache
 
   deploy-cv:
     name: Deploy production CV
     needs:
       - quality
       - cv-build
-      - cv-e2e
+      - cv-worker-tests
+      - deploy-application-registry
     if: >-
       ${{
         (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-        github.event_name == 'repository_dispatch' ||
         (github.event_name == 'workflow_dispatch' &&
           (inputs.deploy_target == 'all' || inputs.deploy_target == 'cv'))
       }}
     permissions:
       actions: read
-      contents: write
+      contents: read
       deployments: write
       id-token: write
     secrets: inherit
     uses: ./.github/workflows/deploy-cv.yml
-    with:
-      content_ref: ${{ github.event.client_payload.content_ref || inputs.content_ref || 'main' }}
 
   deploy-analytics:
     name: Deploy production analytics
@@ -239,7 +221,9 @@ jobs:
       ${{
         (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
         (github.event_name == 'workflow_dispatch' &&
-          (inputs.deploy_target == 'all' || inputs.deploy_target == 'registry'))
+          (inputs.deploy_target == 'all' ||
+            inputs.deploy_target == 'cv' ||
+            inputs.deploy_target == 'registry'))
       }}
     permissions:
       actions: read

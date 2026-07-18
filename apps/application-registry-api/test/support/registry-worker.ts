@@ -56,6 +56,10 @@ export default {
 
 export const registryTestToken = 'application-registry-e2e-token'
 
+export type RegistryOutboundService = (
+  request: Request
+) => Response | Promise<Response>
+
 type D1Value = string | number | null
 
 type RegistryRequestInit = {
@@ -171,17 +175,30 @@ export class RegistryWorkerHarness {
   #miniflare: Miniflare | undefined
   #registryWorker: Awaited<ReturnType<Miniflare['getWorker']>> | undefined
   #url: URL | undefined
+  readonly #outboundService: RegistryOutboundService | undefined
 
-  private constructor(persistPath: string, token: string) {
+  private constructor(
+    persistPath: string,
+    token: string,
+    outboundService?: RegistryOutboundService
+  ) {
     this.persistPath = persistPath
     this.token = token
+    this.#outboundService = outboundService
   }
 
-  static async make(token = registryTestToken) {
+  static async make(
+    token = registryTestToken,
+    outboundService?: RegistryOutboundService
+  ) {
     const persistPath = await mkdtemp(
       join(tmpdir(), 'application-registry-miniflare-')
     )
-    const harness = new RegistryWorkerHarness(persistPath, token)
+    const harness = new RegistryWorkerHarness(
+      persistPath,
+      token,
+      outboundService
+    )
     try {
       await harness.#start(true)
       return harness
@@ -189,6 +206,13 @@ export class RegistryWorkerHarness {
       await harness.dispose()
       throw error
     }
+  }
+
+  static makeWithOutboundService(
+    outboundService: RegistryOutboundService,
+    token = registryTestToken
+  ) {
+    return RegistryWorkerHarness.make(token, outboundService)
   }
 
   get database() {
@@ -237,13 +261,24 @@ export class RegistryWorkerHarness {
   async #start(migrate: boolean) {
     const miniflare = new Miniflare({
       compatibilityDate: '2026-06-22',
+      compatibilityFlags: ['nodejs_compat'],
       d1Persist: this.persistPath,
+      kvPersist: this.persistPath,
+      r2Persist: this.persistPath,
       workers: [
         {
-          bindings: { REGISTRY_API_TOKEN: this.token },
+          bindings: {
+            CHATGPT_SESSION_SECRET: 'integration-chatgpt-session-secret',
+            REGISTRY_API_TOKEN: this.token,
+          },
           d1Databases: { APPLICATION_REGISTRY_DB: d1DatabaseId },
+          kvNamespaces: { CHATGPT_SESSIONS: 'chatgpt-sessions' },
           modules: true,
           name: registryWorkerName,
+          ...(this.#outboundService
+            ? { outboundService: this.#outboundService }
+            : {}),
+          r2Buckets: { CV_OBJECTS: 'cv-objects' },
           scriptPath: workerBundlePath,
           unsafeDirectSockets: [{ port: 0 }],
         },

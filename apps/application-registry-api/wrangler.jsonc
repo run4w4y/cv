@@ -3,9 +3,26 @@
   "name": "cv-application-registry",
   "main": "src/index.ts",
   "compatibility_date": "2026-06-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "../application-registry/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/v1/*", "/health", "/openapi.json"]
+  },
   "observability": {
     "enabled": true
   },
+  "browser": {
+    "binding": "BROWSER"
+  },
+  "workflows": [
+    {
+      "binding": "CV_PDF_WORKFLOW",
+      "name": "cv-pdf",
+      "class_name": "CvPdfWorkflow"
+    }
+  ],
   "triggers": {
     "crons": ["17 * * * *"]
   },
@@ -21,6 +38,18 @@
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "../../libs/application-registry/entity/drizzle",
       "migrations_pattern": "../../libs/application-registry/entity/drizzle/*/migration.sql"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "CHATGPT_SESSIONS",
+      "id": "00000000000000000000000000000000"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "CV_OBJECTS",
+      "bucket_name": "cv-objects"
     }
   ]
 }

@@ -1,0 +1,24 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "facts-release-publisher",
+  "projectType": "application",
+  "sourceRoot": "tools/facts-release/src",
+  "tags": ["scope:cv", "type:tool", "visibility:private"],
+  "targets": {
+    "publish": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "options": {
+        "command": "bun run tools/facts-release/src/main.ts",
+        "color": true
+      }
+    },
+    "format": {},
+    "format:check": {},
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {}
+  }
+}

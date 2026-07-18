@@ -9,17 +9,13 @@ import { omit, pick } from 'es-toolkit/object'
 
 import {
   ApplicationVersionSchema,
-  FitScoreSchema,
   UtcIsoTimestampSchema,
 } from '../model/constraints'
-import { OpportunityDetailsSchema } from '../model/details'
 import { applications } from '../tables/applications'
 import { optionalNullableInsertField } from './optional-nullable-insert-field'
 
 const applicationSelectRefinements = {
   version: () => ApplicationVersionSchema,
-  details: () => OpportunityDetailsSchema,
-  fitScore: () => FitScoreSchema,
   followUpAt: () => UtcIsoTimestampSchema,
   appliedAt: () => UtcIsoTimestampSchema,
   lastContactAt: () => UtcIsoTimestampSchema,
@@ -30,8 +26,6 @@ const applicationSelectRefinements = {
 }
 
 const applicationInsertRefinements = {
-  details: optionalNullableInsertField(OpportunityDetailsSchema),
-  fitScore: optionalNullableInsertField(FitScoreSchema),
   followUpAt: optionalNullableInsertField(UtcIsoTimestampSchema),
   appliedAt: optionalNullableInsertField(UtcIsoTimestampSchema),
   lastContactAt: optionalNullableInsertField(UtcIsoTimestampSchema),
@@ -40,8 +34,6 @@ const applicationInsertRefinements = {
 }
 
 const applicationUpdateRefinements = {
-  details: () => OpportunityDetailsSchema,
-  fitScore: () => FitScoreSchema,
   followUpAt: () => UtcIsoTimestampSchema,
   appliedAt: () => UtcIsoTimestampSchema,
   lastContactAt: () => UtcIsoTimestampSchema,
@@ -75,15 +67,6 @@ export const applicationWritableKeys = [
   'applicationStatus',
   'targetStage',
   'personalPriority',
-  'fitScore',
-  'category',
-  'remotePolicy',
-  'details',
-  'openStatus',
-  'sourceConfidence',
-  'technologyStack',
-  'recommendedAction',
-  'researchPriority',
   'followUpAt',
   'appliedAt',
   'lastContactAt',
@@ -107,15 +90,6 @@ export const applicationMutableKeys = [
   'applicationStatus',
   'targetStage',
   'personalPriority',
-  'fitScore',
-  'category',
-  'remotePolicy',
-  'details',
-  'openStatus',
-  'sourceConfidence',
-  'technologyStack',
-  'recommendedAction',
-  'researchPriority',
   'followUpAt',
   'appliedAt',
   'lastContactAt',

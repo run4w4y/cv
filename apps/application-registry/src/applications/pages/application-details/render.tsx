@@ -7,7 +7,7 @@ import {
 } from '@cv/internal-ui'
 import { useAtomValue } from '@effect/atom-react'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
-import { ArrowLeft, FileText } from 'lucide-react'
+import { ArrowLeft, FilePenLine, FileText, WandSparkles } from 'lucide-react'
 import * as React from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { HeaderActions } from '../../../shell/header-actions'
@@ -80,6 +80,20 @@ export const ApplicationDetailsPage = () => {
     <section className="min-h-0 flex-1 overflow-y-auto bg-background p-4 lg:p-6">
       {application === undefined ? null : (
         <HeaderActions>
+          <Link
+            to={`/applications/${application.id}/prepare`}
+            className={cn(buttonVariants())}
+          >
+            <WandSparkles />
+            Prepare CV
+          </Link>
+          <Link
+            to={`/applications/${application.id}/cover-letter`}
+            className={cn(buttonVariants({ variant: 'outline' }))}
+          >
+            <FilePenLine />
+            Cover letter
+          </Link>
           <RecordEventDialog application={application} />
           <ApplicationEditDialog application={application} />
           <DeleteApplicationDialog

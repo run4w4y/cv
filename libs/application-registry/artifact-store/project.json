@@ -1,0 +1,31 @@
+{
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "name": "application-registry-artifact-store",
+  "projectType": "library",
+  "sourceRoot": "libs/application-registry/artifact-store/src",
+  "tags": [
+    "scope:application-registry",
+    "type:data-access",
+    "visibility:private"
+  ],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/application-registry/artifact-store/src/index.ts",
+        "outputPath": "libs/application-registry/artifact-store/dist",
+        "rootDir": "libs/application-registry/artifact-store/src",
+        "tsConfig": "libs/application-registry/artifact-store/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
+    "format": {},
+    "format:check": {}
+  }
+}

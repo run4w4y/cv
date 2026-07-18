@@ -19,7 +19,7 @@ import {
   sidebarMenuButtonVariants,
   useSidebar,
 } from '@cv/internal-ui'
-import { Activity, BriefcaseBusiness, Database } from 'lucide-react'
+import { Activity, Braces, BriefcaseBusiness, Database } from 'lucide-react'
 import { NuqsAdapter } from 'nuqs/adapters/react-router/v7'
 import * as React from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router'
@@ -29,10 +29,18 @@ import { HeaderActionsProvider } from './header-actions'
 const navItems = [
   { to: '/applications', label: 'Applications', icon: BriefcaseBusiness },
   { to: '/events', label: 'Events', icon: Activity },
+  { to: '/schema/cv-document', label: 'CV schema', icon: Braces },
 ] as const
 
 const routeTitle = (pathname: string) => {
+  if (pathname === '/schema/cv-document') return 'CV schema'
   if (pathname.startsWith('/events')) return 'Events'
+  if (/^\/applications\/[^/]+\/prepare$/u.test(pathname)) {
+    return 'Prepare tailored CV'
+  }
+  if (/^\/applications\/[^/]+\/cover-letter$/u.test(pathname)) {
+    return 'Prepare cover letter'
+  }
   if (/^\/applications\/[^/]+/u.test(pathname)) return 'Application details'
   return 'Applications'
 }

@@ -1,20 +1,27 @@
-resource "cloudflare_pages_project" "cv" {
-  account_id        = var.cloudflare_account_id
-  name              = var.pages_project_name
-  production_branch = var.pages_production_branch
+# The v1 Pages deployment is intentionally frozen in place. These state
+# removals must be applied once before this file is deleted. `destroy = false`
+# preserves the Pages project, its custom-domain attachment, and the proxied
+# CNAME while removing them from Terraform ownership.
+removed {
+  from = cloudflare_pages_project.cv
+
+  lifecycle {
+    destroy = false
+  }
 }
 
-resource "cloudflare_pages_domain" "cv" {
-  account_id   = var.cloudflare_account_id
-  project_name = cloudflare_pages_project.cv.name
-  name         = var.cv_web_host
+removed {
+  from = cloudflare_pages_domain.cv
+
+  lifecycle {
+    destroy = false
+  }
 }
 
-resource "cloudflare_dns_record" "cv_pages_domain" {
-  zone_id = var.cloudflare_zone_id
-  name    = var.cv_web_host
-  type    = "CNAME"
-  ttl     = 1
-  content = cloudflare_pages_project.cv.subdomain
-  proxied = true
+removed {
+  from = cloudflare_dns_record.cv_pages_domain
+
+  lifecycle {
+    destroy = false
+  }
 }

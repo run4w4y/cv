@@ -3,5 +3,5 @@
   "compilerOptions": {
     "noEmit": true
   },
-  "include": ["astro.config.ts", "lingui.config.ts"]
+  "include": ["astro.config.ts"]
 }

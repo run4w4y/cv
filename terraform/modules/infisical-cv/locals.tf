@@ -23,12 +23,12 @@ locals {
     application_registry = {
       name        = "application-registry"
       path        = local.application_registry_path
-      description = "Application registry API authentication and Cloudflare deployment values."
+      description = "Personal application registry authentication and Cloudflare deployment values."
     }
     content = {
       name        = "content"
       path        = local.content_path
-      description = "Private CV content encryption and build secrets."
+      description = "Reviewed facts publication and frozen analytics compatibility secrets."
     }
     deploy = {
       name        = "deploy"
@@ -43,6 +43,13 @@ locals {
   }
 
   secret_shape = {
+    (local.application_registry_path) = {
+      APPLICATION_REGISTRY_MANAGEMENT_ACCESS_EMAIL = {
+        value       = local.placeholder_value
+        description = "Single owner email allowed through Cloudflare Access to the personal management UI."
+      }
+    }
+
     (local.analytics_path) = {
       CACHE_TTL_SECONDS = {
         value       = "600"
@@ -65,7 +72,7 @@ locals {
       }
       PUBLIC_CV_FULL_ACCESS_EMAIL = {
         value       = local.placeholder_value
-        description = "Public contact email shown in redaction notices for full CV access requests."
+        description = "Frozen v1 redaction-contact value retained only to preserve existing Infisical state; CV v2 does not consume it."
       }
     }
 
@@ -118,5 +125,4 @@ locals {
     }
   ]...)
 
-  private_content_root_key = "base64url:${random_id.private_content_root_key.b64_url}"
 }

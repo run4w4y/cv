@@ -1,6 +1,7 @@
 import {
   type ApplicationLabel,
   ApplicationLabelSchema,
+  FactsChannelSchema,
   type ListingCheckRun,
   ListingCheckRunSchema,
 } from '@cv/application-registry-entity'
@@ -8,6 +9,48 @@ import { Schema } from 'effect'
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from 'effect/unstable/httpapi'
 
 import { RegistryAuthorization } from './auth'
+import {
+  ActivateFactsReleaseRequestSchema,
+  ActiveFactsReleaseQuerySchema,
+  ActiveFactsReleaseResponseSchema,
+  AppendContentRevisionRequestSchema,
+  ApproveContentRevisionRequestSchema,
+  BeginPdfArtifactRequestSchema,
+  CaptureJobPostingSnapshotResponseSchema,
+  CompletePdfArtifactRequestSchema,
+  ContentEntryParamsSchema,
+  ContentEntryResponseSchema,
+  ContentRevisionParamsSchema,
+  ContentRevisionResultResponseSchema,
+  CurrentPdfArtifactParamsSchema,
+  CurrentPdfArtifactQuerySchema,
+  CvLinkResponseSchema,
+  DisableApplicationCvLinksRequestSchema,
+  DisableApplicationCvLinksResponseSchema,
+  EnsureContentEntryRequestSchema,
+  FactsChannelParamsSchema,
+  FactsReleaseParamsSchema,
+  FactsReleaseRecordResponseSchema,
+  FailPdfArtifactRequestSchema,
+  GeneratedArtifactResponseSchema,
+  JobPostingSnapshotParamsSchema,
+  JobPostingSnapshotPayloadParamsSchema,
+  JobPostingSnapshotResponseSchema,
+  ListContentRevisionsResponseSchema,
+  OpaqueObjectResponseSchema,
+  OpaquePayloadResponseSchema,
+  PdfArtifactParamsSchema,
+  PdfWorkflowParamsSchema,
+  PdfWorkflowResponseSchema,
+  PersistJobPostingSnapshotRequestSchema,
+  PublishCvRequestSchema,
+  PutOpaqueObjectRequestSchema,
+  ReadContentRevisionResponseSchema,
+  ReadyPdfArtifactResponseSchema,
+  RegisterFactsReleaseRequestSchema,
+  SetCvLinkAvailabilityRequestSchema,
+  StartPdfWorkflowRequestSchema,
+} from './content'
 import {
   BadRequestErrorSchema,
   ConflictErrorSchema,
@@ -156,6 +199,46 @@ export class RegistryApi extends HttpApiGroup.make('registry')
     )
   )
   .add(
+    HttpApiEndpoint.post('putOpaqueObject', '/objects', {
+      error: registryEndpointErrors,
+      payload: PutOpaqueObjectRequestSchema,
+      success: OpaqueObjectResponseSchema,
+    })
+  )
+  .add(
+    HttpApiEndpoint.post('registerFactsRelease', '/facts-releases', {
+      error: registryEndpointErrors,
+      payload: RegisterFactsReleaseRequestSchema,
+      success: FactsReleaseRecordResponseSchema,
+    })
+  )
+  .add(
+    HttpApiEndpoint.get('getActiveFactsRelease', '/facts-releases/active', {
+      error: registryEndpointErrors,
+      query: ActiveFactsReleaseQuerySchema,
+      success: ActiveFactsReleaseResponseSchema,
+    })
+  )
+  .add(
+    HttpApiEndpoint.get('getFactsRelease', '/facts-releases/:releaseId', {
+      error: registryEndpointErrors,
+      params: FactsReleaseParamsSchema,
+      success: FactsReleaseRecordResponseSchema,
+    })
+  )
+  .add(
+    HttpApiEndpoint.put(
+      'activateFactsRelease',
+      '/facts-releases/channels/:channel',
+      {
+        error: registryEndpointErrors,
+        params: FactsChannelParamsSchema,
+        payload: ActivateFactsReleaseRequestSchema,
+        success: FactsChannelSchema,
+      }
+    )
+  )
+  .add(
     HttpApiEndpoint.get(
       'listApplicationCompensations',
       '/applications/:id/compensations',
@@ -279,6 +362,261 @@ export class RegistryApi extends HttpApiGroup.make('registry')
       params: ListingCheckRunIdentifierParamsSchema,
       success: ListingCheckRunResponseSchema,
     })
+  )
+  .add(
+    HttpApiEndpoint.post(
+      'captureJobPostingSnapshot',
+      '/applications/:id/job-snapshots/capture',
+      {
+        error: registryEndpointErrors,
+        params: ApplicationIdentifierParamsSchema,
+        success: CaptureJobPostingSnapshotResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.post(
+      'persistJobPostingSnapshot',
+      '/applications/:id/job-snapshots',
+      {
+        error: registryEndpointErrors,
+        params: ApplicationIdentifierParamsSchema,
+        payload: PersistJobPostingSnapshotRequestSchema,
+        success: JobPostingSnapshotResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.get(
+      'getLatestJobPostingSnapshot',
+      '/applications/:id/job-snapshots/latest',
+      {
+        error: registryEndpointErrors,
+        params: ApplicationIdentifierParamsSchema,
+        success: JobPostingSnapshotResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.get(
+      'getJobPostingSnapshot',
+      '/applications/:id/job-snapshots/:snapshotId',
+      {
+        error: registryEndpointErrors,
+        params: JobPostingSnapshotParamsSchema,
+        success: JobPostingSnapshotResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.get(
+      'getJobPostingSnapshotPayload',
+      '/applications/:id/job-snapshots/:snapshotId/payloads/:kind',
+      {
+        error: registryEndpointErrors,
+        params: JobPostingSnapshotPayloadParamsSchema,
+        success: OpaquePayloadResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.post(
+      'ensureContentEntry',
+      '/applications/:id/content-entries',
+      {
+        error: registryEndpointErrors,
+        params: ApplicationIdentifierParamsSchema,
+        payload: EnsureContentEntryRequestSchema,
+        success: ContentEntryResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.get(
+      'getContentEntry',
+      '/applications/:id/content-entries/:entryId',
+      {
+        error: registryEndpointErrors,
+        params: ContentEntryParamsSchema,
+        success: ContentEntryResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.get(
+      'listContentRevisions',
+      '/applications/:id/content-entries/:entryId/revisions',
+      {
+        error: registryEndpointErrors,
+        params: ContentEntryParamsSchema,
+        success: ListContentRevisionsResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.post(
+      'appendContentRevision',
+      '/applications/:id/content-entries/:entryId/revisions',
+      {
+        error: registryEndpointErrors,
+        params: ContentEntryParamsSchema,
+        payload: AppendContentRevisionRequestSchema,
+        success: ContentRevisionResultResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.get(
+      'readContentRevision',
+      '/applications/:id/content-entries/:entryId/revisions/:revisionId',
+      {
+        error: registryEndpointErrors,
+        params: ContentRevisionParamsSchema,
+        success: ReadContentRevisionResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.post(
+      'approveContentRevision',
+      '/applications/:id/content-entries/:entryId/approval',
+      {
+        error: registryEndpointErrors,
+        params: ContentEntryParamsSchema,
+        payload: ApproveContentRevisionRequestSchema,
+        success: ContentRevisionResultResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.post(
+      'publishCv',
+      '/applications/:id/content-entries/:entryId/publication',
+      {
+        error: registryEndpointErrors,
+        params: ContentEntryParamsSchema,
+        payload: PublishCvRequestSchema,
+        success: CvLinkResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.get(
+      'getCvLink',
+      '/applications/:id/content-entries/:entryId/publication',
+      {
+        error: registryEndpointErrors,
+        params: ContentEntryParamsSchema,
+        success: CvLinkResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.put(
+      'setCvLinkAvailability',
+      '/applications/:id/content-entries/:entryId/publication/availability',
+      {
+        error: registryEndpointErrors,
+        params: ContentEntryParamsSchema,
+        payload: SetCvLinkAvailabilityRequestSchema,
+        success: CvLinkResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.post(
+      'disableApplicationCvLinks',
+      '/applications/:id/cv-links/disable',
+      {
+        error: registryEndpointErrors,
+        params: ApplicationIdentifierParamsSchema,
+        payload: DisableApplicationCvLinksRequestSchema,
+        success: DisableApplicationCvLinksResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.post(
+      'beginPdfArtifact',
+      '/applications/:id/content-entries/:entryId/pdf-artifacts',
+      {
+        error: registryEndpointErrors,
+        params: ContentEntryParamsSchema,
+        payload: BeginPdfArtifactRequestSchema,
+        success: GeneratedArtifactResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.post(
+      'completePdfArtifact',
+      '/applications/:id/pdf-artifacts/:artifactId/complete',
+      {
+        error: registryEndpointErrors,
+        params: PdfArtifactParamsSchema,
+        payload: CompletePdfArtifactRequestSchema,
+        success: GeneratedArtifactResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.post(
+      'failPdfArtifact',
+      '/applications/:id/pdf-artifacts/:artifactId/fail',
+      {
+        error: registryEndpointErrors,
+        params: PdfArtifactParamsSchema,
+        payload: FailPdfArtifactRequestSchema,
+        success: GeneratedArtifactResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.get(
+      'getCurrentPdfArtifact',
+      '/applications/:id/content-entries/:entryId/pdf-artifacts/current',
+      {
+        error: registryEndpointErrors,
+        params: CurrentPdfArtifactParamsSchema,
+        query: CurrentPdfArtifactQuerySchema,
+        success: GeneratedArtifactResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.get(
+      'readCurrentPdfArtifact',
+      '/applications/:id/content-entries/:entryId/pdf-artifacts/current/content',
+      {
+        error: registryEndpointErrors,
+        params: CurrentPdfArtifactParamsSchema,
+        query: CurrentPdfArtifactQuerySchema,
+        success: ReadyPdfArtifactResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.post(
+      'startPdfWorkflow',
+      '/applications/:id/content-entries/:entryId/pdf-workflow',
+      {
+        error: registryEndpointErrors,
+        params: ContentEntryParamsSchema,
+        payload: StartPdfWorkflowRequestSchema,
+        success: PdfWorkflowResponseSchema,
+      }
+    )
+  )
+  .add(
+    HttpApiEndpoint.get(
+      'getPdfWorkflow',
+      '/applications/:id/content-entries/:entryId/pdf-workflow/:workflowId',
+      {
+        error: registryEndpointErrors,
+        params: PdfWorkflowParamsSchema,
+        success: PdfWorkflowResponseSchema,
+      }
+    )
   )
   .prefix('/v1')
   .middleware(RegistryAuthorization) {}

@@ -6,6 +6,7 @@
 
 @source "../../../libs/internal-ui/src";
 @source "../../../libs/drizzle-query-ui/src";
+@source "../../../libs/schema-editor/src";
 
 html,
 body,

@@ -25,7 +25,6 @@ import type React from 'react'
 import { formatDateTime, formatLabel } from '../../../lib/format'
 import { AnnualCompensation } from '../../components/annual-compensation'
 import { CurrencyCombobox } from '../../components/currency-combobox'
-import { FitScore } from '../../components/fit-score'
 import { ListingAvailabilityReviewDialog } from '../../components/listing-availability-review'
 import { StatusBadge } from '../../components/status-badge'
 import type { CompensationDisplayCurrency } from '../../model/currency'
@@ -110,7 +109,7 @@ export const ApplicationMetadata = ({
     <Card>
       <CardHeader className="flex-row items-center gap-2 pb-0">
         <FileText className="size-4 text-primary" />
-        <CardTitle>Opportunity details</CardTitle>
+        <CardTitle>Application details</CardTitle>
       </CardHeader>
       <CardContent>
         <dl className="mt-5 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -123,19 +122,6 @@ export const ApplicationMetadata = ({
             {application.personalPriority === null
               ? '—'
               : formatLabel(application.personalPriority)}
-          </Detail>
-          <Detail label="Fit score">
-            <FitScore score={application.fitScore} />
-          </Detail>
-          <Detail label="Category">{application.category ?? '—'}</Detail>
-          <Detail label="Remote policy">
-            {application.remotePolicy ?? '—'}
-          </Detail>
-          <Detail label="Technology">
-            {application.technologyStack ?? '—'}
-          </Detail>
-          <Detail label="Recommended action">
-            {application.recommendedAction ?? '—'}
           </Detail>
           <Detail label="Follow up">
             {formatDateTime(application.followUpAt)}

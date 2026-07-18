@@ -8,24 +8,7 @@ output "workers_dev_urls" {
   value = {
     analytics_connector  = local.analytics_connector_workers_dev_url
     application_registry = local.application_registry_workers_dev_url
-  }
-}
-
-output "pages_project" {
-  description = "Cloudflare Pages project managed for the public CV site."
-  value = {
-    name      = cloudflare_pages_project.cv.name
-    subdomain = cloudflare_pages_project.cv.subdomain
-  }
-}
-
-output "pages_domain" {
-  description = "Cloudflare Pages custom domain and DNS record managed for the public CV site."
-  value = {
-    name          = cloudflare_pages_domain.cv.name
-    project_name  = cloudflare_pages_domain.cv.project_name
-    status        = cloudflare_pages_domain.cv.status
-    dns_record_id = cloudflare_dns_record.cv_pages_domain.id
+    cv_public            = local.cv_public_workers_dev_url
   }
 }
 
@@ -56,5 +39,38 @@ output "application_registry" {
     route_pattern       = local.application_registry_route_enabled ? local.application_registry_route_pattern : null
     workers_dev_enabled = var.enable_application_registry_worker_dev_subdomain
     workers_dev_url     = local.application_registry_workers_dev_url
+  }
+}
+
+output "cv_objects" {
+  description = "Private R2 object bucket used by the v2 registry Worker."
+  value = {
+    binding  = "CV_OBJECTS"
+    id       = cloudflare_r2_bucket.cv_objects.id
+    location = cloudflare_r2_bucket.cv_objects.location
+    name     = cloudflare_r2_bucket.cv_objects.name
+  }
+}
+
+output "chatgpt_sessions" {
+  description = "Workers KV namespace used by the registry Worker for subscription authentication sessions."
+  value = {
+    binding = "CHATGPT_SESSIONS"
+    id      = cloudflare_workers_kv_namespace.chatgpt_sessions.id
+    title   = cloudflare_workers_kv_namespace.chatgpt_sessions.title
+  }
+}
+
+output "cv_public" {
+  description = "Public SSR CV Worker deployment and route-overlay values."
+  value = {
+    registry_entrypoint   = var.cv_public_resolver_entrypoint
+    registry_service      = var.application_registry_worker_name
+    resolver_binding      = "CV_PUBLIC_RESOLVER"
+    route_overlay_enabled = var.enable_cv_public_route_overlay
+    route_pattern         = var.enable_cv_public_route_overlay ? local.cv_public_route_pattern : null
+    worker_name           = var.cv_public_worker_name
+    workers_dev_enabled   = var.enable_cv_public_worker_dev_subdomain
+    workers_dev_url       = local.cv_public_workers_dev_url
   }
 }

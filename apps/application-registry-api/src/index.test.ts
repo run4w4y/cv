@@ -1,19 +1,31 @@
-import { describe, expect, test } from 'bun:test'
-import type { D1Database } from '@cloudflare/workers-types'
+import { describe, expect, mock, test } from 'bun:test'
+import type {
+  D1Database,
+  KVNamespace,
+  R2Bucket,
+} from '@cloudflare/workers-types'
 import {
   applicationRegistryOpenApi,
   HealthResponseSchema,
 } from '@cv/application-registry-api-contract'
 import { Schema } from 'effect'
-import worker from './index'
 import type {
   ApplicationRegistryEnv,
   WorkerExecutionContext,
 } from './worker/types'
 
+mock.module('cloudflare:workers', () => ({
+  WorkerEntrypoint: class WorkerEntrypoint {},
+  WorkflowEntrypoint: class WorkflowEntrypoint {},
+}))
+
+const { default: worker } = await import('./index')
+
 const env = {
   // These routing tests never execute a registry persistence operation.
   APPLICATION_REGISTRY_DB: undefined as unknown as D1Database,
+  CHATGPT_SESSIONS: undefined as unknown as KVNamespace,
+  CV_OBJECTS: undefined as unknown as R2Bucket,
   REGISTRY_API_TOKEN: 'test-token',
 } satisfies ApplicationRegistryEnv
 const context: WorkerExecutionContext = { waitUntil: () => undefined }
@@ -42,6 +54,58 @@ describe('application registry worker', () => {
     expect(response.status).toBe(200)
     expect(await response.text()).toBe(
       JSON.stringify(applicationRegistryOpenApi)
+    )
+  })
+
+  test('proxies browser registry requests through the same-origin BFF', async () => {
+    const response = await worker.fetch(
+      new Request('https://registry.example.test/api/registry/health'),
+      env,
+      context
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+    expect(
+      Schema.decodeUnknownSync(HealthResponseSchema)(await response.json())
+    ).toEqual({ ok: true })
+  })
+
+  test('fails closed when browser BFF authentication is not configured', async () => {
+    const response = await worker.fetch(
+      new Request('https://registry.example.test/api/registry/health'),
+      { ...env, REGISTRY_API_TOKEN: undefined },
+      context
+    )
+
+    expect(response.status).toBe(503)
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+    expect(
+      Schema.decodeUnknownSync(
+        Schema.Struct({ code: Schema.String, message: Schema.String })
+      )(await response.json())
+    ).toEqual({
+      code: 'service_unavailable',
+      message: 'Registry BFF authentication is not configured.',
+    })
+  })
+
+  test('serves management SPA assets outside API routes', async () => {
+    const ASSETS = {
+      fetch: (request: Request) =>
+        Promise.resolve(
+          new Response(`management asset: ${new URL(request.url).pathname}`)
+        ),
+    }
+    const response = await worker.fetch(
+      new Request('https://registry.example.test/applications/example'),
+      { ...env, ASSETS },
+      context
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.text()).toBe(
+      'management asset: /applications/example'
     )
   })
 

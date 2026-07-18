@@ -25,7 +25,7 @@ import { applicationEvents } from '../tables/events'
 import { applicationIdentityAliases } from '../tables/identity-aliases'
 import { timestampFilterOperators } from './timestamp-filter-operators'
 
-const applicationListCursorRevision = 'applications-list-v6'
+const applicationListCursorRevision = 'applications-list-v7'
 
 const escapeLikeLiteral = (value: string): string =>
   value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')

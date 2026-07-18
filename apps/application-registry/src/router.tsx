@@ -1,8 +1,8 @@
-import { createBrowserRouter, Navigate } from 'react-router'
+import { createBrowserRouter, Navigate, type RouteObject } from 'react-router'
 import { AppShell } from './shell/app-shell'
 import { RouteErrorPage } from './shell/route-error-page'
 
-export const router = createBrowserRouter([
+export const registryRoutes: RouteObject[] = [
   {
     path: '/',
     Component: AppShell,
@@ -18,6 +18,20 @@ export const router = createBrowserRouter([
         path: 'applications/:applicationId',
         lazy: () => import('./applications/pages/application-details'),
       },
+      {
+        path: 'applications/:applicationId/prepare',
+        lazy: () => import('./preparation/pages/cv-preparation'),
+      },
+      {
+        path: 'applications/:applicationId/cover-letter',
+        lazy: () => import('./preparation/pages/cover-letter'),
+      },
+      {
+        path: 'schema/cv-document',
+        lazy: () => import('./preparation/pages/schema-inspector'),
+      },
     ],
   },
-])
+]
+
+export const router = createBrowserRouter(registryRoutes)

@@ -23,8 +23,7 @@ export const applicationWorkflow = Effect.gen(function* () {
   const initialRevision = created.updatedRevision
   const patched = yield* applications.patch(created.id, {
     expectedVersion: created.version,
-    fitScore: 91,
-    recommendedAction: 'Apply this week',
+    personalPriority: 'high',
   })
   const labels = yield* applications.replaceLabels(created.id, [
     'priority',
@@ -53,8 +52,7 @@ export const applicationWorkflow = Effect.gen(function* () {
     deltaIds: delta.items.map(({ id }) => id),
     labels: labels.map(({ label }) => label),
     patched: {
-      fitScore: patched.fitScore,
-      recommendedAction: patched.recommendedAction,
+      personalPriority: patched.personalPriority,
       version: patched.version,
     },
     storedLabels: storedAnnotations.labels.map(({ label }) => label),
@@ -186,8 +184,8 @@ export const defaultsWorkflow = Effect.gen(function* () {
     captureStatus: captured.application.applicationStatus,
     created: {
       applicationStatus: created.applicationStatus,
-      category: created.category,
-      fitScore: created.fitScore,
+      followUpAt: created.followUpAt,
+      personalPriority: created.personalPriority,
       targetStage: created.targetStage,
       version: created.version,
     },
@@ -196,50 +194,32 @@ export const defaultsWorkflow = Effect.gen(function* () {
 
 export const patchNullabilityWorkflow = Effect.gen(function* () {
   const applications = yield* ApplicationsService
-  const details = {
-    applyFromAbroad: 'Yes',
-    countryCode: 'JP' as const,
-    employmentType: 'full-time',
-    languageRequirements: ['English'],
-    region: 'Kanto',
-    relocationSupport: 'Available',
-    remoteRegion: 'Worldwide',
-    residenceRequirement: null,
-    timezoneOverlap: 'JST overlap',
-    visaSponsorship: 'Case by case',
-    workAuthorization: 'Not required when applying',
-    workMode: 'remote',
-  }
   const created = yield* applications.upsert({
     ...makeApplicationInput('patch-nullability'),
-    category: 'Backend',
-    details,
     followUpAt: '2026-07-20T12:00:00.000Z',
+    location: 'Remote',
     personalPriority: 'high',
   })
   const partiallyUpdated = yield* applications.patch(created.id, {
-    fitScore: 42,
+    lastContactAt: '2026-07-19T12:00:00.000Z',
   })
   const cleared = yield* applications.patch(created.id, {
-    category: null,
-    details: null,
     followUpAt: null,
+    location: null,
     personalPriority: null,
   })
 
   return {
     cleared: {
-      category: cleared.category,
-      details: cleared.details,
-      fitScore: cleared.fitScore,
       followUpAt: cleared.followUpAt,
+      lastContactAt: cleared.lastContactAt,
+      location: cleared.location,
       personalPriority: cleared.personalPriority,
     },
     partiallyUpdated: {
-      category: partiallyUpdated.category,
-      details: partiallyUpdated.details,
-      fitScore: partiallyUpdated.fitScore,
       followUpAt: partiallyUpdated.followUpAt,
+      lastContactAt: partiallyUpdated.lastContactAt,
+      location: partiallyUpdated.location,
       personalPriority: partiallyUpdated.personalPriority,
     },
   }

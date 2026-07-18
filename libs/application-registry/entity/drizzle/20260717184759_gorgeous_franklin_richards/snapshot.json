@@ -1,0 +1,3678 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "id": "76beec4a-4024-4e55-960d-0ae7592cbeb7",
+  "prevIds": ["f8decb83-b452-4987-8595-0099e1f456b7"],
+  "ddl": [
+    {
+      "name": "application_labels",
+      "entityType": "tables"
+    },
+    {
+      "name": "application_notes",
+      "entityType": "tables"
+    },
+    {
+      "name": "applications",
+      "entityType": "tables"
+    },
+    {
+      "name": "generated_artifacts",
+      "entityType": "tables"
+    },
+    {
+      "name": "campaign_captures",
+      "entityType": "tables"
+    },
+    {
+      "name": "application_compensations",
+      "entityType": "tables"
+    },
+    {
+      "name": "content_entries",
+      "entityType": "tables"
+    },
+    {
+      "name": "content_revisions",
+      "entityType": "tables"
+    },
+    {
+      "name": "cv_links",
+      "entityType": "tables"
+    },
+    {
+      "name": "application_events",
+      "entityType": "tables"
+    },
+    {
+      "name": "facts_channels",
+      "entityType": "tables"
+    },
+    {
+      "name": "facts_release_assets",
+      "entityType": "tables"
+    },
+    {
+      "name": "facts_release_catalogs",
+      "entityType": "tables"
+    },
+    {
+      "name": "facts_releases",
+      "entityType": "tables"
+    },
+    {
+      "name": "fx_rates",
+      "entityType": "tables"
+    },
+    {
+      "name": "application_identity_aliases",
+      "entityType": "tables"
+    },
+    {
+      "name": "job_posting_snapshots",
+      "entityType": "tables"
+    },
+    {
+      "name": "application_listing_check_schedules",
+      "entityType": "tables"
+    },
+    {
+      "name": "application_listing_checks",
+      "entityType": "tables"
+    },
+    {
+      "name": "listing_check_runs",
+      "entityType": "tables"
+    },
+    {
+      "name": "command_receipts",
+      "entityType": "tables"
+    },
+    {
+      "name": "registry_sequence",
+      "entityType": "tables"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "table": "application_labels"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "label",
+      "entityType": "columns",
+      "table": "application_labels"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "application_labels"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "application_notes"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "table": "application_notes"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "kind",
+      "entityType": "columns",
+      "table": "application_notes"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "body",
+      "entityType": "columns",
+      "table": "application_notes"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source",
+      "entityType": "columns",
+      "table": "application_notes"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "application_notes"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "application_notes"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "job_key",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_job_id",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "canonical_url",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "company",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "company_normalized",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "role",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "location",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'not_started'",
+      "generated": null,
+      "name": "application_status",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'backlog'",
+      "generated": null,
+      "name": "target_stage",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "personal_priority",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "follow_up_at",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "applied_at",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "last_contact_at",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'unchecked'",
+      "generated": null,
+      "name": "listing_availability",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "listing_confidence",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "listing_reason_code",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "listing_checked_at",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "listing_closed_candidate_at",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "listing_consecutive_closed_checks",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_revision",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "cv_link_id",
+      "entityType": "columns",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "content_revision_id",
+      "entityType": "columns",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "kind",
+      "entityType": "columns",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "status",
+      "entityType": "columns",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "workflow_id",
+      "entityType": "columns",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "renderer_version",
+      "entityType": "columns",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "qr_target",
+      "entityType": "columns",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "object_key",
+      "entityType": "columns",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "sha256",
+      "entityType": "columns",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "byte_length",
+      "entityType": "columns",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "media_type",
+      "entityType": "columns",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "error_code",
+      "entityType": "columns",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "error_message",
+      "entityType": "columns",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "generated_at",
+      "entityType": "columns",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "campaign_captures"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "table": "campaign_captures"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "campaign_run_id",
+      "entityType": "columns",
+      "table": "campaign_captures"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "profile",
+      "entityType": "columns",
+      "table": "campaign_captures"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "audience",
+      "entityType": "columns",
+      "table": "campaign_captures"
+    },
+    {
+      "type": "real",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "confidence",
+      "entityType": "columns",
+      "table": "campaign_captures"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "application_url",
+      "entityType": "columns",
+      "table": "campaign_captures"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "fit_assessment",
+      "entityType": "columns",
+      "table": "campaign_captures"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "submission_details",
+      "entityType": "columns",
+      "table": "campaign_captures"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "artifacts",
+      "entityType": "columns",
+      "table": "campaign_captures"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "job_content_hash",
+      "entityType": "columns",
+      "table": "campaign_captures"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "captured_at",
+      "entityType": "columns",
+      "table": "campaign_captures"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "operation_id",
+      "entityType": "columns",
+      "table": "campaign_captures"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "application_compensations"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "table": "application_compensations"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "kind",
+      "entityType": "columns",
+      "table": "application_compensations"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "currency_code",
+      "entityType": "columns",
+      "table": "application_compensations"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "minimum_minor",
+      "entityType": "columns",
+      "table": "application_compensations"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "maximum_minor",
+      "entityType": "columns",
+      "table": "application_compensations"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "period",
+      "entityType": "columns",
+      "table": "application_compensations"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "raw_text",
+      "entityType": "columns",
+      "table": "application_compensations"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source",
+      "entityType": "columns",
+      "table": "application_compensations"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "application_compensations"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "application_compensations"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "content_entries"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "table": "content_entries"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "kind",
+      "entityType": "columns",
+      "table": "content_entries"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "locale",
+      "entityType": "columns",
+      "table": "content_entries"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'draft'",
+      "generated": null,
+      "name": "state",
+      "entityType": "columns",
+      "table": "content_entries"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "head_revision_id",
+      "entityType": "columns",
+      "table": "content_entries"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "approved_revision_id",
+      "entityType": "columns",
+      "table": "content_entries"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "content_entries"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "content_entries"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "content_entries"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "content_entry_id",
+      "entityType": "columns",
+      "table": "content_revisions"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_number",
+      "entityType": "columns",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parent_revision_id",
+      "entityType": "columns",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "contract_id",
+      "entityType": "columns",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "contract_version",
+      "entityType": "columns",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "object_key",
+      "entityType": "columns",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "sha256",
+      "entityType": "columns",
+      "table": "content_revisions"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "byte_length",
+      "entityType": "columns",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "media_type",
+      "entityType": "columns",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source",
+      "entityType": "columns",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "facts_release_id",
+      "entityType": "columns",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "job_snapshot_id",
+      "entityType": "columns",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "operation_id",
+      "entityType": "columns",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "cv_links"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "table": "cv_links"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "content_entry_id",
+      "entityType": "columns",
+      "table": "cv_links"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "published_revision_id",
+      "entityType": "columns",
+      "table": "cv_links"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "token",
+      "entityType": "columns",
+      "table": "cv_links"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "public_url",
+      "entityType": "columns",
+      "table": "cv_links"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "true",
+      "generated": null,
+      "name": "enabled",
+      "entityType": "columns",
+      "table": "cv_links"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "disabled_reason",
+      "entityType": "columns",
+      "table": "cv_links"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "disabled_at",
+      "entityType": "columns",
+      "table": "cv_links"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "cv_links"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "cv_links"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "cv_links"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "application_events"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "table": "application_events"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "kind",
+      "entityType": "columns",
+      "table": "application_events"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision",
+      "entityType": "columns",
+      "table": "application_events"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "occurred_at",
+      "entityType": "columns",
+      "table": "application_events"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "recorded_at",
+      "entityType": "columns",
+      "table": "application_events"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "device_id",
+      "entityType": "columns",
+      "table": "application_events"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "payload",
+      "entityType": "columns",
+      "table": "application_events"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "operation_id",
+      "entityType": "columns",
+      "table": "application_events"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "name",
+      "entityType": "columns",
+      "table": "facts_channels"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "active_release_id",
+      "entityType": "columns",
+      "table": "facts_channels"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "facts_channels"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "facts_channels"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "release_id",
+      "entityType": "columns",
+      "table": "facts_release_assets"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "asset_id",
+      "entityType": "columns",
+      "table": "facts_release_assets"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "file_name",
+      "entityType": "columns",
+      "table": "facts_release_assets"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "object_key",
+      "entityType": "columns",
+      "table": "facts_release_assets"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "sha256",
+      "entityType": "columns",
+      "table": "facts_release_assets"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "byte_length",
+      "entityType": "columns",
+      "table": "facts_release_assets"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "media_type",
+      "entityType": "columns",
+      "table": "facts_release_assets"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "release_id",
+      "entityType": "columns",
+      "table": "facts_release_catalogs"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "locale",
+      "entityType": "columns",
+      "table": "facts_release_catalogs"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "object_key",
+      "entityType": "columns",
+      "table": "facts_release_catalogs"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "sha256",
+      "entityType": "columns",
+      "table": "facts_release_catalogs"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "byte_length",
+      "entityType": "columns",
+      "table": "facts_release_catalogs"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "media_type",
+      "entityType": "columns",
+      "table": "facts_release_catalogs"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "facts_releases"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "facts_schema_version",
+      "entityType": "columns",
+      "table": "facts_releases"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_repository",
+      "entityType": "columns",
+      "table": "facts_releases"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_commit",
+      "entityType": "columns",
+      "table": "facts_releases"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "compiler_repository",
+      "entityType": "columns",
+      "table": "facts_releases"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "compiler_commit",
+      "entityType": "columns",
+      "table": "facts_releases"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "manifest_object_key",
+      "entityType": "columns",
+      "table": "facts_releases"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "manifest_sha256",
+      "entityType": "columns",
+      "table": "facts_releases"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "manifest_byte_length",
+      "entityType": "columns",
+      "table": "facts_releases"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "facts_releases"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "base_currency",
+      "entityType": "columns",
+      "table": "fx_rates"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "quote_currency",
+      "entityType": "columns",
+      "table": "fx_rates"
+    },
+    {
+      "type": "real",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "rate",
+      "entityType": "columns",
+      "table": "fx_rates"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "provider",
+      "entityType": "columns",
+      "table": "fx_rates"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "observed_at",
+      "entityType": "columns",
+      "table": "fx_rates"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "fetched_at",
+      "entityType": "columns",
+      "table": "fx_rates"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "job_key",
+      "entityType": "columns",
+      "table": "application_identity_aliases"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "table": "application_identity_aliases"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "application_identity_aliases"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "requested_url",
+      "entityType": "columns",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "final_url",
+      "entityType": "columns",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "status",
+      "entityType": "columns",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "fetched_at",
+      "entityType": "columns",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "fetcher_version",
+      "entityType": "columns",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "raw_object_key",
+      "entityType": "columns",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "raw_sha256",
+      "entityType": "columns",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "raw_byte_length",
+      "entityType": "columns",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "raw_media_type",
+      "entityType": "columns",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "normalized_object_key",
+      "entityType": "columns",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "normalized_sha256",
+      "entityType": "columns",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "normalized_byte_length",
+      "entityType": "columns",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "normalized_media_type",
+      "entityType": "columns",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "error_code",
+      "entityType": "columns",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "error_message",
+      "entityType": "columns",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "table": "application_listing_check_schedules"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "due_at",
+      "entityType": "columns",
+      "table": "application_listing_check_schedules"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "lease_token",
+      "entityType": "columns",
+      "table": "application_listing_check_schedules"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "lease_until",
+      "entityType": "columns",
+      "table": "application_listing_check_schedules"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "attempt_count",
+      "entityType": "columns",
+      "table": "application_listing_check_schedules"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "last_error",
+      "entityType": "columns",
+      "table": "application_listing_check_schedules"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "application_listing_check_schedules"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "run_id",
+      "entityType": "columns",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "operation_id",
+      "entityType": "columns",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "requested_url",
+      "entityType": "columns",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "final_url",
+      "entityType": "columns",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "provider",
+      "entityType": "columns",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "outcome",
+      "entityType": "columns",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "confidence",
+      "entityType": "columns",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "recommended_action",
+      "entityType": "columns",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "reason_code",
+      "entityType": "columns",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "http_status",
+      "entityType": "columns",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "evidence",
+      "entityType": "columns",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "content_hash",
+      "entityType": "columns",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "checker_version",
+      "entityType": "columns",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "checked_at",
+      "entityType": "columns",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "received_at",
+      "entityType": "columns",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "next_check_at",
+      "entityType": "columns",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "trigger",
+      "entityType": "columns",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "mode",
+      "entityType": "columns",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "state",
+      "entityType": "columns",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "selected_count",
+      "entityType": "columns",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "checked_count",
+      "entityType": "columns",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "open_count",
+      "entityType": "columns",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "closed_count",
+      "entityType": "columns",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "review_count",
+      "entityType": "columns",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "error_count",
+      "entityType": "columns",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "started_at",
+      "entityType": "columns",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "completed_at",
+      "entityType": "columns",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "operation_id",
+      "entityType": "columns",
+      "table": "command_receipts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "operation_request_signature",
+      "entityType": "columns",
+      "table": "command_receipts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "kind",
+      "entityType": "columns",
+      "table": "command_receipts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "table": "command_receipts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "event_id",
+      "entityType": "columns",
+      "table": "command_receipts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "capture_id",
+      "entityType": "columns",
+      "table": "command_receipts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "note_id",
+      "entityType": "columns",
+      "table": "command_receipts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "recorded_at",
+      "entityType": "columns",
+      "table": "command_receipts"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "registry_sequence"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision",
+      "entityType": "columns",
+      "table": "registry_sequence"
+    },
+    {
+      "columns": ["application_id"],
+      "tableTo": "applications",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_application_labels_application_id_applications_id_fk",
+      "entityType": "fks",
+      "table": "application_labels"
+    },
+    {
+      "columns": ["application_id"],
+      "tableTo": "applications",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_application_notes_application_id_applications_id_fk",
+      "entityType": "fks",
+      "table": "application_notes"
+    },
+    {
+      "columns": ["cv_link_id"],
+      "tableTo": "cv_links",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "name": "fk_generated_artifacts_cv_link_id_cv_links_id_fk",
+      "entityType": "fks",
+      "table": "generated_artifacts"
+    },
+    {
+      "columns": ["content_revision_id"],
+      "tableTo": "content_revisions",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "name": "fk_generated_artifacts_content_revision_id_content_revisions_id_fk",
+      "entityType": "fks",
+      "table": "generated_artifacts"
+    },
+    {
+      "columns": ["application_id"],
+      "tableTo": "applications",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_campaign_captures_application_id_applications_id_fk",
+      "entityType": "fks",
+      "table": "campaign_captures"
+    },
+    {
+      "columns": ["application_id"],
+      "tableTo": "applications",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_application_compensations_application_id_applications_id_fk",
+      "entityType": "fks",
+      "table": "application_compensations"
+    },
+    {
+      "columns": ["application_id"],
+      "tableTo": "applications",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_content_entries_application_id_applications_id_fk",
+      "entityType": "fks",
+      "table": "content_entries"
+    },
+    {
+      "columns": ["content_entry_id"],
+      "tableTo": "content_entries",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_content_revisions_content_entry_id_content_entries_id_fk",
+      "entityType": "fks",
+      "table": "content_revisions"
+    },
+    {
+      "columns": ["facts_release_id"],
+      "tableTo": "facts_releases",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "name": "fk_content_revisions_facts_release_id_facts_releases_id_fk",
+      "entityType": "fks",
+      "table": "content_revisions"
+    },
+    {
+      "columns": ["job_snapshot_id"],
+      "tableTo": "job_posting_snapshots",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "nameExplicit": false,
+      "name": "fk_content_revisions_job_snapshot_id_job_posting_snapshots_id_fk",
+      "entityType": "fks",
+      "table": "content_revisions"
+    },
+    {
+      "columns": ["application_id"],
+      "tableTo": "applications",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_cv_links_application_id_applications_id_fk",
+      "entityType": "fks",
+      "table": "cv_links"
+    },
+    {
+      "columns": ["content_entry_id"],
+      "tableTo": "content_entries",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_cv_links_content_entry_id_content_entries_id_fk",
+      "entityType": "fks",
+      "table": "cv_links"
+    },
+    {
+      "columns": ["published_revision_id"],
+      "tableTo": "content_revisions",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_cv_links_published_revision_id_content_revisions_id_fk",
+      "entityType": "fks",
+      "table": "cv_links"
+    },
+    {
+      "columns": ["application_id"],
+      "tableTo": "applications",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_application_events_application_id_applications_id_fk",
+      "entityType": "fks",
+      "table": "application_events"
+    },
+    {
+      "columns": ["active_release_id"],
+      "tableTo": "facts_releases",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "name": "fk_facts_channels_active_release_id_facts_releases_id_fk",
+      "entityType": "fks",
+      "table": "facts_channels"
+    },
+    {
+      "columns": ["release_id"],
+      "tableTo": "facts_releases",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "name": "fk_facts_release_assets_release_id_facts_releases_id_fk",
+      "entityType": "fks",
+      "table": "facts_release_assets"
+    },
+    {
+      "columns": ["release_id"],
+      "tableTo": "facts_releases",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "name": "fk_facts_release_catalogs_release_id_facts_releases_id_fk",
+      "entityType": "fks",
+      "table": "facts_release_catalogs"
+    },
+    {
+      "columns": ["application_id"],
+      "tableTo": "applications",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_application_identity_aliases_application_id_applications_id_fk",
+      "entityType": "fks",
+      "table": "application_identity_aliases"
+    },
+    {
+      "columns": ["application_id"],
+      "tableTo": "applications",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_job_posting_snapshots_application_id_applications_id_fk",
+      "entityType": "fks",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "columns": ["application_id"],
+      "tableTo": "applications",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_application_listing_check_schedules_application_id_applications_id_fk",
+      "entityType": "fks",
+      "table": "application_listing_check_schedules"
+    },
+    {
+      "columns": ["application_id"],
+      "tableTo": "applications",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_application_listing_checks_application_id_applications_id_fk",
+      "entityType": "fks",
+      "table": "application_listing_checks"
+    },
+    {
+      "columns": ["run_id"],
+      "tableTo": "listing_check_runs",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "nameExplicit": false,
+      "name": "fk_application_listing_checks_run_id_listing_check_runs_id_fk",
+      "entityType": "fks",
+      "table": "application_listing_checks"
+    },
+    {
+      "columns": ["application_id"],
+      "tableTo": "applications",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_command_receipts_application_id_applications_id_fk",
+      "entityType": "fks",
+      "table": "command_receipts"
+    },
+    {
+      "columns": ["application_id", "label"],
+      "nameExplicit": false,
+      "name": "application_labels_pk",
+      "entityType": "pks",
+      "table": "application_labels"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "application_notes_pk",
+      "entityType": "pks",
+      "table": "application_notes"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "applications_pk",
+      "entityType": "pks",
+      "table": "applications"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "generated_artifacts_pk",
+      "entityType": "pks",
+      "table": "generated_artifacts"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "campaign_captures_pk",
+      "entityType": "pks",
+      "table": "campaign_captures"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "application_compensations_pk",
+      "entityType": "pks",
+      "table": "application_compensations"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "content_entries_pk",
+      "entityType": "pks",
+      "table": "content_entries"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "content_revisions_pk",
+      "entityType": "pks",
+      "table": "content_revisions"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "cv_links_pk",
+      "entityType": "pks",
+      "table": "cv_links"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "application_events_pk",
+      "entityType": "pks",
+      "table": "application_events"
+    },
+    {
+      "columns": ["name"],
+      "nameExplicit": false,
+      "name": "facts_channels_pk",
+      "entityType": "pks",
+      "table": "facts_channels"
+    },
+    {
+      "columns": ["release_id", "asset_id"],
+      "nameExplicit": false,
+      "name": "facts_release_assets_pk",
+      "entityType": "pks",
+      "table": "facts_release_assets"
+    },
+    {
+      "columns": ["release_id", "locale"],
+      "nameExplicit": false,
+      "name": "facts_release_catalogs_pk",
+      "entityType": "pks",
+      "table": "facts_release_catalogs"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "facts_releases_pk",
+      "entityType": "pks",
+      "table": "facts_releases"
+    },
+    {
+      "columns": ["base_currency", "quote_currency", "provider", "observed_at"],
+      "nameExplicit": false,
+      "name": "fx_rates_pk",
+      "entityType": "pks",
+      "table": "fx_rates"
+    },
+    {
+      "columns": ["job_key"],
+      "nameExplicit": false,
+      "name": "application_identity_aliases_pk",
+      "entityType": "pks",
+      "table": "application_identity_aliases"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "job_posting_snapshots_pk",
+      "entityType": "pks",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "columns": ["application_id"],
+      "nameExplicit": false,
+      "name": "application_listing_check_schedules_pk",
+      "entityType": "pks",
+      "table": "application_listing_check_schedules"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "application_listing_checks_pk",
+      "entityType": "pks",
+      "table": "application_listing_checks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "listing_check_runs_pk",
+      "entityType": "pks",
+      "table": "listing_check_runs"
+    },
+    {
+      "columns": ["operation_id"],
+      "nameExplicit": false,
+      "name": "command_receipts_pk",
+      "entityType": "pks",
+      "table": "command_receipts"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "registry_sequence_pk",
+      "entityType": "pks",
+      "table": "registry_sequence"
+    },
+    {
+      "columns": [
+        {
+          "value": "label",
+          "isExpression": false
+        },
+        {
+          "value": "application_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "application_labels_label_idx",
+      "entityType": "indexes",
+      "table": "application_labels"
+    },
+    {
+      "columns": [
+        {
+          "value": "application_id",
+          "isExpression": false
+        },
+        {
+          "value": "created_at",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "application_notes_application_created_idx",
+      "entityType": "indexes",
+      "table": "application_notes"
+    },
+    {
+      "columns": [
+        {
+          "value": "job_key",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "applications_job_key_unique",
+      "entityType": "indexes",
+      "table": "applications"
+    },
+    {
+      "columns": [
+        {
+          "value": "company_normalized",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "applications_company_normalized_idx",
+      "entityType": "indexes",
+      "table": "applications"
+    },
+    {
+      "columns": [
+        {
+          "value": "application_status",
+          "isExpression": false
+        },
+        {
+          "value": "updated_revision",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "applications_status_updated_revision_idx",
+      "entityType": "indexes",
+      "table": "applications"
+    },
+    {
+      "columns": [
+        {
+          "value": "target_stage",
+          "isExpression": false
+        },
+        {
+          "value": "updated_revision",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "applications_target_stage_updated_revision_idx",
+      "entityType": "indexes",
+      "table": "applications"
+    },
+    {
+      "columns": [
+        {
+          "value": "listing_availability",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "applications_listing_availability_idx",
+      "entityType": "indexes",
+      "table": "applications"
+    },
+    {
+      "columns": [
+        {
+          "value": "updated_revision",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "applications_updated_revision_unique",
+      "entityType": "indexes",
+      "table": "applications"
+    },
+    {
+      "columns": [
+        {
+          "value": "cv_link_id",
+          "isExpression": false
+        },
+        {
+          "value": "content_revision_id",
+          "isExpression": false
+        },
+        {
+          "value": "kind",
+          "isExpression": false
+        },
+        {
+          "value": "renderer_version",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "generated_artifacts_render_unique",
+      "entityType": "indexes",
+      "table": "generated_artifacts"
+    },
+    {
+      "columns": [
+        {
+          "value": "cv_link_id",
+          "isExpression": false
+        },
+        {
+          "value": "status",
+          "isExpression": false
+        },
+        {
+          "value": "updated_at",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "generated_artifacts_link_status_idx",
+      "entityType": "indexes",
+      "table": "generated_artifacts"
+    },
+    {
+      "columns": [
+        {
+          "value": "operation_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "campaign_captures_operation_id_unique",
+      "entityType": "indexes",
+      "table": "campaign_captures"
+    },
+    {
+      "columns": [
+        {
+          "value": "application_id",
+          "isExpression": false
+        },
+        {
+          "value": "captured_at",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "campaign_captures_application_captured_idx",
+      "entityType": "indexes",
+      "table": "campaign_captures"
+    },
+    {
+      "columns": [
+        {
+          "value": "application_id",
+          "isExpression": false
+        },
+        {
+          "value": "kind",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "application_compensations_application_idx",
+      "entityType": "indexes",
+      "table": "application_compensations"
+    },
+    {
+      "columns": [
+        {
+          "value": "application_id",
+          "isExpression": false
+        },
+        {
+          "value": "kind",
+          "isExpression": false
+        },
+        {
+          "value": "locale",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "content_entries_application_kind_locale_unique",
+      "entityType": "indexes",
+      "table": "content_entries"
+    },
+    {
+      "columns": [
+        {
+          "value": "application_id",
+          "isExpression": false
+        },
+        {
+          "value": "updated_at",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "content_entries_application_updated_idx",
+      "entityType": "indexes",
+      "table": "content_entries"
+    },
+    {
+      "columns": [
+        {
+          "value": "content_entry_id",
+          "isExpression": false
+        },
+        {
+          "value": "revision_number",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "content_revisions_entry_number_unique",
+      "entityType": "indexes",
+      "table": "content_revisions"
+    },
+    {
+      "columns": [
+        {
+          "value": "operation_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "content_revisions_operation_unique",
+      "entityType": "indexes",
+      "table": "content_revisions"
+    },
+    {
+      "columns": [
+        {
+          "value": "content_entry_id",
+          "isExpression": false
+        },
+        {
+          "value": "created_at",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "content_revisions_entry_created_idx",
+      "entityType": "indexes",
+      "table": "content_revisions"
+    },
+    {
+      "columns": [
+        {
+          "value": "token",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "cv_links_token_unique",
+      "entityType": "indexes",
+      "table": "cv_links"
+    },
+    {
+      "columns": [
+        {
+          "value": "content_entry_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "cv_links_content_entry_unique",
+      "entityType": "indexes",
+      "table": "cv_links"
+    },
+    {
+      "columns": [
+        {
+          "value": "application_id",
+          "isExpression": false
+        },
+        {
+          "value": "enabled",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "cv_links_application_enabled_idx",
+      "entityType": "indexes",
+      "table": "cv_links"
+    },
+    {
+      "columns": [
+        {
+          "value": "operation_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "application_events_operation_id_unique",
+      "entityType": "indexes",
+      "table": "application_events"
+    },
+    {
+      "columns": [
+        {
+          "value": "application_id",
+          "isExpression": false
+        },
+        {
+          "value": "occurred_at",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "application_events_application_occurred_idx",
+      "entityType": "indexes",
+      "table": "application_events"
+    },
+    {
+      "columns": [
+        {
+          "value": "application_id",
+          "isExpression": false
+        },
+        {
+          "value": "revision",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "application_events_application_revision_idx",
+      "entityType": "indexes",
+      "table": "application_events"
+    },
+    {
+      "columns": [
+        {
+          "value": "revision",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "application_events_revision_unique",
+      "entityType": "indexes",
+      "table": "application_events"
+    },
+    {
+      "columns": [
+        {
+          "value": "source_repository",
+          "isExpression": false
+        },
+        {
+          "value": "source_commit",
+          "isExpression": false
+        },
+        {
+          "value": "compiler_commit",
+          "isExpression": false
+        },
+        {
+          "value": "facts_schema_version",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "facts_releases_input_unique",
+      "entityType": "indexes",
+      "table": "facts_releases"
+    },
+    {
+      "columns": [
+        {
+          "value": "base_currency",
+          "isExpression": false
+        },
+        {
+          "value": "quote_currency",
+          "isExpression": false
+        },
+        {
+          "value": "fetched_at",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "fx_rates_pair_fetched_idx",
+      "entityType": "indexes",
+      "table": "fx_rates"
+    },
+    {
+      "columns": [
+        {
+          "value": "application_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "application_identity_aliases_application_idx",
+      "entityType": "indexes",
+      "table": "application_identity_aliases"
+    },
+    {
+      "columns": [
+        {
+          "value": "application_id",
+          "isExpression": false
+        },
+        {
+          "value": "fetched_at",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "job_posting_snapshots_application_fetched_idx",
+      "entityType": "indexes",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "columns": [
+        {
+          "value": "due_at",
+          "isExpression": false
+        },
+        {
+          "value": "lease_until",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "listing_check_schedules_due_lease_idx",
+      "entityType": "indexes",
+      "table": "application_listing_check_schedules"
+    },
+    {
+      "columns": [
+        {
+          "value": "operation_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "application_listing_checks_operation_unique",
+      "entityType": "indexes",
+      "table": "application_listing_checks"
+    },
+    {
+      "columns": [
+        {
+          "value": "application_id",
+          "isExpression": false
+        },
+        {
+          "value": "checked_at",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "application_listing_checks_application_checked_idx",
+      "entityType": "indexes",
+      "table": "application_listing_checks"
+    },
+    {
+      "columns": [
+        {
+          "value": "run_id",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "application_listing_checks_run_idx",
+      "entityType": "indexes",
+      "table": "application_listing_checks"
+    },
+    {
+      "columns": [
+        {
+          "value": "started_at",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "listing_check_runs_started_idx",
+      "entityType": "indexes",
+      "table": "listing_check_runs"
+    },
+    {
+      "value": "\"kind\" in ('summary', 'role_description', 'why_this_fits', 'caveat', 'research', 'application', 'interview_prep', 'contact', 'general')",
+      "name": "application_notes_kind_check",
+      "entityType": "checks",
+      "table": "application_notes"
+    },
+    {
+      "value": "\"application_status\" in ('not_started', 'preparing', 'applied', 'recruiter_screen', 'technical_screen', 'take_home', 'interview_loop', 'paused', 'offer', 'rejected', 'withdrawn', 'archived')",
+      "name": "applications_status_check",
+      "entityType": "checks",
+      "table": "applications"
+    },
+    {
+      "value": "\"target_stage\" in ('apply_next', 'verify_first', 'secondary', 'backlog', 'watch_after_move', 'closed_skip')",
+      "name": "applications_target_stage_check",
+      "entityType": "checks",
+      "table": "applications"
+    },
+    {
+      "value": "\"personal_priority\" is null or \"personal_priority\" in ('low', 'medium', 'high', 'pass')",
+      "name": "applications_personal_priority_check",
+      "entityType": "checks",
+      "table": "applications"
+    },
+    {
+      "value": "\"listing_availability\" in ('unchecked', 'open', 'suspected_closed', 'closed', 'unknown')",
+      "name": "applications_listing_availability_check",
+      "entityType": "checks",
+      "table": "applications"
+    },
+    {
+      "value": "\"listing_confidence\" is null or \"listing_confidence\" in ('low', 'medium', 'high', 'confirmed')",
+      "name": "applications_listing_confidence_check",
+      "entityType": "checks",
+      "table": "applications"
+    },
+    {
+      "value": "\"listing_reason_code\" is null or \"listing_reason_code\" in ('http_404', 'http_410', 'provider_open', 'provider_closed', 'valid_through_expired', 'explicit_closed_text', 'working_application_path', 'identity_mismatch', 'redirected_to_listing_page', 'access_forbidden', 'rate_limited', 'server_error', 'network_error', 'unclassified_page')",
+      "name": "applications_listing_reason_check",
+      "entityType": "checks",
+      "table": "applications"
+    },
+    {
+      "value": "\"listing_consecutive_closed_checks\" >= 0",
+      "name": "applications_listing_closed_count_check",
+      "entityType": "checks",
+      "table": "applications"
+    },
+    {
+      "value": "\"version\" >= 1",
+      "name": "applications_version_check",
+      "entityType": "checks",
+      "table": "applications"
+    },
+    {
+      "value": "\"kind\" in ('pdf')",
+      "name": "generated_artifacts_kind_check",
+      "entityType": "checks",
+      "table": "generated_artifacts"
+    },
+    {
+      "value": "\"status\" in ('pending', 'ready', 'failed')",
+      "name": "generated_artifacts_status_check",
+      "entityType": "checks",
+      "table": "generated_artifacts"
+    },
+    {
+      "value": "\"byte_length\" is null or \"byte_length\" >= 0",
+      "name": "generated_artifacts_byte_length_check",
+      "entityType": "checks",
+      "table": "generated_artifacts"
+    },
+    {
+      "value": "\"confidence\" is null or (\"confidence\" >= 0 and \"confidence\" <= 1)",
+      "name": "campaign_captures_confidence_check",
+      "entityType": "checks",
+      "table": "campaign_captures"
+    },
+    {
+      "value": "\"fit_assessment\" is null or json_valid(\"fit_assessment\")",
+      "name": "campaign_captures_fit_assessment_json_check",
+      "entityType": "checks",
+      "table": "campaign_captures"
+    },
+    {
+      "value": "json_valid(\"submission_details\")",
+      "name": "campaign_captures_submission_details_json_check",
+      "entityType": "checks",
+      "table": "campaign_captures"
+    },
+    {
+      "value": "json_valid(\"artifacts\")",
+      "name": "campaign_captures_artifacts_json_check",
+      "entityType": "checks",
+      "table": "campaign_captures"
+    },
+    {
+      "value": "\"kind\" in ('base_salary', 'total_compensation', 'bonus', 'equity', 'other')",
+      "name": "application_compensations_kind_check",
+      "entityType": "checks",
+      "table": "application_compensations"
+    },
+    {
+      "value": "length(\"currency_code\") = 3 and \"currency_code\" glob '[A-Z][A-Z][A-Z]'",
+      "name": "application_compensations_currency_code_check",
+      "entityType": "checks",
+      "table": "application_compensations"
+    },
+    {
+      "value": "\"period\" in ('hour', 'day', 'week', 'month', 'year', 'one_time', 'unknown')",
+      "name": "application_compensations_period_check",
+      "entityType": "checks",
+      "table": "application_compensations"
+    },
+    {
+      "value": "\"minimum_minor\" is null or \"minimum_minor\" >= 0",
+      "name": "application_compensations_minimum_check",
+      "entityType": "checks",
+      "table": "application_compensations"
+    },
+    {
+      "value": "\"maximum_minor\" is null or \"maximum_minor\" >= 0",
+      "name": "application_compensations_maximum_check",
+      "entityType": "checks",
+      "table": "application_compensations"
+    },
+    {
+      "value": "\"minimum_minor\" is null or \"maximum_minor\" is null or \"minimum_minor\" <= \"maximum_minor\"",
+      "name": "application_compensations_range_check",
+      "entityType": "checks",
+      "table": "application_compensations"
+    },
+    {
+      "value": "\"kind\" in ('cv', 'cover_letter')",
+      "name": "content_entries_kind_check",
+      "entityType": "checks",
+      "table": "content_entries"
+    },
+    {
+      "value": "\"state\" in ('draft', 'approved')",
+      "name": "content_entries_state_check",
+      "entityType": "checks",
+      "table": "content_entries"
+    },
+    {
+      "value": "\"version\" >= 1",
+      "name": "content_entries_version_check",
+      "entityType": "checks",
+      "table": "content_entries"
+    },
+    {
+      "value": "\"source\" in ('ai', 'human', 'ai_adjustment', 'migration')",
+      "name": "content_revisions_source_check",
+      "entityType": "checks",
+      "table": "content_revisions"
+    },
+    {
+      "value": "\"revision_number\" >= 1",
+      "name": "content_revisions_revision_number_check",
+      "entityType": "checks",
+      "table": "content_revisions"
+    },
+    {
+      "value": "\"byte_length\" >= 0",
+      "name": "content_revisions_byte_length_check",
+      "entityType": "checks",
+      "table": "content_revisions"
+    },
+    {
+      "value": "\"version\" >= 1",
+      "name": "cv_links_version_check",
+      "entityType": "checks",
+      "table": "cv_links"
+    },
+    {
+      "value": "\"kind\" in ('discovered', 'campaign_prepared', 'listing_closed', 'submitted', 'stage_changed', 'interview_scheduled', 'rejected', 'withdrawn', 'offer_received', 'note_added', 'contact_logged', 'follow_up_scheduled', 'research_updated')",
+      "name": "application_events_kind_check",
+      "entityType": "checks",
+      "table": "application_events"
+    },
+    {
+      "value": "json_valid(\"payload\")",
+      "name": "application_events_payload_json_check",
+      "entityType": "checks",
+      "table": "application_events"
+    },
+    {
+      "value": "\"version\" >= 1",
+      "name": "facts_channels_version_check",
+      "entityType": "checks",
+      "table": "facts_channels"
+    },
+    {
+      "value": "\"byte_length\" >= 0",
+      "name": "facts_release_assets_byte_length_check",
+      "entityType": "checks",
+      "table": "facts_release_assets"
+    },
+    {
+      "value": "\"byte_length\" >= 0",
+      "name": "facts_release_catalogs_byte_length_check",
+      "entityType": "checks",
+      "table": "facts_release_catalogs"
+    },
+    {
+      "value": "\"manifest_byte_length\" >= 0",
+      "name": "facts_releases_manifest_byte_length_check",
+      "entityType": "checks",
+      "table": "facts_releases"
+    },
+    {
+      "value": "length(\"base_currency\") = 3 and \"base_currency\" glob '[A-Z][A-Z][A-Z]'",
+      "name": "fx_rates_base_currency_check",
+      "entityType": "checks",
+      "table": "fx_rates"
+    },
+    {
+      "value": "length(\"quote_currency\") = 3 and \"quote_currency\" glob '[A-Z][A-Z][A-Z]'",
+      "name": "fx_rates_quote_currency_check",
+      "entityType": "checks",
+      "table": "fx_rates"
+    },
+    {
+      "value": "\"rate\" > 0",
+      "name": "fx_rates_rate_check",
+      "entityType": "checks",
+      "table": "fx_rates"
+    },
+    {
+      "value": "\"status\" in ('fetched', 'provided', 'failed')",
+      "name": "job_posting_snapshots_status_check",
+      "entityType": "checks",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "value": "\"raw_byte_length\" is null or \"raw_byte_length\" >= 0",
+      "name": "job_posting_snapshots_raw_byte_length_check",
+      "entityType": "checks",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "value": "\"normalized_byte_length\" is null or \"normalized_byte_length\" >= 0",
+      "name": "job_posting_snapshots_normalized_byte_length_check",
+      "entityType": "checks",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "value": "\"attempt_count\" >= 0",
+      "name": "listing_check_schedules_attempt_count_check",
+      "entityType": "checks",
+      "table": "application_listing_check_schedules"
+    },
+    {
+      "value": "\"outcome\" in ('open', 'closed', 'unknown')",
+      "name": "application_listing_checks_outcome_check",
+      "entityType": "checks",
+      "table": "application_listing_checks"
+    },
+    {
+      "value": "\"confidence\" in ('low', 'medium', 'high', 'confirmed')",
+      "name": "application_listing_checks_confidence_check",
+      "entityType": "checks",
+      "table": "application_listing_checks"
+    },
+    {
+      "value": "\"recommended_action\" in ('keep', 'recheck', 'review', 'archive')",
+      "name": "application_listing_checks_action_check",
+      "entityType": "checks",
+      "table": "application_listing_checks"
+    },
+    {
+      "value": "\"reason_code\" in ('http_404', 'http_410', 'provider_open', 'provider_closed', 'valid_through_expired', 'explicit_closed_text', 'working_application_path', 'identity_mismatch', 'redirected_to_listing_page', 'access_forbidden', 'rate_limited', 'server_error', 'network_error', 'unclassified_page')",
+      "name": "application_listing_checks_reason_check",
+      "entityType": "checks",
+      "table": "application_listing_checks"
+    },
+    {
+      "value": "\"http_status\" is null or (\"http_status\" >= 100 and \"http_status\" <= 599)",
+      "name": "application_listing_checks_http_status_check",
+      "entityType": "checks",
+      "table": "application_listing_checks"
+    },
+    {
+      "value": "json_valid(\"evidence\")",
+      "name": "application_listing_checks_evidence_json_check",
+      "entityType": "checks",
+      "table": "application_listing_checks"
+    },
+    {
+      "value": "\"trigger\" in ('cli', 'scheduled')",
+      "name": "listing_check_runs_trigger_check",
+      "entityType": "checks",
+      "table": "listing_check_runs"
+    },
+    {
+      "value": "\"mode\" in ('report', 'archive_eligible')",
+      "name": "listing_check_runs_mode_check",
+      "entityType": "checks",
+      "table": "listing_check_runs"
+    },
+    {
+      "value": "\"state\" in ('running', 'completed')",
+      "name": "listing_check_runs_state_check",
+      "entityType": "checks",
+      "table": "listing_check_runs"
+    },
+    {
+      "value": "\"selected_count\" >= 0 and \"checked_count\" >= 0 and \"open_count\" >= 0 and \"closed_count\" >= 0 and \"review_count\" >= 0 and \"error_count\" >= 0",
+      "name": "listing_check_runs_counts_check",
+      "entityType": "checks",
+      "table": "listing_check_runs"
+    },
+    {
+      "value": "\"kind\" in ('campaign_capture', 'application_event', 'application_note', 'listing_check', 'managed_application_update')",
+      "name": "command_receipts_kind_check",
+      "entityType": "checks",
+      "table": "command_receipts"
+    },
+    {
+      "value": "\"id\" = 1",
+      "name": "registry_sequence_singleton_check",
+      "entityType": "checks",
+      "table": "registry_sequence"
+    },
+    {
+      "value": "\"revision\" >= 1",
+      "name": "registry_sequence_revision_check",
+      "entityType": "checks",
+      "table": "registry_sequence"
+    }
+  ],
+  "renames": []
+}

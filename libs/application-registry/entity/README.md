@@ -9,10 +9,6 @@ compensation entries, FX-rate observations, idempotency receipts, and the
 monotonic revision sequence. Table row types are inferred directly from those
 definitions; there is no hand-maintained duplicate entity interface.
 
-`applications.remotePolicy` retains the source's short/raw work-policy text for
-search and display. `applications.details.workMode` is the normalized shared
-opportunity field used alongside the other geography-independent details.
-
 The package separates the three concerns involved in the entity model:
 
 - `src/model` owns reusable Effect leaf and structured-value schemas. Literal

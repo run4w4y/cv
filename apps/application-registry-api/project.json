@@ -11,7 +11,7 @@
       "outputs": ["{projectRoot}/dist"],
       "options": {
         "color": true,
-        "command": "bun build apps/application-registry-api/src/index.ts --target browser --outdir apps/application-registry-api/dist"
+        "command": "bun apps/application-registry-api/scripts/build.ts"
       }
     },
     "deploy": {

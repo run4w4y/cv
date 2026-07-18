@@ -27,7 +27,7 @@
       "outputs": [],
       "options": {
         "color": true,
-        "command": "node --import tsx --test libs/application-registry/crud/test/crud.integration.test.ts"
+        "command": "node --import tsx --test libs/application-registry/crud/test/*.integration.test.ts"
       }
     },
     "lint": {},

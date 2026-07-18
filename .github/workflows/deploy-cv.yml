@@ -7,12 +7,6 @@ permissions:
 
 on:
   workflow_call:
-    inputs:
-      content_ref:
-        description: Git ref or SHA from run4w4y/cv-content.
-        default: main
-        required: false
-        type: string
 
 concurrency:
   group: cv-production
@@ -20,21 +14,18 @@ concurrency:
 
 env:
   ASTRO_TELEMETRY_DISABLED: "1"
-  CLOUDFLARE_PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
-  CONTENT_REF: ${{ inputs.content_ref || 'main' }}
-  CONTENT_ROOT: ${{ github.workspace }}/.external/cv-content
-  CV_WEB_BASE_URL: ${{ vars.CV_WEB_BASE_URL || 'https://run4w4y.github.io/cv' }}
   INFISICAL_ENV: ${{ vars.INFISICAL_ENV || 'prod' }}
   INFISICAL_HOST: ${{ vars.INFISICAL_HOST || 'https://app.infisical.com' }}
 
 jobs:
-  build-cv-production:
-    name: Build production CV app
+  deploy-cv-worker:
+    name: Build and deploy public CV Worker
     runs-on: ubuntu-latest
     environment: production
     permissions:
       actions: read
       contents: read
+      deployments: write
       id-token: write
     steps:
       - name: Checkout
@@ -43,7 +34,7 @@ jobs:
           fetch-depth: 0
           filter: tree:0
 
-      - name: Fetch Infisical secrets
+      - name: Fetch Infisical deployment values
         if: ${{ !env.ACT }}
         uses: ./.github/actions/fetch-infisical
         with:
@@ -52,46 +43,35 @@ jobs:
           env-slug: ${{ env.INFISICAL_ENV }}
           host: ${{ env.INFISICAL_HOST }}
 
-      - name: Checkout private content
-        run: |
-          if [[ -z "${CONTENT_REPO_TOKEN:-}" ]]; then
-            if [[ -d ../cv-content/content ]]; then
-              mkdir -p .external
-              cp -a ../cv-content .external/cv-content
-              exit 0
-            fi
-
-            echo "::error title=Missing CONTENT_REPO_TOKEN::Infisical did not export CONTENT_REPO_TOKEN. Check /cv/content and the machine identity access policy."
-            exit 1
-          fi
-
-          mkdir -p .external
-          export GH_TOKEN="$CONTENT_REPO_TOKEN"
-          export GIT_TERMINAL_PROMPT=0
-
-          gh auth setup-git --hostname github.com --force
-          git clone --no-tags --depth 1 https://github.com/run4w4y/cv-content.git .external/cv-content
-          cd .external/cv-content
-          if [[ "$CONTENT_REF" != "main" ]]; then
-            git fetch --no-tags --depth 1 origin "$CONTENT_REF"
-            git checkout --detach FETCH_HEAD
-          fi
-
       - name: Set up workspace runtime
         uses: ./.github/actions/setup-runtime
-        with:
-          install-playwright: "true"
 
-      - name: Validate production CV configuration
+      - name: Resolve public CV Worker deployment values
+        env:
+          CONFIGURED_CV_PUBLIC_REGISTRY_SERVICE_NAME: ${{ vars.CV_PUBLIC_REGISTRY_SERVICE_NAME }}
+          CONFIGURED_CV_PUBLIC_RESOLVER_ENTRYPOINT: ${{ vars.CV_PUBLIC_RESOLVER_ENTRYPOINT }}
+          CONFIGURED_CV_PUBLIC_WORKER_NAME: ${{ vars.CV_PUBLIC_WORKER_NAME }}
+        run: |
+          worker_name="${CONFIGURED_CV_PUBLIC_WORKER_NAME:-${CV_PUBLIC_WORKER_NAME:-cv-public}}"
+          resolver_entrypoint="${CONFIGURED_CV_PUBLIC_RESOLVER_ENTRYPOINT:-${CV_PUBLIC_RESOLVER_ENTRYPOINT:-CvPublicResolver}}"
+          registry_service_name="${CONFIGURED_CV_PUBLIC_REGISTRY_SERVICE_NAME:-${CV_PUBLIC_REGISTRY_SERVICE_NAME:-}}"
+
+          {
+            printf 'CV_PUBLIC_WORKER_NAME=%s\n' "$worker_name"
+            printf 'CV_PUBLIC_RESOLVER_ENTRYPOINT=%s\n' "$resolver_entrypoint"
+            if [[ -n "$registry_service_name" ]]; then
+              printf 'CV_PUBLIC_REGISTRY_SERVICE_NAME=%s\n' "$registry_service_name"
+            fi
+          } >> "$GITHUB_ENV"
+
+      - name: Validate production CV Worker configuration
+        if: ${{ !env.ACT }}
         run: |
           missing=()
           for name in \
-            CONTENT_ID_SALT \
-            CONTENT_ROOT \
-            CV_WEB_BASE_URL \
-            PRIVATE_CONTENT_AUDIENCE_KEY \
-            PRIVATE_CONTENT_ROOT_KEY \
-            PUBLIC_CV_FULL_ACCESS_EMAIL
+            CLOUDFLARE_ACCOUNT_ID \
+            CLOUDFLARE_API_TOKEN \
+            CV_PUBLIC_WORKER_NAME
           do
             if [[ -z "${!name:-}" ]]; then
               missing+=("$name")
@@ -99,146 +79,33 @@ jobs:
           done
 
           if (( ${#missing[@]} > 0 )); then
-            printf '::error title=Missing production CV configuration::Missing: %s\n' "${missing[*]}"
+            printf '::error title=Missing production CV Worker configuration::Missing: %s\n' "${missing[*]}"
             exit 1
           fi
 
-      - name: Build static site
+          if [[ -z "${CV_PUBLIC_REGISTRY_SERVICE_NAME:-}" && -z "${APPLICATION_REGISTRY_WORKER_NAME:-}" ]]; then
+            echo "::error title=Missing production CV Worker configuration::Set CV_PUBLIC_REGISTRY_SERVICE_NAME or APPLICATION_REGISTRY_WORKER_NAME."
+            exit 1
+          fi
+
+      - name: Build public CV Worker
         run: ./node_modules/.bin/nx run cv:build --skip-nx-cache
 
-      - name: Validate static site content
-        run: |
-          if grep -R --line-number --fixed-strings \
-            -e 'Example CV Fixture' \
-            -e 'public.fixture@example.invalid' \
-            -e 'fixtures/cv-content-e2e' \
-            apps/cv/dist; then
-            echo "::error title=Fixture content in deploy artifact::apps/cv/dist contains e2e fixture content. Rebuild with private CONTENT_ROOT before deploy."
-            exit 1
-          fi
+      - name: Generate production Wrangler config
+        env:
+          CV_PUBLIC_COMPATIBILITY_DATE: ${{ vars.CV_PUBLIC_COMPATIBILITY_DATE }}
+        run: >-
+          bun apps/cv/scripts/write-wrangler-config.ts
+          apps/cv/dist/server/wrangler.deploy.json
 
-      - name: Generate public PDF exports
-        run: ./node_modules/.bin/nx run pdf-export:public
+      - name: Validate deployable Worker artifact
+        run: >-
+          bunx wrangler deploy --dry-run
+          --config apps/cv/dist/server/wrangler.deploy.json
+          --outdir apps/cv/dist/deploy-check
 
-      - name: Upload PDF artifact
+      - name: Deploy public CV Worker
         if: ${{ !env.ACT }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: cv-pdf
-          path: apps/cv/dist/pdf/*.pdf
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Remove PDF exports from static site artifact
-        run: rm -rf apps/cv/dist/pdf
-
-      - name: Upload static artifact
-        if: ${{ !env.ACT }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: cv-dist
-          path: apps/cv/dist
-          if-no-files-found: error
-          retention-days: 7
-
-  publish-pdf-release:
-    name: Publish PDF release assets
-    needs: build-cv-production
-    runs-on: ubuntu-latest
-    environment: production
-    permissions:
-      contents: write
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_TAG: cv-pdf-latest
-    steps:
-      - name: Download PDF artifact
-        if: ${{ !env.ACT }}
-        uses: actions/download-artifact@v4
-        with:
-          name: cv-pdf
-          path: pdf-assets
-
-      - name: Publish PDF release assets
-        if: ${{ !env.ACT }}
-        run: |
-          release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq ".[] | select(.tag_name == \"${RELEASE_TAG}\")" 2>/dev/null || true)"
-          if [[ -n "$release_json" ]]; then
-            is_draft="$(node -e 'const fs = require("node:fs"); const release = JSON.parse(fs.readFileSync(0, "utf8")); console.log(release.draft ? "true" : "false")' <<<"$release_json")"
-            if [[ "$is_draft" == "true" ]]; then
-              release_id="$(node -e 'const fs = require("node:fs"); const release = JSON.parse(fs.readFileSync(0, "utf8")); console.log(release.id)' <<<"$release_json")"
-              gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/${release_id}"
-              release_json=""
-            fi
-          fi
-
-          if [[ -z "$release_json" ]]; then
-            gh release create "$RELEASE_TAG" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "Latest CV PDFs" \
-              --notes "Latest generated CV PDF exports from ${GITHUB_SHA}." \
-              --target "main" \
-              --latest=false
-          fi
-
-          gh release upload "$RELEASE_TAG" \
-            pdf-assets/cv-en.pdf \
-            pdf-assets/cv-ru.pdf \
-            --clobber \
-            --repo "$GITHUB_REPOSITORY"
-
-  deploy-pages:
-    name: Deploy Cloudflare Pages
-    needs: build-cv-production
-    runs-on: ubuntu-latest
-    environment: production
-    permissions:
-      contents: read
-      deployments: write
-      id-token: write
-    steps:
-      - name: Checkout
-        if: ${{ !env.ACT }}
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          filter: tree:0
-
-      - name: Fetch Infisical secrets
-        if: ${{ !env.ACT }}
-        uses: ./.github/actions/fetch-infisical
-        with:
-          identity-id: ${{ secrets.INFISICAL_IDENTITY_ID }}
-          project-slug: ${{ secrets.INFISICAL_PROJECT_SLUG }}
-          env-slug: ${{ env.INFISICAL_ENV }}
-          host: ${{ env.INFISICAL_HOST }}
-
-      - name: Set up workspace runtime
-        if: ${{ !env.ACT }}
-        uses: ./.github/actions/setup-runtime
-
-      - name: Download static artifact
-        if: ${{ !env.ACT }}
-        uses: actions/download-artifact@v4
-        with:
-          name: cv-dist
-          path: apps/cv/dist
-
-      - name: Validate Cloudflare Pages configuration
-        if: ${{ !env.ACT }}
-        run: |
-          missing=()
-          for name in CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN CLOUDFLARE_PAGES_PROJECT; do
-            if [[ -z "${!name:-}" ]]; then
-              missing+=("$name")
-            fi
-          done
-
-          if (( ${#missing[@]} > 0 )); then
-            printf '::error title=Missing Cloudflare Pages configuration::Missing: %s\n' "${missing[*]}"
-            exit 1
-          fi
-
-      - name: Deploy to Cloudflare Pages
-        if: ${{ !env.ACT }}
-        run: bunx wrangler pages deploy apps/cv/dist --project-name="$CLOUDFLARE_PAGES_PROJECT"
+        run: >-
+          bunx wrangler deploy
+          --config apps/cv/dist/server/wrangler.deploy.json

@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import type { D1Database } from '@cloudflare/workers-types'
+import type {
+  D1Database,
+  KVNamespace,
+  R2Bucket,
+} from '@cloudflare/workers-types'
 
 import type { ApplicationRegistryEnv } from '../worker/types'
 import {
@@ -8,9 +12,11 @@ import {
 } from './listing-checks'
 
 const env = (
-  values: Omit<ApplicationRegistryEnv, 'APPLICATION_REGISTRY_DB'> = {}
+  values: Partial<Omit<ApplicationRegistryEnv, 'APPLICATION_REGISTRY_DB'>> = {}
 ): ApplicationRegistryEnv => ({
   APPLICATION_REGISTRY_DB: undefined as unknown as D1Database,
+  CHATGPT_SESSIONS: undefined as unknown as KVNamespace,
+  CV_OBJECTS: undefined as unknown as R2Bucket,
   ...values,
 })
 

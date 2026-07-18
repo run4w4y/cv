@@ -3,10 +3,11 @@
 Cloudflare Worker that exposes sanitized Cloudflare Analytics data as flat JSON
 tables for Grafana Infinity.
 
-The static CV site does not ship analytics scripts. Instead, this Worker queries
-Cloudflare's request analytics for the CV hostname, normalizes the result through
-`@cv/analytics-core`, adapts it with `@cv/analytics-grafana`, and rejects table
-rows that would leak private tokens or raw identifiers.
+Neither the frozen Pages site nor the v2 SSR CV Worker ships analytics scripts.
+Instead, this Worker queries Cloudflare's request analytics for the CV hostname,
+normalizes the result through `@cv/analytics-core`, adapts it with
+`@cv/analytics-grafana`, and rejects table rows that would leak frozen-v1
+private query tokens or raw identifiers.
 
 ## Configuration
 
@@ -23,8 +24,9 @@ Required Worker vars:
 
 Optional Worker secrets and vars:
 
-- `PRIVATE_CONTENT_AUDIENCE_KEY`: decodes compact private audience ids back to
-  the human-readable audience labels used when links were minted.
+- `PRIVATE_CONTENT_AUDIENCE_KEY`: frozen-v1 compatibility only; decodes compact
+  private audience ids already present in historical or still-running Pages
+  traffic.
 - `CLOUDFLARE_GRAPHQL_ENDPOINT`: override for tests or local proxies.
 - `CACHE_TTL_SECONDS`: response cache TTL. Defaults to `600`.
 - `ANALYTICS_FALLBACK`: `empty` or `sample` fallback mode when Cloudflare
@@ -54,21 +56,28 @@ bunx nx run analytics-connector:test:unit
 
 `deploy` builds the Worker, writes `wrangler.deploy.jsonc`, and runs Wrangler.
 
-## Audience Decoding
+## Frozen-v1 audience decoding
 
-Private CV links use paths like:
+The detached Pages deployment used private CV paths like:
 
 ```text
 /en/a/<compact-encrypted-audience-id>/?p=<compact-profile-token>
 ```
 
-Cloudflare records the path, so the Worker can see the compact audience id
-without seeing or needing the private profile token. When
-`PRIVATE_CONTENT_AUDIENCE_KEY` is configured, the Worker decodes that path id
-before returning rows to Grafana. No audience metadata table is required.
+Cloudflare recorded the path, so the connector can still see the compact
+audience ID without seeing or needing the private profile query token. When
+`PRIVATE_CONTENT_AUDIENCE_KEY` is configured, the connector decodes that path
+ID before returning historical rows to Grafana. No audience metadata table is
+required.
 
 If private audience ids are present and the key is missing, requests that need
 decoded audience rows fail rather than returning misleading labels.
+
+This format is not the v2 publication contract. New CVs use stable shareable
+`/c/:token` links backed by the registry, and the analytics connector does not
+decode those tokens into v1 audiences or profiles. The old codec and secret
+remain solely so freezing Pages and detaching its CI does not invalidate
+existing analytics history.
 
 ## Endpoints
 

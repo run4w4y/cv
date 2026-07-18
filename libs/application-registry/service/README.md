@@ -29,6 +29,32 @@ The public services are split by registry slice:
 - `ListingChecksService` owns idempotent local-finding ingestion, internal
   scheduled runs, grace windows, lifecycle safeguards, and listing-check
   history.
+- `JobPostingSnapshotsService` stores and retrieves raw or normalized job
+  context as opaque, content-addressed bytes associated with one application.
+  Capture and management clients may derive or correct normalized text, while
+  this backend remains unaware of job, CV, and facts document shapes.
+- `OpaqueObjectsService` is the schema-free content-addressed byte boundary used
+  by publication clients and internal content workflows.
+- `FactsReleasesService` verifies every manifest, locale catalog, and asset
+  reference before registering immutable release metadata. It owns optimistic
+  channel activation and resolves active catalogs and assets without importing
+  either CV contract.
+- `ContentEntriesService` owns one linear revision chain per application,
+  content kind, and locale. It derives revision numbers and parent IDs,
+  compare-and-swaps the entry version, and approves only the current head.
+- `CvPublicationsService` publishes approved CV revisions behind a stable
+  revocable token. Re-publication advances the pinned revision without
+  replacing the token; disabled links resolve as not found.
+- `PdfArtifactsService` records the pending, ready, or failed PDF lifecycle.
+  It derives both the content revision and QR target from the current public
+  link, then stores completed PDF bytes in the artifact store.
+
+The content services inspect transport metadata (contract ID/version, media
+type, hashes, byte lengths, release IDs, locales, and asset IDs) but never
+import the document or facts schema and never parse payload fields. Concrete
+schema validation remains a renderer and management-frontend concern.
+`RegistryContentServicesLive` exposes the content-only Layer group;
+`RegistryServicesLive` includes it with the original registry services.
 
 `ListingAvailabilityChecker` lives in the runtime-neutral
 `@cv/application-registry-listing-check` package. Both the local Bun CLI and the

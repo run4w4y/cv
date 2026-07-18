@@ -9,6 +9,14 @@ import type {
   ApplicationNote,
   ApplicationWritable,
   CampaignCapture,
+  ContentEntry,
+  ContentRevision,
+  CvLink,
+  FactsRelease,
+  FactsReleaseAsset,
+  FactsReleaseCatalog,
+  GeneratedArtifact,
+  JobPostingSnapshot,
   ListingAvailability,
   ListingCheckConfidence,
   ListingCheckMode,
@@ -210,3 +218,25 @@ export type ListingCheckProjection = {
   readonly consecutiveClosedChecks: number
   readonly reasonCode: ListingCheckReason
 }
+
+export type PersistedFactsRelease = {
+  readonly release: FactsRelease
+  readonly catalogs: readonly FactsReleaseCatalog[]
+  readonly assets: readonly FactsReleaseAsset[]
+}
+
+export type PersistedContentEntry = Omit<
+  ContentEntry,
+  'approvedRevisionId' | 'headRevisionId' | 'state' | 'version'
+>
+
+export type PersistedContentRevision = ContentRevision
+
+export type PersistedCvLink = Omit<
+  CvLink,
+  'disabledAt' | 'disabledReason' | 'enabled' | 'publicationVersion' | 'version'
+>
+
+export type PersistedGeneratedArtifact = GeneratedArtifact
+
+export type PersistedJobPostingSnapshot = JobPostingSnapshot

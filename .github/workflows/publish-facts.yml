@@ -1,0 +1,127 @@
+name: Publish Reviewed Facts
+
+on:
+  repository_dispatch:
+    types:
+      - facts-release-requested
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Full cv-content commit ID to publish
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: facts-publication-production
+  cancel-in-progress: false
+
+env:
+  INFISICAL_ENV: ${{ vars.INFISICAL_ENV || 'prod' }}
+  INFISICAL_HOST: ${{ vars.INFISICAL_HOST || 'https://app.infisical.com' }}
+
+jobs:
+  publish:
+    name: Compile, register, and activate facts
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout compiler repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          filter: tree:0
+
+      - name: Fetch Infisical publication values
+        uses: ./.github/actions/fetch-infisical
+        with:
+          identity-id: ${{ secrets.INFISICAL_IDENTITY_ID }}
+          project-slug: ${{ secrets.INFISICAL_PROJECT_SLUG }}
+          env-slug: ${{ env.INFISICAL_ENV }}
+          host: ${{ env.INFISICAL_HOST }}
+
+      - name: Set up workspace runtime
+        uses: ./.github/actions/setup-runtime
+
+      - name: Resolve immutable commits
+        env:
+          DISPATCH_SOURCE_SHA: ${{ github.event.client_payload.source_sha }}
+          MANUAL_SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          source_sha="${DISPATCH_SOURCE_SHA:-$MANUAL_SOURCE_SHA}"
+          compiler_sha="$(git rev-parse HEAD)"
+
+          for pair in "source:$source_sha" "compiler:$compiler_sha"; do
+            name="${pair%%:*}"
+            value="${pair#*:}"
+            if [[ ! "$value" =~ ^[a-f0-9]{40}([a-f0-9]{24})?$ ]]; then
+              echo "::error title=Invalid ${name} commit::Expected a full lowercase commit ID."
+              exit 1
+            fi
+          done
+
+          {
+            printf 'FACTS_SOURCE_COMMIT=%s\n' "$source_sha"
+            printf 'FACTS_COMPILER_COMMIT=%s\n' "$compiler_sha"
+          } >> "$GITHUB_ENV"
+
+      - name: Validate publication configuration
+        run: |
+          missing=()
+          for name in CONTENT_REPO_TOKEN REGISTRY_API_URL REGISTRY_API_TOKEN; do
+            if [[ -z "${!name:-}" ]]; then
+              missing+=("$name")
+            fi
+          done
+
+          if (( ${#missing[@]} > 0 )); then
+            printf '::error title=Missing facts publication configuration::Missing: %s\n' "${missing[*]}"
+            exit 1
+          fi
+
+      - name: Checkout exact reviewed facts source
+        run: |
+          export GH_TOKEN="$CONTENT_REPO_TOKEN"
+          mkdir -p .external
+          gh repo clone run4w4y/cv-content .external/cv-content -- --no-checkout
+          git -C .external/cv-content fetch --depth=1 origin "$FACTS_SOURCE_COMMIT"
+          git -C .external/cv-content checkout --detach "$FACTS_SOURCE_COMMIT"
+          actual="$(git -C .external/cv-content rev-parse HEAD)"
+          if [[ "$actual" != "$FACTS_SOURCE_COMMIT" ]]; then
+            echo '::error title=Source checkout mismatch::The checkout does not match the requested commit.'
+            exit 1
+          fi
+
+      - name: Reject a superseded main-branch release request
+        id: source_head
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        run: |
+          export GH_TOKEN="$CONTENT_REPO_TOKEN"
+          authoritative_sha="$(gh api repos/run4w4y/cv-content/git/ref/heads/main --jq .object.sha)"
+
+          if [[ ! "$authoritative_sha" =~ ^[a-f0-9]{40}([a-f0-9]{24})?$ ]]; then
+            echo '::error title=Invalid authoritative source commit::The cv-content main ref did not resolve to a full lowercase commit ID.'
+            exit 1
+          fi
+
+          if [[ "$authoritative_sha" != "$FACTS_SOURCE_COMMIT" ]]; then
+            echo "::notice title=Superseded facts release::Skipping ${FACTS_SOURCE_COMMIT}; cv-content main is now ${authoritative_sha}."
+            echo 'superseded=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo 'superseded=false' >> "$GITHUB_OUTPUT"
+
+      - name: Publish and activate reviewed facts
+        if: ${{ github.event_name == 'workflow_dispatch' || steps.source_head.outputs.superseded != 'true' }}
+        env:
+          FACTS_CHANNEL: production
+          FACTS_COMPILER_REPOSITORY: run4w4y/cv
+          FACTS_CONTENT_ROOT: ${{ github.workspace }}/.external/cv-content
+          FACTS_SOURCE_REPOSITORY: run4w4y/cv-content
+        run: >-
+          ./node_modules/.bin/nx run facts-release-publisher:publish
+          --skip-nx-cache

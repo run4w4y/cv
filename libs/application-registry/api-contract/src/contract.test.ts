@@ -165,7 +165,7 @@ describe('application registry HTTP contract', () => {
     const applications = Schema.decodeUnknownSync(ListApplicationsQuerySchema)({
       filters: JSON.stringify(applicationFilters),
       orderBy: JSON.stringify([
-        { field: 'fitScore', direction: 'desc', nulls: 'last' },
+        { field: 'updatedRevision', direction: 'desc' },
       ]),
       currency: 'USD',
       q: 'platform systems',
@@ -190,7 +190,7 @@ describe('application registry HTTP contract', () => {
 
     expect(applications.filters).toEqual(applicationFilters)
     expect(applications.orderBy).toEqual([
-      { field: 'fitScore', direction: 'desc', nulls: 'last' },
+      { field: 'updatedRevision', direction: 'desc' },
     ])
     expect(applications.pagination).toEqual({ size: 100 })
     expect(applications.currency).toBe('USD')
@@ -394,6 +394,11 @@ describe('application registry HTTP contract', () => {
     ).toBeDefined()
     expect(
       applicationRegistryOpenApi.paths['/v1/applications/{id}/management']
+    ).toBeDefined()
+    expect(
+      applicationRegistryOpenApi.paths[
+        '/v1/applications/{id}/job-snapshots/capture'
+      ]
     ).toBeDefined()
     expect(applicationRegistryOpenApi.paths['/v1/captures']).toBeDefined()
   })

@@ -5,11 +5,8 @@
     "jsx": "react-jsx",
     "jsxImportSource": "react",
     "paths": {
-      "@cv/color-scheme": ["../../libs/color-scheme/src/index.ts"],
-      "@cv/color-scheme/astro": ["../../libs/color-scheme/src/astro.ts"],
-      "@cv/color-scheme/react": ["../../libs/color-scheme/src/react.ts"],
       "@/*": ["src/*"]
     },
-    "types": ["astro/client", "bun-types"]
+    "types": ["astro/client", "@cloudflare/workers-types", "bun-types"]
   }
 }

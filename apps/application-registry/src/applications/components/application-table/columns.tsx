@@ -12,13 +12,11 @@ import { Link } from 'react-router'
 
 import { formatDateTime, formatLabel } from '../../../lib/format'
 import { AnnualCompensation } from '../annual-compensation'
-import { FitScore } from '../fit-score'
 import { ListingAvailabilityReviewDialog } from '../listing-availability-review'
 import { StatusBadge } from '../status-badge'
 import {
   CompanyEditor,
   CompensationEditor,
-  FitScoreEditor,
   FollowUpEditor,
   LabelsEditor,
   PriorityEditor,
@@ -97,17 +95,6 @@ export const createApplicationColumns = ({
         <Badge variant="outline" className="whitespace-normal text-center">
           {formatLabel(row.original.targetStage)}
         </Badge>
-      ),
-  },
-  {
-    accessorKey: 'fitScore',
-    header: 'Fit',
-    size: 164,
-    cell: ({ row }) =>
-      editingRowId === row.original.id ? (
-        <FitScoreEditor />
-      ) : (
-        <FitScore score={row.original.fitScore} />
       ),
   },
   {

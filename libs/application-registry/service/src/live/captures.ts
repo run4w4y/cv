@@ -165,7 +165,6 @@ const make = Effect.gen(function* () {
             compensations: decorateCompensations(request.compensations),
             eventId,
             fitAssessment: request.fitAssessment ?? null,
-            fitScore: request.fitAssessment?.score ?? request.fitScore,
             identityAlias: resolved.identityAlias,
             jobKey: resolved.application?.jobKey ?? request.jobKey,
             recordedAt,

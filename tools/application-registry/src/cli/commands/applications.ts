@@ -7,7 +7,6 @@ import {
 } from '@cv/application-registry-api-contract'
 import {
   applicationStatusValues,
-  FitScoreSchema,
   personalPriorityValues,
   targetStageValues,
 } from '@cv/application-registry-entity'
@@ -49,12 +48,6 @@ const label = optionalStringFlag('label').pipe(
 )
 const url = optionalStringFlag('url')
 const size = listPageSizeFlag
-const fitScoreMin = optionalFlag(
-  Flag.integer('fit-score-min').pipe(Flag.withSchema(FitScoreSchema))
-)
-const fitScoreMax = optionalFlag(
-  Flag.integer('fit-score-max').pipe(Flag.withSchema(FitScoreSchema))
-)
 const applicationStatus = optionalFlag(
   Flag.choice('status', applicationStatusValues)
 ).pipe(Flag.map((value) => (value === undefined ? undefined : [value])))
@@ -83,8 +76,6 @@ const filters = {
   applicationStatus,
   company,
   currency,
-  fitScoreMax,
-  fitScoreMin,
   followUpShortcut,
   label,
   size,

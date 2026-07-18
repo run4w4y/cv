@@ -1,7 +1,6 @@
 export { RowEditorActions } from './actions'
 export {
   CompanyEditor,
-  FitScoreEditor,
   PriorityEditor,
   RoleEditor,
   StatusEditor,

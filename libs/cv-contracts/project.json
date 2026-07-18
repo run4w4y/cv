@@ -1,0 +1,26 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "cv-contracts",
+  "projectType": "library",
+  "sourceRoot": "libs/cv-contracts/src",
+  "tags": ["scope:cv", "type:contract", "visibility:private"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/cv-contracts/src/document/index.ts",
+        "outputPath": "libs/cv-contracts/dist",
+        "rootDir": "libs/cv-contracts/src",
+        "tsConfig": "libs/cv-contracts/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
+    "format": {},
+    "format:check": {}
+  }
+}

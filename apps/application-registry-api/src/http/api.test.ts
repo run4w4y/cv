@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import type { D1Database } from '@cloudflare/workers-types'
+import type {
+  D1Database,
+  KVNamespace,
+  R2Bucket,
+} from '@cloudflare/workers-types'
 import {
   ApplicationRegistryApi,
   type CreateCampaignCaptureRequest,
@@ -19,17 +23,28 @@ import {
   ApplicationsService,
   CapturesService,
   CompensationsService,
+  ContentEntriesService,
   type CreateCampaignCaptureInput,
+  CvPublicationsService,
   EventsService,
+  FactsReleasesService,
+  JobPostingSnapshotsService,
   type ListApplicationsInput,
   ListingChecksService,
+  OpaqueObjectsService,
+  PdfArtifactsService,
+  RegistryDatabaseError,
   type ResolveListingAvailabilityInput,
 } from '@cv/application-registry-service'
 import { Effect, Layer, type Scope } from 'effect'
-import { HttpClientRequest, HttpServer } from 'effect/unstable/http'
+import {
+  HttpClientRequest,
+  type HttpRouter,
+  HttpServer,
+} from 'effect/unstable/http'
 import { HttpApiMiddleware, HttpApiTest } from 'effect/unstable/httpapi'
 
-import { makeWorkerRequestContext } from '../worker/bindings'
+import { makeWorkerRequestContext, WorkerEnv } from '../worker/bindings'
 import type {
   ApplicationRegistryEnv,
   WorkerExecutionContext,
@@ -42,6 +57,8 @@ const context: WorkerExecutionContext = { waitUntil: () => undefined }
 const env = {
   // Persistence is replaced by makeRegistryLayer in these HTTP codec tests.
   APPLICATION_REGISTRY_DB: undefined as unknown as D1Database,
+  CHATGPT_SESSIONS: undefined as unknown as KVNamespace,
+  CV_OBJECTS: undefined as unknown as R2Bucket,
   REGISTRY_API_TOKEN: 'test-token',
 } satisfies ApplicationRegistryEnv
 
@@ -49,14 +66,11 @@ const application: Application = {
   applicationStatus: 'preparing',
   appliedAt: null,
   id: 'application-1',
-  category: null,
   jobKey: 'web:one',
   source: 'web',
   sourceJobId: null,
   canonicalUrl: 'https://example.test/jobs/one',
   company: 'Example',
-  details: null,
-  fitScore: null,
   followUpAt: null,
   role: 'Engineer',
   location: null,
@@ -67,14 +81,8 @@ const application: Application = {
   listingConfidence: null,
   listingConsecutiveClosedChecks: 0,
   listingReasonCode: null,
-  openStatus: null,
   personalPriority: null,
-  recommendedAction: null,
-  remotePolicy: null,
-  researchPriority: null,
-  sourceConfidence: null,
   targetStage: 'backlog',
-  technologyStack: null,
   version: 1,
   createdAt: '2026-07-10T00:00:00.000Z',
   updatedAt: '2026-07-10T00:00:00.000Z',
@@ -222,12 +230,16 @@ const RegistryAuthorizationClientLayer = HttpApiMiddleware.layerClient(
     next(HttpClientRequest.bearerToken(clientRequest, env.REGISTRY_API_TOKEN))
 )
 
+const unsupportedV2ServiceMethod = (..._arguments: readonly unknown[]) =>
+  Effect.die(new Error('This v2 service is not used by the legacy HTTP test.'))
+
 const makeRegistryLayer = (
   onCapture: (payload: CreateCampaignCaptureInput) => void = () => undefined,
   onNote: (payload: AddApplicationNoteInput) => void = () => undefined,
   onListApplications: (query: ListApplicationsInput) => void = () => undefined,
   onResolveListing: (input: ResolveListingAvailabilityInput) => void = () =>
-    undefined
+    undefined,
+  failLinkSynchronization = false
 ) =>
   Layer.mergeAll(
     Layer.succeed(AnnotationsService, {
@@ -281,6 +293,38 @@ const makeRegistryLayer = (
       replaceAnnual: () =>
         Effect.succeed({ annualCompensation: null, application }),
     }),
+    Layer.succeed(ContentEntriesService, {
+      appendRevision: unsupportedV2ServiceMethod,
+      approveRevision: unsupportedV2ServiceMethod,
+      ensure: unsupportedV2ServiceMethod,
+      find: unsupportedV2ServiceMethod,
+      listRevisions: unsupportedV2ServiceMethod,
+      readRevision: unsupportedV2ServiceMethod,
+    }),
+    Layer.succeed(CvPublicationsService, {
+      disableForApplication: () =>
+        failLinkSynchronization
+          ? Effect.fail(
+              new RegistryDatabaseError({
+                cause: new Error('simulated link synchronization failure'),
+                message: 'Could not synchronize CV links.',
+              })
+            )
+          : Effect.succeed(0),
+      findByEntry: unsupportedV2ServiceMethod,
+      publish: unsupportedV2ServiceMethod,
+      resolve: unsupportedV2ServiceMethod,
+      restoreAfterRejection: () =>
+        failLinkSynchronization
+          ? Effect.fail(
+              new RegistryDatabaseError({
+                cause: new Error('simulated link synchronization failure'),
+                message: 'Could not synchronize CV links.',
+              })
+            )
+          : Effect.succeed(0),
+      setAvailability: unsupportedV2ServiceMethod,
+    }),
     Layer.succeed(EventsService, {
       append: () => Effect.succeed({ application, event, replayed: false }),
       list: () =>
@@ -318,6 +362,32 @@ const makeRegistryLayer = (
           replayedCount: 0,
           run: listingCheckRun,
         }),
+    }),
+    Layer.succeed(JobPostingSnapshotsService, {
+      find: unsupportedV2ServiceMethod,
+      latest: unsupportedV2ServiceMethod,
+      persist: unsupportedV2ServiceMethod,
+      readPayload: unsupportedV2ServiceMethod,
+    }),
+    Layer.succeed(FactsReleasesService, {
+      activate: unsupportedV2ServiceMethod,
+      find: unsupportedV2ServiceMethod,
+      findActive: unsupportedV2ServiceMethod,
+      readActive: unsupportedV2ServiceMethod,
+      readActiveAsset: unsupportedV2ServiceMethod,
+      readActiveCatalog: unsupportedV2ServiceMethod,
+      register: unsupportedV2ServiceMethod,
+    }),
+    Layer.succeed(OpaqueObjectsService, {
+      put: unsupportedV2ServiceMethod,
+      read: unsupportedV2ServiceMethod,
+    }),
+    Layer.succeed(PdfArtifactsService, {
+      begin: unsupportedV2ServiceMethod,
+      complete: unsupportedV2ServiceMethod,
+      fail: unsupportedV2ServiceMethod,
+      findCurrent: unsupportedV2ServiceMethod,
+      readCurrent: unsupportedV2ServiceMethod,
     })
   )
 
@@ -329,7 +399,7 @@ const provideApiTestLayer = <A, E, R>(
   const apiLayer = Layer.mergeAll(
     Layer.provide(
       Layer.merge(HealthHandlersLayer, RegistryHandlersLayer),
-      registryLayer
+      Layer.merge(registryLayer, Layer.succeed(WorkerEnv, env))
     ),
     HttpServer.layerServices,
     Layer.succeedContext(makeWorkerRequestContext(env, context))
@@ -344,8 +414,17 @@ const provideApiTestLayer = <A, E, R>(
     : provided
 }
 
-const runApiTest = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
-  Effect.runPromise(Effect.scoped(effect))
+const runApiTest = <A, E>(
+  effect: Effect.Effect<
+    A,
+    E,
+    Scope.Scope | HttpRouter.Request<'Requires', unknown>
+  >
+) =>
+  // HttpApiTest executes request-level handler dependencies from the context
+  // installed by makeWorkerRequestContext. The router's Request marker is a
+  // type-only wrapper, so it is safe to remove once that context is installed.
+  Effect.runPromise(Effect.scoped(effect as Effect.Effect<A, E, Scope.Scope>))
 
 describe('application registry HttpApi', () => {
   test('serves the public health endpoint', async () => {
@@ -456,6 +535,31 @@ describe('application registry HttpApi', () => {
       application,
       labels: ['priority'],
     })
+  })
+
+  test('keeps a committed application update successful when derived CV link repair fails', async () => {
+    const response = await runApiTest(
+      Effect.gen(function* () {
+        const client = yield* HttpApiTest.groups(ApplicationRegistryApi, [
+          'registry',
+        ])
+        return yield* client.registry.patchApplication({
+          params: { id: application.id },
+          payload: {
+            applicationStatus: 'rejected',
+            expectedVersion: application.version,
+          },
+        })
+      }).pipe((effect) =>
+        provideApiTestLayer(
+          effect,
+          makeRegistryLayer(undefined, undefined, undefined, undefined, true),
+          true
+        )
+      )
+    )
+
+    expect(response).toEqual(application)
   })
 
   test('serves application facets through the static applications route', async () => {

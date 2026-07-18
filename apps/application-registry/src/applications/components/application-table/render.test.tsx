@@ -20,21 +20,11 @@ const application = {
   sourceJobId: 'one',
   canonicalUrl: 'https://example.test/jobs/one',
   company: 'Example',
-  companyNormalized: 'example',
   role: 'Staff Engineer',
   location: 'Remote',
   applicationStatus: 'not_started',
   targetStage: 'apply_next',
   personalPriority: 'high',
-  fitScore: 91,
-  category: 'Engineering',
-  remotePolicy: 'Remote',
-  details: null,
-  openStatus: 'Open',
-  sourceConfidence: 'High',
-  technologyStack: 'TypeScript, React',
-  recommendedAction: 'Apply',
-  researchPriority: 'High',
   followUpAt: '2026-07-20T09:30:00.000Z',
   appliedAt: null,
   lastContactAt: null,
@@ -102,9 +92,9 @@ describe('ApplicationsTable', () => {
     const headers = within(table).getAllByRole('columnheader')
     const cells = within(table).getAllByRole('cell')
 
-    expect(headers).toHaveLength(13)
-    expect(cells).toHaveLength(13)
-    expect(table.style.width).toBe('2774px')
+    expect(headers).toHaveLength(12)
+    expect(cells).toHaveLength(12)
+    expect(table.style.width).toBe('2610px')
     expect(view.getByText('Annual compensation')).toBeTruthy()
     expect(view.getByText('Updated')).toBeTruthy()
     expect(

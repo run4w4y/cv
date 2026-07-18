@@ -18,8 +18,6 @@ export type ApplicationFilterOptions = {
   readonly applicationStatus?: readonly ApplicationStatus[]
   readonly company?: string
   readonly currency?: ListApplicationsQuery['currency']
-  readonly fitScoreMax?: number
-  readonly fitScoreMin?: number
   readonly followUpShortcut?: FollowUpShortcut
   readonly label?: readonly string[]
   readonly location?: string
@@ -77,22 +75,6 @@ export const applicationFilters = (
           field: 'company' as const,
           operator: 'contains' as const,
           value: options.company,
-        },
-    options.fitScoreMin === undefined
-      ? undefined
-      : {
-          type: 'condition' as const,
-          field: 'fitScore' as const,
-          operator: 'gte' as const,
-          value: options.fitScoreMin,
-        },
-    options.fitScoreMax === undefined
-      ? undefined
-      : {
-          type: 'condition' as const,
-          field: 'fitScore' as const,
-          operator: 'lte' as const,
-          value: options.fitScoreMax,
         },
     options.followUpShortcut === undefined
       ? undefined

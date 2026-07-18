@@ -1,0 +1,138 @@
+import {
+  type ApplicationRegistryError,
+  CvPublicationsService,
+} from '@cv/application-registry-service'
+import { Effect } from 'effect'
+
+import { RegistryServiceLayer } from '../layers/registry'
+import { WorkerEnv } from '../worker/bindings'
+import type { ApplicationRegistryEnv } from '../worker/types'
+
+export const cvPublicationHeaders = {
+  byteLength: 'x-cv-content-byte-length',
+  contractId: 'x-cv-contract-id',
+  contractVersion: 'x-cv-contract-version',
+  locale: 'x-cv-document-locale',
+  publicUrl: 'x-cv-public-url',
+  sha256: 'x-cv-content-sha256',
+} as const
+
+export type PublicCvResolution = {
+  readonly byteLength: number
+  readonly bytes: Uint8Array
+  readonly contractId: string
+  readonly contractVersion: string
+  readonly locale: string
+  readonly mediaType: string
+  readonly publicUrl: string
+  readonly sha256: string
+}
+
+export type ResolvePublicCv = (
+  token: string
+) => Effect.Effect<PublicCvResolution, ApplicationRegistryError>
+
+const notFound = () =>
+  new Response('Not found', {
+    headers: {
+      'Cache-Control': 'private, no-store',
+      'Content-Type': 'text/plain; charset=utf-8',
+      'X-Robots-Tag': 'noindex, nofollow, noarchive',
+    },
+    status: 404,
+  })
+
+const methodNotAllowed = () =>
+  new Response('Method not allowed', {
+    headers: {
+      Allow: 'GET',
+      'Cache-Control': 'private, no-store',
+      'Content-Type': 'text/plain; charset=utf-8',
+    },
+    status: 405,
+  })
+
+const internalError = () =>
+  new Response('Internal resolver error', {
+    headers: {
+      'Cache-Control': 'private, no-store',
+      'Content-Type': 'text/plain; charset=utf-8',
+    },
+    status: 500,
+  })
+
+export const parseCvPublicationResolverToken = (
+  pathname: string
+): string | null => {
+  const match = /^\/cv-publications\/([^/]+)$/u.exec(pathname)
+  if (!match?.[1]) return null
+
+  try {
+    const token = decodeURIComponent(match[1])
+    return token.length > 0 && !token.includes('/') ? token : null
+  } catch {
+    return null
+  }
+}
+
+const publicationResponse = (publication: PublicCvResolution) =>
+  new Response(Uint8Array.from(publication.bytes).buffer, {
+    headers: {
+      'Cache-Control': 'private, no-store',
+      'Content-Type': publication.mediaType,
+      [cvPublicationHeaders.byteLength]: publication.byteLength.toString(10),
+      [cvPublicationHeaders.contractId]: publication.contractId,
+      [cvPublicationHeaders.contractVersion]: publication.contractVersion,
+      [cvPublicationHeaders.locale]: publication.locale,
+      [cvPublicationHeaders.publicUrl]: publication.publicUrl,
+      [cvPublicationHeaders.sha256]: publication.sha256,
+    },
+    status: 200,
+  })
+
+export const makeCvPublicResolverHandler = (resolve: ResolvePublicCv) =>
+  async function handleCvPublicResolverRequest(
+    request: Request
+  ): Promise<Response> {
+    const token = parseCvPublicationResolverToken(new URL(request.url).pathname)
+    if (!token) return notFound()
+    if (request.method !== 'GET') return methodNotAllowed()
+
+    return resolve(token).pipe(
+      Effect.match({
+        onFailure: (error) =>
+          error._tag === 'RegistryNotFoundError' ? notFound() : internalError(),
+        onSuccess: publicationResponse,
+      }),
+      Effect.runPromise
+    )
+  }
+
+const resolvePublicCv =
+  (env: ApplicationRegistryEnv): ResolvePublicCv =>
+  (token) =>
+    Effect.gen(function* () {
+      const publications = yield* CvPublicationsService
+      const { bytes, entry, link, revision } =
+        yield* publications.resolve(token)
+
+      return {
+        byteLength: revision.byteLength,
+        bytes,
+        contractId: revision.contractId,
+        contractVersion: revision.contractVersion,
+        locale: entry.locale,
+        mediaType: revision.mediaType,
+        publicUrl: link.publicUrl,
+        sha256: revision.sha256,
+      }
+    }).pipe(
+      Effect.provide(RegistryServiceLayer),
+      Effect.provide(WorkerEnv.context(env))
+    )
+
+export const handleCvPublicResolverRequest = (
+  request: Request,
+  env: ApplicationRegistryEnv
+): Promise<Response> =>
+  makeCvPublicResolverHandler(resolvePublicCv(env))(request)

@@ -26,6 +26,7 @@ export interface RegistryMiniflareHarnessOptions {
   readonly databaseBinding: string
   readonly databaseId?: string
   readonly migrationsPath?: string
+  readonly throughMigration?: string
 }
 
 export class RegistryMiniflareHarness {
@@ -70,7 +71,7 @@ export class RegistryMiniflareHarness {
       await miniflare.getD1Database(options.databaseBinding, workerName),
       options.migrationsPath ?? defaultMigrationsPath
     )
-    await harness.#migrate()
+    await harness.#migrateThrough(options.throughMigration)
     return harness
   }
 
@@ -90,16 +91,43 @@ export class RegistryMiniflareHarness {
     await rm(this.#persistPath, { force: true, recursive: true })
   }
 
-  async #migrate() {
+  async migrateAfter(migrationName: string) {
     const migrations = readMigrationFiles({
       migrationsFolder: this.#migrationsPath,
     })
-    const statements = migrations.flatMap((migration) =>
-      migration.sql
-        .map((sql) => sql.trim())
-        .filter(Boolean)
-        .map((sql) => this.database.prepare(sql))
+    const migrationIndex = migrations.findIndex(
+      ({ name }) => name === migrationName
     )
-    await this.database.batch(statements)
+    if (migrationIndex < 0) {
+      throw new Error(`Registry migration ${migrationName} was not found.`)
+    }
+    await this.#applyMigrations(migrations.slice(migrationIndex + 1))
+  }
+
+  async #migrateThrough(migrationName: string | undefined) {
+    const migrations = readMigrationFiles({
+      migrationsFolder: this.#migrationsPath,
+    })
+    if (migrationName === undefined) {
+      await this.#applyMigrations(migrations)
+      return
+    }
+    const migrationIndex = migrations.findIndex(
+      ({ name }) => name === migrationName
+    )
+    if (migrationIndex < 0) {
+      throw new Error(`Registry migration ${migrationName} was not found.`)
+    }
+    await this.#applyMigrations(migrations.slice(0, migrationIndex + 1))
+  }
+
+  async #applyMigrations(migrations: ReturnType<typeof readMigrationFiles>) {
+    for (const migration of migrations) {
+      const statements = migration.sql
+        .map((statement) => statement.trim())
+        .filter(Boolean)
+        .map((statement) => this.database.prepare(statement))
+      if (statements.length > 0) await this.database.batch(statements)
+    }
   }
 }

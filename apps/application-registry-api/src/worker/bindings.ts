@@ -1,5 +1,4 @@
-import { Context, type Scope } from 'effect'
-import type { HttpServerRequest } from 'effect/unstable/http'
+import { Context } from 'effect'
 
 import type { ApplicationRegistryEnv, WorkerExecutionContext } from './types'
 
@@ -21,15 +20,13 @@ export const WorkerContext = Context.Reference<WorkerExecutionContext>(
   }
 )
 
-type WebHandlerContext = HttpServerRequest.HttpServerRequest | Scope.Scope
-
 export const makeWorkerRequestContext = (
   env: ApplicationRegistryEnv,
   context: WorkerExecutionContext
-): Context.Context<WebHandlerContext> =>
+): Context.Context<unknown> =>
   // HttpRouter injects these services itself, while the web handler context
-  // type only exposes the router-owned request services.
+  // type is intentionally erased across its request-level dependency marker.
   Context.mergeAll(
     WorkerEnv.context(env),
     WorkerContext.context(context)
-  ) as Context.Context<WebHandlerContext>
+  ) as Context.Context<unknown>

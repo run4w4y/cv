@@ -120,7 +120,7 @@ test('executes application CRUD and database defaults through slice services', a
       const created = yield* seedApplication
       const updated = yield* applications.patch(
         application.applicationId,
-        { category: null, expectedVersion: 1, fitScore: 42 },
+        { expectedVersion: 1, location: 'Remote' },
         '2026-07-12T13:00:00.000Z'
       )
       const page = yield* applications.list(
@@ -137,8 +137,7 @@ test('executes application CRUD and database defaults through slice services', a
   assert.equal(result.created.version, 1)
 
   assert.ok(result.updated)
-  assert.equal(result.updated.category, null)
-  assert.equal(result.updated.fitScore, 42)
+  assert.equal(result.updated.location, 'Remote')
   assert.equal(result.updated.version, 2)
   assert.deepEqual(
     result.page.items.map(({ id }) => id),
@@ -386,7 +385,7 @@ test('updates a managed application aggregate in one version transition', async 
           patch: {
             applicationStatus: 'applied',
             company: 'Managed Company',
-            fitScore: 91,
+            personalPriority: 'high',
           },
           recordedAt: '2026-07-12T13:00:00.000Z',
         }
@@ -402,7 +401,7 @@ test('updates a managed application aggregate in one version transition', async 
           labels: ['stale'],
           operationId: 'managed-operation-stale',
           operationRequestSignature: 'managed-signature-stale',
-          patch: { fitScore: 1 },
+          patch: { personalPriority: 'low' },
           recordedAt: '2026-07-12T14:00:00.000Z',
         }
       )
@@ -426,7 +425,7 @@ test('updates a managed application aggregate in one version transition', async 
   assert.equal(result.stale, false)
   assert.equal(result.application?.applicationStatus, 'applied')
   assert.equal(result.application?.company, 'Managed Company')
-  assert.equal(result.application?.fitScore, 91)
+  assert.equal(result.application?.personalPriority, 'high')
   assert.equal(result.application?.version, 2)
   assert.equal(result.application?.updatedRevision, 2)
   assert.deepEqual(
@@ -481,7 +480,6 @@ test('filters before pagination and returns dashboard details and facets', async
       },
     ],
     followUpAt: '2026-07-12T11:00:00.000Z',
-    fitScore: 85,
     jobKey: 'test:dashboard-past',
     labels: ['remote', 'priority'],
     location: 'Remote',
@@ -496,7 +494,6 @@ test('filters before pagination and returns dashboard details and facets', async
     canonicalUrl: 'https://example.test/jobs/dashboard-future',
     company: 'Beta Corp',
     followUpAt: '2026-07-12T13:00:00.000Z',
-    fitScore: 45,
     jobKey: 'test:dashboard-future',
     labels: ['remote'],
     personalPriority: 'low',
@@ -669,34 +666,8 @@ test('filters before pagination and returns dashboard details and facets', async
           pagination: { size: 10 },
         })
       )
-      const highFit = yield* applications.list(
-        resolveApplicationList({
-          filters: [
-            {
-              type: 'condition',
-              field: 'fitScore',
-              operator: 'gte',
-              value: 80,
-            },
-          ],
-          pagination: { size: 10 },
-        })
-      )
-      const lowFit = yield* applications.list(
-        resolveApplicationList({
-          filters: [
-            {
-              type: 'condition',
-              field: 'fitScore',
-              operator: 'lte',
-              value: 50,
-            },
-          ],
-          pagination: { size: 10 },
-        })
-      )
       const facets = yield* applications.facets()
-      return { facets, highFit, lowFit, page, upcoming }
+      return { facets, page, upcoming }
     })
   )
 
@@ -735,14 +706,6 @@ test('filters before pagination and returns dashboard details and facets', async
   )
   assert.deepEqual(
     result.upcoming.items.map(({ id }) => id),
-    [futureFollowUp.applicationId]
-  )
-  assert.deepEqual(
-    result.highFit.items.map(({ id }) => id),
-    [pastFollowUp.applicationId]
-  )
-  assert.deepEqual(
-    result.lowFit.items.map(({ id }) => id),
     [futureFollowUp.applicationId]
   )
   assert.deepEqual(result.facets, {

@@ -1,0 +1,30 @@
+{
+  "name": "schema-editor",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/schema-editor/src",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/schema-editor/src/core/index.ts",
+        "outputPath": "libs/schema-editor/dist",
+        "rootDir": "libs/schema-editor/src",
+        "tsConfig": "libs/schema-editor/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "format": {},
+    "format:check": {},
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun test --preload libs/schema-editor/test/setup.ts libs/schema-editor/src"
+      }
+    },
+    "typecheck": {}
+  }
+}

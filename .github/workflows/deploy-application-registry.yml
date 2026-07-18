@@ -52,8 +52,12 @@ jobs:
             APPLICATION_REGISTRY_DB_ID \
             APPLICATION_REGISTRY_DB_NAME \
             APPLICATION_REGISTRY_WORKER_NAME \
+            CHATGPT_SESSIONS_KV_ID \
+            CHATGPT_SESSION_SECRET \
             CLOUDFLARE_ACCOUNT_ID \
             CLOUDFLARE_API_TOKEN \
+            CV_WEB_HOST \
+            CV_OBJECTS_BUCKET_NAME \
             REGISTRY_API_TOKEN
           do
             if [[ -z "${!name:-}" ]]; then
@@ -65,6 +69,15 @@ jobs:
             printf '::error title=Missing production registry configuration::Missing: %s\n' "${missing[*]}"
             exit 1
           fi
+
+      - name: Build management application
+        run: |
+          if [[ "$CV_WEB_HOST" == *://* || "$CV_WEB_HOST" == */* ]]; then
+            echo '::error title=Invalid public CV hostname::CV_WEB_HOST must be a hostname without a scheme or path.'
+            exit 1
+          fi
+          export VITE_CV_PUBLIC_BASE_URL="https://${CV_WEB_HOST}/c"
+          ./node_modules/.bin/nx run application-registry-management:build --skip-nx-cache
 
       - name: Build registry Worker
         run: ./node_modules/.bin/nx run application-registry-api:build --skip-nx-cache

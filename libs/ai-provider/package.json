@@ -1,0 +1,34 @@
+{
+  "name": "@cv/ai-provider",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./live": {
+      "types": "./dist/live/index.d.ts",
+      "default": "./dist/live/index.js"
+    },
+    "./test-support": {
+      "types": "./dist/test-support/index.d.ts",
+      "default": "./dist/test-support/index.js"
+    }
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "4.0.16",
+    "@ai-sdk/provider": "4.0.3",
+    "@opencoredev/loginwithchatgpt-ai": "0.2.0",
+    "ai": "7.0.31",
+    "ajv": "8.20.0",
+    "effect": "4.0.0-beta.91"
+  }
+}

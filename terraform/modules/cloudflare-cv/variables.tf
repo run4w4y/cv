@@ -10,12 +10,48 @@ variable "cloudflare_account_id" {
 
 variable "cloudflare_api_token" {
   type        = string
-  description = "Cloudflare deploy token with Account Workers Scripts, D1 Write, Pages Write, and Zone DNS Write permissions."
+  description = "Cloudflare deploy token with Workers Scripts, Workers Routes, D1, R2, Access, and Zone DNS write permissions."
   sensitive   = true
 
   validation {
     condition     = length(trimspace(var.cloudflare_api_token)) > 0
     error_message = "cloudflare_api_token must be set."
+  }
+}
+
+variable "cv_objects_bucket_name" {
+  type        = string
+  description = "Private R2 bucket for immutable facts, job snapshots, document revisions, and PDFs."
+  default     = "cv-objects"
+
+  validation {
+    condition     = length(trimspace(var.cv_objects_bucket_name)) > 0
+    error_message = "cv_objects_bucket_name must be set."
+  }
+}
+
+variable "cv_objects_bucket_location" {
+  type        = string
+  description = "Best-effort location hint used only when the R2 bucket is first created."
+  default     = "weur"
+
+  validation {
+    condition = contains(
+      ["apac", "eeur", "enam", "weur", "wnam", "oc"],
+      trimspace(var.cv_objects_bucket_location)
+    )
+    error_message = "cv_objects_bucket_location must be one of apac, eeur, enam, weur, wnam, or oc."
+  }
+}
+
+variable "chatgpt_sessions_namespace_title" {
+  type        = string
+  description = "Workers KV namespace used only for encrypted Login with ChatGPT sessions and short-lived rate counters."
+  default     = "cv-chatgpt-sessions"
+
+  validation {
+    condition     = length(trimspace(var.chatgpt_sessions_namespace_title)) > 0
+    error_message = "chatgpt_sessions_namespace_title must be set."
   }
 }
 
@@ -39,28 +75,6 @@ variable "zone_name" {
   }
 }
 
-variable "pages_project_name" {
-  type        = string
-  description = "Cloudflare Pages project name for the public CV site."
-  default     = "cv"
-
-  validation {
-    condition     = length(trimspace(var.pages_project_name)) > 0
-    error_message = "pages_project_name must be set."
-  }
-}
-
-variable "pages_production_branch" {
-  type        = string
-  description = "Production branch for the Cloudflare Pages project."
-  default     = "main"
-
-  validation {
-    condition     = length(trimspace(var.pages_production_branch)) > 0
-    error_message = "pages_production_branch must be set."
-  }
-}
-
 variable "worker_name" {
   type        = string
   description = "Analytics connector Worker script name."
@@ -74,7 +88,9 @@ variable "workers_dev_account_subdomain" {
 
   validation {
     condition = (
-      (!var.enable_worker_dev_subdomain && !var.enable_application_registry_worker_dev_subdomain) ||
+      (!var.enable_worker_dev_subdomain &&
+        !var.enable_application_registry_worker_dev_subdomain &&
+      !var.enable_cv_public_worker_dev_subdomain) ||
       length(trimspace(var.workers_dev_account_subdomain)) > 0
     )
     error_message = "workers_dev_account_subdomain must be set when a Worker is exposed on workers.dev."
@@ -91,12 +107,46 @@ variable "workers_dev_account_subdomain" {
 
 variable "cv_web_host" {
   type        = string
-  description = "Hostname whose Cloudflare analytics should be queried, for example cv.example.com."
+  description = "Public CV hostname that remains backed by the frozen Pages project except for Worker route overlays."
 
   validation {
     condition     = length(trimspace(var.cv_web_host)) > 0
     error_message = "cv_web_host must be set."
   }
+}
+
+variable "cv_public_worker_name" {
+  type        = string
+  description = "Public SSR CV Worker script name."
+  default     = "cv-public"
+
+  validation {
+    condition     = length(trimspace(var.cv_public_worker_name)) > 0
+    error_message = "cv_public_worker_name must be set."
+  }
+}
+
+variable "cv_public_resolver_entrypoint" {
+  type        = string
+  description = "Named application registry entrypoint bound to the public CV Worker."
+  default     = "CvPublicResolver"
+
+  validation {
+    condition     = length(trimspace(var.cv_public_resolver_entrypoint)) > 0
+    error_message = "cv_public_resolver_entrypoint must be set."
+  }
+}
+
+variable "enable_cv_public_route_overlay" {
+  type        = bool
+  description = "Attach the /c/* Worker route overlay after the public SSR CV Worker has been deployed. Disable for the initial infrastructure bootstrap."
+  default     = true
+}
+
+variable "enable_cv_public_worker_dev_subdomain" {
+  type        = bool
+  description = "Expose the public SSR CV Worker on workers.dev."
+  default     = false
 }
 
 variable "worker_custom_domain_hostname" {
@@ -125,6 +175,20 @@ variable "application_registry_worker_name" {
   validation {
     condition     = length(trimspace(var.application_registry_worker_name)) > 0
     error_message = "application_registry_worker_name must be set."
+  }
+}
+
+variable "application_registry_management_access_email" {
+  type        = string
+  description = "Email allowed through Cloudflare Access to the personal registry management UI. Empty disables Access provisioning."
+  default     = ""
+
+  validation {
+    condition = (
+      trimspace(var.application_registry_management_access_email) == "" ||
+      can(regex("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", trimspace(var.application_registry_management_access_email)))
+    )
+    error_message = "application_registry_management_access_email must be empty or a valid email address."
   }
 }
 
@@ -173,7 +237,7 @@ variable "enable_application_registry_worker_dev_subdomain" {
 
 variable "infisical_sync_enabled" {
   type        = bool
-  description = "Whether to write Cloudflare-derived analytics and application registry values back into Infisical."
+  description = "Whether to write Cloudflare-derived analytics, registry, and public CV deployment values back into Infisical."
   default     = false
 }
 
@@ -219,5 +283,16 @@ variable "infisical_application_registry_folder_path" {
   validation {
     condition     = startswith(var.infisical_application_registry_folder_path, "/")
     error_message = "infisical_application_registry_folder_path must start with '/'."
+  }
+}
+
+variable "infisical_cv_public_folder_path" {
+  type        = string
+  description = "Infisical folder path that receives public CV Worker deployment values."
+  default     = "/cv/deploy"
+
+  validation {
+    condition     = startswith(var.infisical_cv_public_folder_path, "/")
+    error_message = "infisical_cv_public_folder_path must start with '/'."
   }
 }

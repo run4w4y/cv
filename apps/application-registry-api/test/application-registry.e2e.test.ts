@@ -41,7 +41,10 @@ test('serves health and generated OpenAPI without authentication', async () => {
 
   const openApiResponse = await fetch(new URL('/openapi.json', harness.url))
   assert.equal(openApiResponse.status, 200)
-  const openApi = await openApiResponse.json()
+  const openApi = (await openApiResponse.json()) as {
+    readonly openapi: string
+    readonly paths: Readonly<Record<string, unknown>>
+  }
   assert.equal(openApi.openapi, '3.1.0')
   assert.ok(openApi.paths['/v1/applications'])
   assert.ok(openApi.paths['/v1/applications/{id}/annual-compensation'])
@@ -64,9 +67,8 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
   assert.match(applicationId, /^[0-9a-f-]{36}$/u)
   assert.equal(created.applicationStatus, 'not_started')
   assert.equal(created.version, 1)
-  assert.equal(created.details?.countryCode, 'JP')
-  assert.equal(created.details?.workMode, 'remote')
-  assert.equal(created.details?.remoteRegion, 'Worldwide')
+  assert.equal(created.personalPriority, 'high')
+  assert.equal(created.location, 'Tokyo or remote')
 
   const listed = await Effect.runPromise(
     registry.registry.listApplications({
@@ -152,13 +154,12 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
       payload: {
         applicationStatus: 'preparing',
         expectedVersion: created.version,
-        fitScore: 90,
         followUpAt: '2026-07-11T12:00:00.000Z',
       },
     })
   )
   assert.equal(patched.applicationStatus, 'preparing')
-  assert.equal(patched.fitScore, 90)
+  assert.equal(patched.followUpAt, '2026-07-11T12:00:00.000Z')
   assert.equal(patched.version, created.version + 1)
 
   const managedPayload = {
@@ -209,46 +210,46 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
   )
   assert.equal(staleManaged._tag, 'ConflictError')
 
-  const exactFit = await Effect.runPromise(
+  const exactVersion = await Effect.runPromise(
     registry.registry.listApplications({
       query: {
         filters: [
           {
             type: 'condition',
-            field: 'fitScore',
+            field: 'version',
             operator: 'gte',
-            value: 90,
+            value: managed.application.version,
           },
           {
             type: 'condition',
-            field: 'fitScore',
+            field: 'version',
             operator: 'lte',
-            value: 90,
+            value: managed.application.version,
           },
         ],
       },
     })
   )
   assert.deepEqual(
-    exactFit.items.map((item) => item.id),
+    exactVersion.items.map((item) => item.id),
     [applicationId]
   )
 
-  const aboveFit = await Effect.runPromise(
+  const aboveVersion = await Effect.runPromise(
     registry.registry.listApplications({
       query: {
         filters: [
           {
             type: 'condition',
-            field: 'fitScore',
+            field: 'version',
             operator: 'gte',
-            value: 91,
+            value: managed.application.version + 1,
           },
         ],
       },
     })
   )
-  assert.deepEqual(aboveFit.items, [])
+  assert.deepEqual(aboveVersion.items, [])
 
   const scheduledFollowUp = await Effect.runPromise(
     registry.registry.listApplications({
@@ -281,7 +282,7 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
         filters: JSON.stringify([
           {
             type: 'condition',
-            field: 'fitScore',
+            field: 'version',
             operator: 'dropTable',
             value: 90,
           },
@@ -363,7 +364,6 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
   assert.equal(replayedCapture.replayed, true)
   assert.equal(replayedCapture.capture.id, captured.capture.id)
   assert.equal(captured.application.id, applicationId)
-  assert.equal(captured.application.fitScore, 88)
   assert.deepEqual(captured.capture.fitAssessment, captureInput.fitAssessment)
 
   const eventPayload = {
@@ -689,7 +689,7 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
       params: { id: applicationId },
       payload: {
         expectedVersion: current.version,
-        recommendedAction: 'Visible after the application revision baseline.',
+        lastContactAt: '2026-07-12T18:00:00.000Z',
       },
     })
   )
@@ -736,10 +736,7 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
   )
   assert.equal(persisted.company, applicationInput.company)
   assert.equal(persisted.applicationStatus, 'applied')
-  assert.equal(
-    persisted.recommendedAction,
-    'Visible after the application revision baseline.'
-  )
+  assert.equal(persisted.lastContactAt, '2026-07-12T18:00:00.000Z')
 })
 
 test('supports cursor-paginated application and event lists over real HTTP', async () => {
@@ -857,7 +854,7 @@ test('supports cursor-paginated application and event lists over real HTTP', asy
             ],
             orderBy: [
               { field: 'applicationStatus', direction: 'desc' },
-              { field: 'fitScore', direction: 'desc' },
+              { field: 'updatedRevision', direction: 'desc' },
             ],
             pagination: { after: filteredSortedAfter, size: 50 },
           },

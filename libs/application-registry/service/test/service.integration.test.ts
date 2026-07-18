@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { afterEach, beforeEach, test } from 'node:test'
 import type { D1Database } from '@cloudflare/workers-types'
+import { makeInMemoryArtifactStoreLayer } from '@cv/application-registry-artifact-store/test-support'
 import { makeRegistryCrudLive } from '@cv/application-registry-crud/live'
 import { RegistryMiniflareHarness } from '@cv/application-registry-crud/test-support'
 import { FxRates } from '@cv/application-registry-fx'
@@ -9,8 +10,10 @@ import { Duration, Effect, Layer, ManagedRuntime, Result } from 'effect'
 
 import {
   ApplicationsService,
+  FactsReleasesService,
   type ListApplicationsInput,
   ListingChecksService,
+  OpaqueObjectsService,
 } from '../src'
 import { RegistryServicesLive } from '../src/live'
 import { makeApplicationInput, recordedAt } from './support/inputs'
@@ -74,6 +77,7 @@ const makeRegistryServiceTestRuntime = (database: D1Database) =>
   ManagedRuntime.make(
     RegistryServicesLive.pipe(
       Layer.provide(makeRegistryCrudLive(Effect.succeed(database))),
+      Layer.provide(makeInMemoryArtifactStoreLayer()),
       Layer.provide(FakeFxRatesLive),
       Layer.provide(FakeListingAvailabilityCheckerLive)
     )
@@ -102,9 +106,86 @@ test('runs application defaults, patches, labels, and revision filters over D1',
   assert.deepEqual(result.deltaIds, [result.created.id])
   assert.deepEqual(result.labels, ['priority', 'remote'])
   assert.deepEqual(result.storedLabels, result.labels)
-  assert.equal(result.patched.fitScore, 91)
-  assert.equal(result.patched.recommendedAction, 'Apply this week')
+  assert.equal(result.patched.personalPriority, 'high')
   assert.equal(result.patched.version, 2)
+})
+
+test('publishes and resolves an immutable facts release over D1 and opaque storage', async () => {
+  const result = await runtime.runPromise(
+    Effect.gen(function* () {
+      const objects = yield* OpaqueObjectsService
+      const facts = yield* FactsReleasesService
+      const manifestBytes = new TextEncoder().encode('{"manifest":true}')
+      const catalogBytes = new TextEncoder().encode('{"facts":[]}')
+      const assetBytes = new Uint8Array([1, 3, 5, 7])
+      const [manifest, catalog, asset] = yield* Effect.all([
+        objects.put(manifestBytes),
+        objects.put(catalogBytes),
+        objects.put(assetBytes),
+      ])
+      const releaseId = `facts-${manifest.sha256}`
+      const registration = {
+        assets: [
+          {
+            assetId: 'portrait',
+            byteLength: asset.byteLength,
+            fileName: 'portrait.webp',
+            mediaType: 'image/webp',
+            objectKey: asset.key,
+            releaseId,
+            sha256: asset.sha256,
+          },
+        ],
+        catalogs: [
+          {
+            byteLength: catalog.byteLength,
+            locale: 'en',
+            mediaType: 'application/json',
+            objectKey: catalog.key,
+            releaseId,
+            sha256: catalog.sha256,
+          },
+        ],
+        release: {
+          compilerCommit: 'compiler-commit',
+          compilerRepository: 'https://example.test/cv',
+          createdAt: recordedAt,
+          factsSchemaVersion: '@cv/contracts/facts@1',
+          id: releaseId,
+          manifestByteLength: manifest.byteLength,
+          manifestObjectKey: manifest.key,
+          manifestSha256: manifest.sha256,
+          sourceCommit: 'facts-commit',
+          sourceRepository: 'https://example.test/cv-content',
+        },
+      }
+
+      const stored = yield* facts.register(registration)
+      const replayed = yield* facts.register(registration)
+      const channel = yield* facts.activate('stable', releaseId, 0)
+      const active = yield* facts.readActive('stable', 'en')
+      const stale = yield* Effect.result(facts.activate('stable', releaseId, 0))
+      return {
+        active,
+        assetBytes,
+        catalogBytes,
+        channel,
+        replayed,
+        stale,
+        stored,
+      }
+    })
+  )
+
+  assert.deepEqual(result.replayed, result.stored)
+  assert.equal(result.channel.version, 1)
+  assert.equal(result.active.release.id, result.stored.release.id)
+  assert.deepEqual(result.active.catalogBytes, result.catalogBytes)
+  assert.deepEqual(result.active.assetContents[0]?.bytes, result.assetBytes)
+  assert.equal(Result.isFailure(result.stale), true)
+  if (Result.isFailure(result.stale)) {
+    assert.equal(result.stale.failure._tag, 'RegistryConflictError')
+  }
 })
 
 test('continues an explicit revision filter through query cursors', async () => {
@@ -703,8 +784,8 @@ test('uses database defaults for applications and capture-created applications',
 
   assert.deepEqual(result.created, {
     applicationStatus: 'not_started',
-    category: null,
-    fitScore: null,
+    followUpAt: null,
+    personalPriority: null,
     targetStage: 'backlog',
     version: 1,
   })
@@ -714,29 +795,17 @@ test('uses database defaults for applications and capture-created applications',
 test('preserves omitted patch fields and clears explicit nulls', async () => {
   const result = await runtime.runPromise(patchNullabilityWorkflow)
 
-  assert.equal(result.partiallyUpdated.fitScore, 42)
-  assert.equal(result.partiallyUpdated.category, 'Backend')
   assert.equal(result.partiallyUpdated.followUpAt, '2026-07-20T12:00:00.000Z')
+  assert.equal(
+    result.partiallyUpdated.lastContactAt,
+    '2026-07-19T12:00:00.000Z'
+  )
+  assert.equal(result.partiallyUpdated.location, 'Remote')
   assert.equal(result.partiallyUpdated.personalPriority, 'high')
-  assert.deepEqual(result.partiallyUpdated.details, {
-    applyFromAbroad: 'Yes',
-    countryCode: 'JP',
-    employmentType: 'full-time',
-    languageRequirements: ['English'],
-    region: 'Kanto',
-    relocationSupport: 'Available',
-    remoteRegion: 'Worldwide',
-    residenceRequirement: null,
-    timezoneOverlap: 'JST overlap',
-    visaSponsorship: 'Case by case',
-    workAuthorization: 'Not required when applying',
-    workMode: 'remote',
-  })
   assert.deepEqual(result.cleared, {
-    category: null,
-    details: null,
-    fitScore: 42,
     followUpAt: null,
+    lastContactAt: '2026-07-19T12:00:00.000Z',
+    location: null,
     personalPriority: null,
   })
 })

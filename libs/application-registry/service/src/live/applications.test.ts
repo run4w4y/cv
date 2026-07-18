@@ -257,7 +257,10 @@ describe('ApplicationsService', () => {
     let patched = false
     const error = await Effect.runPromise(
       ApplicationsService.use((service) =>
-        service.patch(application.id, { expectedVersion: 9, fitScore: 42 })
+        service.patch(application.id, {
+          expectedVersion: 9,
+          location: 'Remote',
+        })
       ).pipe(
         Effect.flip,
         Effect.provide(

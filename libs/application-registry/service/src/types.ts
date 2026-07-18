@@ -1,3 +1,4 @@
+import type { ArtifactMetadata } from '@cv/application-registry-artifact-store'
 import type {
   AppendableApplicationEventKind,
   Application,
@@ -12,8 +13,19 @@ import type {
   ApplicationStatus,
   ApplicationWritable,
   CampaignCapture,
+  ContentEntry,
+  ContentEntryKind,
+  ContentRevision,
+  ContentRevisionSource,
   CurrencyCode,
+  CvLink,
+  FactsChannel,
+  FactsRelease,
+  FactsReleaseAsset,
+  FactsReleaseCatalog,
+  GeneratedArtifact,
   InformationalApplicationEventKind,
+  JobSnapshotStatus,
   JsonValue,
   ListingCheckAction,
   ListingCheckMode,
@@ -245,4 +257,126 @@ export type ListingCheckDecision = {
   readonly closedCandidateAt: string | null
   readonly consecutiveClosedChecks: number
   readonly nextCheckAt: string
+}
+
+/** Opaque bytes accompanied only by transport metadata. */
+export type OpaquePayloadInput = {
+  readonly bytes: Uint8Array
+  readonly mediaType: string
+}
+
+/** Content-addressed metadata for bytes whose application shape is unknown. */
+export type OpaqueObjectMetadata = ArtifactMetadata
+
+/** Registry-owned metadata for one immutable facts release. */
+export type RegisterFactsReleaseInput = {
+  readonly assets: readonly FactsReleaseAsset[]
+  readonly catalogs: readonly FactsReleaseCatalog[]
+  readonly release: FactsRelease
+}
+
+export type FactsReleaseRecord = RegisterFactsReleaseInput
+
+export type ActiveFactsRelease = {
+  readonly assets: readonly FactsReleaseAsset[]
+  readonly catalog: FactsReleaseCatalog
+  readonly channel: FactsChannel
+  readonly release: FactsRelease
+}
+
+export type ActiveFactsCatalogContent = ActiveFactsRelease & {
+  readonly catalogBytes: Uint8Array
+}
+
+export type ActiveFactsAssetContent = ActiveFactsRelease & {
+  readonly asset: FactsReleaseAsset
+  readonly bytes: Uint8Array
+}
+
+export type ActiveFactsContent = ActiveFactsCatalogContent & {
+  readonly assetContents: readonly {
+    readonly asset: FactsReleaseAsset
+    readonly bytes: Uint8Array
+  }[]
+}
+
+type PersistJobPostingSnapshotInputBase = {
+  readonly fetcherVersion: string
+  readonly finalUrl: string | null
+  readonly normalized?: OpaquePayloadInput | null
+  readonly raw?: OpaquePayloadInput | null
+  readonly requestedUrl: string
+}
+
+export type PersistJobPostingSnapshotInput =
+  | (PersistJobPostingSnapshotInputBase & {
+      readonly errorCode?: never
+      readonly errorMessage?: never
+      readonly status: Exclude<JobSnapshotStatus, 'failed'>
+    })
+  | (PersistJobPostingSnapshotInputBase & {
+      readonly errorCode: string
+      readonly errorMessage: string
+      readonly status: Extract<JobSnapshotStatus, 'failed'>
+    })
+
+export type JobPostingSnapshotPayloadKind = 'normalized' | 'raw'
+
+export type CreateContentEntryInput = {
+  readonly kind: ContentEntryKind
+  readonly locale: string
+}
+
+export type AppendContentRevisionInput = {
+  readonly contractId: string
+  readonly contractVersion: string
+  readonly expectedVersion: number
+  readonly factsReleaseId?: string | null
+  readonly jobSnapshotId?: string | null
+  readonly operationId: string
+  readonly payload: OpaquePayloadInput
+  readonly source: ContentRevisionSource
+}
+
+export type ContentRevisionResult = {
+  readonly entry: ContentEntry
+  readonly revision: ContentRevision
+}
+
+export type OpaqueContentRevision = ContentRevisionResult & {
+  readonly bytes: Uint8Array
+}
+
+export type ApproveContentRevisionInput = {
+  readonly expectedVersion: number
+  readonly revisionId: string
+}
+
+export type PublishCvInput = {
+  readonly expectedContentVersion: number
+  readonly publicBaseUrl: string
+}
+
+export type ResolvedCvPublication = {
+  readonly bytes: Uint8Array
+  readonly entry: ContentEntry
+  readonly link: CvLink
+  readonly revision: ContentRevision
+}
+
+export type SetCvLinkAvailabilityInput = {
+  readonly enabled: boolean
+  readonly expectedPublicationVersion: number
+  readonly reason?: string
+}
+
+export type BeginPdfArtifactInput = {
+  readonly expectedPublicationVersion: number
+  readonly rendererVersion: string
+  readonly workflowId: string
+}
+
+export type ReadyPdfArtifact = {
+  readonly artifact: GeneratedArtifact
+  readonly bytes: Uint8Array
 }

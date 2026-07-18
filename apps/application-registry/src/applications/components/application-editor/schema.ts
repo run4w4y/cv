@@ -3,7 +3,6 @@ import {
   type Application,
   ApplicationSchema,
   CurrencyCodeSchema,
-  FitScoreSchema,
   NonEmptyTrimmedStringSchema,
   UtcIsoTimestampSchema,
 } from '@cv/application-registry-entity'
@@ -23,16 +22,6 @@ const NullableTextFromString = Schema.String.pipe(
       const trimmed = value.trim()
       return trimmed.length === 0 ? null : trimmed
     }),
-    encode: SchemaGetter.transform((value) => value ?? ''),
-  })
-)
-
-const NullableFitScoreFromString = Schema.Union([
-  Schema.Literal(''),
-  Schema.NumberFromString,
-]).pipe(
-  Schema.decodeTo(Schema.NullOr(FitScoreSchema), {
-    decode: SchemaGetter.transform((value) => (value === '' ? null : value)),
     encode: SchemaGetter.transform((value) => value ?? ''),
   })
 )
@@ -146,7 +135,6 @@ export const ApplicationRowEditFormSchema = Schema.Struct({
   role: requiredText('Role'),
   applicationStatus: ApplicationSchema.fields.applicationStatus,
   targetStage: ApplicationSchema.fields.targetStage,
-  fitScore: NullableFitScoreFromString,
   personalPriority: ApplicationSchema.fields.personalPriority,
   labels: LabelsSchema,
   annualCompensation: AnnualCompensationFormSchema,
@@ -171,7 +159,6 @@ export const applicationRowEditDefaults = (
     role: application.role,
     applicationStatus: application.applicationStatus,
     targetStage: application.targetStage,
-    fitScore: application.fitScore === null ? '' : String(application.fitScore),
     personalPriority: application.personalPriority,
     labels: [...application.labels],
     annualCompensation: {
@@ -208,11 +195,6 @@ export const ApplicationDetailEditFormSchema = Schema.Struct({
   applicationStatus: ApplicationSchema.fields.applicationStatus,
   targetStage: ApplicationSchema.fields.targetStage,
   personalPriority: ApplicationSchema.fields.personalPriority,
-  fitScore: NullableFitScoreFromString,
-  category: NullableTextFromString,
-  remotePolicy: NullableTextFromString,
-  technologyStack: NullableTextFromString,
-  recommendedAction: NullableTextFromString,
   followUpAt: NullableTimestampFromDate,
 })
 
@@ -233,11 +215,6 @@ export const applicationDetailEditDefaults = (
   applicationStatus: application.applicationStatus,
   targetStage: application.targetStage,
   personalPriority: application.personalPriority,
-  fitScore: application.fitScore === null ? '' : String(application.fitScore),
-  category: application.category ?? '',
-  remotePolicy: application.remotePolicy ?? '',
-  technologyStack: application.technologyStack ?? '',
-  recommendedAction: application.recommendedAction ?? '',
   followUpAt:
     application.followUpAt === null ? null : new Date(application.followUpAt),
 })

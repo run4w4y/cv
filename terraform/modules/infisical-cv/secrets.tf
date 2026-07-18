@@ -34,38 +34,14 @@ resource "random_password" "registry_api_token" {
   special = false
 }
 
-resource "random_password" "content_id_salt" {
-  length  = 48
+resource "random_password" "chatgpt_session_secret" {
+  length  = 64
   special = false
 }
 
 resource "random_password" "private_audience_key" {
   length  = 48
   special = false
-}
-
-resource "random_id" "private_content_root_key" {
-  byte_length = 32
-}
-
-resource "infisical_secret" "content_id_salt" {
-  name             = "CONTENT_ID_SALT"
-  value_wo         = random_password.content_id_salt.result
-  value_wo_version = 1
-  env_slug         = var.environment_slug
-  workspace_id     = var.infisical_project_id
-  folder_path      = local.content_path
-
-  metadata = merge(local.common_metadata, {
-    description = "Terraform-generated salt used to derive opaque public CV content ids from source ids."
-    kind        = "generated-secret"
-  })
-
-  depends_on = [infisical_secret_folder.child]
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }
 
 resource "infisical_secret" "private_audience_key" {
@@ -78,26 +54,6 @@ resource "infisical_secret" "private_audience_key" {
 
   metadata = merge(local.common_metadata, {
     description = "Terraform-generated key used to derive reversible encrypted private audience URL ids."
-    kind        = "generated-secret"
-  })
-
-  depends_on = [infisical_secret_folder.child]
-
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
-resource "infisical_secret" "private_content_root_key" {
-  name             = "PRIVATE_CONTENT_ROOT_KEY"
-  value_wo         = local.private_content_root_key
-  value_wo_version = 1
-  env_slug         = var.environment_slug
-  workspace_id     = var.infisical_project_id
-  folder_path      = local.content_path
-
-  metadata = merge(local.common_metadata, {
-    description = "Terraform-generated 32-byte root key used by TypeScript build tooling to derive private profile content keys."
     kind        = "generated-secret"
   })
 
@@ -138,6 +94,26 @@ resource "infisical_secret" "registry_api_token" {
 
   metadata = merge(local.common_metadata, {
     description = "Terraform-generated bearer token required by the application registry API."
+    kind        = "generated-secret"
+  })
+
+  depends_on = [infisical_secret_folder.child]
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "infisical_secret" "chatgpt_session_secret" {
+  name             = "CHATGPT_SESSION_SECRET"
+  value_wo         = random_password.chatgpt_session_secret.result
+  value_wo_version = 1
+  env_slug         = var.environment_slug
+  workspace_id     = var.infisical_project_id
+  folder_path      = local.application_registry_path
+
+  metadata = merge(local.common_metadata, {
+    description = "Terraform-generated key used to encrypt Login with ChatGPT sessions stored in Workers KV."
     kind        = "generated-secret"
   })
 

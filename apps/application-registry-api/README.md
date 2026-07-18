@@ -1,8 +1,13 @@
 # Application registry API
 
-Cloudflare Worker API for the persistent job-application registry. D1 is the
-system of record. `@cv/application-registry-entity` owns the TS-first Drizzle
-schema, inferred models, and generated migrations;
+Cloudflare Worker for the personal application registry and CV preparation
+product. It serves the management SPA, its same-origin BFF, the Login with
+ChatGPT subscription proxy, the authenticated registry API, the internal public
+CV resolver, and the PDF Workflow entrypoint. D1 is the relational system of
+record while private opaque bytes live in R2.
+
+`@cv/application-registry-entity` owns the TS-first Drizzle schema, inferred
+models, and generated migrations;
 `@cv/application-registry-crud` owns direct persistence;
 `@cv/application-registry-service` owns registry workflows;
 `@cv/application-registry-fx` owns currency rates and conversion;
@@ -14,6 +19,18 @@ connect to D1 directly.
 
 - One Effect `HttpApi` declaration defines the authenticated routes and OpenAPI
   3.1 document and is also the source of the generated Effect client.
+- Static Assets serves the management SPA. `/api/registry/*` is a same-origin
+  BFF that injects `REGISTRY_API_TOKEN` inside the Worker; Cloudflare Access must
+  protect this browser surface in production.
+- `/api/chatgpt/*` delegates to `@opencoredev/loginwithchatgpt-server`. Encrypted
+  auth sessions and short-lived proxy counters live in Workers KV. Draft prompt
+  and conversation state remain browser-owned and transient.
+- The exported `CvPublicResolver` named entrypoint is the only public-renderer
+  read boundary. `cv-public` calls it through a one-way service binding, so the
+  public Worker never receives a registry bearer token.
+- The exported `CvPdfWorkflow` uses Browser Run to load the exact final public
+  URL, verifies that the document fits one A4 page, generates its PDF with that
+  URL as the QR target, and stores the immutable result in R2.
 - The entity package owns the split Drizzle table definitions, inferred types,
   Drizzle-derived Effect codecs, and generated migration history.
 - CRUD contracts are imported from `@cv/application-registry-crud`; only this
@@ -28,8 +45,8 @@ connect to D1 directly.
   multi-statement writes. `@effect/sql-d1` deliberately does not emulate D1
   transactions; one D1 batch keeps each aggregate write and operation receipt
   atomic.
-- Event rows retain history while the `applications` row is the current
-  searchable projection.
+- Event rows retain history while the deliberately small `applications` row is
+  the current searchable projection.
 - Listing-check rows retain HTTP/provider evidence while the application row
   stores the current availability projection. A separate schedule table uses
   bounded leases and retry backoff so overlapping cron invocations do not
@@ -41,19 +58,53 @@ connect to D1 directly.
   but its HTTP response was lost. A canonical operation request signature
   prevents one operation ID from being reused with different content.
 
-The database contains applications, labels, notes, events, campaign captures,
-structured compensation, exchange-rate observations, and operation receipts.
-Clients supply one stable `operationId` for capture, event, note, and managed
-update replay. The server owns ordinary UUID generation for entity IDs;
-monotonic database revisions, rather than UUID ordering, provide stable list
-ordering and an ordinary filterable change marker.
+## Persistence boundaries
 
-## API
+The current application projection contains source identity (`jobKey`, source
+job ID, canonical URL), company, role, optional location, lifecycle status,
+target stage, optional personal priority and follow-up/contact timestamps, the
+listing-availability projection, optimistic `version`, revisions, and audit
+timestamps. Fit score, category, remote policy, free-form details, open status,
+source confidence, technology stack, recommended action, and research priority
+are no longer application columns.
+
+Related D1 tables contain labels, notes, events, structured compensation,
+exchange-rate observations, listing evidence/schedules, job-snapshot metadata,
+facts release manifests/channels, content-entry and revision metadata, public
+links, generated-artifact metadata, and operation receipts. Campaign captures
+remain readable for historical compatibility, but v2 preparation uses job
+snapshots and content revisions instead of adding more fields to the
+application row.
+
+Facts catalogues/assets, raw and normalized job snapshots, CV and cover-letter
+revision payloads, and PDFs are opaque R2 objects. D1 records only object keys,
+hashes, byte lengths, media types, contract identifiers/versions, ownership,
+and lifecycle relations. This backend does not import or inspect the document
+or facts schemas. The management frontend, facts compiler, and public renderer
+own those code-defined contracts and validate payload shape at their respective
+boundaries. The only supported content locale is `en`.
+
+Clients supply one stable `operationId` for capture, event, note, managed
+update, and content-revision replay where the contract requires it. The server
+owns ordinary UUID generation for entity IDs; monotonic database revisions,
+rather than UUID ordering, provide stable list ordering and an ordinary
+filterable change marker.
+
+## HTTP surfaces
 
 `GET /health` is public. All `/v1/*` routes require
 `Authorization: Bearer <REGISTRY_API_TOKEN>`.
 `GET /openapi.json` exposes the OpenAPI document generated from the same
 declaration used by handlers and the internal Effect client.
+
+The production Cloudflare Access configuration protects the management SPA,
+`/api/registry/*`, and `/api/chatgpt/*` for the single configured owner email.
+It gives `/v1/*` a more-specific Access bypass because those machine routes
+still enforce their own bearer token. `/api/registry/*` strips that prefix,
+forwards to the corresponding registry route, and adds the bearer token without
+exposing it to browser JavaScript.
+
+### Applications and history
 
 - `POST /v1/applications`: create a registry projection and return conflict when
   its job key already exists.
@@ -71,8 +122,8 @@ declaration used by handlers and the internal Effect client.
 - `GET /v1/applications/facets`: sorted observed companies and labels for
   dashboard controls. Closed enum choices come from the shared query metadata.
 - `GET /v1/applications/:id`: fetch by application ID or exact job key.
-- `PATCH /v1/applications/:id`: update source identity metadata, research, and
-  lifecycle fields with optional optimistic version checking.
+- `PATCH /v1/applications/:id`: update source identity, planning, and lifecycle
+  fields with optional optimistic version checking.
 - `PATCH /v1/applications/:id/management`: atomically update management-editable
   fields and, when present, replace labels and annual compensation. It requires
   `expectedVersion` and an idempotent `operationId`; a status transition also
@@ -104,10 +155,77 @@ declaration used by handlers and the internal Effect client.
   revision, source/recorded timestamps, IDs, device, and operation.
 - `GET /v1/applications/:id/listing-checks`: return stored listing-check
   evidence and decisions newest first.
+- `PUT /v1/applications/:id/listing-availability`: resolve a listing finding
+  against the server policy and persist the resulting projection/event.
 - `POST /v1/listing-check-findings`: idempotently ingest a bounded batch of
   observations produced by the local CLI. This endpoint never fetches a job
   page; it validates targets and applies server-owned policy and persistence.
 - `GET /v1/listing-check-runs/:id`: return a persisted run summary.
+
+### Job context, facts, and opaque content
+
+- `POST /v1/applications/:id/job-snapshots/capture`: fetch the application's
+  canonical HTTP(S) posting URL on the server, follow bounded redirects, and
+  persist a success or failure snapshot. Responses are streamed with a 4 MiB
+  limit and a 20-second capture timeout. Successful ordinary HTML captures keep
+  the exact raw response and also derive bounded, deterministic plain text from
+  the page title, metadata, JSON-LD, and visible body text.
+- `POST /v1/applications/:id/job-snapshots`: persist a caller-provided raw
+  and/or normalized snapshot, including an explicit failure record. The
+  management app uses this opaque boundary to save a corrected or pasted role
+  and requirements snapshot without mutating the original raw capture.
+- `GET /v1/applications/:id/job-snapshots/latest` and
+  `GET /v1/applications/:id/job-snapshots/:snapshotId`: read snapshot metadata.
+- `GET /v1/applications/:id/job-snapshots/:snapshotId/payloads/:kind`: read the
+  opaque `raw` or `normalized` payload.
+- `POST /v1/objects`: store opaque bytes and return their content-addressed R2
+  reference. The facts release publisher uses this before registration.
+- `POST /v1/facts-releases`: register immutable exact-SHA release metadata.
+- `GET /v1/facts-releases/:releaseId`: read one registered release.
+- `PUT /v1/facts-releases/channels/:channel`: atomically activate a registered
+  release with optimistic channel versioning.
+- `GET /v1/facts-releases/active`: return the active catalogue and assets for
+  the requested channel and the single `en` locale.
+- `POST /v1/applications/:id/content-entries`: idempotently ensure the one
+  `cv` or `cover_letter` entry for the application, kind, and `en` locale.
+- `GET /v1/applications/:id/content-entries/:entryId`: read entry metadata.
+- `GET|POST /v1/applications/:id/content-entries/:entryId/revisions`: list
+  revisions or append an opaque AI/human revision pinned to optional facts and
+  job-snapshot inputs.
+- `GET /v1/applications/:id/content-entries/:entryId/revisions/:revisionId`:
+  read revision metadata and opaque bytes.
+- `POST /v1/applications/:id/content-entries/:entryId/approval`: select a
+  revision as the approved head with optimistic version checking.
+
+### CV publication and PDF artifacts
+
+- `POST|GET /v1/applications/:id/content-entries/:entryId/publication`: create
+  or read the stable public link for an approved CV revision. Its bearer token
+  remains valid until the link is disabled; republishing the entry retains the
+  token.
+- `PUT /v1/applications/:id/content-entries/:entryId/publication/availability`:
+  disable or re-enable that link. Rejecting an application disables all its CV
+  links with a system reason; reopening restores only links disabled for that
+  reason.
+- `POST /v1/applications/:id/cv-links/disable`: explicitly disable every CV link
+  for an application.
+- `POST /v1/applications/:id/content-entries/:entryId/pdf-workflow`: start the
+  Cloudflare Workflow for the current publication.
+- `GET /v1/applications/:id/content-entries/:entryId/pdf-workflow/:workflowId`:
+  poll Workflow state.
+- `GET /v1/applications/:id/content-entries/:entryId/pdf-artifacts/current` and
+  its `/content` child: read current artifact metadata or the ready PDF.
+- `POST /v1/applications/:id/content-entries/:entryId/pdf-artifacts` and
+  `POST /v1/applications/:id/pdf-artifacts/:artifactId/complete|fail` are the
+  authenticated workflow primitives. Failed rendering, including a one-page
+  overflow, records the failure and disables the incomplete publication. The
+  management product only presents a publication as ready after the exact-URL
+  PDF is stored.
+
+The named `CvPublicResolver` accepts only internal service-binding requests at
+`/cv-publications/:token`. It returns enabled opaque CV bytes plus digest and
+contract metadata with `private, no-store`; the schema-owning public Worker
+validates and renders those bytes at `/c/:token`.
 
 The shared checker prefers authoritative provider APIs for Greenhouse and
 Lever, then uses the fetched page's status, redirects, matching JobPosting JSON-LD,
@@ -184,13 +302,21 @@ bunx nx run application-registry-api:migrations:apply:local
 bunx nx run application-registry-api:dev
 ```
 
-The local `wrangler.jsonc` binds `APPLICATION_REGISTRY_DB`. Set the local Worker
-secret before testing authenticated routes:
+The local `wrangler.jsonc` binds D1 as `APPLICATION_REGISTRY_DB`, R2 as
+`CV_OBJECTS`, Workers KV as `CHATGPT_SESSIONS`, Browser Run as `BROWSER`, and
+the PDF Workflow as `CV_PDF_WORKFLOW`. Set both local Worker secrets before
+testing the BFF or ChatGPT flow:
 
 ```bash
 cd apps/application-registry-api
 printf '%s' 'local-registry-token' | node ../../node_modules/wrangler/bin/wrangler.js secret put REGISTRY_API_TOKEN --local
+printf '%s' 'local-chatgpt-session-secret' | node ../../node_modules/wrangler/bin/wrangler.js secret put CHATGPT_SESSION_SECRET --local
 ```
+
+The management Vite build reads `VITE_CV_PUBLIC_BASE_URL`; production sets it
+to `https://<CV_WEB_HOST>/c`. The Login with ChatGPT flow uses the owner's
+existing subscription through `/api/chatgpt/*`; there is intentionally no
+OpenAI API key configuration.
 
 Wrangler config installs an hourly cron at minute 17. This is an internal
 fallback scanner, not an HTTP-triggered batch. The scheduled handler is
@@ -249,37 +375,58 @@ The integration and end-to-end suites require no Docker daemon:
 
 ## Production deployment
 
-Terraform creates the D1 database, manages the dedicated `workers.dev` exposure
-resource, and writes derived Infisical values. Wrangler owns Worker creation,
-deployed code, observability configuration, the D1 binding, migrations, and
-`REGISTRY_API_TOKEN` secret while preserving that exposure setting.
+Terraform creates D1, the private R2 bucket, and the ChatGPT-session KV
+namespace; provisions Cloudflare Access; manages the dedicated `workers.dev`
+exposure resource; and writes derived Infisical values. Wrangler owns Worker
+creation, deployed code and Static Assets, observability, D1/R2/KV/Browser Run
+and Workflow bindings, migrations, and runtime secrets while preserving that
+exposure setting.
 
 Required deployment environment:
 
 - `CLOUDFLARE_ACCOUNT_ID`
 - `CLOUDFLARE_API_TOKEN`
+- `CV_WEB_HOST`, used to build the management application's public link base
 - `APPLICATION_REGISTRY_DB_ID`
 - `APPLICATION_REGISTRY_DB_NAME`
 - `APPLICATION_REGISTRY_WORKER_NAME`
+- `CHATGPT_SESSIONS_KV_ID`
+- `CHATGPT_SESSION_SECRET`
+- `CV_OBJECTS_BUCKET_NAME`
 - `REGISTRY_API_TOKEN`
+- `APPLICATION_REGISTRY_WORKERS_DEV_ENABLED`, Terraform-synced after Access is
+  attached; defaults to `false` during the initial private bootstrap
+- `CV_PDF_WORKFLOW_NAME`, optional, defaults to `cv-pdf`
 - `APPLICATION_REGISTRY_COMPATIBILITY_DATE`, optional
 
-Apply in this order after Terraform:
+After Terraform has bootstrapped D1, R2, and KV as described in
+`terraform/README.md`, build the management assets and deploy in this order:
 
 ```bash
+VITE_CV_PUBLIC_BASE_URL="https://${CV_WEB_HOST}/c" \
+  bunx nx run application-registry-management:build
 bunx nx run application-registry-api:migrations:apply:remote
 bunx nx run application-registry-api:deploy
 ```
 
-The deploy target requires `REGISTRY_API_TOKEN` and publishes the Worker code
-and bearer secret together through Wrangler's `--secrets-file` deployment. The
-production GitHub workflow performs the same build, migration, and atomic
-deployment sequence. D1 migrations are forward-only; inspect generated SQL and
-use D1 Time Travel for operational recovery rather than editing an applied
-migration.
+The deploy target requires `REGISTRY_API_TOKEN` and `CHATGPT_SESSION_SECRET`
+and publishes the Worker, management assets, both secrets, Workflow entrypoint,
+and resource bindings together through Wrangler's `--secrets-file` deployment.
+On the initial deployment, `APPLICATION_REGISTRY_WORKERS_DEV_ENABLED` is absent
+and the generator emits `workers_dev: false`, so the management UI and its
+bearer-injecting BFF cannot become public before Access. The full Terraform
+apply attaches Access, enables the hostname, and syncs the flag as `true` for
+later deployments.
+The production GitHub workflow first builds the management SPA with the final
+`CV_WEB_HOST/c` public base URL, then performs the same build, migration, and
+atomic deployment sequence. D1 migrations are forward-only; inspect generated
+SQL and use D1 Time Travel for operational recovery rather than editing an
+applied migration.
 
 The two app-owned deployment scripts are deliberately thin infrastructure
 adapters. `scripts/write-wrangler-config.ts` materializes the environment's
-Worker name and D1 binding. `scripts/deploy.ts` writes `REGISTRY_API_TOKEN` to a
-temporary Wrangler `--secrets-file`, invokes `wrangler deploy`, and removes the
-temporary file. Neither script owns registry behavior or migration generation.
+Worker name, Terraform-owned exposure state, D1/R2/KV/Browser Run bindings, and
+PDF Workflow. `scripts/deploy.ts`
+writes `REGISTRY_API_TOKEN` and `CHATGPT_SESSION_SECRET` to a temporary Wrangler
+`--secrets-file`, invokes `wrangler deploy`, and removes the temporary file.
+Neither script owns registry behavior or migration generation.

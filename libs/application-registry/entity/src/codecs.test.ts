@@ -6,6 +6,8 @@ import {
   ApplicationMutableSchema,
   ApplicationRowSelectSchema,
   ApplicationWritableSchema,
+  ContentRevisionSchema,
+  CvLinkSchema,
   FitAssessmentSchema,
   FxRateInputSchema,
   normalizeApplicationCanonicalUrl,
@@ -29,28 +31,6 @@ const applicationRow = {
   applicationStatus: 'not_started',
   targetStage: 'apply_next',
   personalPriority: 'high',
-  fitScore: 91,
-  category: 'Backend',
-  remotePolicy: 'Hybrid',
-  details: {
-    countryCode: 'JP',
-    region: 'Tokyo',
-    workMode: 'remote',
-    remoteRegion: 'Japan',
-    timezoneOverlap: 'JST',
-    employmentType: 'Full-time',
-    languageRequirements: ['Japanese: Conversational'],
-    workAuthorization: null,
-    residenceRequirement: 'Non-resident compatible',
-    applyFromAbroad: 'Yes, verify',
-    visaSponsorship: 'Available',
-    relocationSupport: 'Available',
-  },
-  openStatus: 'Open',
-  sourceConfidence: 'High',
-  technologyStack: 'TypeScript, Effect',
-  recommendedAction: 'Apply',
-  researchPriority: 'Top target',
   followUpAt: null,
   appliedAt: null,
   lastContactAt: null,
@@ -67,14 +47,14 @@ const applicationRow = {
 } as const
 
 describe('application registry database schemas', () => {
-  test('preserves geography and remote requirements in one opportunity', () => {
+  test('decodes the simplified application lifecycle row', () => {
     const row = Schema.decodeUnknownSync(ApplicationRowSelectSchema)(
       applicationRow
     )
 
-    expect(row.details?.countryCode).toBe('JP')
-    expect(row.details?.remoteRegion).toBe('Japan')
-    expect(row.details?.visaSponsorship).toBe('Available')
+    expect(row.company).toBe('Example')
+    expect(row.applicationStatus).toBe('not_started')
+    expect(row.listingAvailability).toBe('unchecked')
   })
 
   test('models original compensation in minor units', () => {
@@ -107,8 +87,7 @@ describe('application registry database schemas', () => {
     )({
       canonicalUrl: 'https://example.test/jobs/three',
       company: 'Example',
-      details: null,
-      fitScore: null,
+      followUpAt: null,
       jobKey: 'web:three',
       role: 'Engineer',
       source: 'web',
@@ -116,18 +95,16 @@ describe('application registry database schemas', () => {
     const mutable = Schema.decodeUnknownSync(ApplicationMutableSchema)({
       canonicalUrl: 'https://example.test/jobs/updated',
       company: 'Updated Example',
-      details: null,
-      fitScore: null,
+      followUpAt: null,
       location: null,
       role: 'Staff Engineer',
       source: 'official',
       sourceJobId: null,
     })
 
-    expect(writable.fitScore).toBeUndefined()
-    expect(nullableWritable.details).toBeNull()
-    expect(nullableWritable.fitScore).toBeNull()
-    expect(mutable.details).toBeNull()
+    expect(writable.followUpAt).toBeUndefined()
+    expect(nullableWritable.followUpAt).toBeNull()
+    expect(mutable.followUpAt).toBeNull()
     expect(mutable.company).toBe('Updated Example')
     expect(mutable.location).toBeNull()
   })
@@ -153,28 +130,6 @@ describe('application registry database schemas', () => {
   })
 
   test('applies domain checks that SQLite metadata cannot express', () => {
-    expect(() =>
-      Schema.decodeUnknownSync(ApplicationWritableSchema)({
-        canonicalUrl: 'https://example.test/jobs/four',
-        company: 'Example',
-        fitScore: 101,
-        jobKey: 'web:four',
-        role: 'Engineer',
-        source: 'web',
-      })
-    ).toThrow()
-
-    expect(() =>
-      Schema.decodeUnknownSync(ApplicationWritableSchema)({
-        canonicalUrl: 'https://example.test/jobs/fractional-fit',
-        company: 'Example',
-        fitScore: 91.5,
-        jobKey: 'web:fractional-fit',
-        role: 'Engineer',
-        source: 'web',
-      })
-    ).toThrow()
-
     expect(() =>
       Schema.decodeUnknownSync(FxRateInputSchema)({
         baseCurrency: 'USD',
@@ -236,5 +191,56 @@ describe('application registry database schemas', () => {
         'https://example.test/jobs/one?utm_source=mail#'
       )
     ).toBe('https://example.test/jobs/one')
+  })
+
+  test('models document revisions as opaque versioned object descriptors', () => {
+    const revision = Schema.decodeUnknownSync(ContentRevisionSchema)({
+      id: 'revision-1',
+      contentEntryId: 'entry-1',
+      revisionNumber: 1,
+      parentRevisionId: null,
+      contractId: 'cv.document',
+      contractVersion: 'cv.document.v1',
+      objectKey: 'documents/sha256/abc.json',
+      sha256: 'abc',
+      byteLength: 42,
+      mediaType: 'application/json',
+      source: 'ai',
+      factsReleaseId: 'facts-1',
+      jobSnapshotId: 'job-1',
+      operationId: 'operation-1',
+      createdAt: '2026-07-17T00:00:00.000Z',
+    })
+
+    expect(revision.contractVersion).toBe('cv.document.v1')
+    expect(revision).not.toHaveProperty('document')
+    expect(() =>
+      Schema.decodeUnknownSync(ContentRevisionSchema)({
+        ...revision,
+        byteLength: -1,
+      })
+    ).toThrow()
+  })
+
+  test('keeps public CV links stable and reversibly enabled', () => {
+    const link = Schema.decodeUnknownSync(CvLinkSchema)({
+      id: 'link-1',
+      applicationId: 'application-1',
+      contentEntryId: 'entry-1',
+      publishedRevisionId: 'revision-1',
+      token: 'public-token',
+      publicUrl: 'https://cv.example.test/c/public-token',
+      enabled: true,
+      disabledReason: null,
+      disabledAt: null,
+      publicationVersion: 1,
+      version: 1,
+      createdAt: '2026-07-17T00:00:00.000Z',
+      updatedAt: '2026-07-17T00:00:00.000Z',
+    })
+
+    expect(link.enabled).toBeTrue()
+    expect(link.token).toBe('public-token')
+    expect(link.publicationVersion).toBe(1)
   })
 })

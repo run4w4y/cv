@@ -13,14 +13,19 @@
     "migrations:apply:remote": "nx run application-registry-api:migrations:apply:remote"
   },
   "dependencies": {
-    "@cv/application-registry-entity": "workspace:*",
-    "@cv/application-registry-crud": "workspace:*",
-    "@cv/application-registry-fx": "workspace:*",
-    "@cv/application-registry-service": "workspace:*",
-    "@cv/application-registry-listing-check": "workspace:*",
+    "@cloudflare/puppeteer": "^1.1.0",
     "@cv/application-registry-api-contract": "workspace:*",
+    "@cv/application-registry-artifact-store": "workspace:*",
+    "@cv/application-registry-crud": "workspace:*",
+    "@cv/application-registry-entity": "workspace:*",
+    "@cv/application-registry-fx": "workspace:*",
+    "@cv/application-registry-listing-check": "workspace:*",
+    "@cv/application-registry-service": "workspace:*",
     "@cv/effect-http-auth": "workspace:*",
-    "effect": "4.0.0-beta.91"
+    "@cv/renderer": "workspace:*",
+    "@opencoredev/loginwithchatgpt-server": "0.2.0",
+    "effect": "4.0.0-beta.91",
+    "htmlparser2": "^12.0.0"
   },
   "devDependencies": {
     "@cv/application-registry-api-client": "workspace:*",
