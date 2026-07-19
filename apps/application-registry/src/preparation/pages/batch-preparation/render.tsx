@@ -1,3 +1,4 @@
+import { maximumPreparationBatchSize } from '@cv/application-preparation-workflow/domain'
 import {
   Alert,
   AlertDescription,
@@ -28,7 +29,6 @@ import {
   preparationRunsAtom,
   startPreparationBatchAtom,
 } from '@/preparation/workflow/atoms'
-import { maximumPreparationBatchSize } from '@cv/application-preparation-workflow/domain'
 import { PreparationRunCard } from './run-card'
 
 export const BatchPreparationPage = () => {

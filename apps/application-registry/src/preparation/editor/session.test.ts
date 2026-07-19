@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test'
+import type { CoverLetterDocument } from '@cv/application-preparation-workflow/cover-letter'
+import type { SavedCandidate } from '@cv/application-preparation-workflow/domain'
 import type {
   Application,
   ContentEntry,
   ContentRevision,
   ContentRevisionSource,
 } from '@cv/application-registry-entity'
-import type { CoverLetterDocument } from '@cv/application-preparation-workflow/cover-letter'
-import type { SavedCandidate } from '@cv/application-preparation-workflow/domain'
 import type { CvDocumentV1 } from '@cv/contracts/document'
 import * as AtomRegistry from 'effect/unstable/reactivity/AtomRegistry'
 

@@ -8,12 +8,6 @@ import {
   cvDocumentV1JsonSchema,
   cvDocumentV1ModelGuidance,
 } from '../cv/ai-schema'
-import { toAiJsonSchema } from '../generation/ai-schema'
-import {
-  buildCoverLetterGenerationRequest,
-  buildCvDraftGenerationRequest,
-  factsForGeneration,
-} from '../generation/prompts'
 import type {
   EvidencePlan,
   JobAnalysis,
@@ -28,6 +22,12 @@ import {
   preparationSourceUrl,
   SectionBriefSchema,
 } from '../domain'
+import { toAiJsonSchema } from '../generation/ai-schema'
+import {
+  buildCoverLetterGenerationRequest,
+  buildCvDraftGenerationRequest,
+  factsForGeneration,
+} from '../generation/prompts'
 import { aiStageMetadata, formatted, stageError } from './shared'
 import {
   validateCvProvenance,

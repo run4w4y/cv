@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 
 import {
   cacheTagForToken,
@@ -113,5 +113,36 @@ describe('public CV cache policy', () => {
     expect(unauthorized.status).toBe(401)
     expect(malformed.status).toBe(400)
     expect(calls).toEqual([])
+  })
+
+  test('turns rejected and unsuccessful purge calls into a 503 response', async () => {
+    const errorLog = spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      const rejected = await handlePublicCachePurge(
+        purgeRequest({ token: 'public-token' }),
+        'test-secret',
+        () => Promise.reject(new Error('Cloudflare API unavailable'))
+      )
+      const unsuccessful = await handlePublicCachePurge(
+        purgeRequest({ all: true }),
+        'test-secret',
+        () =>
+          Promise.resolve({
+            errors: [{ code: 1000, message: 'Purge rejected' }],
+            success: false,
+          })
+      )
+
+      expect(rejected.status).toBe(503)
+      expect(await rejected.json()).toEqual({ error: 'cache_purge_failed' })
+      expect(unsuccessful.status).toBe(503)
+      expect(await unsuccessful.json()).toEqual({
+        error: 'cache_purge_failed',
+      })
+      expect(errorLog).toHaveBeenCalledTimes(2)
+    } finally {
+      errorLog.mockRestore()
+    }
   })
 })

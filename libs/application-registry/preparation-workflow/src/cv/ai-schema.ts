@@ -1,9 +1,10 @@
 import {
-  collectGenerationGuidance,
   CvDocumentV1Schema,
+  collectGenerationGuidance,
   cvDocumentV1GenerationGuidance,
 } from '@cv/contracts/document'
 import { Schema } from 'effect'
+import { isEmptyObject } from 'es-toolkit/predicate'
 
 import { toAiJsonSchema } from '../generation/ai-schema'
 
@@ -13,7 +14,7 @@ const annotatedDocument = Schema.toJsonSchemaDocument(CvDocumentV1Schema, {
 
 export const cvDocumentV1AnnotatedJsonSchema: Record<string, unknown> = {
   ...annotatedDocument.schema,
-  ...(Object.keys(annotatedDocument.definitions).length === 0
+  ...(isEmptyObject(annotatedDocument.definitions)
     ? {}
     : { $defs: annotatedDocument.definitions }),
 }

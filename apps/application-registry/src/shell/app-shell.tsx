@@ -21,9 +21,9 @@ import {
 } from '@cv/internal-ui'
 import {
   Activity,
-  ChartNoAxesCombined,
   Braces,
   BriefcaseBusiness,
+  ChartNoAxesCombined,
   Database,
   GitBranch,
 } from 'lucide-react'

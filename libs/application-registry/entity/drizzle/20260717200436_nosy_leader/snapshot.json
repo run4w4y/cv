@@ -2,9 +2,7 @@
   "version": "7",
   "dialect": "sqlite",
   "id": "eb681726-1e43-4b4e-b5c6-9f94aa9e5491",
-  "prevIds": [
-    "aa2142c7-936b-48d4-9fbf-73f60c3a1a9a"
-  ],
+  "prevIds": ["aa2142c7-936b-48d4-9fbf-73f60c3a1a9a"],
   "ddl": [
     {
       "name": "application_labels",
@@ -2049,13 +2047,9 @@
       "table": "registry_sequence"
     },
     {
-      "columns": [
-        "application_id"
-      ],
+      "columns": ["application_id"],
       "tableTo": "applications",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2064,13 +2058,9 @@
       "table": "application_labels"
     },
     {
-      "columns": [
-        "application_id"
-      ],
+      "columns": ["application_id"],
       "tableTo": "applications",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2079,13 +2069,9 @@
       "table": "application_notes"
     },
     {
-      "columns": [
-        "cv_link_id"
-      ],
+      "columns": ["cv_link_id"],
       "tableTo": "cv_links",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2094,13 +2080,9 @@
       "table": "generated_artifacts"
     },
     {
-      "columns": [
-        "content_revision_id"
-      ],
+      "columns": ["content_revision_id"],
       "tableTo": "content_revisions",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2109,13 +2091,9 @@
       "table": "generated_artifacts"
     },
     {
-      "columns": [
-        "application_id"
-      ],
+      "columns": ["application_id"],
       "tableTo": "applications",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2124,13 +2102,9 @@
       "table": "campaign_captures"
     },
     {
-      "columns": [
-        "application_id"
-      ],
+      "columns": ["application_id"],
       "tableTo": "applications",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2139,13 +2113,9 @@
       "table": "application_compensations"
     },
     {
-      "columns": [
-        "application_id"
-      ],
+      "columns": ["application_id"],
       "tableTo": "applications",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2154,13 +2124,9 @@
       "table": "content_entries"
     },
     {
-      "columns": [
-        "content_entry_id"
-      ],
+      "columns": ["content_entry_id"],
       "tableTo": "content_entries",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2169,13 +2135,9 @@
       "table": "content_revisions"
     },
     {
-      "columns": [
-        "job_snapshot_id"
-      ],
+      "columns": ["job_snapshot_id"],
       "tableTo": "job_posting_snapshots",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "nameExplicit": false,
@@ -2184,13 +2146,9 @@
       "table": "content_revisions"
     },
     {
-      "columns": [
-        "application_id"
-      ],
+      "columns": ["application_id"],
       "tableTo": "applications",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2199,13 +2157,9 @@
       "table": "cv_links"
     },
     {
-      "columns": [
-        "content_entry_id"
-      ],
+      "columns": ["content_entry_id"],
       "tableTo": "content_entries",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2214,13 +2168,9 @@
       "table": "cv_links"
     },
     {
-      "columns": [
-        "published_revision_id"
-      ],
+      "columns": ["published_revision_id"],
       "tableTo": "content_revisions",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2229,13 +2179,9 @@
       "table": "cv_links"
     },
     {
-      "columns": [
-        "application_id"
-      ],
+      "columns": ["application_id"],
       "tableTo": "applications",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2244,13 +2190,9 @@
       "table": "application_events"
     },
     {
-      "columns": [
-        "application_id"
-      ],
+      "columns": ["application_id"],
       "tableTo": "applications",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2259,13 +2201,9 @@
       "table": "application_identity_aliases"
     },
     {
-      "columns": [
-        "application_id"
-      ],
+      "columns": ["application_id"],
       "tableTo": "applications",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2274,13 +2212,9 @@
       "table": "job_posting_snapshots"
     },
     {
-      "columns": [
-        "application_id"
-      ],
+      "columns": ["application_id"],
       "tableTo": "applications",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2289,13 +2223,9 @@
       "table": "application_listing_check_schedules"
     },
     {
-      "columns": [
-        "application_id"
-      ],
+      "columns": ["application_id"],
       "tableTo": "applications",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2304,13 +2234,9 @@
       "table": "application_listing_checks"
     },
     {
-      "columns": [
-        "run_id"
-      ],
+      "columns": ["run_id"],
       "tableTo": "listing_check_runs",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "nameExplicit": false,
@@ -2319,13 +2245,9 @@
       "table": "application_listing_checks"
     },
     {
-      "columns": [
-        "application_id"
-      ],
+      "columns": ["application_id"],
       "tableTo": "applications",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2334,166 +2256,126 @@
       "table": "command_receipts"
     },
     {
-      "columns": [
-        "application_id",
-        "label"
-      ],
+      "columns": ["application_id", "label"],
       "nameExplicit": false,
       "name": "application_labels_pk",
       "entityType": "pks",
       "table": "application_labels"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "application_notes_pk",
       "entityType": "pks",
       "table": "application_notes"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "applications_pk",
       "entityType": "pks",
       "table": "applications"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "generated_artifacts_pk",
       "entityType": "pks",
       "table": "generated_artifacts"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "campaign_captures_pk",
       "entityType": "pks",
       "table": "campaign_captures"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "application_compensations_pk",
       "entityType": "pks",
       "table": "application_compensations"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "content_entries_pk",
       "entityType": "pks",
       "table": "content_entries"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "content_revisions_pk",
       "entityType": "pks",
       "table": "content_revisions"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "cv_links_pk",
       "entityType": "pks",
       "table": "cv_links"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "application_events_pk",
       "entityType": "pks",
       "table": "application_events"
     },
     {
-      "columns": [
-        "base_currency",
-        "quote_currency",
-        "provider",
-        "observed_at"
-      ],
+      "columns": ["base_currency", "quote_currency", "provider", "observed_at"],
       "nameExplicit": false,
       "name": "fx_rates_pk",
       "entityType": "pks",
       "table": "fx_rates"
     },
     {
-      "columns": [
-        "job_key"
-      ],
+      "columns": ["job_key"],
       "nameExplicit": false,
       "name": "application_identity_aliases_pk",
       "entityType": "pks",
       "table": "application_identity_aliases"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "job_posting_snapshots_pk",
       "entityType": "pks",
       "table": "job_posting_snapshots"
     },
     {
-      "columns": [
-        "application_id"
-      ],
+      "columns": ["application_id"],
       "nameExplicit": false,
       "name": "application_listing_check_schedules_pk",
       "entityType": "pks",
       "table": "application_listing_check_schedules"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "application_listing_checks_pk",
       "entityType": "pks",
       "table": "application_listing_checks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "listing_check_runs_pk",
       "entityType": "pks",
       "table": "listing_check_runs"
     },
     {
-      "columns": [
-        "operation_id"
-      ],
+      "columns": ["operation_id"],
       "nameExplicit": false,
       "name": "command_receipts_pk",
       "entityType": "pks",
       "table": "command_receipts"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "registry_sequence_pk",
       "entityType": "pks",

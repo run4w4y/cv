@@ -1,10 +1,9 @@
-import * as Atom from 'effect/unstable/reactivity/Atom'
-
 import {
   canonicalPreparationUrl,
   type DocumentKind,
   maximumPreparationBatchSize,
 } from '@cv/application-preparation-workflow/domain'
+import * as Atom from 'effect/unstable/reactivity/Atom'
 
 export type BatchPreparationForm = {
   readonly kind: DocumentKind

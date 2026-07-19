@@ -6,12 +6,12 @@ import {
 import { Effect, Layer, Match, Schema } from 'effect'
 
 import type { PdfWorkerEnv } from '../worker/types'
+import type { PdfJobPermanentError } from './model'
 import {
   processPdfJobEffect,
   recordPdfJobFailureEffect,
   retryExhaustedError,
 } from './processor'
-import type { PdfJobPermanentError } from './model'
 import { makePdfArtifactPersistenceLive, makePdfRendererLive } from './services'
 
 export const retryDelaySeconds = (

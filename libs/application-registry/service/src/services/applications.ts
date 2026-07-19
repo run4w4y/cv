@@ -5,8 +5,8 @@ import type { ApplicationRegistryError } from '../errors'
 import type {
   ApplicationFacets,
   ApplicationListPage,
-  ListApplicationsInput,
   CreateApplicationInput,
+  ListApplicationsInput,
   UpdateApplicationInput,
   UpdateApplicationResult,
 } from '../types'

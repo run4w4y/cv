@@ -1,11 +1,11 @@
 import { Command } from 'effect/unstable/cli'
+import { activityCommand } from './commands/activities'
 import {
   annotationCommand,
   labelCommand,
   noteCommand,
 } from './commands/annotations'
 import { applicationCommand } from './commands/applications'
-import { activityCommand } from './commands/activities'
 import { compensationCommand } from './commands/compensations'
 import { listingCommand } from './commands/listings'
 import { outboxCommand } from './commands/outbox'

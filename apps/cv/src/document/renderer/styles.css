@@ -1,6 +1,3 @@
-import type { ComponentPropsWithoutRef } from 'react'
-
-export const cvRendererStyles = `
 :where([data-cv-document]) {
   --cv2-accent: #155eef;
   --cv2-accent-soft: #eff6ff;
@@ -295,9 +292,9 @@ export const cvRendererStyles = `
 }
 
 .cv2-qr {
+  display: block;
   width: 22mm;
   height: 22mm;
-  color: #000000;
   background: #ffffff;
 }
 
@@ -337,8 +334,7 @@ export const cvRendererStyles = `
   line-height: 1.32;
 }
 
-:where([data-cv-document][data-cv-renderer-mode="print-preview"])
-  .cv2-layout {
+:where([data-cv-document][data-cv-renderer-mode="print-preview"]) .cv2-layout {
   grid-template-columns: minmax(0, 1.75fr) minmax(42mm, 0.8fr);
 }
 
@@ -371,15 +367,3 @@ export const cvRendererStyles = `
     display: grid;
   }
 }
-`
-
-export type CvRendererStyleSheetProps = Pick<
-  ComponentPropsWithoutRef<'style'>,
-  'nonce'
->
-
-export const CvRendererStyleSheet = ({ nonce }: CvRendererStyleSheetProps) => (
-  <style data-cv-renderer-styles nonce={nonce}>
-    {cvRendererStyles}
-  </style>
-)

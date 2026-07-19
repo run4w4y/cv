@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { Schema } from 'effect'
 import {
-  ApplicationCompensationInputSchema,
   ApplicationActivityInsertSchema,
+  ApplicationCompensationInputSchema,
   ApplicationMutableSchema,
   ApplicationRowSelectSchema,
   ApplicationWritableSchema,

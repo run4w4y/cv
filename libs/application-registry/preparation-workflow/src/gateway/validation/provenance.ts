@@ -1,9 +1,9 @@
 import type { CvDocumentV1 } from '@cv/contracts/document'
 import type { FactsCatalogueV1 } from '@cv/contracts/facts'
 import { Effect } from 'effect'
-
-import { reviewedFactIdsForGeneration } from '../../generation/prompts'
+import { difference } from 'es-toolkit/array'
 import { PreparationWorkflowError } from '../../domain'
+import { reviewedFactIdsForGeneration } from '../../generation/prompts'
 
 export const validateCvProvenance = (
   catalogue: FactsCatalogueV1,
@@ -109,15 +109,17 @@ export const validateCvProvenance = (
       issues.push(`experience:${item.id}.period was changed`)
     if (item.location !== undefined && item.location !== source.location)
       issues.push(`experience:${item.id}.location was changed`)
-    const technologies = new Set([
+    const supportedTechnologies = [
       ...source.technologies,
       ...source.workstreams.flatMap((workstream) => workstream.technologies),
-    ])
-    for (const technology of item.technologies) {
-      if (!technologies.has(technology))
-        issues.push(
-          `experience:${item.id}.technology:${technology} is unsupported`
-        )
+    ]
+    for (const technology of difference(
+      item.technologies,
+      supportedTechnologies
+    )) {
+      issues.push(
+        `experience:${item.id}.technology:${technology} is unsupported`
+      )
     }
   }
   for (const item of document.projects) {
@@ -128,17 +130,17 @@ export const validateCvProvenance = (
     }
     if (item.name !== source.name)
       issues.push(`project:${item.id}.name was changed`)
-    const technologies = new Set([
+    const supportedTechnologies = [
       ...source.technologies,
       ...source.contributions.flatMap(
         (contribution) => contribution.technologies
       ),
-    ])
-    for (const technology of item.technologies) {
-      if (!technologies.has(technology))
-        issues.push(
-          `project:${item.id}.technology:${technology} is unsupported`
-        )
+    ]
+    for (const technology of difference(
+      item.technologies,
+      supportedTechnologies
+    )) {
+      issues.push(`project:${item.id}.technology:${technology} is unsupported`)
     }
     const publicLinks = source.links.filter(
       (link) => link.visibility !== 'private'
@@ -174,10 +176,9 @@ export const validateCvProvenance = (
       issues.push(`skills:${item.id} is absent from the facts catalogue`)
       continue
     }
-    const names = new Set(source.skills.map((skill) => skill.name))
-    for (const skill of item.items) {
-      if (!names.has(skill))
-        issues.push(`skills:${item.id}.item:${skill} is unsupported`)
+    const supportedSkills = source.skills.map(({ name }) => name)
+    for (const skill of difference(item.items, supportedSkills)) {
+      issues.push(`skills:${item.id}.item:${skill} is unsupported`)
     }
   }
   const reviewedFactIds = reviewedFactIdsForGeneration(catalogue)

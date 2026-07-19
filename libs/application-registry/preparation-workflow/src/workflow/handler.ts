@@ -14,8 +14,8 @@ import * as DurableDeferred from 'effect/unstable/workflow/DurableDeferred'
 import * as WorkflowEngine from 'effect/unstable/workflow/WorkflowEngine'
 
 import {
-  candidateMatchesDocumentKind,
   ContentRevisionResultSchema,
+  candidateMatchesDocumentKind,
   EvidencePlanResultSchema,
   type GeneratedCandidate,
   GeneratedCandidateSchema,

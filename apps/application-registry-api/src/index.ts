@@ -2,12 +2,12 @@ import { Effect, Redacted } from 'effect'
 import { handleChatGPTRequest, isChatGPTRequest } from './chatgpt/handler'
 import { applicationRegistryWebHandler } from './http/runtime'
 import { runScheduledListingChecks } from './scheduled/listing-checks'
-import { runScheduledPdfDispatches } from './worker/pdf-queue'
 import { makeWorkerRequestContext } from './worker/bindings'
 import {
   provideWorkerConfiguration,
   readRegistryApiToken,
 } from './worker/config'
+import { runScheduledPdfDispatches } from './worker/pdf-queue'
 import type {
   ApplicationRegistryEnv,
   WorkerExecutionContext,

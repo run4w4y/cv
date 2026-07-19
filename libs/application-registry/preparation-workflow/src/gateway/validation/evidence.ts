@@ -1,19 +1,12 @@
 import type { FactsCatalogueV1 } from '@cv/contracts/facts'
 import { Effect } from 'effect'
-
-import { reviewedFactIdsForGeneration } from '../../generation/prompts'
+import { difference, uniq } from 'es-toolkit/array'
 import type { EvidencePlan, JobAnalysis, SectionBrief } from '../../domain'
 import { PreparationWorkflowError } from '../../domain'
+import { reviewedFactIdsForGeneration } from '../../generation/prompts'
 
-const duplicateIds = (ids: ReadonlyArray<string>): ReadonlyArray<string> => {
-  const seen = new Set<string>()
-  const duplicates = new Set<string>()
-  for (const id of ids) {
-    if (seen.has(id)) duplicates.add(id)
-    seen.add(id)
-  }
-  return [...duplicates]
-}
+const duplicateIds = (ids: ReadonlyArray<string>): ReadonlyArray<string> =>
+  uniq(ids.filter((id, index) => ids.indexOf(id) !== index))
 
 export const validateEvidencePlan = (
   analysis: JobAnalysis,
@@ -21,27 +14,25 @@ export const validateEvidencePlan = (
   plan: EvidencePlan
 ) =>
   Effect.gen(function* () {
-    const requirementIds = new Set(
-      analysis.requirements.map((requirement) => requirement.id)
-    )
-    const factIds = reviewedFactIdsForGeneration(catalogue)
+    const requirementIds = analysis.requirements.map(({ id }) => id)
+    const factIds = [...reviewedFactIdsForGeneration(catalogue)]
     const plannedRequirementIds = [
       ...plan.matches.map(({ requirementId }) => requirementId),
       ...plan.uncoveredRequirementIds,
     ]
-    const unknownRequirements = plannedRequirementIds.filter(
-      (id) => !requirementIds.has(id)
+    const unknownRequirements = difference(
+      plannedRequirementIds,
+      requirementIds
     )
-    const unknownFacts = plan.matches
-      .flatMap(({ factIds: selected }) => selected)
-      .filter((id) => !factIds.has(id))
+    const unknownFacts = difference(
+      plan.matches.flatMap(({ factIds: selected }) => selected),
+      factIds
+    )
 
     if (unknownRequirements.length > 0) {
       return yield* Effect.fail(
         new PreparationWorkflowError({
-          message: `Evidence plan referenced unknown requirement IDs: ${[
-            ...new Set(unknownRequirements),
-          ].join(', ')}`,
+          message: `Evidence plan referenced unknown requirement IDs: ${uniq(unknownRequirements).join(', ')}`,
           stage: 'evidence',
         })
       )
@@ -49,15 +40,14 @@ export const validateEvidencePlan = (
     if (unknownFacts.length > 0) {
       return yield* Effect.fail(
         new PreparationWorkflowError({
-          message: `Evidence plan referenced unknown fact IDs: ${[
-            ...new Set(unknownFacts),
-          ].join(', ')}`,
+          message: `Evidence plan referenced unknown fact IDs: ${uniq(unknownFacts).join(', ')}`,
           stage: 'evidence',
         })
       )
     }
-    const missingRequirements = [...requirementIds].filter(
-      (id) => !plannedRequirementIds.includes(id)
+    const missingRequirements = difference(
+      requirementIds,
+      plannedRequirementIds
     )
     if (missingRequirements.length > 0) {
       return yield* Effect.fail(
@@ -94,28 +84,22 @@ export const validateSectionBrief = (
         })
       )
     }
-    const factIds = reviewedFactIdsForGeneration(catalogue)
-    const unknown = brief.factIds.filter((id) => !factIds.has(id))
+    const factIds = [...reviewedFactIdsForGeneration(catalogue)]
+    const unknown = difference(brief.factIds, factIds)
     if (unknown.length > 0) {
       return yield* Effect.fail(
         new PreparationWorkflowError({
-          message: `Section ${sectionId} referenced unknown fact IDs: ${[
-            ...new Set(unknown),
-          ].join(', ')}`,
+          message: `Section ${sectionId} referenced unknown fact IDs: ${uniq(unknown).join(', ')}`,
           stage: 'briefs',
         })
       )
     }
-    const allowedFactIds = new Set(
-      plan.matches.flatMap((match) => match.factIds)
-    )
-    const outsidePlan = brief.factIds.filter((id) => !allowedFactIds.has(id))
+    const allowedFactIds = plan.matches.flatMap((match) => match.factIds)
+    const outsidePlan = difference(brief.factIds, allowedFactIds)
     if (outsidePlan.length > 0) {
       return yield* Effect.fail(
         new PreparationWorkflowError({
-          message: `Section ${sectionId} referenced fact IDs outside the validated evidence plan: ${[
-            ...new Set(outsidePlan),
-          ].join(', ')}`,
+          message: `Section ${sectionId} referenced fact IDs outside the validated evidence plan: ${uniq(outsidePlan).join(', ')}`,
           stage: 'briefs',
         })
       )

@@ -8,8 +8,8 @@ import type {
   ReadCurrentPdfInput,
   ReadPdfJobInput,
   SetPublicationAvailabilityInput,
-  StartPdfGenerationInput,
   StageCvInput,
+  StartPdfGenerationInput,
 } from '../types'
 import { dataError } from './shared'
 
@@ -34,20 +34,20 @@ export const makePreparationPublicationRepository = (
         )
   })
 
-  const loadCvPageState = Effect.fn(
-    'PreparationRepository.loadCvPageState'
-  )(
+  const loadCvPageState = Effect.fn('PreparationRepository.loadCvPageState')(
     function* (identity: PublicationIdentity) {
       const link = yield* registry.publications
         .getCvLink({
-            params: {
-              entryId: identity.entryId,
-              id: identity.applicationId,
-            },
-          })
+          params: {
+            entryId: identity.entryId,
+            id: identity.applicationId,
+          },
+        })
         .pipe(
           Effect.map((value): CvLink | null => value),
-          Effect.catchTag('NotFoundError', () => Effect.succeed<CvLink | null>(null))
+          Effect.catchTag('NotFoundError', () =>
+            Effect.succeed<CvLink | null>(null)
+          )
         )
       if (link === null) return null
       const artifact = yield* currentPdfArtifact(identity).pipe(

@@ -1,3 +1,4 @@
+import type { PreparationRun } from '@cv/application-preparation-workflow/domain'
 import {
   Alert,
   AlertDescription,
@@ -14,9 +15,7 @@ import { Cause } from 'effect'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import { Ban, CircleAlert, ExternalLink } from 'lucide-react'
 import { Link } from 'react-router'
-
 import { cancelPreparationRunAtom } from '@/preparation/workflow/atoms'
-import type { PreparationRun } from '@cv/application-preparation-workflow/domain'
 
 const reviewPath = (run: PreparationRun): string | null => {
   if (run.applicationId === null) return null

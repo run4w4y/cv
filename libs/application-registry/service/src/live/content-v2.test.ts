@@ -510,15 +510,11 @@ describe('content domain services', () => {
             revisionId: first.revision.id,
           }
         )
-        const firstLink = yield* publications.stage(
-          application.id,
-          entry.id,
-          {
-            expectedContentVersion: firstApproval.entry.version,
-            publicBaseUrl: 'https://cv.example.test/cv',
-            revisionId: first.revision.id,
-          }
-        )
+        const firstLink = yield* publications.stage(application.id, entry.id, {
+          expectedContentVersion: firstApproval.entry.version,
+          publicBaseUrl: 'https://cv.example.test/cv',
+          revisionId: first.revision.id,
+        })
         yield* Effect.sync(() => {
           state.applicationStatus = 'rejected'
         })
@@ -560,15 +556,11 @@ describe('content domain services', () => {
             revisionId: second.revision.id,
           }
         )
-        const secondLink = yield* publications.stage(
-          application.id,
-          entry.id,
-          {
-            expectedContentVersion: secondApproval.entry.version,
-            publicBaseUrl: 'https://cv.example.test/cv',
-            revisionId: second.revision.id,
-          }
-        )
+        const secondLink = yield* publications.stage(application.id, entry.id, {
+          expectedContentVersion: secondApproval.entry.version,
+          publicBaseUrl: 'https://cv.example.test/cv',
+          revisionId: second.revision.id,
+        })
         const privatePublicResolution = yield* Effect.flip(
           publications.resolve(secondLink.token)
         )
@@ -609,9 +601,7 @@ describe('content domain services', () => {
     expect(result.enabledWithoutPdf.enabled).toBe(true)
     expect(result.secondLink.id).toBe(result.firstLink.id)
     expect(result.secondLink.token).toBe(result.firstLink.token)
-    expect(result.secondLink.currentRevisionId).toBe(
-      result.second.revision.id
-    )
+    expect(result.secondLink.currentRevisionId).toBe(result.second.revision.id)
     expect(result.secondLink.enabled).toBe(false)
     expect(result.privatePublicResolution._tag).toBe('RegistryNotFoundError')
     expect(result.invalidPreview._tag).toBe('RegistryNotFoundError')
@@ -865,9 +855,7 @@ describe('content domain services', () => {
       })
     )
 
-    expect(result.pending.contentRevisionId).toBe(
-      result.link.currentRevisionId
-    )
+    expect(result.pending.contentRevisionId).toBe(result.link.currentRevisionId)
     expect(result.pending.qrTarget).toBe(result.link.publicUrl)
     expect(result.pending.publicationVersion).toBe(
       result.link.publicationVersion
@@ -883,9 +871,7 @@ describe('content domain services', () => {
       result.link.publicationVersion
     )
     expect(result.enabled.version).toBe(result.link.version + 1)
-    expect(result.enabled.currentRevisionId).toBe(
-      result.link.currentRevisionId
-    )
+    expect(result.enabled.currentRevisionId).toBe(result.link.currentRevisionId)
     expect(result.reloadedWhileDisabled.bytes).toEqual(pdf)
     expect(result.readAfterEnable.bytes).toEqual(pdf)
     expect(result.systemDisabled.enabled).toBe(false)
@@ -929,15 +915,11 @@ describe('content domain services', () => {
             revisionId: draft.revision.id,
           }
         )
-        const firstLink = yield* publications.stage(
-          application.id,
-          entry.id,
-          {
-            expectedContentVersion: approval.entry.version,
-            publicBaseUrl: 'https://cv.example.test/c/',
-            revisionId: draft.revision.id,
-          }
-        )
+        const firstLink = yield* publications.stage(application.id, entry.id, {
+          expectedContentVersion: approval.entry.version,
+          publicBaseUrl: 'https://cv.example.test/c/',
+          revisionId: draft.revision.id,
+        })
         const failedAttempt = yield* pdfs.startJob(application.id, entry.id, {
           expectedPublicationVersion: firstLink.publicationVersion,
           requestId: 'request-failed',
@@ -967,15 +949,11 @@ describe('content domain services', () => {
           requestId: 'request-stale',
         })
 
-        const secondLink = yield* publications.stage(
-          application.id,
-          entry.id,
-          {
-            expectedContentVersion: approval.entry.version,
-            publicBaseUrl: 'https://new-cv.example.test/c/',
-            revisionId: draft.revision.id,
-          }
-        )
+        const secondLink = yield* publications.stage(application.id, entry.id, {
+          expectedContentVersion: approval.entry.version,
+          publicBaseUrl: 'https://new-cv.example.test/c/',
+          revisionId: draft.revision.id,
+        })
         const staleCompletion = yield* Effect.flip(
           pdfs.complete(
             application.id,

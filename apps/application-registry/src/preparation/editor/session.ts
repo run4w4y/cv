@@ -1,9 +1,9 @@
-import { type CvDocumentV1, CvDocumentV1Schema } from '@cv/contracts/document'
 import {
   CoverLetterDocumentSchema,
   initialCoverLetterDraft,
 } from '@cv/application-preparation-workflow/cover-letter'
 import type { SavedCandidate } from '@cv/application-preparation-workflow/domain'
+import { type CvDocumentV1, CvDocumentV1Schema } from '@cv/contracts/document'
 import {
   createInitialValue,
   inspectSchema,

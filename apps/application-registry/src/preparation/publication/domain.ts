@@ -3,10 +3,7 @@ import {
   CvLinkResponseSchema,
   PdfJobResponseSchema,
 } from '@cv/application-registry-api-contract'
-import type {
-  ContentEntry,
-  CvLink,
-} from '@cv/application-registry-entity'
+import type { ContentEntry, CvLink } from '@cv/application-registry-entity'
 import { Schema } from 'effect'
 import * as Workflow from 'effect/unstable/workflow/Workflow'
 

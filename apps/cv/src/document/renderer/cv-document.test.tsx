@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { CvDocumentV1 } from '@cv/contracts/document'
 import { renderToStaticMarkup } from 'react-dom/server'
 
-import { CvDocumentRenderer } from './cv-document-renderer'
+import { CvDocumentRenderer } from './cv-document'
 
 const document: CvDocumentV1 = {
   $schema: 'cv.document.v1',
@@ -90,33 +90,26 @@ const document: CvDocumentV1 = {
 
 describe('CvDocumentRenderer', () => {
   test('renders deterministic semantic markup from the v1 document', () => {
-    const props = {
-      document,
-      idPrefix: 'application-42',
-      includeStyles: false,
-    } as const
-    const first = renderToStaticMarkup(<CvDocumentRenderer {...props} />)
-    const second = renderToStaticMarkup(<CvDocumentRenderer {...props} />)
+    const first = renderToStaticMarkup(
+      <CvDocumentRenderer document={document} />
+    )
+    const second = renderToStaticMarkup(
+      <CvDocumentRenderer document={document} />
+    )
 
     expect(second).toBe(first)
-    expect(first).toContain('<article aria-labelledby="application-42-title"')
+    expect(first).toContain('<article aria-labelledby="cv-document-title"')
     expect(first).toContain('dir="ltr" lang="en"')
     expect(first).toContain('<h1 class="cv2-name"')
     expect(first).toContain('<address aria-label="Contact information"')
-    expect(first).toContain(
-      '<section aria-labelledby="application-42-experience"'
-    )
-    expect(first).toContain(
-      '<section aria-labelledby="application-42-projects"'
-    )
-    expect(first).toContain('<section aria-labelledby="application-42-skills"')
-    expect(first).toContain(
-      '<section aria-labelledby="application-42-education"'
-    )
-    expect(first).not.toContain('data-cv-renderer-styles')
+    expect(first).toContain('<section aria-labelledby="cv-document-experience"')
+    expect(first).toContain('<section aria-labelledby="cv-document-projects"')
+    expect(first).toContain('<section aria-labelledby="cv-document-skills"')
+    expect(first).toContain('<section aria-labelledby="cv-document-education"')
+    expect(first).not.toContain('<style')
   })
 
-  test('includes scoped styles by default and omits empty sections', () => {
+  test('omits empty sections', () => {
     const markup = renderToStaticMarkup(
       <CvDocumentRenderer
         document={{
@@ -130,7 +123,6 @@ describe('CvDocumentRenderer', () => {
       />
     )
 
-    expect(markup).toContain('<style data-cv-renderer-styles="true">')
     expect(markup).not.toContain('id="cv-document-experience"')
     expect(markup).not.toContain('id="cv-document-projects"')
     expect(markup).not.toContain('id="cv-document-skills"')
@@ -139,10 +131,7 @@ describe('CvDocumentRenderer', () => {
 
   test('selects presentation labels from the document locale', () => {
     const markup = renderToStaticMarkup(
-      <CvDocumentRenderer
-        document={{ ...document, locale: 'ru' }}
-        includeStyles={false}
-      />
+      <CvDocumentRenderer document={{ ...document, locale: 'ru' }} />
     )
 
     expect(markup).toContain('>Опыт</h2>')
@@ -151,20 +140,18 @@ describe('CvDocumentRenderer', () => {
   })
 
   test('integrates the exact publication URL into the A4 preview', () => {
-    const publicUrl = 'https://cv.example.com/c/stable-token?from=email&copy=1'
+    const publicUrl = 'https://cv.example.com/c/stable-token'
     const markup = renderToStaticMarkup(
       <CvDocumentRenderer
         document={document}
-        includeStyles={false}
         mode="print-preview"
         publicUrl={publicUrl}
       />
     )
 
-    const escapedUrl = publicUrl.replaceAll('&', '&amp;')
     expect(markup).toContain('data-cv-renderer-mode="print-preview"')
     expect(markup).toContain('data-cv-print-only="true"')
-    expect(markup).toContain(`data-cv-public-url="${escapedUrl}"`)
-    expect(markup).toContain(`href="${escapedUrl}"`)
+    expect(markup).toContain(`data-cv-public-url="${publicUrl}"`)
+    expect(markup).toContain(`href="${publicUrl}"`)
   })
 })

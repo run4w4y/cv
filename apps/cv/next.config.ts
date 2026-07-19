@@ -30,7 +30,7 @@ const nextConfig: NextConfig = {
           {
             key: 'Content-Security-Policy',
             value:
-              "default-src 'none'; base-uri 'none'; connect-src 'none'; form-action 'none'; frame-ancestors 'none'; img-src data:; style-src 'self' 'unsafe-inline'",
+              "default-src 'none'; base-uri 'none'; connect-src 'none'; form-action 'none'; frame-ancestors 'none'; img-src data:; style-src 'self'",
           },
         ],
       },
@@ -45,7 +45,7 @@ const nextConfig: NextConfig = {
           {
             key: 'Content-Security-Policy',
             value:
-              "default-src 'none'; base-uri 'none'; connect-src 'none'; form-action 'none'; frame-ancestors *; img-src data:; style-src 'self' 'unsafe-inline'",
+              "default-src 'none'; base-uri 'none'; connect-src 'none'; form-action 'none'; frame-ancestors *; img-src data:; style-src 'self'",
           },
           { key: 'Cache-Control', value: 'private, no-store' },
         ],

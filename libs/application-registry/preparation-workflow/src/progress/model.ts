@@ -1,14 +1,13 @@
 import { Context, type Effect, type SubscriptionRef } from 'effect'
 import type * as DurableDeferred from 'effect/unstable/workflow/DurableDeferred'
-
 import type {
   ContentRevisionResult,
   PreparationRunState,
   PreparationStage,
+  PreparationWorkflowError,
   PreparationWorkflowInput,
   SavedCandidate,
 } from '../domain'
-import type { PreparationWorkflowError } from '../domain'
 
 export type PreparationRunStates = ReadonlyMap<string, PreparationRunState>
 

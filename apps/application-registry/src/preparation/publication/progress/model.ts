@@ -4,9 +4,9 @@ import { Context, type Effect, type SubscriptionRef } from 'effect'
 import type {
   ActiveCvPublicationRun,
   CvPublicationRun,
+  CvPublicationWorkflowError,
   CvPublicationWorkflowInput,
   CvPublicationWorkflowResult,
-  CvPublicationWorkflowError,
 } from '../domain'
 
 export type CvPublicationRuns = ReadonlyMap<string, CvPublicationRun>

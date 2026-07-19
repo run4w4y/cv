@@ -1,6 +1,6 @@
 import {
-  applicationCompensations,
   applicationActivities,
+  applicationCompensations,
   applicationLabels,
   applications,
   idempotencyReceipts,

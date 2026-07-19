@@ -441,10 +441,11 @@ test('rebuilds the current model, removes legacy captures, and preserves current
     readonly current_revision_id: string
     readonly enabled: number
     readonly preview_token: string
-  }>(
-    'select current_revision_id, enabled, preview_token from cv_links'
+  }>('select current_revision_id, enabled, preview_token from cv_links')
+  assert.equal(
+    migratedLinks[0]?.current_revision_id,
+    'migration-content-revision'
   )
-  assert.equal(migratedLinks[0]?.current_revision_id, 'migration-content-revision')
   assert.equal(migratedLinks[0]?.enabled, 1)
   assert.match(migratedLinks[0]?.preview_token ?? '', /^[a-f0-9]{32}$/u)
   const tables = await harness.query<{ readonly name: string }>(

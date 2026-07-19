@@ -10,9 +10,9 @@ import { operationRequestSignature } from '../internal/operation-request-signatu
 import {
   findRequiredApplication,
   findValidatedIdempotency,
+  type IdempotencyIdentity,
   missingRegistryData,
   newRegistryId,
-  type IdempotencyIdentity,
   recoverConcurrentReplay,
   registryNow,
   requireNote,

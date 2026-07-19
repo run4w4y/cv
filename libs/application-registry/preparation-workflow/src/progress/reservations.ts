@@ -1,3 +1,5 @@
+import { uniq } from 'es-toolkit/array'
+
 import type { PreparationRunState, PreparationWorkflowInput } from '../domain'
 import { preparationSourceApplicationId, preparationSourceUrl } from '../domain'
 import type { PreparationRunStates } from './model'
@@ -80,7 +82,7 @@ export const releasePreparationReservations = (
   runIds: ReadonlyArray<string>
 ): PreparationRunStates => {
   let runs: Map<string, PreparationRunState> | null = null
-  for (const runId of new Set(runIds)) {
+  for (const runId of uniq(runIds)) {
     const run = current.get(runId)
     if (
       run === undefined ||

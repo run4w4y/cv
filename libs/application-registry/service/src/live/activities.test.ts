@@ -3,8 +3,8 @@ import type { ActivitiesCrud } from '@cv/application-registry-crud'
 import { Effect, Layer } from 'effect'
 
 import {
-  application,
   activity,
+  application,
   registryActivityListItem,
 } from '../../test/support/fixtures'
 import {

@@ -10,10 +10,10 @@ import {
   enableCvLinksForApplication,
   findArtifact,
   findArtifactByRequestId,
-  findCurrentArtifactForPublication,
   findContentEntry,
   findContentEntryByApplication,
   findContentRevision,
+  findCurrentArtifactForPublication,
   findCvLinkByEntry,
   findCvLinkByToken,
   findJobPostingSnapshot,
@@ -28,8 +28,8 @@ import {
   markPdfDispatchFailed,
   persistJobPostingSnapshot,
   persistPendingArtifact,
-  stageCvLink,
   setCvLinkEnabled,
+  stageCvLink,
 } from '../persistence/content'
 import {
   ArtifactsCrud,

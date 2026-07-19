@@ -21,12 +21,8 @@ const compareLinkFreshness = (left: CvLink, right: CvLink): number => {
   return left.version - right.version
 }
 
-const pageFromRun = (
-  run: CvPublicationRun | null
-): CvPageState | null =>
-  run?._tag === 'Published'
-    ? { artifact: null, link: run.result.link }
-    : null
+const pageFromRun = (run: CvPublicationRun | null): CvPageState | null =>
+  run?._tag === 'Published' ? { artifact: null, link: run.result.link } : null
 
 /**
  * Reconciles the durable query with faster in-memory Workflow and mutation
@@ -48,8 +44,7 @@ export const resolveCurrentCvPage = ({
       ? queriedPage
       : queriedPage === null
         ? runPage
-        : compareLinkFreshness(queriedPage.link, runPage.link) >=
-            0
+        : compareLinkFreshness(queriedPage.link, runPage.link) >= 0
           ? queriedPage
           : runPage
   if (
@@ -58,8 +53,7 @@ export const resolveCurrentCvPage = ({
     availabilityLink.id !== page.link.id ||
     availabilityLink.applicationId !== page.link.applicationId ||
     availabilityLink.contentEntryId !== page.link.contentEntryId ||
-    availabilityLink.publicationVersion !==
-      page.link.publicationVersion ||
+    availabilityLink.publicationVersion !== page.link.publicationVersion ||
     availabilityLink.version < page.link.version
   ) {
     return page

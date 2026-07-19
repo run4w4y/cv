@@ -1,6 +1,6 @@
 export {
   CvPublicationProgress,
-  type CvPublicationRuns,
   type CvPublicationProgressService,
+  type CvPublicationRuns,
 } from './model'
 export { cvPublicationProgressLayer } from './service'

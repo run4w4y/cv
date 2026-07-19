@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { loadCvPublicationForToken } from '@/server/load-publication'
 import { decodeCvToken } from '@/server/token'
 import '../global.css'
+import '@/document/renderer/styles.css'
 
 export default async function PublicCvLayout({
   children,

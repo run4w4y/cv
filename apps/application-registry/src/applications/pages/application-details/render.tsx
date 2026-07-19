@@ -14,9 +14,9 @@ import { HeaderActions } from '../../../shell/header-actions'
 import { ApplicationEditDialog } from '../../components/application-editor'
 import { ApplicationActivitiesTable } from '../../components/application-events-table'
 import {
+  applicationActivitiesAtom,
   applicationAtom,
   applicationCompensationsAtom,
-  applicationActivitiesAtom,
 } from '../../data'
 import type { CompensationDisplayCurrency } from '../../model/currency'
 import {

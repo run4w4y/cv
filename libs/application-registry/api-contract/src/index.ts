@@ -1,3 +1,4 @@
+export * from './analytics'
 export {
   ApplicationRegistryApi,
   ApplicationsApi,
@@ -7,7 +8,6 @@ export {
   PublicationsApi,
 } from './api'
 export { RegistryAuthorization } from './auth'
-export * from './analytics'
 export * from './commands'
 export * from './content'
 export * from './cv-links'

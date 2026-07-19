@@ -33,8 +33,8 @@ import {
   JobPostingSnapshotResponseSchema,
   ListContentRevisionsResponseSchema,
   PersistJobPostingSnapshotRequestSchema,
-  StageCvRequestSchema,
   SetCvLinkAvailabilityRequestSchema,
+  StageCvRequestSchema,
 } from './content'
 import { assertUniqueHttpApiEndpoints } from './endpoint-integrity'
 import {
@@ -43,6 +43,11 @@ import {
   InternalServerErrorSchema,
   NotFoundErrorSchema,
 } from './errors'
+import {
+  PdfJobParamsSchema,
+  PdfJobResponseSchema,
+  StartPdfJobRequestSchema,
+} from './pdf-jobs'
 import {
   AddApplicationNoteRequestSchema,
   AddApplicationNoteResponseSchema,
@@ -70,11 +75,6 @@ import {
   UpdateApplicationRequestSchema,
   UpdateApplicationResponseSchema,
 } from './schemas'
-import {
-  PdfJobParamsSchema,
-  PdfJobResponseSchema,
-  StartPdfJobRequestSchema,
-} from './pdf-jobs'
 
 const endpointErrors = [
   BadRequestErrorSchema,

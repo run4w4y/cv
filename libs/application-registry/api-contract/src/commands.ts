@@ -12,8 +12,8 @@ import {
   UtcIsoTimestampSchema,
 } from '@cv/application-registry-entity'
 import {
-  activityListQuery,
   AnnualCompensationSchema,
+  activityListQuery,
   applicationListQuery,
 } from '@cv/application-registry-entity/query'
 import {

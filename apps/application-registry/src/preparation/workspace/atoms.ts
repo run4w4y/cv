@@ -1,6 +1,6 @@
+import type { PreparationRun } from '@cv/application-preparation-workflow/domain'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import * as Atom from 'effect/unstable/reactivity/Atom'
-import type { PreparationRun } from '@cv/application-preparation-workflow/domain'
 import type { PreparationBootstrap } from '../data'
 import { preparationBootstrapAtom } from '../data'
 import type { PreparationEditorSession } from '../editor'

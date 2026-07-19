@@ -1,13 +1,14 @@
 import { Cause, Crypto, Effect, Exit, Ref } from 'effect'
 import * as WorkflowEngine from 'effect/unstable/workflow/WorkflowEngine'
+import { compact, partition, uniq } from 'es-toolkit/array'
 
 import {
   canonicalPreparationUrl,
   HttpUrlSchema,
   PreparationBatchUrlsSchema,
+  PreparationWorkflowError,
   type PreparationWorkflowInput,
   PreparationWorkflowInputSchema,
-  PreparationWorkflowError,
   PrepareApplicationWorkflow,
   type StartPreparationBatchInput,
   type StartPreparationInput,
@@ -70,7 +71,6 @@ export const startReservedPreparations = Effect.fn(
 )(function* (prepared: ReadonlyArray<PreparedStart>) {
   const engine = yield* WorkflowEngine.WorkflowEngine
   const progress = yield* PreparationProgress
-  const runIds = prepared.map(({ payload }) => payload.runId)
 
   return yield* Effect.acquireUseRelease(
     Effect.gen(function* () {
@@ -116,14 +116,12 @@ export const startReservedPreparations = Effect.fn(
         ? Effect.void
         : Effect.gen(function* () {
             const attemptedIds = yield* Ref.get(attempted)
-            const attemptedRuns = prepared.filter(({ executionId }) =>
-              attemptedIds.has(executionId)
-            )
-            const attemptedRunIds = new Set(
-              attemptedRuns.map(({ payload }) => payload.runId)
+            const [attemptedRuns, unattemptedRuns] = partition(
+              prepared,
+              ({ executionId }) => attemptedIds.has(executionId)
             )
             yield* progress.releaseReservations(
-              runIds.filter((runId) => !attemptedRunIds.has(runId))
+              unattemptedRuns.map(({ payload }) => payload.runId)
             )
             yield* Effect.forEach(
               attemptedRuns,
@@ -166,10 +164,10 @@ export const startPreparationBatch = Effect.fn(
   'PreparationWorkflow.startBatch'
 )(function* (input: StartPreparationBatchInput) {
   const decodedUrls = yield* Effect.forEach(
-    input.urls.map((url) => url.trim()).filter(Boolean),
+    compact(input.urls.map((url) => url.trim())),
     (url) => HttpUrlSchema.makeEffect(url)
   )
-  const urls = [...new Set(decodedUrls.map(canonicalPreparationUrl))]
+  const urls = uniq(decodedUrls.map(canonicalPreparationUrl))
   const validated = yield* PreparationBatchUrlsSchema.makeEffect(urls)
   const prepared = yield* Effect.forEach(
     validated,

@@ -36,6 +36,7 @@
     "@cv/ai-provider": "workspace:*",
     "@cv/application-registry-entity": "workspace:*",
     "@cv/contracts": "workspace:*",
-    "effect": "4.0.0-beta.99"
+    "effect": "4.0.0-beta.99",
+    "es-toolkit": "^1.43.0"
   }
 }

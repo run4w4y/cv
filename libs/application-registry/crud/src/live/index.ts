@@ -1,8 +1,7 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import { type Effect, Layer } from 'effect'
-
-import { makeAnnotationsCrudLive } from './annotations'
 import { makeActivitiesCrudLive } from './activities'
+import { makeAnnotationsCrudLive } from './annotations'
 import { makeApplicationsCrudLive } from './applications'
 import { makeCompensationsCrudLive } from './compensations'
 import { makeContentCrudLive } from './content'

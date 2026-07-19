@@ -1,8 +1,12 @@
 import {
-  type GenerationGuidanceItem,
+  cvDocumentV1AnnotatedJsonSchema,
+  cvDocumentV1GuidanceItems,
+} from '@cv/application-preparation-workflow/cv'
+import {
   CvDocumentV1Schema,
   cvDocumentV1ContractId,
   cvDocumentV1Version,
+  type GenerationGuidanceItem,
 } from '@cv/contracts/document'
 import {
   Alert,
@@ -21,11 +25,6 @@ import {
 } from '@cv/internal-ui'
 import { type EditorDescriptor, inspectSchema } from '@cv/schema-editor/core'
 import { Braces, CircleAlert, LockKeyhole } from 'lucide-react'
-
-import {
-  cvDocumentV1AnnotatedJsonSchema,
-  cvDocumentV1GuidanceItems,
-} from '@cv/application-preparation-workflow/cv'
 
 export const DescriptorTree = ({
   descriptor,

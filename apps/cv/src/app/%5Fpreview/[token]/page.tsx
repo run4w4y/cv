@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 
-import { CvDocumentRenderer } from '@/document/cv-document-renderer'
+import { CvDocumentRenderer } from '@/document/renderer/cv-document'
 import { loadCvPreviewForToken } from '@/server/load-publication'
 import { cvRenderVersion } from '@/server/render-version'
 import { decodeCvToken } from '@/server/token'

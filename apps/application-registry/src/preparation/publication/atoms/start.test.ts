@@ -3,13 +3,12 @@ import type { ContentEntry } from '@cv/application-registry-entity'
 import { Deferred, Effect, Exit, Fiber, Layer, SubscriptionRef } from 'effect'
 import * as Reactivity from 'effect/unstable/reactivity/Reactivity'
 import * as WorkflowEngine from 'effect/unstable/workflow/WorkflowEngine'
-
+import { type CvPublicationWorkflowInput, PublishCvWorkflow } from '../domain'
+import { CvPublicationProgress, cvPublicationProgressLayer } from '../progress'
 import {
   type PreparedCvPublicationStart,
   startPreparedCvPublication,
 } from './start'
-import { type CvPublicationWorkflowInput, PublishCvWorkflow } from '../domain'
-import { CvPublicationProgress, cvPublicationProgressLayer } from '../progress'
 
 const recordedAt = '2026-07-18T00:00:00.000Z'
 

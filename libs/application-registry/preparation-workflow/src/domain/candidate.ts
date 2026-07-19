@@ -9,8 +9,8 @@ import { FactsCatalogueV1Schema } from '@cv/contracts/facts'
 import { Schema } from 'effect'
 
 import { CoverLetterDocumentSchema } from '../cover-letter/contract'
-import type { DocumentKind } from './input'
 import { AiStageMetadataSchema } from './generation'
+import type { DocumentKind } from './input'
 
 export const ContentRevisionResultSchema = Schema.Struct({
   entry: ContentEntrySchema,

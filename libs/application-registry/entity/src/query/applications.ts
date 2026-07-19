@@ -18,9 +18,9 @@ import {
   personalPriorityValues,
   targetStageValues,
 } from '../model/values'
+import { applicationActivities } from '../tables/activities'
 import { applicationLabels, applicationNotes } from '../tables/annotations'
 import { applications } from '../tables/applications'
-import { applicationActivities } from '../tables/activities'
 import { timestampFilterOperators } from './timestamp-filter-operators'
 
 const escapeLikeLiteral = (value: string): string =>

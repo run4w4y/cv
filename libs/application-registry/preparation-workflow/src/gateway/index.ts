@@ -1,9 +1,6 @@
 import { AiProvider } from '@cv/ai-provider'
 import type { Application } from '@cv/application-registry-entity'
 import { Context, Effect, Layer } from 'effect'
-
-import { PreparationStore } from '../store'
-
 import type {
   ContentRevisionResult,
   EvidencePlan,
@@ -18,6 +15,7 @@ import type {
   SectionBrief,
   SectionBriefResult,
 } from '../domain'
+import { PreparationStore } from '../store'
 import { makePreparationContextGateway } from './context'
 import { makePreparationGenerationGateway } from './generation'
 import { makePreparationPersistenceGateway } from './persistence'

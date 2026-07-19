@@ -6,12 +6,12 @@ import type {
   PreparationBootstrap,
   PreparationWorkflowInput,
 } from '../domain'
-import type { PreparationStoreShape } from '../store'
 import {
   canonicalPreparationUrl,
   PreparationWorkflowError,
   preparationSourceUrl,
 } from '../domain'
+import type { PreparationStoreShape } from '../store'
 import { stageError } from './shared'
 
 export const makePreparationContextGateway = (

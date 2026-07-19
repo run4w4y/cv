@@ -4,7 +4,7 @@ import {
   cvDocumentV1ContractId,
   cvDocumentV1Version,
 } from '@cv/contracts/document'
-import { Effect, Result, Schema } from 'effect'
+import { Crypto, Effect, Schema } from 'effect'
 
 export interface CvPublicResolverBinding {
   readonly fetch: (request: Request) => Promise<Response>
@@ -22,6 +22,26 @@ export type CvPublicationLoadResult =
   | { readonly tag: 'not-found' }
   | { readonly tag: 'unavailable' }
 
+export const maximumCvPublicationBytes = 256 * 1024
+
+class InvalidCvPublication extends Schema.TaggedErrorClass<InvalidCvPublication>()(
+  'InvalidCvPublication',
+  { message: Schema.String }
+) {}
+
+class CvPublicationNotFound extends Schema.TaggedErrorClass<CvPublicationNotFound>()(
+  'CvPublicationNotFound',
+  {}
+) {}
+
+class CvPublicationUnavailable extends Schema.TaggedErrorClass<CvPublicationUnavailable>()(
+  'CvPublicationUnavailable',
+  {
+    cause: Schema.Defect(),
+    message: Schema.String,
+  }
+) {}
+
 const headers = {
   byteLength: 'x-cv-content-byte-length',
   contractId: 'x-cv-contract-id',
@@ -31,28 +51,29 @@ const headers = {
   sha256: 'x-cv-content-sha256',
 } as const
 
+const invalidPublication = (message: string) =>
+  new InvalidCvPublication({ message })
+
+const unavailablePublication = (message: string, cause: unknown) =>
+  new CvPublicationUnavailable({ cause, message })
+
 const bytesToHex = (bytes: Uint8Array): string =>
   Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
-
-export const sha256Hex = (bytes: Uint8Array): Promise<string> =>
-  crypto.subtle
-    .digest('SHA-256', Uint8Array.from(bytes).buffer)
-    .then((digest) => bytesToHex(new Uint8Array(digest)))
 
 const decodeDocument = (bytes: Uint8Array) =>
   Effect.try({
     try: () => {
-      const json: unknown = JSON.parse(
-        new TextDecoder('utf-8', { fatal: true }).decode(bytes)
-      )
-      return json
+      const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+      return JSON.parse(text) as unknown
     },
-    catch: () => 'invalid-document' as const,
+    catch: () => invalidPublication('The publication body is not valid JSON.'),
   }).pipe(
     Effect.flatMap((json) =>
       Schema.decodeUnknownEffect(CvDocumentV1Schema)(json)
     ),
-    Effect.mapError(() => 'invalid-document' as const)
+    Effect.mapError(() =>
+      invalidPublication('The publication does not satisfy cv.document.v1.')
+    )
   )
 
 const validPublicUrl = (value: string, token: string): boolean => {
@@ -73,18 +94,25 @@ const positiveInteger = (value: string | null): number | null => {
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null
 }
 
-const loadCvDocument = async (
+const loadCvDocument = Effect.fn('CvPublication.load')(function* (
   binding: CvPublicResolverBinding,
   token: string,
   resolverUrl: string
-): Promise<CvPublicationLoadResult> => {
-  const response = await binding
-    .fetch(new Request(resolverUrl))
-    .catch(() => null)
+) {
+  const response = yield* Effect.tryPromise({
+    try: (signal) =>
+      binding.fetch(new Request(resolverUrl, { method: 'GET', signal })),
+    catch: (cause) =>
+      unavailablePublication('The CV publication resolver failed.', cause),
+  })
 
-  if (!response) return { tag: 'unavailable' }
-  if (response.status === 404) return { tag: 'not-found' }
-  if (!response.ok) return { tag: 'unavailable' }
+  if (response.status === 404) return yield* new CvPublicationNotFound()
+  if (!response.ok) {
+    return yield* unavailablePublication(
+      `The CV publication resolver returned HTTP ${response.status}.`,
+      new Error(response.statusText || `HTTP ${response.status}`)
+    )
+  }
 
   const contractId = response.headers.get(headers.contractId)
   const contractVersion = response.headers.get(headers.contractVersion)
@@ -94,6 +122,7 @@ const loadCvDocument = async (
   const expectedByteLength = positiveInteger(
     response.headers.get(headers.byteLength)
   )
+  const contentLength = positiveInteger(response.headers.get('content-length'))
   const mediaType = response.headers.get('content-type')?.split(';', 1)[0]
 
   if (
@@ -107,36 +136,66 @@ const loadCvDocument = async (
     !/^[a-f0-9]{64}$/u.test(expectedSha256) ||
     expectedByteLength === null
   ) {
-    return { tag: 'invalid-publication' }
+    return yield* invalidPublication('The publication metadata is invalid.')
   }
 
-  const buffer = await response.arrayBuffer().catch(() => null)
-  if (!buffer) return { tag: 'invalid-publication' }
+  if (
+    expectedByteLength > maximumCvPublicationBytes ||
+    (contentLength !== null && contentLength > maximumCvPublicationBytes)
+  ) {
+    return yield* invalidPublication('The publication body is too large.')
+  }
+
+  const buffer = yield* Effect.tryPromise({
+    try: () => response.arrayBuffer(),
+    catch: (cause) =>
+      unavailablePublication(
+        'The CV publication body could not be read.',
+        cause
+      ),
+  })
   const bytes = new Uint8Array(buffer)
-  if (bytes.byteLength !== expectedByteLength) {
-    return { tag: 'invalid-publication' }
+
+  if (
+    bytes.byteLength > maximumCvPublicationBytes ||
+    bytes.byteLength !== expectedByteLength
+  ) {
+    return yield* invalidPublication(
+      'The publication body length does not match its metadata.'
+    )
   }
 
-  const actualSha256 = await sha256Hex(bytes).catch(() => null)
-  if (actualSha256 !== expectedSha256) {
-    return { tag: 'invalid-publication' }
+  const crypto = yield* Crypto.Crypto
+  const digest = yield* crypto
+    .digest('SHA-256', bytes)
+    .pipe(
+      Effect.mapError((cause) =>
+        unavailablePublication(
+          'The CV publication integrity check failed.',
+          cause
+        )
+      )
+    )
+  if (bytesToHex(digest) !== expectedSha256) {
+    return yield* invalidPublication(
+      'The publication body does not match its integrity metadata.'
+    )
   }
 
-  const decoded = await decodeDocument(bytes).pipe(
-    Effect.result,
-    Effect.runPromise
-  )
-  if (Result.isFailure(decoded) || decoded.success.locale !== locale) {
-    return { tag: 'invalid-publication' }
+  const document = yield* decodeDocument(bytes)
+  if (document.locale !== locale) {
+    return yield* invalidPublication(
+      'The publication locale does not match its metadata.'
+    )
   }
 
-  return { document: decoded.success, publicUrl, tag: 'success' }
-}
+  return { document, publicUrl, tag: 'success' } satisfies LoadedCvPublication
+})
 
 export const loadCvPublication = (
   binding: CvPublicResolverBinding,
   token: string
-): Promise<CvPublicationLoadResult> =>
+) =>
   loadCvDocument(
     binding,
     token,
@@ -147,10 +206,33 @@ export const loadCvPreview = (
   binding: CvPublicResolverBinding,
   token: string,
   previewToken: string
-): Promise<CvPublicationLoadResult> => {
+) => {
   const url = new URL(
     `https://registry.internal/cv-previews/${encodeURIComponent(token)}`
   )
   url.searchParams.set('access', previewToken)
   return loadCvDocument(binding, token, url.toString())
 }
+
+export const asCvPublicationLoadResult = <R>(
+  effect: Effect.Effect<
+    LoadedCvPublication,
+    CvPublicationNotFound | CvPublicationUnavailable | InvalidCvPublication,
+    R
+  >
+): Effect.Effect<CvPublicationLoadResult, never, R> =>
+  effect.pipe(
+    Effect.match({
+      onFailure: (error): CvPublicationLoadResult => {
+        switch (error._tag) {
+          case 'CvPublicationNotFound':
+            return { tag: 'not-found' }
+          case 'CvPublicationUnavailable':
+            return { tag: 'unavailable' }
+          case 'InvalidCvPublication':
+            return { tag: 'invalid-publication' }
+        }
+      },
+      onSuccess: (publication): CvPublicationLoadResult => publication,
+    })
+  )

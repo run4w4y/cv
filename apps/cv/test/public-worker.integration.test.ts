@@ -59,6 +59,9 @@ test('renders a valid publication through the named service binding', async () =
   assert.equal(response.status, 200)
   assert.match(html, /Ada Lovelace/u)
   assert.match(html, /cv2-document/u)
+  assert.match(html, /href="\/c\/_next\/static\/[^"]+\.css/u)
+  assert.doesNotMatch(html, /data-cv-renderer-styles/u)
+  assert.match(html, /data-cv-public-url="https:\/\/cv\.example\.test/u)
   assert.equal(
     response.headers.get('cache-control'),
     'public, max-age=0, must-revalidate'
@@ -69,6 +72,12 @@ test('renders a valid publication through the named service binding', async () =
   )
   assert.match(response.headers.get('cache-tag') ?? '', /^cv:[a-f0-9]{64}$/u)
   assert.match(response.headers.get('x-robots-tag') ?? '', /noindex/u)
+  assert.equal(
+    response.headers
+      .get('content-security-policy')
+      ?.includes("'unsafe-inline'"),
+    false
+  )
 })
 
 test('returns 404 for missing and disabled publications', async () => {
@@ -113,6 +122,12 @@ test('renders capability previews without shared caching', async () => {
   assert.match(response.headers.get('x-robots-tag') ?? '', /noindex/u)
   assert.equal(response.headers.get('cloudflare-cdn-cache-control'), null)
   assert.equal(response.headers.get('cache-tag'), null)
+  assert.equal(
+    response.headers
+      .get('content-security-policy')
+      ?.includes("'unsafe-inline'"),
+    false
+  )
 })
 
 test('rejects query parameters on public pages before rendering', async () => {

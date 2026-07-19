@@ -134,9 +134,8 @@ The deployment order is:
 The old Pages resources use Terraform `removed` blocks with `destroy = false`.
 Keep them through the first successful production apply; the deployed Pages
 project and hostname remain live but unmanaged afterward. See
-`docs/legacy-migration/README.md`, `apps/cv/README.md`,
-`apps/application-registry-api/README.md`, and `terraform/README.md` for
-operational detail.
+`apps/cv/README.md`, `apps/application-registry-api/README.md`, and
+`terraform/README.md` for operational detail.
 
 Remote deployment requires Cloudflare, Infisical, and Terraform Cloud
 credentials. Local builds and Miniflare integration tests do not.

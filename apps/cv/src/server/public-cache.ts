@@ -88,12 +88,20 @@ export const handlePublicCachePurge = async (
 
   const all = 'all' in body && body.all === true
   const token = 'token' in body ? decodeCvToken(body.token) : null
-  const result = all
-    ? await purge({ purgeEverything: true })
-    : token !== null
-      ? await purge({ tags: [await cacheTagForToken(token)] })
-      : null
-  if (result === null) return json({ error: 'invalid_token' }, 400)
+
+  let result: PublicCachePurgeResult
+  try {
+    if (all) {
+      result = await purge({ purgeEverything: true })
+    } else {
+      if (token === null) return json({ error: 'invalid_token' }, 400)
+      result = await purge({ tags: [await cacheTagForToken(token)] })
+    }
+  } catch (error) {
+    console.error('CV cache purge failed.', error)
+    return json({ error: 'cache_purge_failed' }, 503)
+  }
+
   if (!result.success) {
     console.error('CV cache purge failed.', result.errors)
     return json({ error: 'cache_purge_failed' }, 503)

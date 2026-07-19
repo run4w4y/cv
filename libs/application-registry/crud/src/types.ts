@@ -13,13 +13,13 @@ import type {
   CvLink,
   GeneratedArtifact,
   JobPostingSnapshot,
-  PdfGenerationOutbox,
   ListingAvailability,
   ListingCheckConfidence,
   ListingCheckMode,
   ListingCheckReason,
   ListingCheckRun,
   ListingCheckRunTrigger,
+  PdfGenerationOutbox,
   UtcIsoTimestamp,
 } from '@cv/application-registry-entity'
 import type {

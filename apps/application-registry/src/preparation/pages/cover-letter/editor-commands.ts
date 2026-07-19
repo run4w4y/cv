@@ -1,4 +1,3 @@
-import { useAtom, useAtomSet } from '@effect/atom-react'
 import {
   coverLetterContractId,
   coverLetterContractVersion,
@@ -7,6 +6,7 @@ import {
   isRevisionBoundToPreparationRun,
   ReviewDecisionSchema,
 } from '@cv/application-preparation-workflow/domain'
+import { useAtom, useAtomSet } from '@effect/atom-react'
 import { Cause } from 'effect'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import * as Atom from 'effect/unstable/reactivity/Atom'

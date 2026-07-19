@@ -1,10 +1,13 @@
 import { describe, expect, test } from 'bun:test'
+import * as BrowserCrypto from '@effect/platform-browser/BrowserCrypto'
+import { Effect } from 'effect'
 
 import {
+  asCvPublicationLoadResult,
   type CvPublicResolverBinding,
   loadCvPreview,
   loadCvPublication,
-  sha256Hex,
+  maximumCvPublicationBytes,
 } from './publication'
 
 const validDocument = {
@@ -31,6 +34,16 @@ const validDocument = {
   additionalSections: [],
 }
 
+const sha256Hex = async (bytes: Uint8Array): Promise<string> => {
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    Uint8Array.from(bytes).buffer
+  )
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, '0')
+  ).join('')
+}
+
 const responseFor = async (
   document: unknown,
   overrides: Readonly<Record<string, string>> = {}
@@ -54,11 +67,20 @@ const bindingFor = (
   response: () => Promise<Response>
 ): CvPublicResolverBinding => ({ fetch: response })
 
+const runPublication = (effect: ReturnType<typeof loadCvPublication>) =>
+  effect.pipe(
+    asCvPublicationLoadResult,
+    Effect.provide(BrowserCrypto.layer),
+    Effect.runPromise
+  )
+
 describe('public CV publication loader', () => {
   test('validates and returns a v1 document with its exact public URL', async () => {
-    const result = await loadCvPublication(
-      bindingFor(() => responseFor(validDocument)),
-      'stable-token'
+    const result = await runPublication(
+      loadCvPublication(
+        bindingFor(() => responseFor(validDocument)),
+        'stable-token'
+      )
     )
 
     expect(result.tag).toBe('success')
@@ -69,20 +91,24 @@ describe('public CV publication loader', () => {
   })
 
   test('treats missing and disabled links as not found', async () => {
-    const result = await loadCvPublication(
-      bindingFor(() => Promise.resolve(new Response(null, { status: 404 }))),
-      'disabled-token'
+    const result = await runPublication(
+      loadCvPublication(
+        bindingFor(() => Promise.resolve(new Response(null, { status: 404 }))),
+        'disabled-token'
+      )
     )
 
     expect(result).toEqual({ tag: 'not-found' })
   })
 
   test('rejects content that does not satisfy the document contract', async () => {
-    const result = await loadCvPublication(
-      bindingFor(() =>
-        responseFor({ ...validDocument, unsupportedRendererField: true })
-      ),
-      'stable-token'
+    const result = await runPublication(
+      loadCvPublication(
+        bindingFor(() =>
+          responseFor({ ...validDocument, unsupportedRendererField: true })
+        ),
+        'stable-token'
+      )
     )
 
     expect(result).toEqual({ tag: 'invalid-publication' })
@@ -97,27 +123,55 @@ describe('public CV publication loader', () => {
     ]
 
     for (const overrides of invalidMetadata) {
-      const result = await loadCvPublication(
-        bindingFor(() => responseFor(validDocument, overrides)),
-        'stable-token'
+      const result = await runPublication(
+        loadCvPublication(
+          bindingFor(() => responseFor(validDocument, overrides)),
+          'stable-token'
+        )
       )
       expect(result).toEqual({ tag: 'invalid-publication' })
     }
   })
 
-  test('reports resolver failures without attempting public HTTP auth', async () => {
-    const requestedUrls: string[] = []
-    const result = await loadCvPublication(
-      {
-        fetch: (request) => {
-          requestedUrls.push(request.url)
-          return Promise.resolve(new Response(null, { status: 503 }))
-        },
-      },
-      'stable-token'
+  test('rejects a declared body above the small publication limit', async () => {
+    const result = await runPublication(
+      loadCvPublication(
+        bindingFor(() =>
+          responseFor(validDocument, {
+            'x-cv-content-byte-length': (
+              maximumCvPublicationBytes + 1
+            ).toString(10),
+          })
+        ),
+        'stable-token'
+      )
     )
 
-    expect(result).toEqual({ tag: 'unavailable' })
+    expect(result).toEqual({ tag: 'invalid-publication' })
+  })
+
+  test('reports resolver failures without attempting public HTTP auth', async () => {
+    const requestedUrls: string[] = []
+    const unavailable = await runPublication(
+      loadCvPublication(
+        {
+          fetch: (request) => {
+            requestedUrls.push(request.url)
+            return Promise.resolve(new Response(null, { status: 503 }))
+          },
+        },
+        'stable-token'
+      )
+    )
+    const rejected = await runPublication(
+      loadCvPublication(
+        bindingFor(() => Promise.reject(new Error('resolver unavailable'))),
+        'stable-token'
+      )
+    )
+
+    expect(unavailable).toEqual({ tag: 'unavailable' })
+    expect(rejected).toEqual({ tag: 'unavailable' })
     expect(requestedUrls).toEqual([
       'https://registry.internal/cv-publications/stable-token',
     ])
@@ -125,15 +179,17 @@ describe('public CV publication loader', () => {
 
   test('sends preview capabilities only to the private resolver route', async () => {
     const requestedUrls: string[] = []
-    const result = await loadCvPreview(
-      {
-        fetch: (request) => {
-          requestedUrls.push(request.url)
-          return responseFor(validDocument)
+    const result = await runPublication(
+      loadCvPreview(
+        {
+          fetch: (request) => {
+            requestedUrls.push(request.url)
+            return responseFor(validDocument)
+          },
         },
-      },
-      'stable-token',
-      'preview-secret'
+        'stable-token',
+        'preview-secret'
+      )
     )
 
     expect(result.tag).toBe('success')

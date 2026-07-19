@@ -1,6 +1,6 @@
 export {
-  canonicalPreparationUrl,
   type ContentRevisionResult,
+  canonicalPreparationUrl,
   type DocumentKind,
   DocumentKindSchema,
   type GeneratedCandidate,

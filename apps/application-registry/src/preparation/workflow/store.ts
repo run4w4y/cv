@@ -3,9 +3,8 @@ import {
   PreparationStoreError,
 } from '@cv/application-preparation-workflow'
 import { Effect, Layer } from 'effect'
-
-import { PreparationRepository } from '@/preparation/data/repository'
 import { publicCvBaseUrl } from '@/preparation/config'
+import { PreparationRepository } from '@/preparation/data/repository'
 
 const storeOperation = (operation: string) =>
   Effect.mapError(

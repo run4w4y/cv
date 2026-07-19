@@ -1,7 +1,6 @@
 import { defineRelations } from 'drizzle-orm'
-
-import { applicationLabels, applicationNotes } from './tables/annotations'
 import { applicationActivities } from './tables/activities'
+import { applicationLabels, applicationNotes } from './tables/annotations'
 import { applications } from './tables/applications'
 import { generatedArtifacts } from './tables/artifacts'
 import { applicationCompensations } from './tables/compensations'

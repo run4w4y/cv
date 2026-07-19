@@ -1,3 +1,4 @@
+import { CoverLetterDocumentSchema } from '@cv/application-preparation-workflow/cover-letter'
 import {
   Badge,
   Button,
@@ -13,8 +14,6 @@ import {
 } from '@cv/internal-ui'
 import { RawJsonEditor, SchemaEditor } from '@cv/schema-editor/react'
 import { Check, Save, X } from 'lucide-react'
-
-import { CoverLetterDocumentSchema } from '@cv/application-preparation-workflow/cover-letter'
 import type {
   CoverLetterPageController,
   CoverLetterWorkspace,
