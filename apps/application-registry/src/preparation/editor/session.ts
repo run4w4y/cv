@@ -1,17 +1,17 @@
 import { type CvDocumentV1, CvDocumentV1Schema } from '@cv/contracts/document'
 import {
+  CoverLetterDocumentSchema,
+  initialCoverLetterDraft,
+} from '@cv/application-preparation-workflow/cover-letter'
+import type { SavedCandidate } from '@cv/application-preparation-workflow/domain'
+import {
   createInitialValue,
   inspectSchema,
   validateSchemaValue,
 } from '@cv/schema-editor/core'
 import { Option } from 'effect'
 
-import {
-  CoverLetterDocumentSchema,
-  initialCoverLetterDocument,
-} from '../cover-letter-contract'
 import type { SavedContentRevision } from '../data'
-import type { SavedCandidate } from '../workflow/domain'
 import type {
   DerivePreparationEditorSessionInput,
   PreparationEditorIdentity,
@@ -25,7 +25,7 @@ const cvInitialDescriptor = inspectSchema(CvDocumentV1Schema).descriptor
 const initialDocument = (identity: PreparationEditorIdentity): unknown =>
   identity.kind === 'cv'
     ? createInitialValue(cvInitialDescriptor)
-    : initialCoverLetterDocument(identity.locale)
+    : initialCoverLetterDraft(identity.locale)
 
 const candidateRevision = (
   candidate: SavedCandidate
@@ -176,16 +176,6 @@ const validateDocument = (
   return validation
 }
 
-export const preparationDocumentFingerprint = (
-  document: unknown
-): string | null => {
-  try {
-    return JSON.stringify(document) ?? null
-  } catch {
-    return null
-  }
-}
-
 /** Pure join of query, Workflow, and editor-local state. */
 export const derivePreparationEditorSession = (
   input: DerivePreparationEditorSessionInput
@@ -202,12 +192,6 @@ export const derivePreparationEditorSession = (
   const workflowCandidate = workflowCandidateFor(input, baseRevision)
   const document = documentFor(input, baseRevision)
   const validation = validateDocument(input.identity, document)
-  const currentDocumentFingerprint = preparationDocumentFingerprint(document)
-  const layoutAssessment =
-    input.local.layoutDocumentFingerprint !== null &&
-    input.local.layoutDocumentFingerprint === currentDocumentFingerprint
-      ? input.local.layoutAssessment
-      : null
   const dirty = Option.isSome(input.local.humanDraft) || baseRevision === null
   const isApproved =
     baseRevision !== null &&
@@ -219,9 +203,6 @@ export const derivePreparationEditorSession = (
     input.run?.status === 'running' ||
     input.run?.status === 'review_submitted' ||
     input.run?.status === 'cancelling'
-  const layoutAllowsApproval =
-    input.identity.kind === 'cover_letter' ||
-    layoutAssessment?.status === 'fits'
 
   return {
     ...input.local,
@@ -236,7 +217,6 @@ export const derivePreparationEditorSession = (
       baseRevision !== null &&
       !dirty &&
       validation.valid &&
-      layoutAllowsApproval &&
       !isApproved &&
       !detached &&
       !workflowBlocksMutation,
@@ -246,7 +226,6 @@ export const derivePreparationEditorSession = (
     document,
     identity: input.identity,
     isApproved,
-    layoutAssessment,
     source: sourceFor(input, baseRevision, workflowCandidate),
     validation,
     workflowCandidate,

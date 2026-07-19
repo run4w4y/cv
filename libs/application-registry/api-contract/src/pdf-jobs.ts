@@ -7,7 +7,6 @@ import { Schema } from 'effect'
 
 export const StartPdfJobRequestSchema = Schema.Struct({
   expectedPublicationVersion: ExpectedApplicationVersionSchema,
-  rendererVersion: NonEmptyString,
   requestId: NonEmptyString,
 })
 export interface StartPdfJobRequest

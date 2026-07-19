@@ -9,6 +9,7 @@ import {
   cvPublicationHeaders,
   makeCvPublicResolverHandler,
   type PublicCvResolution,
+  parseCvPreviewResolverToken,
   parseCvPublicationResolverToken,
 } from './cv-public-resolver'
 
@@ -61,6 +62,31 @@ describe('CV public resolver service-binding handler', () => {
 
     expect(response.status).toBe(404)
     expect(response.headers.get('x-robots-tag')).toContain('noindex')
+  })
+
+  test('resolves a private preview only when its capability is present', async () => {
+    const calls: Array<readonly [string, string]> = []
+    const handler = makeCvPublicResolverHandler(
+      () => Effect.die('Public resolution is not expected.'),
+      (token, access) => {
+        calls.push([token, access])
+        return Effect.succeed(publication)
+      }
+    )
+    const missingAccess = await handler(
+      new Request('https://registry.internal/cv-previews/stable-token')
+    )
+    const response = await handler(
+      new Request(
+        'https://registry.internal/cv-previews/stable-token?access=preview-secret'
+      )
+    )
+
+    expect(missingAccess.status).toBe(404)
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+    expect(calls).toEqual([['stable-token', 'preview-secret']])
+    expect(parseCvPreviewResolverToken('/cv-previews/bad%2Ftoken')).toBe(null)
   })
 
   test('does not expose storage failures', async () => {

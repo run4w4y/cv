@@ -10,12 +10,13 @@ import {
 } from '@cv/application-registry-api-contract'
 import type {
   Application,
-  ApplicationEvent,
+  ApplicationActivity,
   ApplicationListingCheck,
   ApplicationNote,
   ListingCheckRun,
 } from '@cv/application-registry-entity'
 import {
+  ActivitiesService,
   type AddApplicationNoteInput,
   AnnotationsService,
   ApplicationsService,
@@ -23,16 +24,14 @@ import {
   ContentEntriesService,
   CvAnalyticsService,
   CvPublicationsService,
-  EventsService,
-  FactsReleasesService,
   JobPostingCaptureService,
   JobPostingSnapshotsService,
   type ListApplicationsInput,
   ListingChecksService,
   OpaqueObjectsService,
   PdfArtifactsService,
-  RegistryDatabaseError,
   type ResolveListingAvailabilityInput,
+  type SubmitListingCheckFindingsInput,
 } from '@cv/application-registry-service'
 import { Effect, Layer, type Scope } from 'effect'
 import {
@@ -48,12 +47,12 @@ import type {
   WorkerExecutionContext,
 } from '../worker/types'
 import { HealthHandlersLayer } from './handlers/health'
-import { RegistryHandlersLayer } from './handlers/registry'
+import { RegistryHandlersLayers } from './handlers/registry'
 import { RegistryAuthorizationLayer } from './middleware/auth'
 
+const timestamp = '2026-07-10T00:00:00.000Z'
 const context: WorkerExecutionContext = { waitUntil: () => undefined }
 const env = {
-  // Persistence is replaced by makeRegistryLayer in these HTTP codec tests.
   APPLICATION_REGISTRY_DB: undefined as unknown as D1Database,
   CHATGPT_SESSIONS: undefined as unknown as KVNamespace,
   CLOUDFLARE_ANALYTICS_API_TOKEN: 'analytics-token',
@@ -66,146 +65,143 @@ const env = {
 const application: Application = {
   applicationStatus: 'preparing',
   appliedAt: null,
-  id: 'application-1',
-  jobKey: 'web:one',
-  source: 'web',
-  sourceJobId: null,
-  canonicalUrl: 'https://example.test/jobs/one',
   company: 'Example',
+  createdAt: timestamp,
   followUpAt: null,
-  role: 'Engineer',
-  location: null,
-  lastContactAt: null,
+  id: 'application-1',
   listingAvailability: 'unchecked',
   listingCheckedAt: null,
   listingClosedCandidateAt: null,
   listingConfidence: null,
   listingConsecutiveClosedChecks: 0,
   listingReasonCode: null,
+  location: null,
   personalPriority: null,
+  postingUrl: 'https://example.test/jobs/one',
+  role: 'Engineer',
   targetStage: 'backlog',
-  version: 1,
-  createdAt: '2026-07-10T00:00:00.000Z',
-  updatedAt: '2026-07-10T00:00:00.000Z',
+  updatedAt: timestamp,
   updatedRevision: 1,
+  version: 1,
 }
 
-const event: ApplicationEvent = {
-  id: 'event-1',
+const activity: ApplicationActivity = {
+  actor: 'system',
   applicationId: application.id,
-  kind: 'research_updated',
-  occurredAt: application.createdAt,
-  recordedAt: application.createdAt,
-  deviceId: null,
-  payload: { run: 'run-1' },
+  id: 'activity-1',
+  kind: 'application_created',
+  occurredAt: timestamp,
+  payload: {},
   revision: 1,
-  operationId: 'event:one',
-}
-
-const applicationListItem = {
-  ...application,
-  annualCompensation: null,
-  counts: { notes: 1 },
-  identityAliases: [],
-  labels: ['priority'],
-  latestEvent: { kind: event.kind, occurredAt: event.occurredAt },
-}
-
-const eventListItem = {
-  ...event,
-  canonicalUrl: application.canonicalUrl,
-  company: application.company,
-  role: application.role,
+  source: 'management',
 }
 
 const note: ApplicationNote = {
   applicationId: application.id,
   body: 'Follow up',
-  createdAt: application.createdAt,
+  createdAt: timestamp,
   id: 'note-1',
   kind: 'general',
   source: 'test',
-  updatedAt: application.updatedAt,
+  updatedAt: timestamp,
 }
 
 const listingCheck: ApplicationListingCheck = {
   applicationId: application.id,
-  checkedAt: application.updatedAt,
+  checkedAt: timestamp,
   checkerVersion: '1',
   confidence: 'high',
   contentHash: null,
-  evidence: [
-    {
-      code: 'provider_open',
-      detail: 'Provider reports the posting as open.',
-      sourceUrl: null,
-    },
-  ],
-  finalUrl: application.canonicalUrl,
+  evidence: [],
+  finalUrl: application.postingUrl,
   httpStatus: 200,
-  id: 'listing-check-1',
-  nextCheckAt: '2026-07-11T00:00:00.000Z',
-  operationId: 'listing-check-operation-1',
+  id: 'check-1',
+  nextCheckAt: timestamp,
+  operationId: 'check-operation-1',
   outcome: 'open',
-  provider: 'generic',
-  receivedAt: application.updatedAt,
+  provider: 'test',
   reasonCode: 'provider_open',
+  receivedAt: timestamp,
   recommendedAction: 'keep',
-  requestedUrl: application.canonicalUrl,
-  runId: null,
+  requestedUrl: application.postingUrl,
+  runId: 'run-1',
 }
 
-const listingCheckRun: ListingCheckRun = {
+const listingRun: ListingCheckRun = {
   checkedCount: 1,
   closedCount: 0,
-  completedAt: application.updatedAt,
+  completedAt: timestamp,
   errorCount: 0,
-  id: 'listing-check-run-1',
+  id: 'run-1',
   mode: 'report',
   openCount: 1,
   reviewCount: 0,
   selectedCount: 1,
-  startedAt: application.createdAt,
+  startedAt: timestamp,
   state: 'completed',
   trigger: 'cli',
 }
 
-const RegistryAuthorizationClientLayer = HttpApiMiddleware.layerClient(
-  RegistryAuthorization,
-  ({ next, request: clientRequest }) =>
-    next(HttpClientRequest.bearerToken(clientRequest, env.REGISTRY_API_TOKEN))
-)
+const unsupported = (..._arguments: readonly unknown[]) =>
+  Effect.die(new Error('Unexpected service call.'))
 
-const unsupportedV2ServiceMethod = (..._arguments: readonly unknown[]) =>
-  Effect.die(new Error('This v2 service is not used by the legacy HTTP test.'))
+type Observers = {
+  note?: (input: AddApplicationNoteInput) => void
+  list?: (input: ListApplicationsInput) => void
+  resolve?: (input: ResolveListingAvailabilityInput) => void
+  submit?: (input: SubmitListingCheckFindingsInput) => void
+  update?: (idempotencyKey: string) => void
+}
 
-const makeRegistryLayer = (
-  onNote: (payload: AddApplicationNoteInput) => void = () => undefined,
-  onListApplications: (query: ListApplicationsInput) => void = () => undefined,
-  onResolveListing: (input: ResolveListingAvailabilityInput) => void = () =>
-    undefined,
-  failLinkSynchronization = false
-) =>
-  Layer.mergeAll(
+const makeServices = (observers: Observers = {}) => {
+  const blob = new Uint8Array([1, 2, 3])
+  const digest = 'a'.repeat(64)
+
+  return Layer.mergeAll(
+    Layer.succeed(ActivitiesService, {
+      list: () =>
+        Effect.succeed({
+          items: [
+            {
+              ...activity,
+              company: application.company,
+              postingUrl: application.postingUrl,
+              role: application.role,
+            },
+          ],
+          pageInfo: {
+            kind: 'cursor',
+            size: 50,
+            hasNextPage: false,
+            hasPreviousPage: false,
+            nextCursor: null,
+          },
+        }),
+      listByApplication: () => Effect.succeed({ items: [activity] }),
+    }),
     Layer.succeed(AnnotationsService, {
-      addNote: (_identifier, payload) => {
-        onNote(payload)
+      addNote: (_identifier, input) => {
+        observers.note?.(input)
         return Effect.succeed({ note, replayed: false })
       },
-      list: () => Effect.succeed({ labels: [], notes: [] }),
+      list: () => Effect.succeed({ labels: [], notes: [note] }),
     }),
     Layer.succeed(ApplicationsService, {
       create: () => Effect.succeed(application),
-      facets: () =>
-        Effect.succeed({
-          companies: [application.company],
-          labels: ['priority'],
-        }),
+      facets: () => Effect.succeed({ companies: ['Example'], labels: [] }),
       find: () => Effect.succeed(application),
-      list: (query) => {
-        onListApplications(query)
+      list: (input) => {
+        observers.list?.(input)
         return Effect.succeed({
-          items: [applicationListItem],
+          items: [
+            {
+              ...application,
+              annualCompensation: null,
+              counts: { notes: 1 },
+              labels: [],
+              latestActivity: activity,
+            },
+          ],
           pageInfo: {
             kind: 'cursor',
             size: 50,
@@ -215,123 +211,35 @@ const makeRegistryLayer = (
           },
         })
       },
-      patch: () => Effect.succeed(application),
-      updateManaged: () =>
-        Effect.succeed({
+      remove: () => Effect.void,
+      update: (_identifier, input) => {
+        observers.update?.(input.idempotencyKey)
+        return Effect.succeed({
           annualCompensation: null,
           application,
-          labels: ['priority'],
-        }),
-      remove: () => Effect.succeed(undefined),
-      replaceLabels: () => Effect.succeed([]),
-      upsert: () => Effect.succeed(application),
+          labels: [],
+        })
+      },
     }),
     Layer.succeed(CompensationsService, {
       listByApplication: () => Effect.succeed({ items: [] }),
-      replaceAnnual: () =>
-        Effect.succeed({ annualCompensation: null, application }),
+      replaceAnnual: unsupported,
     }),
-    Layer.succeed(ContentEntriesService, {
-      appendRevision: unsupportedV2ServiceMethod,
-      approveRevision: unsupportedV2ServiceMethod,
-      ensure: unsupportedV2ServiceMethod,
-      find: unsupportedV2ServiceMethod,
-      listRevisions: unsupportedV2ServiceMethod,
-      readRevision: unsupportedV2ServiceMethod,
-    }),
+    Layer.succeed(CvAnalyticsService, { read: unsupported }),
     Layer.succeed(CvPublicationsService, {
-      disableForApplication: () =>
-        failLinkSynchronization
-          ? Effect.fail(
-              new RegistryDatabaseError({
-                cause: new Error('simulated link synchronization failure'),
-                message: 'Could not synchronize CV links.',
-              })
-            )
-          : Effect.succeed(0),
-      findByEntry: unsupportedV2ServiceMethod,
-      publish: unsupportedV2ServiceMethod,
-      resolve: unsupportedV2ServiceMethod,
-      restoreAfterRejection: () =>
-        failLinkSynchronization
-          ? Effect.fail(
-              new RegistryDatabaseError({
-                cause: new Error('simulated link synchronization failure'),
-                message: 'Could not synchronize CV links.',
-              })
-            )
-          : Effect.succeed(0),
-      setAvailability: unsupportedV2ServiceMethod,
-    }),
-    Layer.succeed(CvAnalyticsService, {
-      read: () =>
-        Effect.succeed({
-          countries: [{ name: 'DE', visits: 2 }],
-          generatedAt: application.updatedAt,
-          items: [
-            {
-              application: {
-                appliedAt: application.appliedAt,
-                applicationStatus: application.applicationStatus,
-                canonicalUrl: application.canonicalUrl,
-                company: application.company,
-                createdAt: application.createdAt,
-                id: application.id,
-                listingAvailability: application.listingAvailability,
-                role: application.role,
-              },
-              countries: [{ name: 'DE', visits: 2 }],
-              firstSeenOn: '2026-07-10',
-              labels: ['priority'],
-              lastSeenOn: '2026-07-10',
-              link: {
-                contentEntryId: 'content-1',
-                createdAt: application.createdAt,
-                enabled: true,
-                id: 'link-1',
-                locale: 'en',
-                updatedAt: application.updatedAt,
-              },
-              series: [{ at: '2026-07-10', pageViews: 3, visits: 2 }],
-              totals: { pageViews: 3, visits: 2 },
-            },
-          ],
-          range: {
-            from: application.createdAt,
-            granularity: 'day' as const,
-            to: application.updatedAt,
-          },
-          series: [{ at: '2026-07-10', pageViews: 3, visits: 2 }],
-          summary: {
-            enabledLinks: 1,
-            pageViews: 3,
-            publishedLinks: 1,
-            unviewedLinks: 0,
-            viewedLinks: 1,
-            visits: 2,
-          },
-        }),
-    }),
-    Layer.succeed(EventsService, {
-      append: () => Effect.succeed({ application, event, replayed: false }),
-      list: () =>
-        Effect.succeed({
-          items: [eventListItem],
-          pageInfo: {
-            kind: 'cursor',
-            size: 50,
-            hasNextPage: false,
-            hasPreviousPage: false,
-            nextCursor: null,
-          },
-        }),
-      listByApplication: () => Effect.succeed({ items: [event] }),
+      disableForApplication: () => Effect.succeed(0),
+      findByEntry: unsupported,
+      resolve: unsupported,
+      resolvePreview: unsupported,
+      restoreAfterRejection: () => Effect.succeed(0),
+      setAvailability: unsupported,
+      stage: unsupported,
     }),
     Layer.succeed(ListingChecksService, {
-      findRun: () => Effect.succeed(listingCheckRun),
+      findRun: () => Effect.succeed(listingRun),
       listByApplication: () => Effect.succeed({ items: [listingCheck] }),
       resolveAvailability: (_identifier, input) => {
-        onResolveListing(input)
+        observers.resolve?.(input)
         return Effect.succeed({
           application,
           archived: false,
@@ -339,392 +247,248 @@ const makeRegistryLayer = (
           replayed: false,
         })
       },
-      runDue: () =>
-        Effect.succeed({ checks: [listingCheck], run: listingCheckRun }),
-      submitFindings: () =>
-        Effect.succeed({
+      runDue: unsupported,
+      submitFindings: (input) => {
+        observers.submit?.(input)
+        return Effect.succeed({
           archivedCount: 0,
           checks: [listingCheck],
           rejected: [],
           replayedCount: 0,
-          run: listingCheckRun,
-        }),
-    }),
-    Layer.succeed(JobPostingSnapshotsService, {
-      find: unsupportedV2ServiceMethod,
-      latest: unsupportedV2ServiceMethod,
-      persist: unsupportedV2ServiceMethod,
-      readPayload: unsupportedV2ServiceMethod,
-    }),
-    Layer.succeed(JobPostingCaptureService, {
-      capture: unsupportedV2ServiceMethod,
-    }),
-    Layer.succeed(FactsReleasesService, {
-      activate: unsupportedV2ServiceMethod,
-      find: unsupportedV2ServiceMethod,
-      findActive: unsupportedV2ServiceMethod,
-      readActive: unsupportedV2ServiceMethod,
-      readActiveAsset: unsupportedV2ServiceMethod,
-      readActiveCatalog: unsupportedV2ServiceMethod,
-      register: unsupportedV2ServiceMethod,
+          run: listingRun,
+        })
+      },
     }),
     Layer.succeed(OpaqueObjectsService, {
-      put: unsupportedV2ServiceMethod,
-      read: unsupportedV2ServiceMethod,
+      put: (bytes) =>
+        Effect.succeed({
+          byteLength: bytes.byteLength,
+          key: `sha256/${digest}`,
+          sha256: digest,
+        }),
+      read: () => Effect.succeed(blob),
+    }),
+    Layer.succeed(ContentEntriesService, {
+      appendRevision: unsupported,
+      approveRevision: unsupported,
+      ensure: unsupported,
+      find: unsupported,
+      listRevisions: unsupported,
+      readRevision: unsupported,
+    }),
+    Layer.succeed(JobPostingCaptureService, { capture: unsupported }),
+    Layer.succeed(JobPostingSnapshotsService, {
+      find: unsupported,
+      latest: unsupported,
+      persist: unsupported,
+      readPayload: unsupported,
     }),
     Layer.succeed(PdfArtifactsService, {
-      complete: unsupportedV2ServiceMethod,
-      fail: unsupportedV2ServiceMethod,
-      findCurrent: unsupportedV2ServiceMethod,
-      findJob: unsupportedV2ServiceMethod,
-      findPendingDispatch: unsupportedV2ServiceMethod,
-      markDispatchFailed: unsupportedV2ServiceMethod,
-      markDispatched: unsupportedV2ServiceMethod,
-      pendingDispatches: unsupportedV2ServiceMethod,
-      readCurrent: unsupportedV2ServiceMethod,
-      startJob: unsupportedV2ServiceMethod,
+      complete: unsupported,
+      fail: unsupported,
+      findCurrent: unsupported,
+      findJob: unsupported,
+      findPendingDispatch: unsupported,
+      markDispatchFailed: unsupported,
+      markDispatched: unsupported,
+      pendingDispatches: unsupported,
+      readCurrent: unsupported,
+      startJob: unsupported,
     })
   )
+}
 
-const provideApiTestLayer = <A, E, R>(
+const authorizationClient = HttpApiMiddleware.layerClient(
+  RegistryAuthorization,
+  ({ next, request }) =>
+    next(HttpClientRequest.bearerToken(request, env.REGISTRY_API_TOKEN))
+)
+
+const provideApi = <A, E, R>(
   effect: Effect.Effect<A, E, R>,
-  registryLayer = makeRegistryLayer(),
+  services = makeServices(),
   authenticated = false
 ) => {
-  const apiLayer = Layer.mergeAll(
+  const handlerLayers = Layer.mergeAll(
+    HealthHandlersLayer,
+    ...RegistryHandlersLayers
+  )
+  const layer = Layer.mergeAll(
     Layer.provide(
-      Layer.merge(HealthHandlersLayer, RegistryHandlersLayer),
-      Layer.merge(registryLayer, Layer.succeed(WorkerEnv, env))
+      handlerLayers,
+      Layer.merge(services, Layer.succeed(WorkerEnv, env))
     ),
     HttpServer.layerServices,
     Layer.succeedContext(makeWorkerRequestContext(env, context))
   )
   const provided = effect.pipe(
-    Effect.provide(apiLayer),
+    Effect.provide(layer),
     Effect.provide(RegistryAuthorizationLayer)
   )
-
   return authenticated
-    ? provided.pipe(Effect.provide(RegistryAuthorizationClientLayer))
+    ? provided.pipe(Effect.provide(authorizationClient))
     : provided
 }
 
-const runApiTest = <A, E>(
+const runApi = <A, E>(
   effect: Effect.Effect<
     A,
     E,
     Scope.Scope | HttpRouter.Request<'Requires', unknown>
   >
 ) =>
-  // HttpApiTest executes request-level handler dependencies from the context
-  // installed by makeWorkerRequestContext. The router's Request marker is a
-  // type-only wrapper, so it is safe to remove once that context is installed.
   Effect.runPromise(Effect.scoped(effect as Effect.Effect<A, E, Scope.Scope>))
 
 describe('application registry HttpApi', () => {
   test('serves the public health endpoint', async () => {
-    const response = await runApiTest(
+    const response = await runApi(
       Effect.gen(function* () {
         const client = yield* HttpApiTest.groups(ApplicationRegistryApi, [
           'public',
         ])
         return yield* client.health()
-      }).pipe(provideApiTestLayer)
+      }).pipe(provideApi)
     )
-
     expect(response).toEqual({ ok: true })
   })
 
-  test('serves CV analytics without exposing provider paths', async () => {
-    const response = await runApiTest(
-      Effect.gen(function* () {
-        const client = yield* HttpApiTest.groups(ApplicationRegistryApi, [
-          'registry',
-        ])
-        return yield* client.registry.getCvAnalytics({ query: { days: 7 } })
-      }).pipe((effect) =>
-        provideApiTestLayer(effect, makeRegistryLayer(), true)
-      )
-    )
-
-    expect(response.summary).toEqual(
-      expect.objectContaining({ pageViews: 3, visits: 2 })
-    )
-    expect(JSON.stringify(response)).not.toContain('/c/')
-    expect(JSON.stringify(response)).not.toContain('public-token')
-  })
-
-  test('decodes the annual compensation replacement command', async () => {
-    const response = await runApiTest(
-      Effect.gen(function* () {
-        const client = yield* HttpApiTest.groups(ApplicationRegistryApi, [
-          'registry',
-        ])
-        return yield* client.registry.replaceAnnualCompensation({
-          params: { id: application.id },
-          payload: {
-            annualCompensation: {
-              currencyCode: 'USD',
-              minimumMinor: 15_000_000,
-              maximumMinor: 18_000_000,
-            },
-            expectedVersion: application.version,
-          },
-        })
-      }).pipe((effect) =>
-        provideApiTestLayer(effect, makeRegistryLayer(), true)
-      )
-    )
-
-    expect(response).toEqual({ annualCompensation: null, application })
-  })
-
-  test('decodes one managed application update command', async () => {
-    const response = await runApiTest(
-      Effect.gen(function* () {
-        const client = yield* HttpApiTest.groups(ApplicationRegistryApi, [
-          'registry',
-        ])
-        return yield* client.registry.updateManagedApplication({
-          params: { id: application.id },
-          payload: {
-            annualCompensation: null,
-            applicationStatus: 'offer',
-            expectedVersion: application.version,
-            labels: ['priority'],
-            operationId: 'managed-update-1',
-          },
-        })
-      }).pipe((effect) =>
-        provideApiTestLayer(effect, makeRegistryLayer(), true)
-      )
-    )
-
-    expect(response).toEqual({
-      annualCompensation: null,
-      application,
-      labels: ['priority'],
-    })
-  })
-
-  test('keeps a committed application update successful when derived CV link repair fails', async () => {
-    const response = await runApiTest(
-      Effect.gen(function* () {
-        const client = yield* HttpApiTest.groups(ApplicationRegistryApi, [
-          'registry',
-        ])
-        return yield* client.registry.patchApplication({
-          params: { id: application.id },
-          payload: {
-            applicationStatus: 'rejected',
-            expectedVersion: application.version,
-          },
-        })
-      }).pipe((effect) =>
-        provideApiTestLayer(
-          effect,
-          makeRegistryLayer(undefined, undefined, undefined, true),
-          true
-        )
-      )
-    )
-
-    expect(response).toEqual(application)
-  })
-
-  test('serves application facets through the static applications route', async () => {
-    const response = await runApiTest(
-      Effect.gen(function* () {
-        const client = yield* HttpApiTest.groups(ApplicationRegistryApi, [
-          'registry',
-        ])
-        return yield* client.registry.listApplicationFacets()
-      }).pipe((effect) =>
-        provideApiTestLayer(effect, makeRegistryLayer(), true)
-      )
-    )
-
-    expect(response).toEqual({
-      companies: ['Example'],
-      labels: ['priority'],
-    })
-  })
-
-  test('decodes the definition-derived application query through the HTTP contract', async () => {
+  test('keeps the drizzle-query list request intact', async () => {
     let observed: ListApplicationsInput | undefined
     const query = {
       filters: [
         {
-          type: 'group',
-          combinator: 'or',
-          children: [
-            {
-              type: 'condition',
-              field: 'company',
-              operator: 'contains',
-              value: 'Example',
-            },
-            {
-              type: 'condition',
-              field: 'labels',
-              operator: 'hasAny',
-              value: ['priority'],
-            },
-          ],
+          type: 'condition',
+          field: 'company',
+          operator: 'contains',
+          value: 'Example',
         },
       ],
       orderBy: [{ field: 'company', direction: 'desc' }],
       pagination: { size: 10 },
     } as const
-
-    const response = await runApiTest(
+    const response = await runApi(
       Effect.gen(function* () {
         const client = yield* HttpApiTest.groups(ApplicationRegistryApi, [
-          'registry',
+          'applications',
         ])
-        return yield* client.registry.listApplications({ query })
+        return yield* client.applications.listApplications({ query })
       }).pipe((effect) =>
-        provideApiTestLayer(
+        provideApi(
           effect,
-          makeRegistryLayer(undefined, (input) => {
-            observed = input
+          makeServices({
+            list: (input) => {
+              observed = input
+            },
           }),
           true
         )
       )
     )
-
-    expect(response.items).toEqual([applicationListItem])
     expect(observed).toEqual(query)
+    expect(response.items[0]?.id).toBe(application.id)
   })
 
-  test('carries one note operation ID through the generated HTTP contract', async () => {
-    let observed: AddApplicationNoteInput | undefined
-    const response = await runApiTest(
+  test('takes mutation idempotency from the HTTP header', async () => {
+    let updateKey: string | undefined
+    let noteInput: AddApplicationNoteInput | undefined
+    await runApi(
       Effect.gen(function* () {
         const client = yield* HttpApiTest.groups(ApplicationRegistryApi, [
-          'registry',
+          'applications',
         ])
-        return yield* client.registry.addApplicationNote({
+        yield* client.applications.updateApplication({
+          headers: { 'idempotency-key': 'update-1' },
           params: { id: application.id },
-          payload: {
-            body: note.body,
-            kind: note.kind,
-            operationId: 'note-operation-1',
-            source: note.source,
-          },
+          payload: { applicationStatus: 'offer', expectedVersion: 1 },
+        })
+        return yield* client.applications.addApplicationNote({
+          headers: { 'idempotency-key': 'note-1' },
+          params: { id: application.id },
+          payload: { body: note.body, kind: note.kind, source: note.source },
         })
       }).pipe((effect) =>
-        provideApiTestLayer(
+        provideApi(
           effect,
-          makeRegistryLayer((payload) => {
-            observed = payload
+          makeServices({
+            note: (input) => {
+              noteInput = input
+            },
+            update: (key) => {
+              updateKey = key
+            },
           }),
           true
         )
       )
     )
-
-    expect(observed?.operationId).toBe('note-operation-1')
-    expect(response).toEqual({ note, replayed: false })
+    expect(updateKey).toBe('update-1')
+    expect(noteInput?.idempotencyKey).toBe('note-1')
   })
 
-  test('submits locally collected findings through the authenticated contract', async () => {
-    const response = await runApiTest(
+  test('transports opaque objects as bytes and checks the digest path', async () => {
+    const digest = 'a'.repeat(64)
+    const result = await runApi(
       Effect.gen(function* () {
         const client = yield* HttpApiTest.groups(ApplicationRegistryApi, [
-          'registry',
+          'content',
         ])
-        return yield* client.registry.submitListingCheckFindings({
+        const stored = yield* client.content.putBlob({
+          params: { sha256: digest },
+          payload: new Uint8Array([1, 2, 3]),
+        })
+        const bytes = yield* client.content.getBlob({
+          params: { sha256: digest },
+        })
+        return { bytes, stored }
+      }).pipe((effect) => provideApi(effect, makeServices(), true))
+    )
+    expect(result.stored).toEqual({ byteLength: 3, sha256: digest })
+    expect([...result.bytes]).toEqual([1, 2, 3])
+  })
+
+  test('uses the automation run resource from the path', async () => {
+    let observed: SubmitListingCheckFindingsInput | undefined
+    await runApi(
+      Effect.gen(function* () {
+        const client = yield* HttpApiTest.groups(ApplicationRegistryApi, [
+          'automation',
+        ])
+        return yield* client.automation.submitListingCheckFindings({
+          params: { runId: listingRun.id },
           payload: {
-            expectedCount: 1,
+            expectedCount: 0,
             finalBatch: true,
-            findings: [
-              {
-                applicationId: application.id,
-                canonicalUrl: application.canonicalUrl,
-                observation: {
-                  checkedAt: listingCheck.checkedAt,
-                  checkerVersion: listingCheck.checkerVersion,
-                  confidence: listingCheck.confidence,
-                  contentHash: listingCheck.contentHash,
-                  evidence: listingCheck.evidence,
-                  finalUrl: listingCheck.finalUrl,
-                  httpStatus: listingCheck.httpStatus,
-                  outcome: listingCheck.outcome,
-                  provider: listingCheck.provider,
-                  reasonCode: listingCheck.reasonCode,
-                  requestedUrl: listingCheck.requestedUrl,
-                },
-                operationId: listingCheck.operationId,
-                target: {
-                  company: application.company,
-                  role: application.role,
-                  url: application.canonicalUrl,
-                },
-              },
-            ],
+            findings: [],
             mode: 'report',
-            runId: listingCheckRun.id,
-            startedAt: listingCheckRun.startedAt,
+            startedAt: timestamp,
           },
         })
       }).pipe((effect) =>
-        provideApiTestLayer(effect, makeRegistryLayer(), true)
-      )
-    )
-
-    expect(response.run.trigger).toBe('cli')
-    expect(response.checks).toHaveLength(1)
-  })
-
-  test('resolves listing availability through the authenticated contract', async () => {
-    let observed: ResolveListingAvailabilityInput | undefined
-    const response = await runApiTest(
-      Effect.gen(function* () {
-        const client = yield* HttpApiTest.groups(ApplicationRegistryApi, [
-          'registry',
-        ])
-        return yield* client.registry.resolveApplicationListingAvailability({
-          params: { id: application.id },
-          payload: {
-            expectedVersion: application.version,
-            operationId: 'manual-review-1',
-            resolution: 'open',
-          },
-        })
-      }).pipe((effect) =>
-        provideApiTestLayer(
+        provideApi(
           effect,
-          makeRegistryLayer(undefined, undefined, (input) => {
-            observed = input
+          makeServices({
+            submit: (input) => {
+              observed = input
+            },
           }),
           true
         )
       )
     )
-
-    expect(observed).toEqual({
-      expectedVersion: application.version,
-      operationId: 'manual-review-1',
-      resolution: 'open',
-    })
-    expect(response.application.id).toBe(application.id)
-    expect(response.archived).toBe(false)
+    expect(observed?.runId).toBe(listingRun.id)
   })
 
   test('rejects registry calls without bearer authentication', async () => {
-    const exit = await runApiTest(
+    const exit = await runApi(
       Effect.gen(function* () {
         const client = yield* HttpApiTest.groups(ApplicationRegistryApi, [
-          'registry',
+          'applications',
         ])
         return yield* Effect.exit(
-          client.registry.listApplications({ query: {} })
+          client.applications.listApplications({ query: {} })
         )
-      }).pipe(provideApiTestLayer)
+      }).pipe(provideApi)
     )
-
     expect(exit._tag).toBe('Failure')
     expect(exit.toString()).toContain('UnauthorizedError')
   })

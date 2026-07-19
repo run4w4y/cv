@@ -234,7 +234,6 @@ const compileAssets = (
 
 const descriptor = (object: FactsReleaseObject) => ({
   byteLength: object.byteLength,
-  key: object.key,
   mediaType: object.mediaType,
   sha256: object.sha256,
 })

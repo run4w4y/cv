@@ -33,31 +33,25 @@ const withConfiguredRegistryClient = <A, E>(
   )
 
 const DeferredRegistryClientLayer = Layer.succeed(ApplicationRegistryClient, {
-  addNote: (identifier, request) =>
+  activities: (identifier) =>
+    withConfiguredRegistryClient((client) => client.activities(identifier)),
+  addNote: (identifier, idempotencyKey, request) =>
     withConfiguredRegistryClient((client) =>
-      client.addNote(identifier, request)
+      client.addNote(identifier, idempotencyKey, request)
     ),
   annotations: (identifier) =>
     withConfiguredRegistryClient((client) => client.annotations(identifier)),
-  appendEvent: (identifier, request) =>
-    withConfiguredRegistryClient((client) =>
-      client.appendEvent(identifier, request)
-    ),
   create: (request) =>
     withConfiguredRegistryClient((client) => client.create(request)),
   compensations: (identifier, query) =>
     withConfiguredRegistryClient((client) =>
       client.compensations(identifier, query)
     ),
-  events: (identifier) =>
-    withConfiguredRegistryClient((client) => client.events(identifier)),
   facets: () => withConfiguredRegistryClient((client) => client.facets()),
   health: () => withConfiguredRegistryClient((client) => client.health()),
-  labels: (identifier) =>
-    withConfiguredRegistryClient((client) => client.labels(identifier)),
   list: (query) => withConfiguredRegistryClient((client) => client.list(query)),
-  listEvents: (query) =>
-    withConfiguredRegistryClient((client) => client.listEvents(query)),
+  listActivities: (query) =>
+    withConfiguredRegistryClient((client) => client.listActivities(query)),
   listingCheckRun: (identifier) =>
     withConfiguredRegistryClient((client) =>
       client.listingCheckRun(identifier)
@@ -65,25 +59,17 @@ const DeferredRegistryClientLayer = Layer.succeed(ApplicationRegistryClient, {
   listingChecks: (identifier) =>
     withConfiguredRegistryClient((client) => client.listingChecks(identifier)),
   outbox: () => withConfiguredRegistryClient((client) => client.outbox()),
-  patch: (identifier, request) =>
-    withConfiguredRegistryClient((client) => client.patch(identifier, request)),
-  remove: (identifier, expectedVersion) =>
-    withConfiguredRegistryClient((client) =>
-      client.remove(identifier, expectedVersion)
-    ),
-  replaceLabels: (identifier, request) =>
-    withConfiguredRegistryClient((client) =>
-      client.replaceLabels(identifier, request)
-    ),
   show: (identifier) =>
     withConfiguredRegistryClient((client) => client.show(identifier)),
-  submitListingCheckFindings: (batchId, request) =>
+  submitListingCheckFindings: (runId, batchId, request) =>
     withConfiguredRegistryClient((client) =>
-      client.submitListingCheckFindings(batchId, request)
+      client.submitListingCheckFindings(runId, batchId, request)
     ),
   sync: () => withConfiguredRegistryClient((client) => client.sync()),
-  upsert: (request) =>
-    withConfiguredRegistryClient((client) => client.upsert(request)),
+  update: (identifier, idempotencyKey, request) =>
+    withConfiguredRegistryClient((client) =>
+      client.update(identifier, idempotencyKey, request)
+    ),
 } satisfies ApplicationRegistryClientService)
 
 const ApplicationRegistryRuntimeLayer = Layer.mergeAll(

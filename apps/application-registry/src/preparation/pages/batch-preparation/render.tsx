@@ -11,24 +11,24 @@ import {
   Textarea,
 } from '@cv/internal-ui'
 import { useAtom, useAtomSet, useAtomValue } from '@effect/atom-react'
+import { Cause } from 'effect'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import * as Atom from 'effect/unstable/reactivity/Atom'
 import { CircleAlert, GitBranch, Layers3, Sparkles } from 'lucide-react'
-import { asyncResultFailureMessage } from '../../async-result'
-import { chatGptAuthenticatedAtom } from '../../auth/atoms'
+import { chatGptAuthenticatedAtom } from '@/preparation/auth/atoms'
 import {
   batchPreparationCommandGateAtom,
   batchPreparationFormAtom,
   batchPreparationValidationAtom,
-} from '../../batch/atoms'
-import { ChatGptAccess } from '../../components/chatgpt-access'
-import { ModelSelector } from '../../components/model-selector'
-import { selectedPreparationModelAtom } from '../../forms/atoms'
+} from '@/preparation/batch/atoms'
+import { ChatGptAccess } from '@/preparation/components/chatgpt-access'
+import { ModelSelector } from '@/preparation/components/model-selector'
+import { selectedPreparationModelAtom } from '@/preparation/forms/atoms'
 import {
   preparationRunsAtom,
   startPreparationBatchAtom,
-} from '../../workflow/atoms'
-import { maximumPreparationBatchSize } from '../../workflow/domain'
+} from '@/preparation/workflow/atoms'
+import { maximumPreparationBatchSize } from '@cv/application-preparation-workflow/domain'
 import { PreparationRunCard } from './run-card'
 
 export const BatchPreparationPage = () => {
@@ -45,10 +45,10 @@ export const BatchPreparationPage = () => {
     batchPreparationCommandGateAtom
   )
   const starting = commandExecuting || AsyncResult.isWaiting(startResult)
-  const error = asyncResultFailureMessage(
-    startResult,
-    'The URL batch could not be started.'
-  )
+  const error = AsyncResult.isFailure(startResult)
+    ? (Cause.prettyErrors(startResult.cause)[0]?.message ??
+      'The URL batch could not be started.')
+    : null
   const runsResult = useAtomValue(preparationRunsAtom)
   const runs =
     runsResult._tag === 'Success'

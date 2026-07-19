@@ -1,7 +1,7 @@
 import {
   AnnotationsCrud,
   ApplicationsCrud,
-  OperationsCrud,
+  IdempotencyCrud,
   type PersistedNote,
 } from '@cv/application-registry-crud'
 import { Effect, Layer } from 'effect'
@@ -9,14 +9,14 @@ import { Effect, Layer } from 'effect'
 import { operationRequestSignature } from '../internal/operation-request-signature'
 import {
   findRequiredApplication,
-  findValidatedOperation,
+  findValidatedIdempotency,
   missingRegistryData,
   newRegistryId,
-  type OperationIdentity,
+  type IdempotencyIdentity,
   recoverConcurrentReplay,
   registryNow,
   requireNote,
-  requireReceiptNoteId,
+  requireReceiptResourceId,
 } from '../internal/shared'
 import {
   AnnotationsService,
@@ -27,7 +27,7 @@ import type { AddApplicationNoteInput } from '../types'
 const make = Effect.gen(function* () {
   const annotations = yield* AnnotationsCrud
   const applications = yield* ApplicationsCrud
-  const operations = yield* OperationsCrud
+  const idempotency = yield* IdempotencyCrud
 
   return {
     addNote: Effect.fn('AnnotationsService.addNote')(
@@ -37,22 +37,19 @@ const make = Effect.gen(function* () {
             applications,
             identifier
           )
-          const identity: OperationIdentity = {
+          const identity: IdempotencyIdentity = {
             applicationId: application.id,
-            kind: 'application_note',
-            operationId: request.operationId,
-            operationRequestSignature: operationRequestSignature(
-              'application_note',
-              {
-                applicationId: application.id,
-                request,
-              }
-            ),
+            scope: 'application_note',
+            idempotencyKey: request.idempotencyKey,
+            requestHash: operationRequestSignature('application_note', {
+              applicationId: application.id,
+              request,
+            }),
           }
-          const replay = yield* findValidatedOperation(operations, identity)
+          const replay = yield* findValidatedIdempotency(idempotency, identity)
 
           if (replay) {
-            const noteId = yield* requireReceiptNoteId(replay)
+            const noteId = yield* requireReceiptResourceId(replay)
             const note = yield* annotations
               .findNote(noteId)
               .pipe(Effect.flatMap((value) => requireNote(value, noteId)))
@@ -60,25 +57,26 @@ const make = Effect.gen(function* () {
           }
 
           const noteId = newRegistryId()
-          const eventId = newRegistryId()
+          const activityId = newRegistryId()
           const recordedAt = yield* registryNow
           const persisted: PersistedNote = {
             ...request,
-            eventId,
+            activityId,
+            idempotencyKey: identity.idempotencyKey,
             noteId,
             recordedAt,
-            operationRequestSignature: identity.operationRequestSignature,
+            requestHash: identity.requestHash,
           }
           const replayed = yield* recoverConcurrentReplay(
-            operations,
+            idempotency,
             identity,
             annotations.persistNote(application.id, persisted)
           )
           const storedNoteId = replayed
-            ? yield* findValidatedOperation(operations, identity).pipe(
+            ? yield* findValidatedIdempotency(idempotency, identity).pipe(
                 Effect.flatMap((receipt) =>
                   receipt
-                    ? requireReceiptNoteId(receipt)
+                    ? requireReceiptResourceId(receipt)
                     : Effect.fail(
                         missingRegistryData(
                           'Concurrent note receipt disappeared.'

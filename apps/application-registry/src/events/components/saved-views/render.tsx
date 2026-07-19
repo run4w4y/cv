@@ -1,4 +1,4 @@
-import type { RegistryEventListItem } from '@cv/application-registry-api-contract'
+import type { RegistryActivityListItem } from '@cv/application-registry-api-contract'
 import type { Table as TanStackTable } from '@tanstack/react-table'
 
 import {
@@ -22,7 +22,7 @@ import {
 } from './storage'
 
 export interface EventsViewMenuProps {
-  readonly table: TanStackTable<RegistryEventListItem>
+  readonly table: TanStackTable<RegistryActivityListItem>
   readonly density: EventsTableDensity
   readonly onDensityChange: (density: EventsTableDensity) => void
   readonly currentState: EventsSavedViewState
@@ -62,12 +62,12 @@ export const EventsViewMenu = ({
       copy={{
         restoreDescription:
           'Restore filters, sorting, columns, and row density.',
-        emptyDescription: 'Save this event workspace to return to it later.',
+        emptyDescription: 'Save this activity workspace to return to it later.',
         createDescription:
           'This captures the current filters, sorting, visible columns, and density.',
         renameDescription:
-          'Choose a concise name that distinguishes this event workspace.',
-        placeholder: 'For example, Recent stage changes',
+          'Choose a concise name that distinguishes this activity workspace.',
+        placeholder: 'For example, Recent status changes',
       }}
     />
   )

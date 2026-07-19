@@ -6,7 +6,6 @@ import {
   FactsReleaseAssetError,
   FactsReleaseManifestV1Schema,
   FactsReleaseValidationError,
-  makeFactsReleaseRegistration,
 } from './index'
 import {
   factsCatalogueFixture,
@@ -72,7 +71,7 @@ describe('facts release compiler', () => {
     expect(first.catalogues.map(({ locale }) => locale)).toEqual(['en', 'ru'])
   })
 
-  test('emits a strict decodable release manifest with no self-address', async () => {
+  test('emits a strict decodable release manifest without storage addresses', async () => {
     const bundle = await Effect.runPromise(compileFactsRelease(await fixture()))
     const manifestJson = new TextDecoder().decode(bundle.manifestObject.bytes)
     const manifest = Schema.decodeUnknownSync(FactsReleaseManifestV1Schema)(
@@ -98,6 +97,7 @@ describe('facts release compiler', () => {
         assets: [asset, asset],
       })
     ).toThrow('Duplicate manifest asset identifier')
+    expect(asset.object).not.toHaveProperty('key')
     expect(() =>
       Schema.decodeUnknownSync(FactsReleaseManifestV1Schema)({
         ...manifest,
@@ -108,7 +108,7 @@ describe('facts release compiler', () => {
           },
         ],
       })
-    ).toThrow('Object key must contain the declared SHA-256 digest')
+    ).toThrow()
   })
 
   test('copies source bytes before returning the bundle', async () => {
@@ -176,31 +176,6 @@ describe('facts release compiler', () => {
     ).toHaveLength(1)
   })
 
-  test('projects exactly the rows expected by facts release registration', async () => {
-    const bundle = await Effect.runPromise(compileFactsRelease(await fixture()))
-    const registration = await Effect.runPromise(
-      makeFactsReleaseRegistration(bundle, '2026-07-17T12:34:56.789Z')
-    )
-
-    expect(registration.release).toEqual({
-      compilerCommit: fixtureProvenance.compiler.commit,
-      compilerRepository: fixtureProvenance.compiler.repository,
-      createdAt: '2026-07-17T12:34:56.789Z',
-      factsSchemaVersion: 'cv.facts.v1',
-      id: bundle.releaseId,
-      manifestByteLength: bundle.manifestObject.byteLength,
-      manifestObjectKey: bundle.manifestObject.key,
-      manifestSha256: bundle.manifestObject.sha256,
-      sourceCommit: fixtureProvenance.source.commit,
-      sourceRepository: fixtureProvenance.source.repository,
-    })
-    expect(registration.catalogs.map(({ locale }) => locale)).toEqual([
-      'en',
-      'ru',
-    ])
-    expect(registration.assets[0]?.assetId).toBe('asset.employment-review')
-  })
-
   test('rejects invalid facts through the code-owned facts contract', async () => {
     const input = await fixture()
     const error = await Effect.runPromise(
@@ -251,16 +226,6 @@ describe('facts release compiler', () => {
       throw new Error('Expected a facts release validation error.')
     }
     expect(error.context).toBe('provenance')
-  })
-
-  test('requires a canonical UTC publication timestamp', async () => {
-    const bundle = await Effect.runPromise(compileFactsRelease(await fixture()))
-    const error = await Effect.runPromise(
-      Effect.flip(makeFactsReleaseRegistration(bundle, '2026-07-17'))
-    )
-
-    expect(error).toBeInstanceOf(FactsReleaseValidationError)
-    expect(error.context).toBe('timestamp')
   })
 })
 

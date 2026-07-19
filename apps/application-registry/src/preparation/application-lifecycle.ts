@@ -13,19 +13,20 @@ export const startApplicationPreparation = Effect.fn(
   'Preparation.startApplication'
 )(
   function* (registry: RegistryClient['Service'], applicationId: string) {
-    const application = yield* registry.registry.getApplication({
+    const application = yield* registry.applications.getApplication({
       params: { id: applicationId },
     })
     if (application.applicationStatus !== 'not_started') return application
 
-    const updated = yield* registry.registry.patchApplication({
+    const updated = yield* registry.applications.updateApplication({
+      headers: { 'idempotency-key': crypto.randomUUID() },
       params: { id: applicationId },
       payload: {
         applicationStatus: 'preparing',
         expectedVersion: application.version,
       },
     })
-    if (updated.applicationStatus === 'not_started') {
+    if (updated.application.applicationStatus === 'not_started') {
       return yield* Effect.fail(
         ConflictError.make({
           message:
@@ -33,7 +34,7 @@ export const startApplicationPreparation = Effect.fn(
         })
       )
     }
-    return updated
+    return updated.application
   },
   Effect.retry({
     times: 2,

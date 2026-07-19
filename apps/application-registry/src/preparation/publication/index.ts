@@ -1,4 +1,4 @@
-export { publishedCvStateAtom as currentPublishedCvAtom } from '../data/queries'
+export { cvPageStateAtom as currentCvPageAtom } from '../data/queries'
 export {
   type CancelCvPublicationInput,
   cancelCvPublication,

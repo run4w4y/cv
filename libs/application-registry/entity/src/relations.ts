@@ -1,36 +1,24 @@
 import { defineRelations } from 'drizzle-orm'
 
 import { applicationLabels, applicationNotes } from './tables/annotations'
+import { applicationActivities } from './tables/activities'
 import { applications } from './tables/applications'
 import { generatedArtifacts } from './tables/artifacts'
 import { applicationCompensations } from './tables/compensations'
 import { contentEntries, contentRevisions } from './tables/content'
 import { cvLinks } from './tables/cv-links'
-import { applicationEvents } from './tables/events'
-import {
-  factsChannels,
-  factsReleaseAssets,
-  factsReleaseCatalogs,
-  factsReleases,
-} from './tables/facts-releases'
-import { applicationIdentityAliases } from './tables/identity-aliases'
 import { jobPostingSnapshots } from './tables/job-posting-snapshots'
 import { pdfGenerationOutbox } from './tables/pdf-generation-outbox'
 
 const relationalTables = {
   applicationCompensations,
-  applicationEvents,
-  applicationIdentityAliases,
+  applicationActivities,
   applicationLabels,
   applicationNotes,
   applications,
   contentEntries,
   contentRevisions,
   cvLinks,
-  factsChannels,
-  factsReleaseAssets,
-  factsReleaseCatalogs,
-  factsReleases,
   generatedArtifacts,
   jobPostingSnapshots,
   pdfGenerationOutbox,
@@ -45,13 +33,9 @@ export const applicationRegistryRelations = defineRelations(
         from: relation.applications.id,
         to: relation.applicationCompensations.applicationId,
       }),
-      events: relation.many.applicationEvents({
+      activities: relation.many.applicationActivities({
         from: relation.applications.id,
-        to: relation.applicationEvents.applicationId,
-      }),
-      identityAliases: relation.many.applicationIdentityAliases({
-        from: relation.applications.id,
-        to: relation.applicationIdentityAliases.applicationId,
+        to: relation.applicationActivities.applicationId,
       }),
       labels: relation.many.applicationLabels({
         from: relation.applications.id,
@@ -85,16 +69,9 @@ export const applicationRegistryRelations = defineRelations(
         optional: false,
       }),
     },
-    applicationEvents: {
+    applicationActivities: {
       application: relation.one.applications({
-        from: relation.applicationEvents.applicationId,
-        to: relation.applications.id,
-        optional: false,
-      }),
-    },
-    applicationIdentityAliases: {
-      application: relation.one.applications({
-        from: relation.applicationIdentityAliases.applicationId,
+        from: relation.applicationActivities.applicationId,
         to: relation.applications.id,
         optional: false,
       }),
@@ -139,11 +116,6 @@ export const applicationRegistryRelations = defineRelations(
         to: relation.contentEntries.id,
         optional: false,
       }),
-      factsRelease: relation.one.factsReleases({
-        from: relation.contentRevisions.factsReleaseId,
-        to: relation.factsReleases.id,
-        optional: true,
-      }),
       jobSnapshot: relation.one.jobPostingSnapshots({
         from: relation.contentRevisions.jobSnapshotId,
         to: relation.jobPostingSnapshots.id,
@@ -165,49 +137,14 @@ export const applicationRegistryRelations = defineRelations(
         to: relation.contentEntries.id,
         optional: false,
       }),
-      publishedRevision: relation.one.contentRevisions({
-        from: relation.cvLinks.publishedRevisionId,
+      currentRevision: relation.one.contentRevisions({
+        from: relation.cvLinks.currentRevisionId,
         to: relation.contentRevisions.id,
         optional: false,
       }),
       artifacts: relation.many.generatedArtifacts({
         from: relation.cvLinks.id,
         to: relation.generatedArtifacts.cvLinkId,
-      }),
-    },
-    factsReleases: {
-      catalogs: relation.many.factsReleaseCatalogs({
-        from: relation.factsReleases.id,
-        to: relation.factsReleaseCatalogs.releaseId,
-      }),
-      assets: relation.many.factsReleaseAssets({
-        from: relation.factsReleases.id,
-        to: relation.factsReleaseAssets.releaseId,
-      }),
-      channels: relation.many.factsChannels({
-        from: relation.factsReleases.id,
-        to: relation.factsChannels.activeReleaseId,
-      }),
-    },
-    factsReleaseCatalogs: {
-      release: relation.one.factsReleases({
-        from: relation.factsReleaseCatalogs.releaseId,
-        to: relation.factsReleases.id,
-        optional: false,
-      }),
-    },
-    factsReleaseAssets: {
-      release: relation.one.factsReleases({
-        from: relation.factsReleaseAssets.releaseId,
-        to: relation.factsReleases.id,
-        optional: false,
-      }),
-    },
-    factsChannels: {
-      activeRelease: relation.one.factsReleases({
-        from: relation.factsChannels.activeReleaseId,
-        to: relation.factsReleases.id,
-        optional: false,
       }),
     },
     generatedArtifacts: {

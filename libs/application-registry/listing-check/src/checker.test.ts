@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { WebCryptoLayer } from '@cv/effect-web-crypto'
+import * as BrowserCrypto from '@effect/platform-browser/BrowserCrypto'
 import { Crypto, Effect } from 'effect'
 
 import { type ListingFetch, makeListingAvailabilityChecker } from './checker'
@@ -15,7 +15,7 @@ const runCheck = (fetcher: ListingFetch, input = target) =>
     Effect.gen(function* () {
       const crypto = yield* Crypto.Crypto
       return yield* makeListingAvailabilityChecker(fetcher, crypto).check(input)
-    }).pipe(Effect.provide(WebCryptoLayer))
+    }).pipe(Effect.provide(BrowserCrypto.layer))
   )
 
 describe('listing availability checker', () => {

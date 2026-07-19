@@ -1,0 +1,27 @@
+{
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "name": "application-preparation-workflow",
+  "projectType": "library",
+  "sourceRoot": "libs/application-registry/preparation-workflow/src",
+  "tags": ["scope:application-registry", "type:service", "visibility:private"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/application-registry/preparation-workflow/src/index.ts",
+        "outputPath": "libs/application-registry/preparation-workflow/dist",
+        "rootDir": "libs/application-registry/preparation-workflow/src",
+        "tsConfig": "libs/application-registry/preparation-workflow/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
+    "format": {},
+    "format:check": {}
+  }
+}

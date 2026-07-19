@@ -1,6 +1,5 @@
 import {
   AddApplicationNoteRequestSchema,
-  AppendApplicationEventRequestSchema,
   SubmitListingCheckFindingsRequestSchema,
 } from '@cv/application-registry-api-contract'
 import { Context, type Effect, Schema } from 'effect'
@@ -12,16 +11,11 @@ const NonNegativeInteger = Schema.Int.pipe(
   Schema.check(Schema.isGreaterThanOrEqualTo(0))
 )
 
-export const registryOutboxEntryVersion = 3 as const
-
-export const AppendApplicationEventCommandSchema = Schema.Struct({
-  _tag: Schema.Literal('AppendApplicationEvent'),
-  identifier: NonEmptyString,
-  request: AppendApplicationEventRequestSchema,
-})
+export const registryOutboxEntryVersion = 4 as const
 
 export const AddApplicationNoteCommandSchema = Schema.Struct({
   _tag: Schema.Literal('AddApplicationNote'),
+  idempotencyKey: NonEmptyString,
   identifier: NonEmptyString,
   request: AddApplicationNoteRequestSchema,
 })
@@ -30,11 +24,11 @@ export const SubmitListingCheckFindingsCommandSchema = Schema.Struct({
   _tag: Schema.Literal('SubmitListingCheckFindings'),
   batchId: NonEmptyString,
   request: SubmitListingCheckFindingsRequestSchema,
+  runId: NonEmptyString,
 })
 
 export const RegistryCommandSchema = Schema.Union([
   AddApplicationNoteCommandSchema,
-  AppendApplicationEventCommandSchema,
   SubmitListingCheckFindingsCommandSchema,
 ])
 
@@ -98,8 +92,7 @@ export class RegistryOutbox extends Context.Service<
 export const registryCommandOperationId = (command: RegistryCommand) => {
   switch (command._tag) {
     case 'AddApplicationNote':
-    case 'AppendApplicationEvent':
-      return command.request.operationId
+      return command.idempotencyKey
     case 'SubmitListingCheckFindings':
       return command.batchId
   }
@@ -108,11 +101,6 @@ export const registryCommandOperationId = (command: RegistryCommand) => {
 export type AddApplicationNoteCommand = Extract<
   RegistryCommand,
   { readonly _tag: 'AddApplicationNote' }
->
-
-export type AppendApplicationEventCommand = Extract<
-  RegistryCommand,
-  { readonly _tag: 'AppendApplicationEvent' }
 >
 
 export type SubmitListingCheckFindingsCommand = Extract<

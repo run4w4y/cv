@@ -1,29 +1,25 @@
 import type {
   AddApplicationNoteRequest,
   AddApplicationNoteResponse,
-  AppendApplicationEventRequest,
-  AppendApplicationEventResponse,
   ApplicationAnnotationsResponse,
   ApplicationFacetsResponse,
   CreateApplicationRequest,
   HealthResponse,
+  ListActivitiesQuery,
+  ListActivitiesResponse,
+  ListApplicationActivitiesResponse,
   ListApplicationCompensationsQuery,
   ListApplicationCompensationsResponse,
-  ListApplicationEventsResponse,
-  ListApplicationLabelsResponse,
   ListApplicationListingChecksResponse,
   ListApplicationsQuery,
   ListApplicationsResponse,
-  ListEventsQuery,
-  ListEventsResponse,
-  PatchApplicationRequest,
-  ReplaceApplicationLabelsRequest,
   SubmitListingCheckFindingsRequest,
   SubmitListingCheckFindingsResponse,
+  UpdateApplicationRequest,
+  UpdateApplicationResponse,
 } from '@cv/application-registry-api-contract'
 import type {
   Application,
-  ApplicationLabel,
   ListingCheckRun,
 } from '@cv/application-registry-entity'
 import { Context, type Effect } from 'effect'
@@ -36,21 +32,18 @@ import type {
 import type { RegistryOutboxDisposition, RegistryOutboxEntry } from '../outbox'
 
 export type RegistryWriteResult<A> =
+  | { readonly response: A; readonly status: 'synced' }
   | {
-      readonly status: 'synced'
-      readonly response: A
-    }
-  | {
-      readonly status: 'queued'
-      readonly operationId: string
-      readonly failure: string
       readonly disposition: 'retry'
+      readonly failure: string
+      readonly operationId: string
+      readonly status: 'queued'
     }
 
 export type RegistrySyncFailure = {
-  readonly operationId: string
-  readonly error: string
   readonly disposition: Exclude<RegistryOutboxDisposition, 'pending'>
+  readonly error: string
+  readonly operationId: string
 }
 
 export type RegistrySyncResult = {
@@ -70,8 +63,12 @@ type RegistryDurableWriteError =
   | ApplicationRegistryOutboxError
 
 export type ApplicationRegistryClientService = {
+  readonly activities: (
+    identifier: string
+  ) => Effect.Effect<ListApplicationActivitiesResponse, RegistryReadError>
   readonly addNote: (
     identifier: string,
+    idempotencyKey: string,
     request: AddApplicationNoteRequest
   ) => Effect.Effect<
     RegistryWriteResult<AddApplicationNoteResponse>,
@@ -80,13 +77,6 @@ export type ApplicationRegistryClientService = {
   readonly annotations: (
     identifier: string
   ) => Effect.Effect<ApplicationAnnotationsResponse, RegistryReadError>
-  readonly appendEvent: (
-    identifier: string,
-    request: AppendApplicationEventRequest
-  ) => Effect.Effect<
-    RegistryWriteResult<AppendApplicationEventResponse>,
-    RegistryDurableWriteError
-  >
   readonly create: (
     request: CreateApplicationRequest
   ) => Effect.Effect<Application, RegistryReadError>
@@ -94,23 +84,17 @@ export type ApplicationRegistryClientService = {
     identifier: string,
     query?: ListApplicationCompensationsQuery
   ) => Effect.Effect<ListApplicationCompensationsResponse, RegistryReadError>
-  readonly events: (
-    identifier: string
-  ) => Effect.Effect<ListApplicationEventsResponse, RegistryReadError>
   readonly facets: () => Effect.Effect<
     ApplicationFacetsResponse,
     RegistryReadError
   >
   readonly health: () => Effect.Effect<HealthResponse, RegistryReadError>
-  readonly labels: (
-    identifier: string
-  ) => Effect.Effect<ListApplicationLabelsResponse, RegistryReadError>
   readonly list: (
     query: ListApplicationsQuery
   ) => Effect.Effect<ListApplicationsResponse, RegistryReadError>
-  readonly listEvents: (
-    query: ListEventsQuery
-  ) => Effect.Effect<ListEventsResponse, RegistryReadError>
+  readonly listActivities: (
+    query: ListActivitiesQuery
+  ) => Effect.Effect<ListActivitiesResponse, RegistryReadError>
   readonly listingCheckRun: (
     identifier: string
   ) => Effect.Effect<ListingCheckRun, RegistryReadError>
@@ -121,22 +105,11 @@ export type ApplicationRegistryClientService = {
     readonly RegistryOutboxEntry[],
     RegistryDurableWriteError
   >
-  readonly patch: (
-    identifier: string,
-    request: PatchApplicationRequest
-  ) => Effect.Effect<Application, RegistryReadError>
-  readonly remove: (
-    identifier: string,
-    expectedVersion?: number
-  ) => Effect.Effect<void, RegistryReadError>
-  readonly replaceLabels: (
-    identifier: string,
-    request: ReplaceApplicationLabelsRequest
-  ) => Effect.Effect<readonly ApplicationLabel[], RegistryReadError>
   readonly show: (
     identifier: string
   ) => Effect.Effect<Application, RegistryReadError>
   readonly submitListingCheckFindings: (
+    runId: string,
     batchId: string,
     request: SubmitListingCheckFindingsRequest
   ) => Effect.Effect<
@@ -147,9 +120,11 @@ export type ApplicationRegistryClientService = {
     RegistrySyncResult,
     RegistryDurableWriteError
   >
-  readonly upsert: (
-    request: CreateApplicationRequest
-  ) => Effect.Effect<Application, RegistryReadError>
+  readonly update: (
+    identifier: string,
+    idempotencyKey: string,
+    request: UpdateApplicationRequest
+  ) => Effect.Effect<UpdateApplicationResponse, RegistryReadError>
 }
 
 export class ApplicationRegistryClient extends Context.Service<

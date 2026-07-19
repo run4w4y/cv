@@ -1,0 +1,41 @@
+{
+  "name": "@cv/application-preparation-workflow",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./cover-letter": {
+      "types": "./dist/public/cover-letter.d.ts",
+      "default": "./dist/public/cover-letter.js"
+    },
+    "./cv": {
+      "types": "./dist/public/cv.d.ts",
+      "default": "./dist/public/cv.js"
+    },
+    "./domain": {
+      "types": "./dist/public/domain.d.ts",
+      "default": "./dist/public/domain.js"
+    },
+    "./test-support": {
+      "types": "./dist/test-support/index.d.ts",
+      "default": "./dist/test-support/index.js"
+    }
+  },
+  "dependencies": {
+    "@cv/ai-provider": "workspace:*",
+    "@cv/application-registry-entity": "workspace:*",
+    "@cv/contracts": "workspace:*",
+    "effect": "4.0.0-beta.99"
+  }
+}

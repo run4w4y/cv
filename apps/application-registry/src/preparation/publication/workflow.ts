@@ -1,10 +1,8 @@
 import {
   CvLinkResponseSchema,
-  GeneratedArtifactResponseSchema,
-  type PdfJobResponse,
   PdfJobResponseSchema,
 } from '@cv/application-registry-api-contract'
-import { Cause, Effect, Exit, Option, Schedule, Schema } from 'effect'
+import { Cause, Effect, Exit, Option, Schedule } from 'effect'
 import * as Reactivity from 'effect/unstable/reactivity/Reactivity'
 import * as Activity from 'effect/unstable/workflow/Activity'
 
@@ -16,38 +14,15 @@ import {
   type CvPublicationWorkflowInput,
   type CvPublicationWorkflowResult,
   PublishCvWorkflow,
-  verifiedPublicationResult,
 } from './domain'
 import { CvPublicationProgress } from './progress'
-
-const PublishedCvStateSchema = Schema.Struct({
-  artifact: GeneratedArtifactResponseSchema,
-  link: CvLinkResponseSchema,
-})
 
 const stopActivityInterruptRetries = Schedule.recurs(0).pipe(
   Schedule.setInputType<Cause.Cause<unknown>>()
 )
 
-export const cvPublicationPollSchedule = Schedule.spaced('1500 millis').pipe(
-  Schedule.upTo({ times: 319 })
-)
-
-export const cvPublicationReadRetrySchedule = Schedule.exponential(
-  '250 millis'
-).pipe(Schedule.upTo({ times: 2 }))
-
-const messageFromUnknown = (cause: unknown): string => {
-  if (
-    typeof cause === 'object' &&
-    cause !== null &&
-    'message' in cause &&
-    typeof cause.message === 'string'
-  ) {
-    return cause.message
-  }
-  return String(cause)
-}
+const messageFromUnknown = (cause: unknown): string =>
+  Cause.prettyErrors(Cause.fail(cause))[0]?.message ?? String(cause)
 
 const publicationError = (
   stage: CvPublicationStage,
@@ -68,9 +43,6 @@ const invalidatePublication = (input: CvPublicationWorkflowInput) =>
     publicationMutationReactivityKeys(input.applicationId, input.entry.id)
   )
 
-const terminalPdfStatus = (status: PdfJobResponse['status']): boolean =>
-  status === 'ready' || status === 'failed'
-
 const executeCvPublication = Effect.fn('PublishCv.run')(
   function* (input: CvPublicationWorkflowInput) {
     const repository = yield* PreparationRepository
@@ -78,161 +50,49 @@ const executeCvPublication = Effect.fn('PublishCv.run')(
 
     yield* progress.publishing(input.runId)
     const link = yield* Activity.make({
-      name: 'publish-cv-link',
+      name: 'enable-cv-page',
       success: CvLinkResponseSchema,
       error: CvPublicationWorkflowError,
       interruptRetryPolicy: stopActivityInterruptRetries,
       execute: repository
-        .publishCv({
-          applicationId: input.applicationId,
-          entry: input.entry,
-          publicBaseUrl: input.publicBaseUrl,
-        })
-        .pipe(mapRepositoryError('publish-link')),
-    })
-
-    yield* progress.startingPdf(input.runId, link)
-    const started = yield* Activity.make({
-      name: 'start-pdf-generation',
-      success: PdfJobResponseSchema,
-      error: CvPublicationWorkflowError,
-      interruptRetryPolicy: stopActivityInterruptRetries,
-      execute: repository
-        .startPdfGeneration({
+        .setPublicationAvailability({
           applicationId: input.applicationId,
           entryId: input.entry.id,
           input: {
-            expectedPublicationVersion: link.publicationVersion,
-            requestId: input.runId,
-            rendererVersion: input.rendererVersion,
+            enabled: true,
+            expectedPublicationVersion: input.expectedPublicationVersion,
           },
         })
-        .pipe(mapRepositoryError('start-pdf')),
-    }).pipe(
-      Effect.catch((startError) =>
-        Effect.gen(function* () {
-          const compensation = yield* Effect.exit(
-            Activity.make({
-              name: 'disable-cv-link-after-pdf-start-failure',
-              success: CvLinkResponseSchema,
-              error: CvPublicationWorkflowError,
-              interruptRetryPolicy: stopActivityInterruptRetries,
-              execute: repository
-                .setPublicationAvailability({
-                  applicationId: input.applicationId,
-                  entryId: input.entry.id,
-                  input: {
-                    enabled: false,
-                    expectedPublicationVersion: link.publicationVersion,
-                    reason: 'PDF generation could not be started.',
-                  },
-                })
-                .pipe(mapRepositoryError('compensation')),
-            })
-          )
-          if (Exit.isFailure(compensation)) {
-            return yield* Effect.fail(
-              new CvPublicationWorkflowError({
-                message: `PDF generation failed to start, and the new public link could not be disabled: ${Cause.pretty(compensation.cause)}`,
-                stage: 'compensation',
-              })
-            )
-          }
-          return yield* Effect.fail(startError)
-        })
-      )
-    )
+        .pipe(mapRepositoryError('enable-page')),
+    })
 
-    yield* progress.polling(input.runId, link, started)
-    let pollAttempt = 0
-    const readNext = Effect.suspend(() => {
-      const attempt = pollAttempt
-      pollAttempt += 1
-      return Activity.make({
-        name: `poll-pdf-job/${attempt}`,
+    yield* progress.startingPdf(input.runId, link)
+    const started = yield* Effect.result(
+      Activity.make({
+        name: 'start-pdf-generation',
         success: PdfJobResponseSchema,
         error: CvPublicationWorkflowError,
         interruptRetryPolicy: stopActivityInterruptRetries,
         execute: repository
-          .readPdfJob({
+          .startPdfGeneration({
             applicationId: input.applicationId,
             entryId: input.entry.id,
-            jobId: started.jobId,
+            input: {
+              expectedPublicationVersion: link.publicationVersion,
+              requestId: input.runId,
+            },
           })
-          .pipe(
-            mapRepositoryError('poll-pdf'),
-            Effect.retry(cvPublicationReadRetrySchedule)
-          ),
-      }).pipe(Effect.tap((job) => progress.polling(input.runId, link, job)))
-    })
-
-    const finished = terminalPdfStatus(started.status)
-      ? started
-      : yield* readNext.pipe(
-          Effect.repeat({
-            schedule: cvPublicationPollSchedule,
-            while: (job) => !terminalPdfStatus(job.status),
-          })
-        )
-
-    if (finished.status === 'failed') {
-      return yield* Effect.fail(
-        new CvPublicationWorkflowError({
-          message: finished.errorMessage ?? 'PDF generation failed.',
-          stage: 'poll-pdf',
-        })
-      )
-    }
-    if (finished.status !== 'ready') {
-      return yield* Effect.fail(
-        new CvPublicationWorkflowError({
-          message:
-            'PDF generation is still running. Publishing can be started again safely.',
-          stage: 'poll-pdf',
-        })
-      )
-    }
-    const artifactId = finished.jobId
-
-    yield* progress.verifying(input.runId, link, finished)
-    const publication = yield* Activity.make({
-      name: 'verify-current-artifact',
-      success: PublishedCvStateSchema,
-      error: CvPublicationWorkflowError,
-      interruptRetryPolicy: stopActivityInterruptRetries,
-      execute: repository
-        .loadPublishedCvState({
-          applicationId: input.applicationId,
-          entryId: input.entry.id,
-          rendererVersion: input.rendererVersion,
-        })
-        .pipe(
-          mapRepositoryError('verify-artifact'),
-          Effect.flatMap((state) =>
-            state !== null &&
-            verifiedPublicationResult(
-              input,
-              state.link,
-              state.artifact,
-              artifactId
-            )
-              ? Effect.succeed(state)
-              : Effect.fail(
-                  new CvPublicationWorkflowError({
-                    message:
-                      'The current PDF does not match the newly published CV revision and link.',
-                    stage: 'verify-artifact',
-                  })
-                )
-          )
-        ),
-    })
+          .pipe(mapRepositoryError('start-pdf')),
+      })
+    )
 
     const result = {
       applicationId: input.applicationId,
-      artifact: publication.artifact,
       entryId: input.entry.id,
-      link: publication.link,
+      job: started._tag === 'Success' ? started.success : null,
+      link,
+      pdfStartError:
+        started._tag === 'Failure' ? started.failure.message : null,
       runId: input.runId,
     } satisfies CvPublicationWorkflowResult
     yield* progress.complete(result)

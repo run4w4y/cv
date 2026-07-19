@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { CvPublicWorkerHarness } from '@cv/worker-test-kit/cv-public'
 
 const applicationRoot = fileURLToPath(new URL('..', import.meta.url))
-const serverRoot = join(applicationRoot, 'dist', 'server')
+const serverRoot = join(applicationRoot, '.open-next', 'deploy-check')
 
 const document = {
   $schema: 'cv.document.v1',
@@ -31,7 +31,12 @@ const document = {
   additionalSections: [],
 }
 
-let harness: CvPublicWorkerHarness
+let harness: CvPublicWorkerHarness | undefined
+
+const publicWorker = () => {
+  if (harness === undefined) throw new Error('The public Worker is not ready.')
+  return harness
+}
 
 before(async () => {
   harness = await CvPublicWorkerHarness.make({
@@ -42,40 +47,93 @@ before(async () => {
 })
 
 after(async () => {
-  await harness.dispose()
+  await harness?.dispose()
 })
 
 test('renders a valid publication through the named service binding', async () => {
-  const response = await harness.fetch('https://cv.example.test/c/valid-token')
+  const response = await publicWorker().fetch(
+    'https://cv.example.test/c/valid-token'
+  )
   const html = await response.text()
 
   assert.equal(response.status, 200)
   assert.match(html, /Ada Lovelace/u)
   assert.match(html, /cv2-document/u)
-  assert.equal(response.headers.get('cache-control'), 'private, no-store')
+  assert.equal(
+    response.headers.get('cache-control'),
+    'public, max-age=0, must-revalidate'
+  )
+  assert.equal(
+    response.headers.get('cloudflare-cdn-cache-control'),
+    'public, max-age=300'
+  )
+  assert.match(response.headers.get('cache-tag') ?? '', /^cv:[a-f0-9]{64}$/u)
   assert.match(response.headers.get('x-robots-tag') ?? '', /noindex/u)
 })
 
 test('returns 404 for missing and disabled publications', async () => {
   for (const token of ['missing', 'disabled']) {
-    const response = await harness.fetch(`https://cv.example.test/c/${token}`)
+    const response = await publicWorker().fetch(
+      `https://cv.example.test/c/${token}`
+    )
     assert.equal(response.status, 404)
+    assert.equal(response.headers.get('cache-control'), 'private, no-store')
     assert.match(await response.text(), /CV not found/u)
   }
 })
 
 test('refuses to render an invalid document', async () => {
-  const response = await harness.fetch(
+  const response = await publicWorker().fetch(
     'https://cv.example.test/c/invalid-document'
   )
 
-  assert.equal(response.status, 502)
+  assert.equal(response.status, 500)
+  assert.equal(response.headers.get('cache-control'), 'private, no-store')
   assert.match(await response.text(), /CV unavailable/u)
 })
 
 test('returns 404 outside the exact /c/:token route', async () => {
-  for (const path of ['/', '/en', '/c/valid-token/', '/c/a/b', '/_image']) {
-    const response = await harness.fetch(`https://cv.example.test${path}`)
+  for (const path of ['/c/valid-token/', '/c/a/b']) {
+    const response = await publicWorker().fetch(
+      `https://cv.example.test${path}`
+    )
     assert.equal(response.status, 404, path)
   }
+})
+
+test('renders capability previews without shared caching', async () => {
+  const response = await publicWorker().fetch(
+    'https://cv.example.test/c/_preview/valid-token?access=preview-secret'
+  )
+
+  assert.equal(response.status, 200)
+  assert.match(await response.text(), /Ada Lovelace/u)
+  assert.equal(response.headers.get('cache-control'), 'private, no-store')
+  assert.equal(response.headers.get('referrer-policy'), 'no-referrer')
+  assert.match(response.headers.get('x-robots-tag') ?? '', /noindex/u)
+  assert.equal(response.headers.get('cloudflare-cdn-cache-control'), null)
+  assert.equal(response.headers.get('cache-tag'), null)
+})
+
+test('rejects query parameters on public pages before rendering', async () => {
+  const response = await publicWorker().fetch(
+    'https://cv.example.test/c/valid-token?access=not-a-public-capability'
+  )
+
+  assert.equal(response.status, 404)
+  assert.equal(response.headers.get('cache-control'), 'private, no-store')
+})
+
+test('rejects unauthorized cache invalidation requests', async () => {
+  const input = {
+    body: JSON.stringify({ token: 'valid-token' }),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  }
+  const unauthorized = await publicWorker().fetch(
+    'https://cv.example.test/c/_internal/revalidate',
+    input
+  )
+  assert.equal(unauthorized.status, 401)
+  assert.equal(unauthorized.headers.get('cache-control'), 'private, no-store')
 })

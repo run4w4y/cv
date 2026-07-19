@@ -10,7 +10,7 @@ import type {
 export type EventsTableDensity = TableDensity
 
 export const EVENTS_SAVED_VIEWS_SCHEMA_VERSION = 2
-export const EVENTS_SAVED_VIEWS_STORAGE_KEY = `@cv/application-registry/events/saved-views@${EVENTS_SAVED_VIEWS_SCHEMA_VERSION}`
+export const EVENTS_SAVED_VIEWS_STORAGE_KEY = `@cv/application-registry/activities/saved-views@${EVENTS_SAVED_VIEWS_SCHEMA_VERSION}`
 
 export interface EventsSavedViewState {
   readonly filters: readonly FilterNode[]

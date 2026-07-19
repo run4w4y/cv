@@ -12,8 +12,10 @@ import {
 } from '../internal/primitives'
 
 export {
+  collectGenerationGuidance,
   type GenerationGuidance,
   GenerationGuidanceAnnotationId,
+  type GenerationGuidanceItem,
   type GenerationGuidanceSource,
   generationGuidanceSourceValues,
   getGenerationGuidance,

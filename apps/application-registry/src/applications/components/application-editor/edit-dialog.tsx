@@ -82,7 +82,7 @@ export const ApplicationEditDialog = ({
     try {
       const input = {
         ...values,
-        canonicalUrl: values.canonicalUrl.toString(),
+        postingUrl: values.postingUrl.toString(),
         expectedVersion: activeDraft.expectedVersion,
       }
       activeDraft.submission = operationSubmissionFor(
@@ -91,7 +91,8 @@ export const ApplicationEditDialog = ({
       )
       const response = await saveApplication({
         applicationId: activeDraft.applicationId,
-        input: { ...input, operationId: activeDraft.submission.operationId },
+        idempotencyKey: activeDraft.submission.operationId,
+        input,
       })
       activeDraft.submission = undefined
       onSaved?.(response.application)

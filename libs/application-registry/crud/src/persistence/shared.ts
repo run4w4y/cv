@@ -33,6 +33,3 @@ export const runBatch = (
         message: `Failed to execute ${operation}`,
       }),
   })
-
-export const normalizeCompany = (company: string) =>
-  company.trim().toLocaleLowerCase('en-US')

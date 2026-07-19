@@ -1,4 +1,7 @@
-import type { PdfGenerationRequested } from '@cv/application-registry-api-contract'
+import {
+  cvPreviewUrl,
+  type PdfGenerationRequested,
+} from '@cv/application-registry-api-contract'
 import type { PdfArtifactJob } from '@cv/application-registry-service'
 import { Effect } from 'effect'
 
@@ -10,7 +13,6 @@ const publicationChanged = (message: string) =>
     cause: new Error(message),
     code: 'pdf_publication_changed',
     message,
-    publicationReason: 'The public CV changed before its PDF was completed.',
   })
 
 const validatePendingJob = Effect.fn('PdfJob.validatePending')(function* (
@@ -30,11 +32,10 @@ const validatePendingJob = Effect.fn('PdfJob.validatePending')(function* (
     )
   }
   if (
-    !link.enabled ||
     link.id !== artifact.cvLinkId ||
     link.applicationId !== request.applicationId ||
     link.contentEntryId !== request.entryId ||
-    link.publishedRevisionId !== artifact.contentRevisionId ||
+    link.currentRevisionId !== artifact.contentRevisionId ||
     link.publicationVersion !== artifact.publicationVersion ||
     link.publicUrl !== artifact.qrTarget ||
     entry.approvedRevisionId !== artifact.contentRevisionId
@@ -53,21 +54,15 @@ export const processPdfJobEffect = Effect.fn('PdfJob.process')(function* (
   const job = yield* persistence.load(request)
 
   if (job.artifact.status === 'ready') return
-  if (job.artifact.status === 'failed') {
-    yield* persistence.disable(
-      request,
-      job.artifact.publicationVersion,
-      'PDF generation did not complete.'
-    )
-    return
-  }
+  if (job.artifact.status === 'failed') return
 
   yield* validatePendingJob(request, job)
-  const bytes = yield* renderer.render(job.artifact.qrTarget)
+  const rendered = yield* renderer.render(cvPreviewUrl(job.link))
   const ready = yield* persistence.complete(
     request.applicationId,
     request.artifactId,
-    bytes
+    rendered.rendererVersion,
+    rendered.bytes
   )
   if (
     ready.status !== 'ready' ||
@@ -85,16 +80,11 @@ export const recordPdfJobFailureEffect = Effect.fn(
   'PdfJob.recordPermanentFailure'
 )(function* (request: PdfGenerationRequested, error: PdfJobPermanentError) {
   const persistence = yield* PdfArtifactPersistence
-  const failed = yield* persistence.fail(
+  yield* persistence.fail(
     request.applicationId,
     request.artifactId,
     error.code,
     error.message
-  )
-  yield* persistence.disable(
-    request,
-    failed.publicationVersion,
-    error.publicationReason
   )
 })
 
@@ -104,5 +94,4 @@ export const retryExhaustedError = () =>
     code: 'pdf_retry_exhausted',
     message:
       'PDF generation did not complete before its Queue retries expired.',
-    publicationReason: 'PDF generation did not complete.',
   })

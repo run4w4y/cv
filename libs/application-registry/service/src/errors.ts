@@ -43,33 +43,7 @@ export class RegistryAnalyticsError extends Data.TaggedError(
   readonly message: string
 }> {}
 
-export type FactsReleaseObjectKind = 'asset' | 'catalog' | 'manifest'
-
-export class FactsReleaseObjectNotFoundError extends Data.TaggedError(
-  'FactsReleaseObjectNotFoundError'
-)<{
-  readonly logicalId: string
-  readonly message: string
-  readonly objectKind: FactsReleaseObjectKind
-  readonly releaseId: string
-  readonly sha256: string
-}> {}
-
-export class FactsReleaseObjectMetadataError extends Data.TaggedError(
-  'FactsReleaseObjectMetadataError'
-)<{
-  readonly actual: number | string
-  readonly expected: number | string
-  readonly field: 'byteLength' | 'key' | 'sha256'
-  readonly logicalId: string
-  readonly message: string
-  readonly objectKind: FactsReleaseObjectKind
-  readonly releaseId: string
-}> {}
-
 export type ApplicationRegistryError =
-  | FactsReleaseObjectMetadataError
-  | FactsReleaseObjectNotFoundError
   | RegistryAnalyticsError
   | RegistryArtifactError
   | RegistryBadRequestError
@@ -77,5 +51,3 @@ export type ApplicationRegistryError =
   | RegistryDatabaseError
   | RegistryNotFoundError
   | RegistryQueryTooComplexError
-
-export type FactsReleasesServiceError = ApplicationRegistryError

@@ -1,4 +1,4 @@
-import { eventListQuery } from '@cv/application-registry-entity/query'
+import { activityListQuery } from '@cv/application-registry-entity/query'
 import { Alert, AlertDescription, AlertTitle, Button } from '@cv/internal-ui'
 import { AlertCircle } from 'lucide-react'
 import { QueryWorkspaceToolbar } from '../../../table-workspace/query-toolbar'
@@ -12,19 +12,19 @@ export const EventsPage = () => {
   const list = useEventsList(workspace)
   return (
     <section
-      data-slot="events-workspace"
+      data-slot="activities-workspace"
       className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-card"
     >
       <QueryWorkspaceToolbar
-        title="Events"
-        description="Audit the registry timeline across every application."
-        entityName="events"
+        title="Activities"
+        description="Inspect backend-issued annotations across every application."
+        entityName="activities"
         loadedCount={list.events.length}
         loading={list.loading}
         refreshing={list.loading}
         refreshDisabled={list.refreshDisabled}
         onRefresh={list.refresh}
-        definition={eventListQuery}
+        definition={activityListQuery}
         presentation={eventFilterFieldPresentation}
         filters={workspace.filters}
       />
@@ -35,7 +35,7 @@ export const EventsPage = () => {
           className="shrink-0 rounded-none border-x-0 border-t-0 px-5 py-3"
         >
           <AlertCircle />
-          <AlertTitle>Could not load event history</AlertTitle>
+          <AlertTitle>Could not load activity history</AlertTitle>
           <AlertDescription className="whitespace-normal break-words">
             {list.error}
           </AlertDescription>

@@ -13,8 +13,8 @@ import {
 } from '@cv/internal-ui'
 import { RefreshCw, Sparkles } from 'lucide-react'
 
-import { ChatGptAccess } from '../../components/chatgpt-access'
-import { ModelSelector } from '../../components/model-selector'
+import { ChatGptAccess } from '@/preparation/components/chatgpt-access'
+import { ModelSelector } from '@/preparation/components/model-selector'
 import type {
   CoverLetterPageController,
   CoverLetterWorkspace,

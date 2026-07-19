@@ -52,6 +52,19 @@ output "cv_objects" {
   }
 }
 
+output "facts_r2" {
+  description = "Private reviewed-facts R2 bucket and its scoped S3 credential identifiers."
+  value = {
+    account_id              = var.cloudflare_account_id
+    bucket_id               = cloudflare_r2_bucket.cv_facts.id
+    bucket_location         = cloudflare_r2_bucket.cv_facts.location
+    bucket_name             = cloudflare_r2_bucket.cv_facts.name
+    endpoint                = "https://${var.cloudflare_account_id}.r2.cloudflarestorage.com"
+    publisher_access_key_id = cloudflare_account_token.facts_r2_publisher.id
+    reader_access_key_id    = cloudflare_account_token.facts_r2_reader.id
+  }
+}
+
 output "chatgpt_sessions" {
   description = "Workers KV namespace used by the registry Worker for subscription authentication sessions."
   value = {

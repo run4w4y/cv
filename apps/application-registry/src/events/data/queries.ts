@@ -1,6 +1,6 @@
 import type {
-  ListEventsQuery,
-  ListEventsResponse,
+  ListActivitiesQuery,
+  ListActivitiesResponse,
 } from '@cv/application-registry-api-contract'
 import { Effect, Option, Stream } from 'effect'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
@@ -9,20 +9,20 @@ import * as Reactivity from 'effect/unstable/reactivity/Reactivity'
 import { uniqBy } from 'es-toolkit'
 
 import { RegistryClient, registryQuery } from '../../lib/registry-client'
-import { eventListsReactivityKey } from './keys'
+import { activityListsReactivityKey } from './keys'
 
-export type EventsListRequest = Omit<ListEventsQuery, 'pagination'> & {
+export type EventsListRequest = Omit<ListActivitiesQuery, 'pagination'> & {
   readonly size: number
 }
 
 const eventPageAtom = (request: EventsListRequest, after: string | null) => {
   const { size, ...query } = request
-  return registryQuery('listEvents', {
+  return registryQuery('listActivities', {
     query: {
       ...query,
       pagination: { size, ...(after === null ? {} : { after }) },
     },
-    reactivityKeys: [eventListsReactivityKey],
+    reactivityKeys: [activityListsReactivityKey],
     timeToLive: '5 minutes',
   })
 }
@@ -37,7 +37,7 @@ const createEventsAtom = (request: EventsListRequest) =>
             (
               response
             ): readonly [
-              readonly ListEventsResponse[],
+              readonly ListActivitiesResponse[],
               Option.Option<string>,
             ] => [
               [response],
@@ -94,5 +94,5 @@ export const eventsAtom = (input: EventsFamilyInput) => {
 }
 
 export const refreshEventLists = RegistryClient.runtime.fn(() =>
-  Reactivity.invalidate([eventListsReactivityKey])
+  Reactivity.invalidate([activityListsReactivityKey])
 )

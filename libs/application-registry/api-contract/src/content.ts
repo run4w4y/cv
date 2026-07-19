@@ -8,53 +8,35 @@ import {
   type CvLink,
   CvLinkSchema,
   ExpectedApplicationVersionSchema,
-  type FactsChannel,
-  FactsChannelSchema,
-  type FactsRelease,
-  type FactsReleaseAsset,
-  FactsReleaseAssetSchema,
-  type FactsReleaseCatalog,
-  FactsReleaseCatalogSchema,
-  FactsReleaseSchema,
   type GeneratedArtifact,
   GeneratedArtifactSchema,
   type JobPostingSnapshot,
   JobPostingSnapshotSchema,
   NonEmptyTrimmedStringSchema as NonEmptyString,
 } from '@cv/application-registry-entity'
-import { type CvLocale, CvLocaleSchema } from '@cv/contracts/facts'
+import { CvLocaleSchema } from '@cv/contracts/facts'
 import { Schema } from 'effect'
+import { HttpApiSchema } from 'effect/unstable/httpapi'
 
 export const RegistryContentLocaleSchema = CvLocaleSchema
 
-const Base64Schema = Schema.String.pipe(
-  Schema.check(
-    Schema.isMaxLength(16 * 1_024 * 1_024),
-    Schema.isPattern(/^(?:[a-z\d+/]{4})*(?:[a-z\d+/]{2}==|[a-z\d+/]{3}=)?$/iu)
-  )
+export const BinaryBodySchema = Schema.Uint8Array.pipe(
+  HttpApiSchema.asUint8Array({ contentType: 'application/octet-stream' })
 )
 
-export const OpaquePayloadRequestSchema = Schema.Struct({
-  data: Base64Schema,
+export const BlobReferenceInputSchema = Schema.Struct({
   mediaType: NonEmptyString,
+  sha256: NonEmptyString,
 })
-export type OpaquePayloadRequest = Schema.Schema.Type<
-  typeof OpaquePayloadRequestSchema
->
-
-export const OpaquePayloadResponseSchema = Schema.Struct({
-  data: Base64Schema,
-  mediaType: NonEmptyString,
-})
-export type OpaquePayloadResponse = Schema.Schema.Type<
-  typeof OpaquePayloadResponseSchema
+export type BlobReferenceInput = Schema.Schema.Type<
+  typeof BlobReferenceInputSchema
 >
 
 const PersistJobPostingSnapshotBase = {
   fetcherVersion: NonEmptyString,
   finalUrl: Schema.NullOr(NonEmptyString),
-  normalized: Schema.optional(Schema.NullOr(OpaquePayloadRequestSchema)),
-  raw: Schema.optional(Schema.NullOr(OpaquePayloadRequestSchema)),
+  normalized: Schema.optional(Schema.NullOr(BlobReferenceInputSchema)),
+  raw: Schema.optional(Schema.NullOr(BlobReferenceInputSchema)),
   requestedUrl: NonEmptyString,
 }
 
@@ -109,6 +91,12 @@ export const ContentEntryParamsSchema = Schema.Struct({
   id: NonEmptyString,
 })
 
+export const ContentEntryNaturalKeyParamsSchema = Schema.Struct({
+  id: NonEmptyString,
+  kind: ContentEntryKindSchema,
+  locale: RegistryContentLocaleSchema,
+})
+
 export const ContentRevisionParamsSchema = Schema.Struct({
   entryId: NonEmptyString,
   id: NonEmptyString,
@@ -121,8 +109,7 @@ export const AppendContentRevisionRequestSchema = Schema.Struct({
   expectedVersion: ExpectedApplicationVersionSchema,
   factsReleaseId: Schema.optional(Schema.NullOr(NonEmptyString)),
   jobSnapshotId: Schema.optional(Schema.NullOr(NonEmptyString)),
-  operationId: NonEmptyString,
-  payload: OpaquePayloadRequestSchema,
+  blob: BlobReferenceInputSchema,
   source: ContentRevisionSourceSchema,
 })
 export type AppendContentRevisionRequest = Schema.Schema.Type<
@@ -130,8 +117,8 @@ export type AppendContentRevisionRequest = Schema.Schema.Type<
 >
 
 export const ApproveContentRevisionRequestSchema = Schema.Struct({
+  approvedRevisionId: NonEmptyString,
   expectedVersion: ExpectedApplicationVersionSchema,
-  revisionId: NonEmptyString,
 })
 export type ApproveContentRevisionRequest = Schema.Schema.Type<
   typeof ApproveContentRevisionRequestSchema
@@ -150,19 +137,6 @@ export const ContentRevisionResultResponseSchema: Schema.Codec<ContentRevisionRe
     })
   )
 
-export type ReadContentRevisionResponse = ContentRevisionResultResponse & {
-  readonly payload: OpaquePayloadResponse
-}
-
-export const ReadContentRevisionResponseSchema: Schema.Codec<ReadContentRevisionResponse> =
-  Schema.revealCodec(
-    Schema.Struct({
-      entry: ContentEntrySchema,
-      payload: OpaquePayloadResponseSchema,
-      revision: ContentRevisionSchema,
-    })
-  )
-
 export const ListContentRevisionsResponseSchema: Schema.Codec<{
   readonly items: readonly ContentRevision[]
 }> = Schema.revealCodec(
@@ -171,11 +145,12 @@ export const ListContentRevisionsResponseSchema: Schema.Codec<{
   })
 )
 
-export const PublishCvRequestSchema = Schema.Struct({
+export const StageCvRequestSchema = Schema.Struct({
   expectedContentVersion: ExpectedApplicationVersionSchema,
   publicBaseUrl: NonEmptyString,
+  revisionId: NonEmptyString,
 })
-export type PublishCvRequest = Schema.Schema.Type<typeof PublishCvRequestSchema>
+export type StageCvRequest = Schema.Schema.Type<typeof StageCvRequestSchema>
 
 export const SetCvLinkAvailabilityRequestSchema = Schema.Struct({
   enabled: Schema.Boolean,
@@ -209,108 +184,13 @@ export const CurrentPdfArtifactQuerySchema = Schema.Struct({
 export const GeneratedArtifactResponseSchema: Schema.Codec<GeneratedArtifact> =
   Schema.revealCodec(GeneratedArtifactSchema)
 
-export type ReadyPdfArtifactResponse = {
-  readonly artifact: GeneratedArtifact
-  readonly payload: OpaquePayloadResponse
-}
+export const BlobParamsSchema = Schema.Struct({ sha256: NonEmptyString })
 
-export const ReadyPdfArtifactResponseSchema: Schema.Codec<ReadyPdfArtifactResponse> =
-  Schema.revealCodec(
-    Schema.Struct({
-      artifact: GeneratedArtifactSchema,
-      payload: OpaquePayloadResponseSchema,
-    })
-  )
-
-export const PutOpaqueObjectRequestSchema = Schema.Struct({
-  data: Base64Schema,
-})
-
-export const OpaqueObjectResponseSchema = Schema.Struct({
+export const BlobMetadataResponseSchema = Schema.Struct({
   byteLength: Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0))),
-  key: NonEmptyString,
   sha256: NonEmptyString,
 })
 
-export type RegisterFactsReleaseRequest = {
-  readonly assets: readonly FactsReleaseAsset[]
-  readonly catalogs: readonly FactsReleaseCatalog[]
-  readonly release: FactsRelease
-}
-
-export const RegisterFactsReleaseRequestSchema: Schema.Codec<RegisterFactsReleaseRequest> =
-  Schema.revealCodec(
-    Schema.Struct({
-      assets: Schema.Array(FactsReleaseAssetSchema),
-      catalogs: Schema.Array(FactsReleaseCatalogSchema),
-      release: FactsReleaseSchema,
-    })
-  )
-
-export const FactsReleaseRecordResponseSchema =
-  RegisterFactsReleaseRequestSchema
-
-export const FactsReleaseParamsSchema = Schema.Struct({
-  releaseId: NonEmptyString,
-})
-
-export const FactsChannelParamsSchema = Schema.Struct({
-  channel: NonEmptyString,
-})
-
-export const ActivateFactsReleaseRequestSchema = Schema.Struct({
-  expectedVersion: Schema.Int.pipe(
-    Schema.check(Schema.isGreaterThanOrEqualTo(0))
-  ),
-  releaseId: NonEmptyString,
-})
-
-export const ActiveFactsReleaseQuerySchema = Schema.Struct({
-  channel: Schema.optional(NonEmptyString),
-  locale: RegistryContentLocaleSchema,
-})
-
-export type ActiveFactsReleaseResponse = {
-  readonly assets: readonly {
-    readonly assetId: string
-    readonly data: string
-    readonly fileName: string
-    readonly mediaType: string
-    readonly sha256: string
-  }[]
-  readonly catalogue: {
-    readonly data: string
-    readonly locale: CvLocale
-    readonly mediaType: string
-    readonly sha256: string
-  }
-  readonly locales: readonly CvLocale[]
-  readonly channel: FactsChannel
-  readonly release: FactsRelease
-}
-
-export const ActiveFactsReleaseResponseSchema: Schema.Codec<ActiveFactsReleaseResponse> =
-  Schema.revealCodec(
-    Schema.Struct({
-      assets: Schema.Array(
-        Schema.Struct({
-          assetId: NonEmptyString,
-          data: Base64Schema,
-          fileName: NonEmptyString,
-          mediaType: NonEmptyString,
-          sha256: NonEmptyString,
-        })
-      ),
-      catalogue: Schema.Struct({
-        data: Base64Schema,
-        locale: RegistryContentLocaleSchema,
-        mediaType: NonEmptyString,
-        sha256: NonEmptyString,
-      }),
-      locales: Schema.Array(RegistryContentLocaleSchema).pipe(
-        Schema.check(Schema.isMinLength(1))
-      ),
-      channel: FactsChannelSchema,
-      release: FactsReleaseSchema,
-    })
-  )
+export type BlobMetadataResponse = Schema.Schema.Type<
+  typeof BlobMetadataResponseSchema
+>

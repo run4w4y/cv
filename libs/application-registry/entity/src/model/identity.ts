@@ -1,4 +1,5 @@
-export const normalizeApplicationCanonicalUrl = (value: string) => {
+/** Canonical server-side representation used for posting deduplication. */
+export const normalizeApplicationPostingUrl = (value: string) => {
   const url = new URL(value)
   url.hash = ''
   for (const name of [...url.searchParams.keys()]) {

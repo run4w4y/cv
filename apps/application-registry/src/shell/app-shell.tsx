@@ -36,7 +36,7 @@ import { HeaderActionsProvider } from './header-actions'
 const navItems = [
   { to: '/applications', label: 'Applications', icon: BriefcaseBusiness },
   { to: '/preparation/batch', label: 'URL workflows', icon: GitBranch },
-  { to: '/events', label: 'Events', icon: Activity },
+  { to: '/activities', label: 'Activities', icon: Activity },
   { to: '/analytics', label: 'CV analytics', icon: ChartNoAxesCombined },
   { to: '/schema/cv-document', label: 'CV schema', icon: Braces },
 ] as const
@@ -44,7 +44,7 @@ const navItems = [
 const routeTitle = (pathname: string) => {
   if (pathname === '/schema/cv-document') return 'CV schema'
   if (pathname === '/preparation/batch') return 'URL workflows'
-  if (pathname.startsWith('/events')) return 'Events'
+  if (pathname.startsWith('/activities')) return 'Activities'
   if (pathname.startsWith('/analytics')) return 'CV analytics'
   if (/^\/applications\/[^/]+\/prepare$/u.test(pathname)) {
     return 'Prepare tailored CV'

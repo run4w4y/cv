@@ -36,6 +36,7 @@ export const createInitialValue = (descriptor: EditorDescriptor): JsonValue => {
         ? createInitialValue(descriptor.options[0].descriptor)
         : null
     case 'raw':
+    case 'unrepresentable':
       return null
   }
 }

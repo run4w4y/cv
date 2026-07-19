@@ -23,12 +23,10 @@ export const applications = sqliteTable(
   'applications',
   {
     id: text('id').notNull(),
-    jobKey: text('job_key').notNull(),
-    source: text('source').notNull(),
-    sourceJobId: text('source_job_id'),
-    canonicalUrl: text('canonical_url').notNull(),
+    postingUrl: text('posting_url').notNull(),
+    postingUrlNormalized: text('posting_url_normalized').notNull(),
+    postingFingerprint: text('posting_fingerprint').notNull(),
     company: text('company').notNull(),
-    companyNormalized: text('company_normalized').notNull(),
     role: text('role').notNull(),
     location: text('location'),
     applicationStatus: text('application_status', {
@@ -44,7 +42,6 @@ export const applications = sqliteTable(
     }),
     followUpAt: text('follow_up_at'),
     appliedAt: text('applied_at'),
-    lastContactAt: text('last_contact_at'),
     listingAvailability: text('listing_availability', {
       enum: listingAvailabilityValues,
     })
@@ -68,8 +65,13 @@ export const applications = sqliteTable(
   },
   (table) => [
     primaryKey({ columns: [table.id] }),
-    uniqueIndex('applications_job_key_unique').on(table.jobKey),
-    index('applications_company_normalized_idx').on(table.companyNormalized),
+    uniqueIndex('applications_posting_fingerprint_unique').on(
+      table.postingFingerprint
+    ),
+    index('applications_posting_url_normalized_idx').on(
+      table.postingUrlNormalized
+    ),
+    index('applications_company_idx').on(table.company),
     index('applications_status_updated_revision_idx').on(
       table.applicationStatus,
       table.updatedRevision

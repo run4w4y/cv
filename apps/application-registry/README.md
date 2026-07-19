@@ -24,6 +24,14 @@ adds `REGISTRY_API_TOKEN` server-side. The token is never included in the
 browser bundle. A production host must provide the same authenticated reverse
 proxy path, or rewrite it to an equivalent same-origin backend-for-frontend.
 
+Reviewed facts are intentionally different: the app signs direct GET requests
+to the private facts bucket with `VITE_FACTS_R2_ACCOUNT_ID`,
+`VITE_FACTS_R2_BUCKET`, `VITE_FACTS_R2_ACCESS_KEY_ID`, and
+`VITE_FACTS_R2_SECRET_ACCESS_KEY`. That permanent credential is embedded in
+this owner-only application and is scoped to Object Read on that bucket only.
+The app verifies the current pointer, manifest, locale catalogue, media types,
+byte lengths, and SHA-256 digests before using the catalogue.
+
 ## Application preparation workflows
 
 URL-driven CV and cover-letter preparation is orchestrated in the browser by
@@ -67,29 +75,30 @@ document kind, locale, and optional run ID. Registry context, heads, model
 discovery, publication state, and every remote mutation are Effect query or
 command atoms backed by typed `RegistryClient` services. The editor atom owns
 only genuine browser-local state: a human override, the last mutation result,
-the CV layout assessment bound to its document fingerprint, and the explicit
+and the explicit
 decision to adopt a candidate whose in-memory review token was lost. Registry
 heads and Workflow candidates stay in their authoritative atoms and are joined
 by a pure projection; React pages do not mirror them through effects or loaded
 key refs.
 
-CV publication is a separate typed Workflow. It publishes the approved link,
-starts PDF generation, polls on an Effect `Schedule`, verifies that the ready
-artifact matches the exact revision/link/renderer tuple, and invalidates the
-publication query on completion. If PDF generation cannot start, a compensating
-activity disables the newly published link. Publication progress and
-cancellation are exposed through keyed atoms just like preparation runs.
+CV publication is a separate typed Workflow. Saving stages the current revision
+on one private page record and exposes it through a capability preview. The
+Workflow makes that page public by setting its `enabled` boolean, then attempts
+to start PDF generation. PDF status is an independent artifact lifecycle: a
+failed or missing PDF does not disable the page, and the UI can refresh or retry
+it. Publication progress and cancellation are exposed through keyed atoms just
+like preparation runs.
 
 Only orchestration and transient progress are local to the browser. URL capture
 remains a server boundary because arbitrary job sites are not generally
 browser-readable through CORS; the capture service applies schema-based URL,
 redirect, size, and timeout boundaries. PDF rendering remains a private
-Cloudflare RPC service and durable Workflow because it requires Browser
-Rendering, exact-publication verification, and compensation around R2 writes.
+Cloudflare Queue consumer because it requires Browser Rendering, authoritative
+A4 measurement, and content-addressed R2 writes.
 
-The memory engines are intentional first backends. Runs, pending review tokens,
-and publication polling do not survive refresh, HMR, tab closure/eviction,
-runtime disposal, or a second tab. Saved candidate revisions, links, and ready
+The memory engines are intentional first backends. Runs and pending review
+tokens do not survive refresh, HMR, tab closure/eviction, runtime disposal, or
+a second tab. Saved candidate revisions, links, and ready
 artifacts do survive because they are already in the registry. The Workflow
 definitions and service gateways are independent of the engine, so an
 IndexedDB engine can replace `WorkflowEngine.layerMemory` later without moving

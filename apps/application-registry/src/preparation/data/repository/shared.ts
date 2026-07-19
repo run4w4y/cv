@@ -1,24 +1,8 @@
-import type { OpaquePayloadResponse } from '@cv/application-registry-api-contract'
-import { Effect } from 'effect'
-
-import {
-  decodeJsonBase64,
-  decodeUtf8Base64,
-  encodeUtf8Base64,
-} from '../../base64'
+import { Cause, type Crypto, Effect, type Schema } from 'effect'
 import { PreparationDataError } from '../types'
 
-const messageFromUnknown = (cause: unknown): string => {
-  if (
-    typeof cause === 'object' &&
-    cause !== null &&
-    'message' in cause &&
-    typeof cause.message === 'string'
-  ) {
-    return cause.message
-  }
-  return String(cause)
-}
+const messageFromUnknown = (cause: unknown): string =>
+  Cause.prettyErrors(Cause.fail(cause))[0]?.message ?? String(cause)
 
 export const asPreparationDataError = (
   operation: string,
@@ -36,21 +20,30 @@ export const dataError = (operation: string) =>
 
 export const decodeOpaqueValue = (
   operation: string,
-  payload: OpaquePayloadResponse
-): Effect.Effect<unknown, PreparationDataError> =>
+  payload: Uint8Array,
+  mediaType: string
+): Effect.Effect<Schema.Json, PreparationDataError> =>
   Effect.try({
-    try: () =>
-      payload.mediaType.includes('json')
-        ? decodeJsonBase64(payload.data)
-        : decodeUtf8Base64(payload.data),
+    try: () => {
+      const text = new TextDecoder('utf-8', { fatal: true }).decode(payload)
+      return mediaType.includes('json')
+        ? (JSON.parse(text) as Schema.Json)
+        : text
+    },
     catch: (cause) => asPreparationDataError(operation, cause),
   })
 
-export const encodeOpaqueText = (
-  operation: string,
-  value: string
-): Effect.Effect<string, PreparationDataError> =>
-  Effect.try({
-    try: () => encodeUtf8Base64(value),
-    catch: (cause) => asPreparationDataError(operation, cause),
-  })
+export const encodeOpaqueText = (value: string): Uint8Array =>
+  new TextEncoder().encode(value)
+
+export const encodeOpaqueJson = (value: unknown): Uint8Array =>
+  new TextEncoder().encode(JSON.stringify(value))
+
+export const sha256Hex = Effect.fn('PreparationRepository.sha256Hex')(
+  function* (crypto: Crypto.Crypto, bytes: Uint8Array) {
+    const digest = yield* crypto.digest('SHA-256', bytes)
+    return Array.from(digest, (byte) =>
+      byte.toString(16).padStart(2, '0')
+    ).join('')
+  }
+)

@@ -1,5 +1,6 @@
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import * as Atom from 'effect/unstable/reactivity/Atom'
+import type { PreparationRun } from '@cv/application-preparation-workflow/domain'
 import type { PreparationBootstrap } from '../data'
 import { preparationBootstrapAtom } from '../data'
 import type { PreparationEditorSession } from '../editor'
@@ -14,7 +15,6 @@ import {
   latestOpenApplicationRunAtom,
   preparationRunAtom,
 } from '../workflow/atoms'
-import type { PreparationRun } from '../workflow/domain'
 
 export type PreparationWorkspaceIdentity = PreparationEditorIdentity & {
   readonly requestedRunId: string | null
@@ -26,16 +26,6 @@ export type PreparationWorkspace = {
   readonly run: PreparationRun | null
 }
 
-const workspaceKey = (identity: PreparationWorkspaceIdentity): string =>
-  JSON.stringify([
-    identity.applicationId,
-    identity.kind,
-    identity.locale,
-    identity.requestedRunId,
-  ])
-
-const workspaceInputs = new Map<string, PreparationWorkspaceIdentity>()
-
 const runBelongsToWorkspace = (
   run: PreparationRun | null,
   identity: PreparationWorkspaceIdentity
@@ -45,64 +35,60 @@ const runBelongsToWorkspace = (
   run.kind === identity.kind &&
   run.locale === identity.locale
 
-const selectedRunFamily = Atom.family((key: string) => {
-  const identity = workspaceInputs.get(key)
-  if (identity === undefined) {
-    throw new Error(`Missing preparation workspace input for ${key}.`)
-  }
-  const applicationIdentity = applicationPreparationIdentity(
-    identity.applicationId,
-    identity.kind,
-    identity.locale
-  )
-  return Atom.make((get) => {
-    const open = get(latestOpenApplicationRunAtom(applicationIdentity))
-    const latest = get(latestApplicationRunAtom(applicationIdentity))
-    const requested =
-      identity.requestedRunId === null
-        ? AsyncResult.success<PreparationRun | null>(null)
-        : get(preparationRunAtom(identity.requestedRunId))
-    return AsyncResult.map(
-      AsyncResult.all({ latest, open, requested }),
-      (runs) =>
-        runs.open ??
-        (runBelongsToWorkspace(runs.requested, identity)
-          ? runs.requested
-          : runs.latest)
+const selectedRunFamily = Atom.family(
+  (identity: PreparationWorkspaceIdentity) => {
+    const applicationIdentity = applicationPreparationIdentity(
+      identity.applicationId,
+      identity.kind,
+      identity.locale
     )
-  })
-})
+    return Atom.make((get) => {
+      const open = get(latestOpenApplicationRunAtom(applicationIdentity))
+      const latest = get(latestApplicationRunAtom(applicationIdentity))
+      const requested =
+        identity.requestedRunId === null
+          ? AsyncResult.success<PreparationRun | null>(null)
+          : get(preparationRunAtom(identity.requestedRunId))
+      return AsyncResult.map(
+        AsyncResult.all({ latest, open, requested }),
+        (runs) =>
+          runs.open ??
+          (runBelongsToWorkspace(runs.requested, identity)
+            ? runs.requested
+            : runs.latest)
+      )
+    })
+  }
+)
 
-const workspaceFamily = Atom.family((key: string) => {
-  const identity = workspaceInputs.get(key)
-  if (identity === undefined) {
-    throw new Error(`Missing preparation workspace input for ${key}.`)
-  }
-  const editorIdentity: PreparationEditorIdentity = {
-    applicationId: identity.applicationId,
-    kind: identity.kind,
-    locale: identity.locale,
-  }
-  return Atom.make((get) =>
-    AsyncResult.map(
-      AsyncResult.all({
-        bootstrap: get(preparationBootstrapAtom(editorIdentity)),
-        run: get(selectedRunFamily(key)),
-      }),
-      ({ bootstrap, run }) =>
-        ({
-          bootstrap,
-          editor: derivePreparationEditorSession({
-            head: bootstrap.head,
-            identity: editorIdentity,
-            local: get(preparationEditorLocalStateAtom(editorIdentity)),
+const workspaceFamily = Atom.family(
+  (identity: PreparationWorkspaceIdentity) => {
+    const editorIdentity: PreparationEditorIdentity = {
+      applicationId: identity.applicationId,
+      kind: identity.kind,
+      locale: identity.locale,
+    }
+    return Atom.make((get) =>
+      AsyncResult.map(
+        AsyncResult.all({
+          bootstrap: get(preparationBootstrapAtom(editorIdentity)),
+          run: get(selectedRunFamily(identity)),
+        }),
+        ({ bootstrap, run }) =>
+          ({
+            bootstrap,
+            editor: derivePreparationEditorSession({
+              head: bootstrap.head,
+              identity: editorIdentity,
+              local: get(preparationEditorLocalStateAtom(editorIdentity)),
+              run,
+            }),
             run,
-          }),
-          run,
-        }) satisfies PreparationWorkspace
+          }) satisfies PreparationWorkspace
+      )
     )
-  )
-})
+  }
+)
 
 /**
  * One reactive preparation read model for a route. Components subscribe to
@@ -111,12 +97,4 @@ const workspaceFamily = Atom.family((key: string) => {
  */
 export const preparationWorkspaceAtom = (
   identity: PreparationWorkspaceIdentity
-) => {
-  const key = workspaceKey(identity)
-  workspaceInputs.set(key, identity)
-  try {
-    return workspaceFamily(key)
-  } finally {
-    workspaceInputs.delete(key)
-  }
-}
+) => workspaceFamily(identity)

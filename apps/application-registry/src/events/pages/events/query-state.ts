@@ -1,4 +1,4 @@
-import { eventListQuery } from '@cv/application-registry-entity/query'
+import { activityListQuery } from '@cv/application-registry-entity/query'
 import {
   serializeQueryFilterNodes,
   writeCanonicalQueryFiltersUrlState,
@@ -16,7 +16,7 @@ export const defaultEventSorting: SortingState = [
 ]
 
 const sortableFields = new Set(
-  eventListQuery.fields
+  activityListQuery.fields
     .filter((field) => field.sortable)
     .map((field) => field.name)
 )

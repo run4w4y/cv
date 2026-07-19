@@ -1,8 +1,11 @@
+import type { ContentRevisionResultResponse } from '@cv/application-registry-api-contract'
 import { Effect } from 'effect'
 import * as Reactivity from 'effect/unstable/reactivity/Reactivity'
 
+import { publicCvBaseUrl } from '@/preparation/config'
 import {
   contentMutationReactivityKeys,
+  type PublicationIdentity,
   preparationReactivity,
   publicationMutationReactivityKeys,
 } from './keys'
@@ -12,9 +15,27 @@ import type {
   AppendRevisionInput,
   ApproveRevisionInput,
   ManualJobContextInput,
+  PreparationRepositoryShape,
   ReadCurrentPdfInput,
   SetPublicationAvailabilityInput,
+  StartPdfGenerationInput,
 } from './types'
+
+const stageCvRevision = (
+  repository: PreparationRepositoryShape,
+  applicationId: string,
+  result: ContentRevisionResultResponse
+) =>
+  result.entry.kind === 'cv'
+    ? repository
+        .stageCv({
+          applicationId,
+          entry: result.entry,
+          publicBaseUrl: publicCvBaseUrl(),
+          revisionId: result.revision.id,
+        })
+        .pipe(Effect.as(result))
+    : Effect.succeed(result)
 
 const invalidateAfter =
   (keys: ReadonlyArray<unknown>) =>
@@ -56,9 +77,20 @@ const appendPreparationRevision = (input: AppendRevisionInput) => {
     locale: input.entry.locale,
   } as const
   return PreparationRepository.use((repository) =>
-    repository.appendRevision(input)
+    repository
+      .appendRevision(input)
+      .pipe(
+        Effect.flatMap((result) =>
+          stageCvRevision(repository, input.applicationId, result)
+        )
+      )
   ).pipe(
-    invalidateAfter(contentMutationReactivityKeys(identity, input.entry.id))
+    invalidateAfter([
+      ...contentMutationReactivityKeys(identity, input.entry.id),
+      ...(input.entry.kind === 'cv'
+        ? publicationMutationReactivityKeys(input.applicationId, input.entry.id)
+        : []),
+    ])
   )
 }
 
@@ -72,9 +104,20 @@ const approvePreparationRevision = (input: ApproveRevisionInput) => {
     locale: input.entry.locale,
   } as const
   return PreparationRepository.use((repository) =>
-    repository.approveRevision(input)
+    repository
+      .approveRevision(input)
+      .pipe(
+        Effect.flatMap((result) =>
+          stageCvRevision(repository, input.applicationId, result)
+        )
+      )
   ).pipe(
-    invalidateAfter(contentMutationReactivityKeys(identity, input.entry.id))
+    invalidateAfter([
+      ...contentMutationReactivityKeys(identity, input.entry.id),
+      ...(input.entry.kind === 'cv'
+        ? publicationMutationReactivityKeys(input.applicationId, input.entry.id)
+        : []),
+    ])
   )
 }
 
@@ -94,6 +137,26 @@ export const makeSetPublicationAvailabilityAtom = () =>
   preparationDataRuntime.fn<SetPublicationAvailabilityInput>()(
     setPublicationAvailability
   )
+
+const startPdfGeneration = (input: StartPdfGenerationInput) =>
+  PreparationRepository.use((repository) =>
+    repository.startPdfGeneration(input)
+  ).pipe(
+    invalidateAfter(
+      publicationMutationReactivityKeys(input.applicationId, input.entryId)
+    )
+  )
+
+export const makeStartPdfGenerationAtom = () =>
+  preparationDataRuntime.fn<StartPdfGenerationInput>()(startPdfGeneration)
+
+const refreshCvPage = (input: PublicationIdentity) =>
+  Reactivity.invalidate(
+    publicationMutationReactivityKeys(input.applicationId, input.entryId)
+  )
+
+export const makeRefreshCvPageAtom = () =>
+  preparationDataRuntime.fn<PublicationIdentity>()(refreshCvPage)
 
 const readCurrentPdf = (input: ReadCurrentPdfInput) =>
   PreparationRepository.use((repository) => repository.readCurrentPdf(input))

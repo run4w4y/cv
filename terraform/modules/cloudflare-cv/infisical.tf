@@ -7,6 +7,66 @@ locals {
   }
 }
 
+locals {
+  facts_r2_infisical_values = {
+    FACTS_R2_ACCESS_KEY_ID = {
+      description = "Bucket-scoped Object Read & Write access key used only by the reviewed-facts publisher."
+      value       = cloudflare_account_token.facts_r2_publisher.id
+    }
+    FACTS_R2_ACCOUNT_ID = {
+      description = "Cloudflare account ID used to construct the reviewed-facts S3 endpoint."
+      value       = var.cloudflare_account_id
+    }
+    FACTS_R2_BUCKET = {
+      description = "Private R2 bucket containing immutable reviewed-facts releases."
+      value       = cloudflare_r2_bucket.cv_facts.name
+    }
+    FACTS_R2_SECRET_ACCESS_KEY = {
+      description = "Bucket-scoped Object Read & Write secret used only by the reviewed-facts publisher."
+      value       = sha256(cloudflare_account_token.facts_r2_publisher.value)
+    }
+    VITE_FACTS_R2_ACCESS_KEY_ID = {
+      description = "Bucket-scoped Object Read access key embedded in the private management application."
+      value       = cloudflare_account_token.facts_r2_reader.id
+    }
+    VITE_FACTS_R2_ACCOUNT_ID = {
+      description = "Cloudflare account ID embedded in the management application for direct facts reads."
+      value       = var.cloudflare_account_id
+    }
+    VITE_FACTS_R2_BUCKET = {
+      description = "Private reviewed-facts bucket embedded in the management application."
+      value       = cloudflare_r2_bucket.cv_facts.name
+    }
+    VITE_FACTS_R2_SECRET_ACCESS_KEY = {
+      description = "Bucket-scoped Object Read secret embedded in the private management application."
+      value       = sha256(cloudflare_account_token.facts_r2_reader.value)
+    }
+  }
+}
+
+resource "infisical_secret" "facts_r2" {
+  for_each = var.infisical_sync_enabled ? toset([
+    "FACTS_R2_ACCESS_KEY_ID",
+    "FACTS_R2_ACCOUNT_ID",
+    "FACTS_R2_BUCKET",
+    "FACTS_R2_SECRET_ACCESS_KEY",
+    "VITE_FACTS_R2_ACCESS_KEY_ID",
+    "VITE_FACTS_R2_ACCOUNT_ID",
+    "VITE_FACTS_R2_BUCKET",
+    "VITE_FACTS_R2_SECRET_ACCESS_KEY",
+  ]) : toset([])
+
+  name         = each.value
+  value        = local.facts_r2_infisical_values[each.value].value
+  env_slug     = var.infisical_env_slug
+  workspace_id = var.infisical_project_id
+  folder_path  = var.infisical_content_folder_path
+
+  metadata = merge(local.infisical_metadata, {
+    description = local.facts_r2_infisical_values[each.value].description
+  })
+}
+
 resource "infisical_secret" "analytics_connector_url" {
   count = var.infisical_sync_enabled && local.connector_url != null ? 1 : 0
 

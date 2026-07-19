@@ -13,7 +13,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  ASTRO_TELEMETRY_DISABLED: "1"
   INFISICAL_ENV: ${{ vars.INFISICAL_ENV || 'prod' }}
   INFISICAL_HOST: ${{ vars.INFISICAL_HOST || 'https://app.infisical.com' }}
 
@@ -54,7 +53,7 @@ jobs:
         run: |
           worker_name="${CONFIGURED_CV_PUBLIC_WORKER_NAME:-${CV_PUBLIC_WORKER_NAME:-cv-public}}"
           resolver_entrypoint="${CONFIGURED_CV_PUBLIC_RESOLVER_ENTRYPOINT:-${CV_PUBLIC_RESOLVER_ENTRYPOINT:-CvPublicResolver}}"
-          registry_service_name="${CONFIGURED_CV_PUBLIC_REGISTRY_SERVICE_NAME:-${CV_PUBLIC_REGISTRY_SERVICE_NAME:-}}"
+          registry_service_name="${CONFIGURED_CV_PUBLIC_REGISTRY_SERVICE_NAME:-${CV_PUBLIC_REGISTRY_SERVICE_NAME:-${APPLICATION_REGISTRY_WORKER_NAME:-}}}"
 
           {
             printf 'CV_PUBLIC_WORKER_NAME=%s\n' "$worker_name"
@@ -71,7 +70,8 @@ jobs:
           for name in \
             CLOUDFLARE_ACCOUNT_ID \
             CLOUDFLARE_API_TOKEN \
-            CV_PUBLIC_WORKER_NAME
+            CV_PUBLIC_WORKER_NAME \
+            CV_REVALIDATION_SECRET
           do
             if [[ -z "${!name:-}" ]]; then
               missing+=("$name")
@@ -96,16 +96,15 @@ jobs:
           CV_PUBLIC_COMPATIBILITY_DATE: ${{ vars.CV_PUBLIC_COMPATIBILITY_DATE }}
         run: >-
           bun apps/cv/scripts/write-wrangler-config.ts
-          apps/cv/dist/server/wrangler.deploy.json
+          apps/cv/wrangler.deploy.jsonc
 
       - name: Validate deployable Worker artifact
         run: >-
           bunx wrangler deploy --dry-run
-          --config apps/cv/dist/server/wrangler.deploy.json
-          --outdir apps/cv/dist/deploy-check
+          --config apps/cv/wrangler.deploy.jsonc
+          --outdir apps/cv/.open-next/deploy-check
 
       - name: Deploy public CV Worker
         if: ${{ !env.ACT }}
-        run: >-
-          bunx wrangler deploy
-          --config apps/cv/dist/server/wrangler.deploy.json
+        run: bun scripts/deploy.ts wrangler.deploy.jsonc
+        working-directory: apps/cv

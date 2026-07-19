@@ -1,7 +1,4 @@
-import type {
-  Application,
-  ApplicationLabel,
-} from '@cv/application-registry-entity'
+import type { Application } from '@cv/application-registry-entity'
 import { Context, type Effect } from 'effect'
 
 import type { ApplicationRegistryError } from '../errors'
@@ -9,15 +6,14 @@ import type {
   ApplicationFacets,
   ApplicationListPage,
   ListApplicationsInput,
-  PatchApplicationInput,
-  UpdateManagedApplicationInput,
-  UpdateManagedApplicationResult,
-  UpsertApplicationInput,
+  CreateApplicationInput,
+  UpdateApplicationInput,
+  UpdateApplicationResult,
 } from '../types'
 
 export interface ApplicationsService {
   readonly create: (
-    input: UpsertApplicationInput
+    input: CreateApplicationInput
   ) => Effect.Effect<Application, ApplicationRegistryError>
   readonly facets: () => Effect.Effect<
     ApplicationFacets,
@@ -29,26 +25,14 @@ export interface ApplicationsService {
   readonly list: (
     input: ListApplicationsInput
   ) => Effect.Effect<ApplicationListPage, ApplicationRegistryError>
-  readonly patch: (
+  readonly update: (
     identifier: string,
-    input: PatchApplicationInput
-  ) => Effect.Effect<Application, ApplicationRegistryError>
-  readonly updateManaged: (
-    identifier: string,
-    input: UpdateManagedApplicationInput
-  ) => Effect.Effect<UpdateManagedApplicationResult, ApplicationRegistryError>
+    input: UpdateApplicationInput
+  ) => Effect.Effect<UpdateApplicationResult, ApplicationRegistryError>
   readonly remove: (
     identifier: string,
     expectedVersion?: number
   ) => Effect.Effect<void, ApplicationRegistryError>
-  readonly replaceLabels: (
-    identifier: string,
-    labels: readonly string[],
-    expectedVersion?: number
-  ) => Effect.Effect<readonly ApplicationLabel[], ApplicationRegistryError>
-  readonly upsert: (
-    input: UpsertApplicationInput
-  ) => Effect.Effect<Application, ApplicationRegistryError>
 }
 
 export const ApplicationsService = Context.Service<ApplicationsService>(

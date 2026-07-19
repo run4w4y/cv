@@ -3,9 +3,9 @@ import { Context, type Effect } from 'effect'
 
 import type { ApplicationRegistryError } from '../errors'
 import type {
-  PublishCvInput,
   ResolvedCvPublication,
   SetCvLinkAvailabilityInput,
+  StageCvInput,
 } from '../types'
 
 export const applicationRejectedDisableReason = 'application_rejected'
@@ -22,10 +22,14 @@ export interface CvPublicationsService {
   readonly restoreAfterRejection: (
     applicationIdentifier: string
   ) => Effect.Effect<number, ApplicationRegistryError>
-  readonly publish: (
+  readonly resolvePreview: (
+    token: string,
+    previewToken: string
+  ) => Effect.Effect<ResolvedCvPublication, ApplicationRegistryError>
+  readonly stage: (
     applicationIdentifier: string,
     entryId: string,
-    input: PublishCvInput
+    input: StageCvInput
   ) => Effect.Effect<CvLink, ApplicationRegistryError>
   readonly resolve: (
     token: string

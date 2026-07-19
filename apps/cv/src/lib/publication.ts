@@ -73,16 +73,13 @@ const positiveInteger = (value: string | null): number | null => {
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null
 }
 
-export const loadCvPublication = async (
+const loadCvDocument = async (
   binding: CvPublicResolverBinding,
-  token: string
+  token: string,
+  resolverUrl: string
 ): Promise<CvPublicationLoadResult> => {
   const response = await binding
-    .fetch(
-      new Request(
-        `https://registry.internal/cv-publications/${encodeURIComponent(token)}`
-      )
-    )
+    .fetch(new Request(resolverUrl))
     .catch(() => null)
 
   if (!response) return { tag: 'unavailable' }
@@ -134,4 +131,26 @@ export const loadCvPublication = async (
   }
 
   return { document: decoded.success, publicUrl, tag: 'success' }
+}
+
+export const loadCvPublication = (
+  binding: CvPublicResolverBinding,
+  token: string
+): Promise<CvPublicationLoadResult> =>
+  loadCvDocument(
+    binding,
+    token,
+    `https://registry.internal/cv-publications/${encodeURIComponent(token)}`
+  )
+
+export const loadCvPreview = (
+  binding: CvPublicResolverBinding,
+  token: string,
+  previewToken: string
+): Promise<CvPublicationLoadResult> => {
+  const url = new URL(
+    `https://registry.internal/cv-previews/${encodeURIComponent(token)}`
+  )
+  url.searchParams.set('access', previewToken)
+  return loadCvDocument(binding, token, url.toString())
 }

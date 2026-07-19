@@ -9,18 +9,14 @@ import { useAtomValue } from '@effect/atom-react'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import { ArrowLeft, FilePenLine, FileText, WandSparkles } from 'lucide-react'
 import * as React from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { HeaderActions } from '../../../shell/header-actions'
-import {
-  ApplicationEditDialog,
-  DeleteApplicationDialog,
-} from '../../components/application-editor'
-import { ApplicationEventsTable } from '../../components/application-events-table'
-import { RecordEventDialog } from '../../components/record-event'
+import { ApplicationEditDialog } from '../../components/application-editor'
+import { ApplicationActivitiesTable } from '../../components/application-events-table'
 import {
   applicationAtom,
   applicationCompensationsAtom,
-  applicationEventsAtom,
+  applicationActivitiesAtom,
 } from '../../data'
 import type { CompensationDisplayCurrency } from '../../model/currency'
 import {
@@ -43,7 +39,6 @@ const resultError = (
 
 export const ApplicationDetailsPage = () => {
   const { applicationId = '' } = useParams()
-  const navigate = useNavigate()
   const [compensationCurrency, setCompensationCurrency] =
     React.useState<CompensationDisplayCurrency>('original')
   const applicationResult = useAtomValue(applicationAtom(applicationId))
@@ -53,14 +48,16 @@ export const ApplicationDetailsPage = () => {
       currency: compensationCurrency,
     })
   )
-  const eventsResult = useAtomValue(applicationEventsAtom(applicationId))
+  const activitiesResult = useAtomValue(
+    applicationActivitiesAtom(applicationId)
+  )
   const application = AsyncResult.getOrElse(applicationResult, () => undefined)
   const compensations = AsyncResult.getOrElse(
     compensationResult,
     () => undefined
   )?.items
-  const events = AsyncResult.getOrElse(
-    eventsResult,
+  const activities = AsyncResult.getOrElse(
+    activitiesResult,
     () => undefined
   )?.items.slice(0, 8)
   const error = resultError(
@@ -71,9 +68,9 @@ export const ApplicationDetailsPage = () => {
     compensationResult,
     'The application compensation could not be loaded.'
   )
-  const eventsError = resultError(
-    eventsResult,
-    'The related events could not be loaded.'
+  const activitiesError = resultError(
+    activitiesResult,
+    'The related activities could not be loaded.'
   )
 
   return (
@@ -94,12 +91,7 @@ export const ApplicationDetailsPage = () => {
             <FilePenLine />
             Cover letter
           </Link>
-          <RecordEventDialog application={application} />
           <ApplicationEditDialog application={application} />
-          <DeleteApplicationDialog
-            application={application}
-            onDeleted={() => navigate('/applications', { replace: true })}
-          />
         </HeaderActions>
       )}
       <div className="mx-auto max-w-6xl">
@@ -128,7 +120,10 @@ export const ApplicationDetailsPage = () => {
               compensations={compensations}
               error={compensationError}
             />
-            <ApplicationEventsTable events={events} error={eventsError} />
+            <ApplicationActivitiesTable
+              activities={activities}
+              error={activitiesError}
+            />
           </>
         )}
       </div>

@@ -1,18 +1,20 @@
 import { Buffer } from 'node:buffer'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import Handlebars from 'handlebars'
 import type { Miniflare } from 'miniflare'
 
 import {
-  loadEsModules,
   MiniflareTestEnvironment,
   workerTestCompatibilityDate,
-} from '../miniflare'
+} from '../miniflare/index.js'
 
 export interface CvPublicWorkerHarnessOptions {
   readonly document: unknown
   readonly invalidDocument?: unknown
   readonly invalidToken?: string
   readonly notFoundTokens?: readonly string[]
+  readonly revalidationSecret?: string
   readonly serverRoot: string
 }
 
@@ -20,6 +22,24 @@ type TestWorker = Awaited<ReturnType<Miniflare['getWorker']>>
 
 const encodeJson = (value: unknown) =>
   Buffer.from(JSON.stringify(value), 'utf8').toString('base64')
+
+const readWorkerModule = async (workerPath: string) => {
+  const upload = await readFile(workerPath)
+  const firstLineEnd = upload.indexOf('\r\n')
+  if (firstLineEnd < 2 || !upload.subarray(0, 2).equals(Buffer.from('--'))) {
+    return upload.toString('utf8')
+  }
+
+  const boundary = upload.subarray(2, firstLineEnd).toString('utf8')
+  const body = await new Response(upload, {
+    headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+  }).formData()
+  const worker = body.get('worker.js')
+  if (!(worker instanceof Blob)) {
+    throw new Error('Wrangler upload does not contain worker.js.')
+  }
+  return worker.text()
+}
 
 interface RegistryStubTemplateContext {
   readonly document: string
@@ -90,7 +110,7 @@ const registryStubScript = (
     notFoundTokens: JSON.stringify(notFoundTokens),
   })
 
-/** Runs the built Astro CV Worker against a configurable resolver Worker. */
+/** Runs the Wrangler-bundled OpenNext Worker against a resolver Worker. */
 export class CvPublicWorkerHarness {
   readonly #environment: MiniflareTestEnvironment
   readonly #publicWorker: TestWorker
@@ -107,12 +127,23 @@ export class CvPublicWorkerHarness {
     const publicWorkerName = 'cv-public-test'
     const registryWorkerName = 'registry-stub'
     const invalidToken = options.invalidToken ?? 'invalid-document'
+    const workerPath = join(options.serverRoot, 'worker.js')
     const environment = await MiniflareTestEnvironment.make({
       workers: [
         {
           compatibilityDate: workerTestCompatibilityDate,
           compatibilityFlags: ['nodejs_compat'],
-          modules: await loadEsModules(options.serverRoot),
+          bindings: {
+            CV_REVALIDATION_SECRET:
+              options.revalidationSecret ?? 'cv-revalidation-test-secret',
+          },
+          modules: [
+            {
+              contents: await readWorkerModule(workerPath),
+              path: workerPath,
+              type: 'ESModule',
+            },
+          ],
           modulesRoot: options.serverRoot,
           name: publicWorkerName,
           serviceBindings: {

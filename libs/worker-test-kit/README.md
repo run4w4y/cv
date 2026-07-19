@@ -10,8 +10,8 @@ Use the narrowest entry point:
   module-loading, and D1/KV/R2 reset utilities.
 - `@cv/worker-test-kit/application-registry` provides D1-only and built-Worker
   harnesses, registry bindings, deterministic factories, and seed helpers.
-- `@cv/worker-test-kit/cv-public` runs the built Astro Worker against an
-  in-process publication resolver service.
+- `@cv/worker-test-kit/cv-public` runs the Wrangler-bundled OpenNext Worker
+  against an in-process publication resolver service.
 
 Every environment creates isolated temporary persistence and removes it on
 `dispose()`. `restart()` preserves persisted data for restart tests. Registry

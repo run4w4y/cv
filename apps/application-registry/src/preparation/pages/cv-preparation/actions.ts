@@ -1,5 +1,5 @@
-import { usePreparationCommandGate } from '../../command-gate'
-import type { PreparationWorkspace } from '../../workspace/atoms'
+import { usePreparationCommandGate } from '@/preparation/command-gate'
+import type { PreparationWorkspace } from '@/preparation/workspace/atoms'
 import { useCvEditorCommands } from './editor-commands'
 import { useCvPreparationCommands } from './preparation-commands'
 import { useCvPublicationCommands } from './publication-commands'
@@ -62,7 +62,6 @@ export const useCvPreparationActions = ({
     changeDraft: (value: unknown) => {
       if (!commandPending) editor.changeDraft(value)
     },
-    changeLayout: editor.changeLayout,
     changingAvailability: publication.changingAvailability,
     commandPending,
     document: editor.document,
@@ -76,11 +75,15 @@ export const useCvPreparationActions = ({
         : null) ??
       publication.queryError,
     generate: () => execute(preparation.generate),
+    generatePdf: () => execute(publication.generatePdf),
+    generatingPdf: publication.generatingPdf,
     publication: publication.publication,
     publicationExecuting: publication.publicationExecuting,
     publicationRun: publication.publicationRun,
     publish: () => execute(publication.publish),
     publishing: publication.publishing,
+    refreshPublication: () => execute(publication.refreshPage),
+    refreshingPublication: publication.refreshingPage,
     reject: () => execute(editor.reject),
     releaseDetachedCandidate,
     resetCommandResults,

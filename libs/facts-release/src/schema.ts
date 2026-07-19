@@ -15,10 +15,6 @@ const Sha256Schema = Schema.String.pipe(
   Schema.check(Schema.isPattern(/^[a-f0-9]{64}$/u))
 )
 
-const ObjectKeySchema = Schema.String.pipe(
-  Schema.check(Schema.isPattern(/^sha256\/[a-f0-9]{64}$/u))
-)
-
 const NonNegativeIntegerSchema = Schema.Int.pipe(
   Schema.check(Schema.isGreaterThanOrEqualTo(0))
 )
@@ -57,20 +53,14 @@ export const FactsReleaseProvenanceSchema = Schema.Struct({
 
 const FactsReleaseObjectDescriptorV1StructureSchema = Schema.Struct({
   byteLength: NonNegativeIntegerSchema,
-  key: ObjectKeySchema,
   mediaType: MediaTypeSchema,
   sha256: Sha256Schema,
 })
 
 export const FactsReleaseObjectDescriptorV1Schema =
-  FactsReleaseObjectDescriptorV1StructureSchema.pipe(
-    Schema.check(
-      Schema.makeFilter(
-        (descriptor) => descriptor.key === `sha256/${descriptor.sha256}`,
-        { message: 'Object key must contain the declared SHA-256 digest' }
-      )
-    )
-  ).annotate({ identifier: 'FactsReleaseObjectDescriptorV1' })
+  FactsReleaseObjectDescriptorV1StructureSchema.annotate({
+    identifier: 'FactsReleaseObjectDescriptorV1',
+  })
 
 const FactsReleaseManifestV1StructureSchema = Schema.Struct({
   $schema: Schema.Literal(factsReleaseManifestV1ContractId),
@@ -141,5 +131,30 @@ export const FactsReleaseManifestV1Schema =
     )
   ).annotate({
     identifier: 'FactsReleaseManifestV1',
+    parseOptions: { errors: 'all', onExcessProperty: 'error' },
+  })
+
+export const factsCurrentPointerV1ContractId = 'cv.facts-current.v1' as const
+
+const FactsReleaseIdSchema = Schema.String.pipe(
+  Schema.check(Schema.isPattern(/^fr_[a-f0-9]{64}$/u))
+)
+
+const FactsCurrentPointerV1StructureSchema = Schema.Struct({
+  $schema: Schema.Literal(factsCurrentPointerV1ContractId),
+  manifest: FactsReleaseObjectDescriptorV1Schema,
+  releaseId: FactsReleaseIdSchema,
+})
+
+export const FactsCurrentPointerV1Schema =
+  FactsCurrentPointerV1StructureSchema.pipe(
+    Schema.check(
+      Schema.makeFilter(
+        (pointer) => pointer.releaseId === `fr_${pointer.manifest.sha256}`,
+        { message: 'Release ID must contain the manifest SHA-256 digest' }
+      )
+    )
+  ).annotate({
+    identifier: 'FactsCurrentPointerV1',
     parseOptions: { errors: 'all', onExcessProperty: 'error' },
   })

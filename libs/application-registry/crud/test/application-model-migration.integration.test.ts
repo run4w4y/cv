@@ -264,26 +264,6 @@ test('rebuilds the current model, removes legacy captures, and preserves current
       ),
     harness.database
       .prepare(
-        `insert into facts_releases
-          (id, facts_schema_version, source_repository, source_commit,
-           compiler_repository, compiler_commit, manifest_object_key,
-           manifest_sha256, manifest_byte_length, created_at)
-         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .bind(
-        'migration-facts-release',
-        'cv.facts.v1',
-        'cv-content',
-        'source-commit',
-        'cv',
-        'compiler-commit',
-        'sha256/migration-facts-manifest',
-        'migration-facts-manifest',
-        128,
-        '2026-07-17T09:00:00.000Z'
-      ),
-    harness.database
-      .prepare(
         `insert into content_revisions
           (id, content_entry_id, revision_number, parent_revision_id,
            contract_id, contract_version, object_key, sha256, byte_length,
@@ -394,6 +374,9 @@ test('rebuilds the current model, removes legacy captures, and preserves current
     readonly follow_up_at: string
     readonly id: string
     readonly listing_availability: string
+    readonly posting_fingerprint: string
+    readonly posting_url: string
+    readonly posting_url_normalized: string
     readonly updated_revision: number
     readonly version: number
   }>('select * from applications')
@@ -404,6 +387,9 @@ test('rebuilds the current model, removes legacy captures, and preserves current
     follow_up_at: '2026-07-21T09:00:00.000Z',
     id: 'migration-application',
     listing_availability: 'open',
+    posting_fingerprint: 'https://example.test/jobs/migration',
+    posting_url: 'https://example.test/jobs/migration',
+    posting_url_normalized: 'https://example.test/jobs/migration',
     updated_revision: 42,
     version: 7,
   })
@@ -414,12 +400,17 @@ test('rebuilds the current model, removes legacy captures, and preserves current
   const columnNames = new Set(columns.map(({ name }) => name))
   for (const removed of [
     'category',
+    'canonical_url',
     'details',
     'fit_score',
+    'job_key',
+    'last_contact_at',
     'open_status',
     'recommended_action',
     'remote_policy',
     'research_priority',
+    'source',
+    'source_job_id',
     'source_confidence',
     'technology_stack',
   ]) {
@@ -430,16 +421,14 @@ test('rebuilds the current model, removes legacy captures, and preserves current
     'application_labels',
     'application_notes',
     'application_compensations',
-    'application_identity_aliases',
-    'application_events',
-    'command_receipts',
+    'application_activities',
+    'idempotency_receipts',
     'application_listing_check_schedules',
     'application_listing_checks',
     'content_entries',
     'content_revisions',
     'cv_links',
     'generated_artifacts',
-    'facts_releases',
     'job_posting_snapshots',
   ] as const
   for (const table of preservedTables) {
@@ -448,6 +437,16 @@ test('rebuilds the current model, removes legacy captures, and preserves current
       [{ count: 1 }]
     )
   }
+  const migratedLinks = await harness.query<{
+    readonly current_revision_id: string
+    readonly enabled: number
+    readonly preview_token: string
+  }>(
+    'select current_revision_id, enabled, preview_token from cv_links'
+  )
+  assert.equal(migratedLinks[0]?.current_revision_id, 'migration-content-revision')
+  assert.equal(migratedLinks[0]?.enabled, 1)
+  assert.match(migratedLinks[0]?.preview_token ?? '', /^[a-f0-9]{32}$/u)
   const tables = await harness.query<{ readonly name: string }>(
     "select name from sqlite_master where type = 'table'"
   )
@@ -455,88 +454,60 @@ test('rebuilds the current model, removes legacy captures, and preserves current
     tables.some(({ name }) => name === 'campaign_captures'),
     false
   )
-  const receiptColumns = await harness.query<{ readonly name: string }>(
-    'pragma table_info(command_receipts)'
-  )
-  assert.equal(
-    receiptColumns.some(({ name }) => name === 'capture_id'),
-    false
+  assert.deepEqual(
+    await harness.query(
+      'select actor, kind, source from application_activities order by revision'
+    ),
+    [{ actor: 'migration', kind: 'milestone_recorded', source: 'migration' }]
   )
   assert.deepEqual(
     await harness.query(
-      'select kind from application_events order by revision'
+      'select idempotency_key, resource_id, scope from idempotency_receipts order by idempotency_key'
     ),
-    [{ kind: 'research_updated' }]
-  )
-  assert.deepEqual(
-    await harness.query(
-      'select kind from command_receipts order by operation_id'
-    ),
-    [{ kind: 'application_note' }]
+    [
+      {
+        idempotency_key: 'migration-receipt-operation',
+        resource_id: 'migration-note',
+        scope: 'application_note',
+      },
+    ]
   )
   assert.deepEqual(await harness.query('pragma foreign_key_check'), [])
 
-  await assert.rejects(
-    harness.database
-      .prepare(
-        `insert into application_events
-          (id, application_id, kind, revision, occurred_at, recorded_at,
-           payload, operation_id)
-         values (?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .bind(
-        'rejected-legacy-event',
-        'migration-application',
-        'campaign_prepared',
-        100,
-        '2026-07-20T00:00:00.000Z',
-        '2026-07-20T00:00:00.000Z',
-        '{}',
-        'rejected-legacy-event-operation'
-      )
-      .run()
-  )
-  await assert.rejects(
-    harness.database
-      .prepare(
-        `insert into command_receipts
-          (operation_id, operation_request_signature, kind, application_id,
-           recorded_at)
-         values (?, ?, ?, ?, ?)`
-      )
-      .bind(
-        'rejected-legacy-receipt',
-        'rejected-legacy-signature',
-        'campaign_capture',
-        'migration-application',
-        '2026-07-20T00:00:00.000Z'
-      )
-      .run()
-  )
+  for (const removedTable of [
+    'application_events',
+    'application_identity_aliases',
+    'command_receipts',
+  ]) {
+    assert.equal(
+      tables.some(({ name }) => name === removedTable),
+      false
+    )
+  }
 
   const indexes = await harness.query<{ readonly name: string }>(
     'pragma index_list(applications)'
   )
   const indexNames = new Set(indexes.map(({ name }) => name))
-  assert.equal(indexNames.has('applications_job_key_unique'), true)
+  assert.equal(indexNames.has('applications_job_key_unique'), false)
+  assert.equal(indexNames.has('applications_posting_fingerprint_unique'), true)
   assert.equal(indexNames.has('applications_updated_revision_unique'), true)
 
   await assert.rejects(
     harness.database
       .prepare(
         `insert into applications (
-          id, job_key, source, canonical_url, company, company_normalized,
+          id, posting_url, posting_url_normalized, posting_fingerprint, company,
           role, application_status, target_stage, updated_revision,
           created_at, updated_at
-        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .bind(
         'invalid-status',
-        'migration:invalid-status',
-        'test',
+        'https://example.test/jobs/invalid',
+        'https://example.test/jobs/invalid',
         'https://example.test/jobs/invalid',
         'Invalid Company',
-        'invalid company',
         'Engineer',
         'not-a-status',
         'backlog',

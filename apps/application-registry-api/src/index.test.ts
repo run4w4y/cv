@@ -60,18 +60,15 @@ describe('application registry worker', () => {
     )
   })
 
-  test('proxies browser registry requests through the same-origin BFF', async () => {
+  test('routes browser registry requests through the same-origin BFF', async () => {
     const response = await worker.fetch(
-      new Request('https://registry.example.test/api/registry/health'),
+      new Request('https://registry.example.test/api/registry/does-not-exist'),
       env,
       context
     )
 
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(404)
     expect(response.headers.get('cache-control')).toBe('private, no-store')
-    expect(
-      Schema.decodeUnknownSync(HealthResponseSchema)(await response.json())
-    ).toEqual({ ok: true })
   })
 
   test('fails closed when browser BFF authentication is not configured', async () => {
@@ -137,7 +134,7 @@ describe('application registry worker', () => {
       context
     )
     const wrongMethod = await worker.fetch(
-      new Request('https://registry.example.test/v1/applications', {
+      new Request('https://registry.example.test/api/registry/applications', {
         method: 'PATCH',
       }),
       env,

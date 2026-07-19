@@ -32,6 +32,8 @@ import {
 } from '../services/pdf-artifacts'
 import type { StartPdfJobInput } from '../types'
 
+const pendingRendererVersion = 'pending:cv-application'
+
 const make = Effect.gen(function* () {
   const applications = yield* ApplicationsCrud
   const artifacts = yield* ArtifactsCrud
@@ -85,14 +87,12 @@ const make = Effect.gen(function* () {
       readonly cvLinkId: string
       readonly publicationVersion: number
       readonly qrTarget: string
-      readonly rendererVersion: string
     }
   ) {
     if (
       existing.cvLinkId !== expected.cvLinkId ||
       existing.contentRevisionId !== expected.contentRevisionId ||
       existing.kind !== 'pdf' ||
-      existing.rendererVersion !== expected.rendererVersion ||
       existing.publicationVersion !== expected.publicationVersion ||
       existing.qrTarget !== expected.qrTarget
     ) {
@@ -131,9 +131,9 @@ const make = Effect.gen(function* () {
             message: `Public CV link not found for content entry ${entry.id}.`,
           })
         }
-        const artifact = yield* artifacts.findReadyForPublication(
+        const artifact = yield* artifacts.findCurrentForPublication(
           link.id,
-          link.publishedRevisionId,
+          link.currentRevisionId,
           rendererVersion ?? null,
           link.publicationVersion,
           link.publicUrl
@@ -165,10 +165,6 @@ const make = Effect.gen(function* () {
         input: StartPdfJobInput
       ) =>
         Effect.gen(function* () {
-          const rendererVersion = yield* requireNonEmpty(
-            input.rendererVersion,
-            'Renderer version'
-          )
           const requestId = yield* requireNonEmpty(
             input.requestId,
             'PDF request ID'
@@ -194,18 +190,12 @@ const make = Effect.gen(function* () {
               message: `Public CV link not found for content entry ${entry.id}.`,
             })
           }
-          if (!link.enabled) {
-            return yield* new RegistryConflictError({
-              message:
-                'The public CV link must be enabled while its PDF is rendered.',
-            })
-          }
           if (link.publicationVersion !== input.expectedPublicationVersion) {
             return yield* new RegistryConflictError({
               message: `Public CV publication version ${link.publicationVersion} does not match expected version ${input.expectedPublicationVersion}.`,
             })
           }
-          if (entry.approvedRevisionId !== link.publishedRevisionId) {
+          if (entry.approvedRevisionId !== link.currentRevisionId) {
             return yield* new RegistryConflictError({
               message:
                 'The public CV link is not pinned to the approved content revision.',
@@ -214,15 +204,14 @@ const make = Effect.gen(function* () {
           yield* requireAssociatedRevision(
             content,
             entry.id,
-            link.publishedRevisionId
+            link.currentRevisionId
           )
 
           const identity = {
-            contentRevisionId: link.publishedRevisionId,
+            contentRevisionId: link.currentRevisionId,
             cvLinkId: link.id,
             publicationVersion: link.publicationVersion,
             qrTarget: link.publicUrl,
-            rendererVersion,
           }
           const existing = yield* artifacts.findByRequestId(requestId)
           if (existing) {
@@ -232,7 +221,7 @@ const make = Effect.gen(function* () {
           const now = yield* registryNow
           const pending: GeneratedArtifact = {
             byteLength: null,
-            contentRevisionId: link.publishedRevisionId,
+            contentRevisionId: link.currentRevisionId,
             createdAt: now,
             cvLinkId: link.id,
             errorCode: null,
@@ -244,7 +233,7 @@ const make = Effect.gen(function* () {
             objectKey: null,
             publicationVersion: link.publicationVersion,
             qrTarget: link.publicUrl,
-            rendererVersion,
+            rendererVersion: pendingRendererVersion,
             sha256: null,
             status: 'pending',
             updatedAt: now,
@@ -275,11 +264,20 @@ const make = Effect.gen(function* () {
         })
     ),
     complete: Effect.fn('PdfArtifactsService.complete')(
-      (applicationIdentifier: string, artifactId: string, bytes: Uint8Array) =>
+      (
+        applicationIdentifier: string,
+        artifactId: string,
+        rendererVersionInput: string,
+        bytes: Uint8Array
+      ) =>
         Effect.gen(function* () {
           const { artifact } = yield* findArtifactForApplication(
             applicationIdentifier,
             artifactId
+          )
+          const rendererVersion = yield* requireNonEmpty(
+            rendererVersionInput,
+            'Renderer version'
           )
           const storedPayload = yield* putOpaquePayload(store, {
             bytes,
@@ -290,7 +288,8 @@ const make = Effect.gen(function* () {
               artifact.sha256 === storedPayload.sha256 &&
               artifact.byteLength === storedPayload.byteLength &&
               artifact.objectKey === storedPayload.key &&
-              artifact.mediaType === 'application/pdf'
+              artifact.mediaType === 'application/pdf' &&
+              artifact.rendererVersion === rendererVersion
             ) {
               return artifact
             }
@@ -310,6 +309,7 @@ const make = Effect.gen(function* () {
             generatedAt: now,
             mediaType: 'application/pdf',
             objectKey: storedPayload.key,
+            rendererVersion,
             sha256: storedPayload.sha256,
             status: 'ready',
             updatedAt: now,

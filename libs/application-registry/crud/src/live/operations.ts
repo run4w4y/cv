@@ -1,13 +1,13 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import { type Effect, Layer } from 'effect'
 import { withRegistryConnections } from '../internal/connection'
-import { findOperation } from '../persistence/operations'
-import { OperationsCrud } from '../services/operations'
+import { findIdempotencyReceipt } from '../persistence/operations'
+import { IdempotencyCrud } from '../services/operations'
 
-export const makeOperationsCrudLive = (database: Effect.Effect<D1Database>) =>
-  Layer.succeed(OperationsCrud, {
-    find: (operationId) =>
+export const makeIdempotencyCrudLive = (database: Effect.Effect<D1Database>) =>
+  Layer.succeed(IdempotencyCrud, {
+    find: (idempotencyKey) =>
       withRegistryConnections(database, ({ query }) =>
-        findOperation(query, operationId)
+        findIdempotencyReceipt(query, idempotencyKey)
       ),
   })

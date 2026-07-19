@@ -33,10 +33,7 @@ const renderApplicationsPage = (path: string) => {
 
 const application: ApplicationListItem = {
   id: 'application-1',
-  jobKey: 'web:one',
-  source: 'web',
-  sourceJobId: 'one',
-  canonicalUrl: 'https://example.test/jobs/one',
+  postingUrl: 'https://example.test/jobs/one',
   company: 'Example',
   role: 'Staff Engineer',
   location: 'Remote',
@@ -45,7 +42,6 @@ const application: ApplicationListItem = {
   personalPriority: 'high',
   followUpAt: null,
   appliedAt: null,
-  lastContactAt: null,
   listingAvailability: 'open',
   listingCheckedAt: null,
   listingClosedCandidateAt: null,
@@ -58,9 +54,8 @@ const application: ApplicationListItem = {
   updatedAt: '2026-07-16T09:30:00.000Z',
   annualCompensation: null,
   counts: { notes: 0 },
-  identityAliases: [],
   labels: [],
-  latestEvent: null,
+  latestActivity: null,
 }
 
 describe('ApplicationsPage', () => {

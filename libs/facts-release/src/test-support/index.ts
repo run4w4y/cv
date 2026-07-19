@@ -1,10 +1,6 @@
 import type { FactsCatalogueV1 } from '@cv/contracts/facts'
 import { Effect, Layer } from 'effect'
-import type {
-  FactsReleaseObject,
-  FactsReleaseProvenance,
-  FactsReleaseRegistration,
-} from '../model'
+import type { FactsReleaseProvenance, PublishedFactsObject } from '../model'
 import { FactsReleasePublicationTarget } from '../publication'
 
 export const fixtureAssetBytes = new TextEncoder().encode(
@@ -66,27 +62,39 @@ export const factsCatalogueFixture = (
 
 export type InMemoryFactsReleasePublication = {
   readonly layer: Layer.Layer<FactsReleasePublicationTarget>
-  readonly objects: ReadonlyMap<string, FactsReleaseObject>
-  readonly registrations: ReadonlyArray<FactsReleaseRegistration>
+  readonly objects: ReadonlyMap<string, PublishedFactsObject>
+  readonly writes: ReadonlyArray<string>
 }
 
 export const makeInMemoryFactsReleasePublication =
   (): InMemoryFactsReleasePublication => {
-    const objects = new Map<string, FactsReleaseObject>()
-    const registrations: FactsReleaseRegistration[] = []
+    const objects = new Map<string, PublishedFactsObject>()
+    const writes: string[] = []
+    const put = (object: PublishedFactsObject) => {
+      writes.push(object.key)
+      objects.set(object.key, { ...object, bytes: object.bytes.slice() })
+    }
 
     return {
       layer: Layer.succeed(FactsReleasePublicationTarget, {
-        putObject: (object) =>
+        putCurrent: (object) =>
           Effect.sync(() => {
-            objects.set(object.key, { ...object, bytes: object.bytes.slice() })
+            const existing = objects.get(object.key)
+            if (
+              existing !== undefined &&
+              existing.bytes.byteLength === object.bytes.byteLength &&
+              existing.bytes.every(
+                (value, index) => value === object.bytes[index]
+              )
+            ) {
+              return 'already-active' as const
+            }
+            put(object)
+            return 'activated' as const
           }),
-        register: (registration) =>
-          Effect.sync(() => {
-            registrations.push(registration)
-          }),
+        putImmutable: (object) => Effect.sync(() => put(object)),
       }),
       objects,
-      registrations,
+      writes,
     }
   }

@@ -4,7 +4,6 @@ import {
   ArtifactsCrud,
   ContentCrud,
   CvLinksCrud,
-  FactsReleasesCrud,
   JobPostingSnapshotsCrud,
   type PersistedContentEntry,
   type PersistedCvLink,
@@ -177,15 +176,7 @@ const makeMemoryCrudLayer = () => {
           if (
             link.applicationId === applicationId &&
             !link.enabled &&
-            link.disabledReason === disabledReason &&
-            [...state.artifacts.values()].some(
-              (artifact) =>
-                artifact.cvLinkId === link.id &&
-                artifact.contentRevisionId === link.publishedRevisionId &&
-                artifact.publicationVersion === link.publicationVersion &&
-                artifact.qrTarget === link.publicUrl &&
-                artifact.status === 'ready'
-            )
+            link.disabledReason === disabledReason
           ) {
             state.links.set(id, {
               ...link,
@@ -210,7 +201,7 @@ const makeMemoryCrudLayer = () => {
       Effect.succeed(
         [...state.links.values()].find((link) => link.token === token)
       ),
-    publish: (input: PersistedCvLink) =>
+    stage: (input: PersistedCvLink) =>
       Effect.sync(() => {
         const existing = [...state.links.values()].find(
           ({ contentEntryId }) => contentEntryId === input.contentEntryId
@@ -218,11 +209,12 @@ const makeMemoryCrudLayer = () => {
         if (existing) {
           state.links.set(existing.id, {
             ...existing,
-            disabledAt: null,
-            disabledReason: null,
-            enabled: true,
+            currentRevisionId: input.currentRevisionId,
+            disabledAt: input.updatedAt,
+            disabledReason: 'draft_revision',
+            enabled: false,
+            previewToken: input.previewToken,
             publicUrl: input.publicUrl,
-            publishedRevisionId: input.publishedRevisionId,
             publicationVersion: existing.publicationVersion + 1,
             updatedAt: input.updatedAt,
             version: existing.version + 1,
@@ -230,9 +222,9 @@ const makeMemoryCrudLayer = () => {
         } else {
           state.links.set(input.id, {
             ...input,
-            disabledAt: null,
-            disabledReason: null,
-            enabled: true,
+            disabledAt: input.updatedAt,
+            disabledReason: 'draft_revision',
+            enabled: false,
             publicationVersion: 1,
             version: 1,
           })
@@ -251,16 +243,7 @@ const makeMemoryCrudLayer = () => {
         if (
           !link ||
           link.version !== expectedVersion ||
-          link.publicationVersion !== expectedPublicationVersion ||
-          (enabled &&
-            ![...state.artifacts.values()].some(
-              (artifact) =>
-                artifact.cvLinkId === link.id &&
-                artifact.contentRevisionId === link.publishedRevisionId &&
-                artifact.publicationVersion === link.publicationVersion &&
-                artifact.qrTarget === link.publicUrl &&
-                artifact.status === 'ready'
-            ))
+          link.publicationVersion !== expectedPublicationVersion
         ) {
           return false
         }
@@ -285,6 +268,24 @@ const makeMemoryCrudLayer = () => {
         )
       ),
     findPendingDispatch: () => Effect.succeed(undefined),
+    findCurrentForPublication: (
+      cvLinkId,
+      revisionId,
+      rendererVersion,
+      publicationVersion,
+      qrTarget
+    ) =>
+      Effect.succeed(
+        [...state.artifacts.values()].find(
+          (artifact) =>
+            artifact.cvLinkId === cvLinkId &&
+            artifact.contentRevisionId === revisionId &&
+            (rendererVersion === null ||
+              artifact.rendererVersion === rendererVersion) &&
+            artifact.publicationVersion === publicationVersion &&
+            artifact.qrTarget === qrTarget
+        )
+      ),
     findReadyForPublication: (
       cvLinkId,
       revisionId,
@@ -325,10 +326,10 @@ const makeMemoryCrudLayer = () => {
         const link = state.links.get(artifact.cvLinkId)
         if (
           existing?.status !== 'pending' ||
-          !link?.enabled ||
+          !link ||
           link.publicationVersion !== artifact.publicationVersion ||
           link.publicUrl !== artifact.qrTarget ||
-          link.publishedRevisionId !== artifact.contentRevisionId
+          link.currentRevisionId !== artifact.contentRevisionId
         ) {
           return false
         }
@@ -349,7 +350,7 @@ const makeMemoryCrudLayer = () => {
     applicationsCrudLayer({
       findByIdentifier: (identifier) =>
         Effect.succeed(
-          identifier === application.id || identifier === application.jobKey
+          identifier === application.id
             ? { ...application, applicationStatus: state.applicationStatus }
             : undefined
         ),
@@ -357,15 +358,7 @@ const makeMemoryCrudLayer = () => {
     Layer.succeed(ContentCrud, contentCrud),
     Layer.succeed(JobPostingSnapshotsCrud, snapshotsCrud),
     Layer.succeed(CvLinksCrud, linksCrud),
-    Layer.succeed(ArtifactsCrud, artifactsCrud),
-    Layer.succeed(FactsReleasesCrud, {
-      activate: () => Effect.succeed(false),
-      assets: () => Effect.succeed([]),
-      catalogs: () => Effect.succeed([]),
-      find: () => Effect.succeed(undefined),
-      findActiveCatalog: () => Effect.succeed(undefined),
-      register: () => Effect.void,
-    })
+    Layer.succeed(ArtifactsCrud, artifactsCrud)
   )
 
   return { layer, state }
@@ -403,7 +396,7 @@ const appendInput = (
   source: 'human' as const,
 })
 
-describe('v2 content domain services', () => {
+describe('content domain services', () => {
   test('keeps independently authored locale entries for one application', async () => {
     const { run } = makeHarness()
     const entries = await run(
@@ -490,7 +483,7 @@ describe('v2 content domain services', () => {
     expect(result.read.bytes).toEqual(secondBytes)
   })
 
-  test('preserves a public token across revisions and hides disabled links', async () => {
+  test('stages private revisions, preserves page identity, and resolves capability previews', async () => {
     const { run, state } = makeHarness()
     const result = await run(
       Effect.gen(function* () {
@@ -517,12 +510,13 @@ describe('v2 content domain services', () => {
             revisionId: first.revision.id,
           }
         )
-        const firstLink = yield* publications.publish(
+        const firstLink = yield* publications.stage(
           application.id,
           entry.id,
           {
             expectedContentVersion: firstApproval.entry.version,
             publicBaseUrl: 'https://cv.example.test/cv',
+            revisionId: first.revision.id,
           }
         )
         yield* Effect.sync(() => {
@@ -540,11 +534,13 @@ describe('v2 content domain services', () => {
         const restored = yield* publications.restoreAfterRejection(
           application.id
         )
-        const enableWithoutPdf = yield* Effect.flip(
-          publications.setAvailability(application.id, entry.id, {
+        const enabledWithoutPdf = yield* publications.setAvailability(
+          application.id,
+          entry.id,
+          {
             enabled: true,
             expectedPublicationVersion: firstLink.publicationVersion,
-          })
+          }
         )
 
         const second = yield* content.appendRevision(
@@ -564,19 +560,42 @@ describe('v2 content domain services', () => {
             revisionId: second.revision.id,
           }
         )
-        const secondLink = yield* publications.publish(
+        const secondLink = yield* publications.stage(
           application.id,
           entry.id,
           {
             expectedContentVersion: secondApproval.entry.version,
             publicBaseUrl: 'https://cv.example.test/cv',
+            revisionId: second.revision.id,
           }
         )
-        const resolved = yield* publications.resolve(secondLink.token)
+        const privatePublicResolution = yield* Effect.flip(
+          publications.resolve(secondLink.token)
+        )
+        const preview = yield* publications.resolvePreview(
+          secondLink.token,
+          secondLink.previewToken
+        )
+        const invalidPreview = yield* Effect.flip(
+          publications.resolvePreview(secondLink.token, 'wrong-token')
+        )
+        const publicLink = yield* publications.setAvailability(
+          application.id,
+          entry.id,
+          {
+            enabled: true,
+            expectedPublicationVersion: secondLink.publicationVersion,
+          }
+        )
+        const resolved = yield* publications.resolve(publicLink.token)
         return {
-          enableWithoutPdf,
+          enabledWithoutPdf,
           firstLink,
           hidden,
+          invalidPreview,
+          preview,
+          privatePublicResolution,
+          publicLink,
           resolved,
           restored,
           second,
@@ -587,12 +606,19 @@ describe('v2 content domain services', () => {
 
     expect(result.hidden._tag).toBe('RegistryNotFoundError')
     expect(result.restored).toBe(0)
-    expect(result.enableWithoutPdf._tag).toBe('RegistryConflictError')
+    expect(result.enabledWithoutPdf.enabled).toBe(true)
     expect(result.secondLink.id).toBe(result.firstLink.id)
     expect(result.secondLink.token).toBe(result.firstLink.token)
-    expect(result.secondLink.publishedRevisionId).toBe(
+    expect(result.secondLink.currentRevisionId).toBe(
       result.second.revision.id
     )
+    expect(result.secondLink.enabled).toBe(false)
+    expect(result.privatePublicResolution._tag).toBe('RegistryNotFoundError')
+    expect(result.invalidPreview._tag).toBe('RegistryNotFoundError')
+    expect(new TextDecoder().decode(result.preview.bytes)).toBe(
+      '{"revision":2}'
+    )
+    expect(result.publicLink.enabled).toBe(true)
     expect(result.secondLink.publicUrl).toBe(
       `https://cv.example.test/cv/${result.firstLink.token}`
     )
@@ -628,10 +654,19 @@ describe('v2 content domain services', () => {
             revisionId: revision.revision.id,
           }
         )
-        const link = yield* publications.publish(application.id, entry.id, {
+        const staged = yield* publications.stage(application.id, entry.id, {
           expectedContentVersion: approved.entry.version,
           publicBaseUrl: 'https://cv.example.test/c',
+          revisionId: revision.revision.id,
         })
+        const link = yield* publications.setAvailability(
+          application.id,
+          entry.id,
+          {
+            enabled: true,
+            expectedPublicationVersion: staged.publicationVersion,
+          }
+        )
         state.applicationStatus = 'rejected'
         state.allowLinkAvailabilityRepair = false
         const hidden = yield* Effect.flip(publications.resolve(link.token))
@@ -688,12 +723,12 @@ describe('v2 content domain services', () => {
     expect(result.disabledInStorage).toBe(true)
     expect(result.stillHidden._tag).toBe('RegistryNotFoundError')
     expect(result.remainedDisabledInStorage).toBe(true)
-    expect(result.restored).toBe(0)
-    expect(result.persistedRestored.enabled).toBe(false)
-    expect(result.restoredInStorage).toBe(false)
+    expect(result.restored).toBe(1)
+    expect(result.persistedRestored.enabled).toBe(true)
+    expect(result.restoredInStorage).toBe(true)
   })
 
-  test('pins a PDF to the published revision and exact public QR target', async () => {
+  test('pins a PDF to the staged revision independently of page visibility', async () => {
     const { run, state } = makeHarness()
     const pdf = new TextEncoder().encode('%PDF-1.7 opaque-test')
     const result = await run(
@@ -722,21 +757,32 @@ describe('v2 content domain services', () => {
             revisionId: draft.revision.id,
           }
         )
-        const link = yield* publications.publish(application.id, entry.id, {
+        const link = yield* publications.stage(application.id, entry.id, {
           expectedContentVersion: approval.entry.version,
           publicBaseUrl: 'https://cv.example.test/cv/',
+          revisionId: draft.revision.id,
         })
         const pending = yield* pdfs.startJob(application.id, entry.id, {
           expectedPublicationVersion: link.publicationVersion,
-          rendererVersion: 'renderer-v1',
           requestId: 'request-1',
         })
-        const ready = yield* pdfs.complete(application.id, pending.id, pdf)
-        const replay = yield* pdfs.complete(application.id, pending.id, pdf)
+        const ready = yield* pdfs.complete(
+          application.id,
+          pending.id,
+          'renderer-v1',
+          pdf
+        )
+        const replay = yield* pdfs.complete(
+          application.id,
+          pending.id,
+          'renderer-v1',
+          pdf
+        )
         const different = yield* Effect.flip(
           pdfs.complete(
             application.id,
             pending.id,
+            'renderer-v1',
             new TextEncoder().encode('%PDF-different')
           )
         )
@@ -759,19 +805,6 @@ describe('v2 content domain services', () => {
           entry.id,
           'renderer-v1'
         )
-        const newerDraft = yield* content.appendRevision(
-          application.id,
-          entry.id,
-          appendInput(
-            new TextEncoder().encode('{"pdf":"newer-unpublished"}'),
-            approval.entry.version,
-            'newer-unpublished-pdf-revision'
-          )
-        )
-        yield* content.approveRevision(application.id, entry.id, {
-          expectedVersion: newerDraft.entry.version,
-          revisionId: newerDraft.revision.id,
-        })
         const enabled = yield* publications.setAvailability(
           application.id,
           entry.id,
@@ -785,6 +818,19 @@ describe('v2 content domain services', () => {
           entry.id,
           'renderer-v1'
         )
+        const newerDraft = yield* content.appendRevision(
+          application.id,
+          entry.id,
+          appendInput(
+            new TextEncoder().encode('{"pdf":"newer-unpublished"}'),
+            approval.entry.version,
+            'newer-unpublished-pdf-revision'
+          )
+        )
+        yield* content.approveRevision(application.id, entry.id, {
+          expectedVersion: newerDraft.entry.version,
+          revisionId: newerDraft.revision.id,
+        })
         const systemDisabled = yield* publications.setAvailability(
           application.id,
           entry.id,
@@ -820,7 +866,7 @@ describe('v2 content domain services', () => {
     )
 
     expect(result.pending.contentRevisionId).toBe(
-      result.link.publishedRevisionId
+      result.link.currentRevisionId
     )
     expect(result.pending.qrTarget).toBe(result.link.publicUrl)
     expect(result.pending.publicationVersion).toBe(
@@ -836,9 +882,9 @@ describe('v2 content domain services', () => {
     expect(result.enabled.publicationVersion).toBe(
       result.link.publicationVersion
     )
-    expect(result.enabled.version).toBe(result.link.version + 2)
-    expect(result.enabled.publishedRevisionId).toBe(
-      result.link.publishedRevisionId
+    expect(result.enabled.version).toBe(result.link.version + 1)
+    expect(result.enabled.currentRevisionId).toBe(
+      result.link.currentRevisionId
     )
     expect(result.reloadedWhileDisabled.bytes).toEqual(pdf)
     expect(result.readAfterEnable.bytes).toEqual(pdf)
@@ -883,17 +929,17 @@ describe('v2 content domain services', () => {
             revisionId: draft.revision.id,
           }
         )
-        const firstLink = yield* publications.publish(
+        const firstLink = yield* publications.stage(
           application.id,
           entry.id,
           {
             expectedContentVersion: approval.entry.version,
             publicBaseUrl: 'https://cv.example.test/c/',
+            revisionId: draft.revision.id,
           }
         )
         const failedAttempt = yield* pdfs.startJob(application.id, entry.id, {
           expectedPublicationVersion: firstLink.publicationVersion,
-          rendererVersion: 'renderer-v1',
           requestId: 'request-failed',
         })
         const failed = yield* pdfs.fail(
@@ -904,35 +950,39 @@ describe('v2 content domain services', () => {
         )
         const failedReplay = yield* pdfs.startJob(application.id, entry.id, {
           expectedPublicationVersion: firstLink.publicationVersion,
-          rendererVersion: 'renderer-v1',
           requestId: 'request-failed',
         })
         const retryAttempt = yield* pdfs.startJob(application.id, entry.id, {
           expectedPublicationVersion: firstLink.publicationVersion,
-          rendererVersion: 'renderer-v1',
           requestId: 'request-retry',
         })
         const firstReady = yield* pdfs.complete(
           application.id,
           retryAttempt.id,
+          'renderer-v1',
           firstPdf
         )
         const staleAttempt = yield* pdfs.startJob(application.id, entry.id, {
           expectedPublicationVersion: firstLink.publicationVersion,
-          rendererVersion: 'renderer-v1',
           requestId: 'request-stale',
         })
 
-        const secondLink = yield* publications.publish(
+        const secondLink = yield* publications.stage(
           application.id,
           entry.id,
           {
             expectedContentVersion: approval.entry.version,
             publicBaseUrl: 'https://new-cv.example.test/c/',
+            revisionId: draft.revision.id,
           }
         )
         const staleCompletion = yield* Effect.flip(
-          pdfs.complete(application.id, staleAttempt.id, firstPdf)
+          pdfs.complete(
+            application.id,
+            staleAttempt.id,
+            'renderer-v1',
+            firstPdf
+          )
         )
         const staleRead = yield* Effect.flip(
           pdfs.readCurrent(application.id, entry.id, 'renderer-v1')
@@ -942,13 +992,13 @@ describe('v2 content domain services', () => {
           entry.id,
           {
             expectedPublicationVersion: secondLink.publicationVersion,
-            rendererVersion: 'renderer-v1',
             requestId: 'request-changed-url',
           }
         )
         const secondReady = yield* pdfs.complete(
           application.id,
           changedUrlAttempt.id,
+          'renderer-v1',
           secondPdf
         )
         const current = yield* pdfs.readCurrent(
@@ -1002,10 +1052,10 @@ describe('v2 content domain services', () => {
         const snapshots = yield* JobPostingSnapshotsService
         const snapshot = yield* snapshots.persist(application.id, {
           fetcherVersion: 'fetcher-v1',
-          finalUrl: application.canonicalUrl,
+          finalUrl: application.postingUrl,
           normalized: { bytes: normalized, mediaType: 'application/json' },
           raw: { bytes: raw, mediaType: 'text/html' },
-          requestedUrl: application.canonicalUrl,
+          requestedUrl: application.postingUrl,
           status: 'fetched',
         })
         const storedRaw = yield* snapshots.readPayload(

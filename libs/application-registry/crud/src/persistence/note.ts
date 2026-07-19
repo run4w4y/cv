@@ -1,8 +1,8 @@
 import {
-  applicationEvents,
+  applicationActivities,
   applicationNotes,
   applications,
-  commandReceipts,
+  idempotencyReceipts,
 } from '@cv/application-registry-entity'
 import { eq, sql } from 'drizzle-orm'
 import type { BatchItem } from 'drizzle-orm/batch'
@@ -35,29 +35,27 @@ export const persistNote = (
       createdAt: input.recordedAt,
       updatedAt: input.recordedAt,
     }),
-    database.batch.insert(applicationEvents).values({
-      id: input.eventId,
+    database.batch.insert(applicationActivities).values({
+      id: input.activityId,
       applicationId,
       kind: 'note_added',
+      actor: 'user',
+      source: 'management',
       revision: currentRevision,
       occurredAt: input.recordedAt,
-      recordedAt: input.recordedAt,
-      deviceId: null,
       payload: {
         noteId: input.noteId,
         kind: input.kind,
         source: input.source,
       },
-      operationId: input.operationId,
     }),
-    database.batch.insert(commandReceipts).values({
-      operationId: input.operationId,
-      operationRequestSignature: input.operationRequestSignature,
-      kind: 'application_note',
+    database.batch.insert(idempotencyReceipts).values({
+      idempotencyKey: input.idempotencyKey,
+      requestHash: input.requestHash,
+      scope: 'application_note',
       applicationId,
-      eventId: input.eventId,
-      noteId: input.noteId,
-      recordedAt: input.recordedAt,
+      resourceId: input.noteId,
+      createdAt: input.recordedAt,
     }),
   ] satisfies [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]
 

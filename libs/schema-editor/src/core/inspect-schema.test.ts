@@ -52,9 +52,28 @@ describe('runtime schema inspection', () => {
   })
 
   it('uses the encoded representation while retaining transformation metadata', () => {
-    const descriptor = inspectSchema(Schema.NumberFromString).descriptor
+    const descriptor = inspectSchema(
+      Schema.NumberFromString.annotate({
+        title: 'Encoded number',
+        default: 42,
+        examples: [1, 2],
+      })
+    ).descriptor
     expect(descriptor.kind).toBe('string')
     expect(descriptor.encoded).toBe(true)
+    expect(descriptor.title).toBe('Encoded number')
+    expect(descriptor.defaultValue).toBeUndefined()
+    expect(descriptor.examples).toBeUndefined()
+    expect(typeof createInitialValue(descriptor)).toBe('string')
+  })
+
+  it('preserves explicit null metadata when an outer schema overrides a child', () => {
+    const inner = Schema.NullOr(Schema.String).annotate({ default: 'inner' })
+    const descriptor = inspectSchema(
+      Schema.suspend(() => inner).annotate({ default: null })
+    ).descriptor
+
+    expect(descriptor.defaultValue).toBeNull()
   })
 
   it('detects structural nodes that require the raw JSON fallback', () => {
@@ -67,12 +86,57 @@ describe('runtime schema inspection', () => {
         astTag: 'Arrays',
         reason:
           'Tuples and arrays with trailing elements require raw JSON editing.',
+        fallback: 'raw-json',
       },
     ])
+    expect(tuple.jsonEditable).toBe(true)
 
     const unknown = inspectSchema(Schema.Unknown)
     expect(unknown.descriptor.kind).toBe('raw')
     expect(unknown.unsupported[0]?.astTag).toBe('Unknown')
+  })
+
+  it('distinguishes raw JSON fallbacks from non-JSON wire values', () => {
+    const bigint = inspectSchema(Schema.BigInt)
+    const bigintTuple = inspectSchema(Schema.Tuple([Schema.BigInt]))
+
+    expect(bigint.descriptor.kind).toBe('unrepresentable')
+    expect(bigint.jsonEditable).toBe(false)
+    expect(bigint.unsupported[0]?.fallback).toBe('unrepresentable')
+    expect(bigintTuple.descriptor.kind).toBe('unrepresentable')
+    expect(bigintTuple.jsonEditable).toBe(false)
+  })
+
+  it('uses raw JSON for empty object ASTs with non-object values', () => {
+    const inspection = inspectSchema(Schema.Struct({}))
+
+    expect(inspection.descriptor.kind).toBe('raw')
+    expect(inspection.jsonEditable).toBe(true)
+    expect(validateSchemaValue(Schema.Struct({}), 1).valid).toBe(true)
+  })
+
+  it('keeps reliably discriminated unions structural and ambiguous unions raw', () => {
+    const discriminated = inspectSchema(
+      Schema.Union([
+        Schema.Struct({ kind: Schema.Literal('a'), a: Schema.String }),
+        Schema.Struct({ kind: Schema.Literal('b'), b: Schema.Number }),
+      ])
+    )
+    const ambiguous = inspectSchema(
+      Schema.Union([
+        Schema.Struct({ a: Schema.String }),
+        Schema.Struct({ b: Schema.Number }),
+      ])
+    )
+    const distinctJsonTypes = inspectSchema(
+      Schema.Union([Schema.Struct({ value: Schema.String }), Schema.String])
+    )
+
+    expect(discriminated.descriptor.kind).toBe('union')
+    expect(discriminated.structurallyEditable).toBe(true)
+    expect(distinctJsonTypes.descriptor.kind).toBe('union')
+    expect(ambiguous.descriptor.kind).toBe('raw')
+    expect(ambiguous.unsupported[0]?.reason).toMatch(/unambiguously/i)
   })
 })
 
@@ -104,9 +168,33 @@ describe('generic validation and JSON boundaries', () => {
     })
     const invalid = parseRawJson('{')
     expect(invalid.valid).toBe(false)
-    expect(formatRawJson({ ok: true })).toBe('{\n  "ok": true\n}')
+    expect(formatRawJson({ ok: true })).toEqual({
+      valid: true,
+      source: '{\n  "ok": true\n}',
+    })
     const cyclic: Record<string, unknown> = {}
     cyclic.self = cyclic
-    expect(formatRawJson(cyclic)).toBe('null')
+    expect(formatRawJson(cyclic)).toEqual({
+      valid: false,
+      message: 'The current value cannot be represented as JSON.',
+    })
+    expect(formatRawJson(1n).valid).toBe(false)
+    expect(formatRawJson(new Date()).valid).toBe(false)
+    expect(validateSchemaValue(Schema.Number, Infinity)).toEqual({
+      valid: false,
+      issues: [
+        {
+          pointer: '',
+          path: [],
+          message: 'The value cannot be represented as JSON.',
+        },
+      ],
+    })
+    expect(
+      formatRawJson(Object.assign({}, { [Symbol('hidden')]: 1 })).valid
+    ).toBe(false)
+    const sparse: Array<unknown> = []
+    sparse.length = 1
+    expect(formatRawJson(sparse).valid).toBe(false)
   })
 })

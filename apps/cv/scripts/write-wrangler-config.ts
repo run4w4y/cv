@@ -1,104 +1,88 @@
-import { dirname, resolve } from 'node:path'
+import { Config, Effect } from 'effect'
 
-type ServiceBinding = {
-  readonly binding: string
-  readonly entrypoint?: string
-  readonly service: string
-}
-
-type GeneratedWranglerConfig = Record<string, unknown> & {
-  readonly assets?: {
-    readonly binding?: string
-    readonly directory?: string
-    readonly run_worker_first?: boolean | readonly string[]
+type WranglerConfig = {
+  readonly $schema: string
+  readonly assets: {
+    readonly binding: 'ASSETS'
+    readonly directory: '.open-next/assets'
   }
-  readonly main?: string
-  readonly no_bundle?: boolean
-  readonly rules?: unknown
-  readonly services?: readonly ServiceBinding[]
+  readonly cache: { readonly enabled: true }
+  readonly compatibility_date: string
+  readonly compatibility_flags: readonly ['nodejs_compat']
+  readonly main: 'worker.ts'
+  readonly name: string
+  readonly observability: { readonly enabled: true }
+  readonly preview_urls: false
+  readonly services: readonly {
+    readonly binding: 'CV_PUBLIC_RESOLVER'
+    readonly entrypoint: string
+    readonly service: string
+  }[]
+  readonly workers_dev: true
 }
-
-const generatedConfigPath = 'apps/cv/dist/server/wrangler.json'
-const defaultOutputPath = 'apps/cv/dist/server/wrangler.deploy.json'
 
 const optionalString = (name: string, fallback: string) =>
-  process.env[name]?.trim() || fallback
+  Config.string(name).pipe(
+    Config.withDefault(fallback),
+    Config.map((value) => value.trim() || fallback)
+  )
 
-const compatibilityDate = optionalString(
-  'CV_PUBLIC_COMPATIBILITY_DATE',
-  '2026-06-22'
+const readConfig = Effect.all({
+  applicationRegistryWorkerName: optionalString(
+    'APPLICATION_REGISTRY_WORKER_NAME',
+    'cv-application-registry'
+  ),
+  compatibilityDate: optionalString(
+    'CV_PUBLIC_COMPATIBILITY_DATE',
+    '2026-07-19'
+  ),
+  registryEntrypoint: optionalString(
+    'CV_PUBLIC_RESOLVER_ENTRYPOINT',
+    'CvPublicResolver'
+  ),
+  registryServiceName: optionalString('CV_PUBLIC_REGISTRY_SERVICE_NAME', ''),
+  workerName: optionalString('CV_PUBLIC_WORKER_NAME', 'cv-public'),
+}).pipe(
+  Effect.map(
+    ({
+      applicationRegistryWorkerName,
+      compatibilityDate,
+      registryEntrypoint,
+      registryServiceName,
+      workerName,
+    }) =>
+      ({
+        $schema: '../../node_modules/wrangler/config-schema.json',
+        assets: { binding: 'ASSETS', directory: '.open-next/assets' },
+        cache: { enabled: true },
+        compatibility_date: compatibilityDate,
+        compatibility_flags: ['nodejs_compat'],
+        main: 'worker.ts',
+        name: workerName,
+        observability: { enabled: true },
+        preview_urls: false,
+        services: [
+          {
+            binding: 'CV_PUBLIC_RESOLVER',
+            entrypoint: registryEntrypoint,
+            service: registryServiceName || applicationRegistryWorkerName,
+          },
+        ],
+        workers_dev: true,
+      }) satisfies WranglerConfig
+  )
 )
-const registryServiceName = optionalString(
-  'CV_PUBLIC_REGISTRY_SERVICE_NAME',
-  optionalString('APPLICATION_REGISTRY_WORKER_NAME', 'cv-application-registry')
-)
-const registryEntrypoint = optionalString(
-  'CV_PUBLIC_RESOLVER_ENTRYPOINT',
-  'CvPublicResolver'
-)
-const workerName = optionalString('CV_PUBLIC_WORKER_NAME', 'cv-public')
-const outputPath = process.argv[2]?.trim() || defaultOutputPath
 
-if (!/^\d{4}-\d{2}-\d{2}$/.test(compatibilityDate)) {
-  throw new Error(
-    'CV_PUBLIC_COMPATIBILITY_DATE must use the YYYY-MM-DD format.'
-  )
-}
+const program = Effect.gen(function* () {
+  const outputPath = process.argv[2]?.trim() || 'apps/cv/wrangler.deploy.jsonc'
+  const config = yield* readConfig
+  yield* Effect.tryPromise({
+    try: () => Bun.write(outputPath, `${JSON.stringify(config, null, 2)}\n`),
+    catch: (cause) => new Error(`Failed to write ${outputPath}`, { cause }),
+  })
+})
 
-if (resolve(dirname(outputPath)) !== resolve(dirname(generatedConfigPath))) {
-  throw new Error(
-    `The production Wrangler config must remain beside ${generatedConfigPath} so its entrypoint and asset paths stay exact.`
-  )
-}
-
-const sourceFile = Bun.file(generatedConfigPath)
-if (!(await sourceFile.exists())) {
-  throw new Error(
-    `${generatedConfigPath} does not exist. Build the Astro application first.`
-  )
-}
-
-const source = (await sourceFile.json()) as GeneratedWranglerConfig
-const expectedAssets = {
-  binding: 'ASSETS',
-  directory: '../client',
-  run_worker_first: true,
-} as const
-
-if (
-  source.main !== 'entry.mjs' ||
-  source.no_bundle !== true ||
-  source.assets?.binding !== expectedAssets.binding ||
-  source.assets.directory !== expectedAssets.directory ||
-  source.assets.run_worker_first !== expectedAssets.run_worker_first
-) {
-  throw new Error(
-    `${generatedConfigPath} does not match the expected Astro Worker entrypoint and asset layout.`
-  )
-}
-
-const productionConfig = {
-  ...source,
-  configPath: undefined,
-  definedEnvironments: undefined,
-  dev: undefined,
-  topLevelName: undefined,
-  userConfigPath: undefined,
-  $schema: '../../../../node_modules/wrangler/config-schema.json',
-  assets: expectedAssets,
-  compatibility_date: compatibilityDate,
-  main: './entry.mjs',
-  name: workerName,
-  observability: { enabled: true },
-  preview_urls: false,
-  services: [
-    {
-      binding: 'CV_PUBLIC_RESOLVER',
-      service: registryServiceName,
-      entrypoint: registryEntrypoint,
-    },
-  ],
-  workers_dev: true,
-} satisfies GeneratedWranglerConfig
-
-await Bun.write(outputPath, `${JSON.stringify(productionConfig, null, 2)}\n`)
+Effect.runPromise(program).catch((error: unknown) => {
+  console.error(error instanceof Error ? error.message : String(error))
+  process.exitCode = 1
+})

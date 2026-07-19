@@ -3,25 +3,20 @@ import {
   CompensationDisplayCurrencySchema,
   CreateApplicationRequestSchema,
   type ListApplicationsResponse,
-  PatchApplicationRequestSchema,
+  UpdateApplicationRequestSchema,
 } from '@cv/application-registry-api-contract'
 import {
   applicationStatusValues,
   personalPriorityValues,
   targetStageValues,
 } from '@cv/application-registry-entity'
-import { Console, DateTime, Effect } from 'effect'
+import { Console, Crypto, DateTime, Effect } from 'effect'
 import { Argument, Command, Flag } from 'effect/unstable/cli'
 
 import { ApplicationRegistryClient } from '../../client'
 import {
-  registryDeduplicationFlags,
-  runRegistryDeduplication,
-} from '../deduplicate'
-import {
   allFlag,
   applicationIdentifierArgument,
-  expectedVersionFlag,
   inputFlag,
   jsonFlag,
   listPageSizeFlag,
@@ -29,7 +24,7 @@ import {
   optionalFlag,
   optionalStringFlag,
 } from '../flags'
-import { ApplicationRegistryCliInputError, decodeJsonInput } from '../input'
+import { decodeJsonInput } from '../input'
 import { printApplication, printApplications, printJson } from '../output'
 import {
   type ApplicationFilterOptions,
@@ -158,33 +153,25 @@ export const applicationGetCommand = Command.make(
     )
 ).pipe(Command.withDescription('Get one registry application.'))
 
-const writeApplication = (
-  operation: 'create' | 'upsert',
-  options: { readonly input: string; readonly json: boolean }
-) =>
+const writeApplication = (options: {
+  readonly input: string
+  readonly json: boolean
+}) =>
   Effect.gen(function* () {
     const request = yield* decodeJsonInput(
       options.input,
       CreateApplicationRequestSchema
     )
     const client = yield* ApplicationRegistryClient
-    const application = yield* operation === 'create'
-      ? client.create(request)
-      : client.upsert(request)
+    const application = yield* client.create(request)
     yield* printApplication(application, options.json)
   })
 
 export const applicationCreateCommand = Command.make(
   'create',
   { input: inputFlag, json: jsonFlag },
-  (options) => writeApplication('create', options)
+  writeApplication
 ).pipe(Command.withDescription('Create an application; fail if it exists.'))
-
-export const applicationUpsertCommand = Command.make(
-  'upsert',
-  { input: inputFlag, json: jsonFlag },
-  (options) => writeApplication('upsert', options)
-).pipe(Command.withDescription('Create or replace an application by job key.'))
 
 export const applicationUpdateCommand = Command.make(
   'update',
@@ -193,35 +180,19 @@ export const applicationUpdateCommand = Command.make(
     Effect.gen(function* () {
       const request = yield* decodeJsonInput(
         options.input,
-        PatchApplicationRequestSchema
+        UpdateApplicationRequestSchema
       )
       const client = yield* ApplicationRegistryClient
-      const application = yield* client.patch(options.identifier, request)
-      yield* printApplication(application, options.json)
+      const crypto = yield* Crypto.Crypto
+      const idempotencyKey = yield* crypto.randomUUIDv7
+      const result = yield* client.update(
+        options.identifier,
+        idempotencyKey,
+        request
+      )
+      yield* printApplication(result.application, options.json)
     })
 ).pipe(Command.withDescription('Patch application metadata and triage fields.'))
-
-const yes = Flag.boolean('yes').pipe(
-  Flag.withDescription('Confirm destructive deletion.')
-)
-
-export const applicationDeleteCommand = Command.make(
-  'delete',
-  { expectedVersion: expectedVersionFlag, identifier, json: jsonFlag, yes },
-  (options) =>
-    Effect.gen(function* () {
-      if (!options.yes) {
-        return yield* new ApplicationRegistryCliInputError({
-          message: 'Refusing to delete without --yes.',
-        })
-      }
-      const client = yield* ApplicationRegistryClient
-      yield* client.remove(options.identifier, options.expectedVersion)
-      yield* options.json
-        ? printJson({ deleted: true, identifier: options.identifier })
-        : Console.log(`Deleted ${options.identifier}.`)
-    })
-).pipe(Command.withDescription('Delete one registry application.'))
 
 const formatFacetValues = (values: readonly string[]) =>
   values.join(', ') || '—'
@@ -246,18 +217,8 @@ export const applicationFacetsCommand = Command.make(
     )
 ).pipe(Command.withDescription('List dynamic application filter facets.'))
 
-export const applicationDeduplicateCommand = Command.make(
-  'deduplicate',
-  registryDeduplicationFlags,
-  runRegistryDeduplication
-).pipe(
-  Command.withDescription(
-    'Find duplicate canonical URLs and resolve each conflict explicitly.'
-  )
-)
-
 const applicationRoot = Command.make('application').pipe(
-  Command.withDescription('Create, query, update, and delete applications.')
+  Command.withDescription('Create, query, and update applications.')
 )
 
 export const applicationCommand = applicationRoot.pipe(
@@ -266,10 +227,7 @@ export const applicationCommand = applicationRoot.pipe(
     applicationSearchCommand,
     applicationGetCommand,
     applicationCreateCommand,
-    applicationUpsertCommand,
     applicationUpdateCommand,
-    applicationDeleteCommand,
-    applicationDeduplicateCommand,
     applicationFacetsCommand,
   ])
 )

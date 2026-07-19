@@ -1,28 +1,20 @@
 import {
-  AppendableApplicationEventKindSchema,
   ApplicationCompensationInputSchema,
-  ApplicationEventInsertSchema,
   ApplicationMutableSchema,
   ApplicationNoteSchema,
-  ApplicationStatusSchema,
   ApplicationWritableSchema,
-  appendableApplicationEventKindValues,
   CurrencyCodeSchema,
   ExpectedApplicationVersionSchema,
-  InformationalApplicationEventKindSchema,
-  informationalApplicationEventKindValues,
   ListingCheckModeSchema,
   ListingCheckTargetSchema,
   ListingObservationSchema,
   NonEmptyTrimmedStringSchema as NonEmptyString,
-  StatusChangingApplicationEventKindSchema,
-  statusChangingApplicationEventKindValues,
   UtcIsoTimestampSchema,
 } from '@cv/application-registry-entity'
 import {
+  activityListQuery,
   AnnualCompensationSchema,
   applicationListQuery,
-  eventListQuery,
 } from '@cv/application-registry-entity/query'
 import {
   fromSearchParams,
@@ -33,8 +25,6 @@ import {
 import { Effect, Schema } from 'effect'
 import { pick } from 'es-toolkit/object'
 
-const NullableNonEmptyString = Schema.NullOr(NonEmptyString)
-
 export const RegistryApplicationInputSchema = Schema.Struct({
   ...ApplicationWritableSchema.fields,
   compensations: Schema.optional(
@@ -42,20 +32,10 @@ export const RegistryApplicationInputSchema = Schema.Struct({
   ),
   labels: Schema.optional(Schema.Array(NonEmptyString)),
   location: Schema.NullOr(Schema.String),
-  sourceJobId: NullableNonEmptyString,
 })
 
 export type RegistryApplicationInput = Schema.Schema.Type<
   typeof RegistryApplicationInputSchema
->
-
-export const PatchApplicationCommandSchema = Schema.Struct({
-  ...ApplicationMutableSchema.fields,
-  expectedVersion: Schema.optional(ExpectedApplicationVersionSchema),
-})
-
-export type PatchApplicationCommand = Schema.Schema.Type<
-  typeof PatchApplicationCommandSchema
 >
 
 /**
@@ -63,67 +43,36 @@ export type PatchApplicationCommand = Schema.Schema.Type<
  * present labels replace the label set and a present null compensation clears
  * the current annual compensation.
  */
-export const UpdateManagedApplicationCommandSchema = Schema.Struct({
+export const UpdateApplicationCommandSchema = Schema.Struct({
   ...ApplicationMutableSchema.fields,
   annualCompensation: Schema.optional(Schema.NullOr(AnnualCompensationSchema)),
   expectedVersion: ExpectedApplicationVersionSchema,
   labels: Schema.optional(Schema.Array(NonEmptyString)),
-  operationId: NonEmptyString,
 })
 
-export type UpdateManagedApplicationCommand = Schema.Schema.Type<
-  typeof UpdateManagedApplicationCommandSchema
+export type UpdateApplicationCommand = Schema.Schema.Type<
+  typeof UpdateApplicationCommandSchema
 >
+
+export const IdempotencyHeadersSchema = Schema.Struct({
+  'idempotency-key': NonEmptyString,
+})
 
 const applicationNoteInputKeys = ['kind', 'body', 'source'] as const
 
 export const AddApplicationNoteCommandSchema = Schema.Struct({
   ...pick(ApplicationNoteSchema.fields, applicationNoteInputKeys),
-  operationId: NonEmptyString,
 })
 
 export type AddApplicationNoteCommand = Schema.Schema.Type<
   typeof AddApplicationNoteCommandSchema
 >
 
-export type { AppendableApplicationEventKind } from '@cv/application-registry-entity'
-export {
-  AppendableApplicationEventKindSchema,
-  appendableApplicationEventKindValues,
-  informationalApplicationEventKindValues,
-  statusChangingApplicationEventKindValues,
-}
-
-const appendApplicationEventInputKeys = ['occurredAt', 'payload'] as const
-
-const appendApplicationEventFields = {
-  ...pick(ApplicationEventInsertSchema.fields, appendApplicationEventInputKeys),
-  operationId: NonEmptyString,
-  deviceId: NullableNonEmptyString,
-  expectedVersion: Schema.NullOr(Schema.Int),
-}
-
-export const AppendApplicationEventCommandSchema = Schema.Union([
-  Schema.Struct({
-    ...appendApplicationEventFields,
-    kind: StatusChangingApplicationEventKindSchema,
-    nextApplicationStatus: ApplicationStatusSchema,
-  }),
-  Schema.Struct({
-    ...appendApplicationEventFields,
-    kind: InformationalApplicationEventKindSchema,
-  }),
-])
-
-export type AppendApplicationEventCommand = Schema.Schema.Type<
-  typeof AppendApplicationEventCommandSchema
->
-
 export const ListingCheckFindingSchema = Schema.Struct({
   applicationId: NonEmptyString,
-  canonicalUrl: NonEmptyString,
+  postingUrl: NonEmptyString,
   observation: ListingObservationSchema,
-  operationId: NonEmptyString,
+  idempotencyKey: NonEmptyString,
   target: ListingCheckTargetSchema,
 })
 
@@ -138,7 +87,6 @@ export const SubmitListingCheckFindingsCommandSchema = Schema.Struct({
   finalBatch: Schema.Boolean,
   findings: Schema.Array(ListingCheckFindingSchema),
   mode: ListingCheckModeSchema,
-  runId: NonEmptyString,
   startedAt: UtcIsoTimestampSchema,
 })
 
@@ -148,7 +96,6 @@ export type SubmitListingCheckFindingsCommand = Schema.Schema.Type<
 
 export const ResolveListingAvailabilityCommandSchema = Schema.Struct({
   expectedVersion: ExpectedApplicationVersionSchema,
-  operationId: NonEmptyString,
   resolution: Schema.Literals(['open', 'closed']),
 })
 
@@ -194,32 +141,25 @@ export const decodeListApplicationsSearchParams = (
   input: URLSearchParams | string
 ) => Effect.runSync(fromSearchParams(ListApplicationsQuerySchema, input))
 
-export const DeleteApplicationQuerySchema = Schema.Struct({
-  expectedVersion: Schema.optional(
-    Schema.NumberFromString.pipe(
-      Schema.decodeTo(ExpectedApplicationVersionSchema)
-    )
-  ),
-})
+export const ListActivitiesQuerySchema = queryParamsSchema(activityListQuery)
 
-export type DeleteApplicationQuery = Schema.Schema.Type<
-  typeof DeleteApplicationQuerySchema
+export type ListActivitiesQuery = Schema.Schema.Type<
+  typeof ListActivitiesQuerySchema
 >
 
-export const ListEventsQuerySchema = queryParamsSchema(eventListQuery)
-
-export type ListEventsQuery = Schema.Schema.Type<typeof ListEventsQuerySchema>
-
-/** Encodes an event-list request with the canonical HTTP query codec. */
-export const encodeListEventsSearchParams = (request: ListEventsQuery) =>
+/** Encodes an activity-list request with the canonical HTTP query codec. */
+export const encodeListActivitiesSearchParams = (
+  request: ListActivitiesQuery
+) =>
   Effect.runSync(
-    toSearchParams(ListEventsQuerySchema, {
+    toSearchParams(ListActivitiesQuerySchema, {
       ...request,
       filters: request.filters?.length === 0 ? undefined : request.filters,
       orderBy: request.orderBy?.length === 0 ? undefined : request.orderBy,
     })
   )
 
-/** Decodes event-list query parameters with the canonical HTTP codec. */
-export const decodeListEventsSearchParams = (input: URLSearchParams | string) =>
-  Effect.runSync(fromSearchParams(ListEventsQuerySchema, input))
+/** Decodes activity-list query parameters with the canonical HTTP codec. */
+export const decodeListActivitiesSearchParams = (
+  input: URLSearchParams | string
+) => Effect.runSync(fromSearchParams(ListActivitiesQuerySchema, input))

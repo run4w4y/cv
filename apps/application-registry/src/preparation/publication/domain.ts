@@ -1,39 +1,19 @@
 import {
   ContentEntryResponseSchema,
   CvLinkResponseSchema,
-  GeneratedArtifactResponseSchema,
-  type PdfJobResponse,
+  PdfJobResponseSchema,
 } from '@cv/application-registry-api-contract'
 import type {
   ContentEntry,
   CvLink,
-  GeneratedArtifact,
 } from '@cv/application-registry-entity'
 import { Schema } from 'effect'
 import * as Workflow from 'effect/unstable/workflow/Workflow'
 
-const HttpBaseUrlSchema = Schema.String.pipe(
-  Schema.check(
-    Schema.makeFilter((value) => {
-      try {
-        const parsed = new URL(value)
-        return parsed.protocol === 'http:' || parsed.protocol === 'https:'
-          ? true
-          : 'The public CV base URL must use HTTP(S).'
-      } catch {
-        return 'Enter a valid absolute public CV base URL.'
-      }
-    })
-  )
-)
-
 export const CvPublicationStageSchema = Schema.Literals([
   'input',
-  'publish-link',
+  'enable-page',
   'start-pdf',
-  'poll-pdf',
-  'verify-artifact',
-  'compensation',
 ])
 export type CvPublicationStage = typeof CvPublicationStageSchema.Type
 
@@ -48,8 +28,9 @@ export class CvPublicationWorkflowError extends Schema.TaggedErrorClass<CvPublic
 export const CvPublicationWorkflowInputSchema = Schema.Struct({
   applicationId: Schema.NonEmptyString,
   entry: ContentEntryResponseSchema,
-  publicBaseUrl: HttpBaseUrlSchema,
-  rendererVersion: Schema.NonEmptyString,
+  expectedPublicationVersion: Schema.Int.pipe(
+    Schema.check(Schema.isGreaterThan(0))
+  ),
   runId: Schema.NonEmptyString,
 }).pipe(
   Schema.check(
@@ -72,15 +53,16 @@ export interface CvPublicationWorkflowInput
 
 export const CvPublicationWorkflowResultSchema = Schema.Struct({
   applicationId: Schema.NonEmptyString,
-  artifact: GeneratedArtifactResponseSchema,
   entryId: Schema.NonEmptyString,
+  job: Schema.NullOr(PdfJobResponseSchema),
   link: CvLinkResponseSchema,
+  pdfStartError: Schema.NullOr(Schema.NonEmptyString),
   runId: Schema.NonEmptyString,
 })
 export interface CvPublicationWorkflowResult
   extends Schema.Schema.Type<typeof CvPublicationWorkflowResultSchema> {}
 
-export const PublishCvWorkflow = Workflow.make('PublishCv/v1', {
+export const PublishCvWorkflow = Workflow.make('PublishCv/v2', {
   payload: CvPublicationWorkflowInputSchema,
   success: CvPublicationWorkflowResultSchema,
   error: CvPublicationWorkflowError,
@@ -90,8 +72,7 @@ export const PublishCvWorkflow = Workflow.make('PublishCv/v1', {
 export type StartCvPublicationInput = {
   readonly applicationId: string
   readonly entry: ContentEntry
-  readonly publicBaseUrl: string
-  readonly rendererVersion: string
+  readonly expectedPublicationVersion: number
 }
 
 export type StartCvPublicationResult = {
@@ -106,7 +87,6 @@ export type CvPublicationIdentity = {
 
 type RunBase = CvPublicationIdentity & {
   readonly executionId: string
-  readonly rendererVersion: string
   readonly runId: string
 }
 
@@ -123,18 +103,6 @@ export type ActiveCvPublicationRun =
       readonly _tag: 'StartingPdf'
       readonly link: CvLink
       readonly message: string
-    })
-  | (RunBase & {
-      readonly _tag: 'PollingPdf'
-      readonly link: CvLink
-      readonly message: string
-      readonly job: PdfJobResponse
-    })
-  | (RunBase & {
-      readonly _tag: 'VerifyingArtifact'
-      readonly link: CvLink
-      readonly message: string
-      readonly job: PdfJobResponse
     })
 
 export type CvPublicationRun =
@@ -170,22 +138,3 @@ export const publicationRunResult = (
   run: CvPublicationRun | null
 ): CvPublicationWorkflowResult | null =>
   run?._tag === 'Published' ? run.result : null
-
-export const verifiedPublicationResult = (
-  input: CvPublicationWorkflowInput,
-  link: CvLink,
-  artifact: GeneratedArtifact,
-  jobArtifactId: string
-): boolean =>
-  input.entry.approvedRevisionId !== null &&
-  link.applicationId === input.applicationId &&
-  link.contentEntryId === input.entry.id &&
-  link.publishedRevisionId === input.entry.approvedRevisionId &&
-  link.enabled &&
-  artifact.id === jobArtifactId &&
-  artifact.cvLinkId === link.id &&
-  artifact.contentRevisionId === input.entry.approvedRevisionId &&
-  artifact.publicationVersion === link.publicationVersion &&
-  artifact.qrTarget === link.publicUrl &&
-  artifact.rendererVersion === input.rendererVersion &&
-  artifact.status === 'ready'

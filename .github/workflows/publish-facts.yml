@@ -25,7 +25,7 @@ env:
 
 jobs:
   publish:
-    name: Compile, register, and activate facts
+    name: Compile and publish facts
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -71,7 +71,13 @@ jobs:
       - name: Validate publication configuration
         run: |
           missing=()
-          for name in CONTENT_REPO_TOKEN REGISTRY_API_URL REGISTRY_API_TOKEN; do
+          for name in \
+            CONTENT_REPO_TOKEN \
+            FACTS_R2_ACCESS_KEY_ID \
+            FACTS_R2_ACCOUNT_ID \
+            FACTS_R2_BUCKET \
+            FACTS_R2_SECRET_ACCESS_KEY
+          do
             if [[ -z "${!name:-}" ]]; then
               missing+=("$name")
             fi
@@ -110,9 +116,8 @@ jobs:
             exit 1
           fi
 
-      - name: Publish and activate reviewed facts
+      - name: Publish reviewed facts
         env:
-          FACTS_CHANNEL: production
           FACTS_COMPILER_REPOSITORY: run4w4y/cv
           FACTS_CONTENT_ROOT: ${{ github.workspace }}/.external/cv-content
           FACTS_SOURCE_REPOSITORY: run4w4y/cv-content

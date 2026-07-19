@@ -183,14 +183,12 @@ export const applicationRowEditDefaults = (
   }
 }
 
-const CanonicalUrlSchema = Schema.Trim.pipe(
-  Schema.decodeTo(Schema.URLFromString)
-)
+const PostingUrlSchema = Schema.Trim.pipe(Schema.decodeTo(Schema.URLFromString))
 
 export const ApplicationDetailEditFormSchema = Schema.Struct({
   company: requiredText('Company'),
   role: requiredText('Role'),
-  canonicalUrl: CanonicalUrlSchema,
+  postingUrl: PostingUrlSchema,
   location: NullableTextFromString,
   applicationStatus: ApplicationSchema.fields.applicationStatus,
   targetStage: ApplicationSchema.fields.targetStage,
@@ -210,7 +208,7 @@ export const applicationDetailEditDefaults = (
 ): ApplicationDetailEditFormInput => ({
   company: application.company,
   role: application.role,
-  canonicalUrl: application.canonicalUrl,
+  postingUrl: application.postingUrl,
   location: application.location ?? '',
   applicationStatus: application.applicationStatus,
   targetStage: application.targetStage,

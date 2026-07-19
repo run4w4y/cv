@@ -1,4 +1,4 @@
-import type { RegistryEventListItem } from '@cv/application-registry-api-contract'
+import type { RegistryActivityListItem } from '@cv/application-registry-api-contract'
 import {
   Empty,
   EmptyDescription,
@@ -90,7 +90,7 @@ export const EventsTable = ({
   onApplyView,
   onLoadMore,
 }: {
-  readonly data: RegistryEventListItem[]
+  readonly data: RegistryActivityListItem[]
   readonly loading: boolean
   readonly refreshing: boolean
   readonly loadingMore: boolean
@@ -142,20 +142,22 @@ export const EventsTable = ({
 
       {refreshing ? (
         <div
-          data-slot="events-refresh-overlay"
+          data-slot="activities-refresh-overlay"
           className="pointer-events-none sticky top-0 left-0 z-20 flex h-0 w-full min-w-full justify-center overflow-visible"
         >
           <div className="flex h-[calc(100dvh-4rem)] w-full items-center justify-center bg-card/70 backdrop-blur-[1px]">
             <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2">
               <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
-              <span className="text-sm font-medium">Refreshing events…</span>
+              <span className="text-sm font-medium">
+                Refreshing activities…
+              </span>
             </div>
           </div>
         </div>
       ) : null}
 
       <div
-        data-slot="events-table"
+        data-slot="activities-table"
         className="w-max min-w-full flex-1 overflow-visible"
       >
         <Table className="min-w-full table-fixed" style={{ width: tableWidth }}>
@@ -271,7 +273,7 @@ export const EventsTable = ({
                       <EmptyMedia>
                         <History />
                       </EmptyMedia>
-                      <EmptyTitle>No events found</EmptyTitle>
+                      <EmptyTitle>No activities found</EmptyTitle>
                       <EmptyDescription>
                         Try removing a filter or changing the current view.
                       </EmptyDescription>
@@ -301,12 +303,12 @@ export const EventsTable = ({
         {loadingMore ? (
           <span className="inline-flex items-center gap-2">
             <LoaderCircle className="size-4 animate-spin" />
-            Loading more events…
+            Loading more activities…
           </span>
         ) : hasNextPage ? (
-          'Scroll to load more events'
+          'Scroll to load more activities'
         ) : data.length > 0 ? (
-          `All ${data.length} loaded events are visible`
+          `All ${data.length} loaded activities are visible`
         ) : null}
       </div>
     </div>

@@ -4,7 +4,7 @@ import {
   canonicalPreparationUrl,
   type DocumentKind,
   maximumPreparationBatchSize,
-} from '../workflow/domain'
+} from '@cv/application-preparation-workflow/domain'
 
 export type BatchPreparationForm = {
   readonly kind: DocumentKind

@@ -52,7 +52,7 @@ describe('application edit form schema', () => {
         {
           company: ' ',
           role: 'Role',
-          canonicalUrl: 'not a url',
+          postingUrl: 'not a url',
           location: '',
           applicationStatus: 'applied',
           targetStage: 'apply_next',
@@ -61,6 +61,6 @@ describe('application edit form schema', () => {
         },
         { errors: 'all' }
       )
-    ).toThrow(/company|canonicalUrl/u)
+    ).toThrow(/company|postingUrl/u)
   })
 })

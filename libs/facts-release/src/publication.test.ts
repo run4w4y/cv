@@ -6,6 +6,7 @@ import {
   FactsReleaseIntegrityError,
   FactsReleasePublicationError,
   FactsReleasePublicationTarget,
+  factsCurrentObjectKey,
   publishFactsRelease,
 } from './index'
 import {
@@ -40,46 +41,56 @@ const compiledFixture = async () => {
 }
 
 describe('facts release publication', () => {
-  test('uploads every object before registering the release', async () => {
+  test('uploads immutable objects before activating the deterministic pointer', async () => {
     const bundle = await compiledFixture()
     const memory = makeInMemoryFactsReleasePublication()
-    const registration = await Effect.runPromise(
-      publishFactsRelease(bundle, '2026-07-17T12:34:56.789Z').pipe(
-        Effect.provide(memory.layer)
-      )
+    const publication = await Effect.runPromise(
+      publishFactsRelease(bundle).pipe(Effect.provide(memory.layer))
     )
 
-    expect(memory.objects.size).toBe(bundle.objects.length)
-    expect(memory.registrations).toEqual([registration])
-    expect(registration.release.id).toBe(bundle.releaseId)
+    expect(memory.objects.size).toBe(bundle.objects.length + 1)
+    expect(memory.writes.at(-1)).toBe(factsCurrentObjectKey)
+    expect(publication.releaseId).toBe(bundle.releaseId)
+    expect(publication.status).toBe('activated')
+    expect(publication.pointer).toEqual({
+      $schema: 'cv.facts-current.v1',
+      manifest: {
+        byteLength: bundle.manifestObject.byteLength,
+        mediaType: 'application/vnd.cv.facts-release+json',
+        sha256: bundle.manifestObject.sha256,
+      },
+      releaseId: bundle.releaseId,
+    })
+
+    const repeated = await Effect.runPromise(
+      publishFactsRelease(bundle).pipe(Effect.provide(memory.layer))
+    )
+    expect(repeated.status).toBe('already-active')
   })
 
-  test('does not register when an object upload fails', async () => {
+  test('does not activate current.json when an immutable upload fails', async () => {
     const bundle = await compiledFixture()
-    let registrations = 0
+    let activations = 0
     const failure = new FactsReleasePublicationError({
       cause: new Error('R2 unavailable'),
       message: 'Could not upload release object.',
       operation: 'upload',
     })
     const layer = Layer.succeed(FactsReleasePublicationTarget, {
-      putObject: () => Effect.fail(failure),
-      register: () =>
+      putCurrent: () =>
         Effect.sync(() => {
-          registrations += 1
+          activations += 1
+          return 'activated' as const
         }),
+      putImmutable: () => Effect.fail(failure),
     })
 
     const error = await Effect.runPromise(
-      Effect.flip(
-        publishFactsRelease(bundle, '2026-07-17T12:34:56.789Z').pipe(
-          Effect.provide(layer)
-        )
-      )
+      Effect.flip(publishFactsRelease(bundle).pipe(Effect.provide(layer)))
     )
 
     expect(error).toBe(failure)
-    expect(registrations).toBe(0)
+    expect(activations).toBe(0)
   })
 
   test('re-verifies addressed bytes before any external write', async () => {
@@ -87,19 +98,15 @@ describe('facts release publication', () => {
     bundle.manifestObject.bytes.fill(0)
     let writes = 0
     const layer = Layer.succeed(FactsReleasePublicationTarget, {
-      putObject: () =>
+      putCurrent: () => Effect.succeed('activated' as const),
+      putImmutable: () =>
         Effect.sync(() => {
           writes += 1
         }),
-      register: () => Effect.void,
     })
 
     const error = await Effect.runPromise(
-      Effect.flip(
-        publishFactsRelease(bundle, '2026-07-17T12:34:56.789Z').pipe(
-          Effect.provide(layer)
-        )
-      )
+      Effect.flip(publishFactsRelease(bundle).pipe(Effect.provide(layer)))
     )
 
     expect(error).toBeInstanceOf(FactsReleaseIntegrityError)
@@ -114,19 +121,15 @@ describe('facts release publication', () => {
     }
     let writes = 0
     const layer = Layer.succeed(FactsReleasePublicationTarget, {
-      putObject: () =>
+      putCurrent: () => Effect.succeed('activated' as const),
+      putImmutable: () =>
         Effect.sync(() => {
           writes += 1
         }),
-      register: () => Effect.void,
     })
 
     const error = await Effect.runPromise(
-      Effect.flip(
-        publishFactsRelease(incomplete, '2026-07-17T12:34:56.789Z').pipe(
-          Effect.provide(layer)
-        )
-      )
+      Effect.flip(publishFactsRelease(incomplete).pipe(Effect.provide(layer)))
     )
 
     expect(error).toBeInstanceOf(FactsReleaseIntegrityError)

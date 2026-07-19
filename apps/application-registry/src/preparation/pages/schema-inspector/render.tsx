@@ -1,4 +1,5 @@
 import {
+  type GenerationGuidanceItem,
   CvDocumentV1Schema,
   cvDocumentV1ContractId,
   cvDocumentV1Version,
@@ -24,8 +25,7 @@ import { Braces, CircleAlert, LockKeyhole } from 'lucide-react'
 import {
   cvDocumentV1AnnotatedJsonSchema,
   cvDocumentV1GuidanceItems,
-  type SchemaGuidanceItem,
-} from '../../document-contract'
+} from '@cv/application-preparation-workflow/cv'
 
 export const DescriptorTree = ({
   descriptor,
@@ -93,7 +93,7 @@ export const DescriptorTree = ({
 export const GuidanceList = ({
   items,
 }: {
-  readonly items: ReadonlyArray<SchemaGuidanceItem>
+  readonly items: ReadonlyArray<GenerationGuidanceItem>
 }) => (
   <ol className="grid gap-3">
     {items.map((item) => (
@@ -108,7 +108,7 @@ export const GuidanceList = ({
           {item.title ? (
             <span className="text-sm font-semibold">{item.title}</span>
           ) : null}
-          {item.maxWords === null ? null : (
+          {item.maxWords === undefined ? null : (
             <Badge variant="outline">≤ {item.maxWords} words</Badge>
           )}
         </div>

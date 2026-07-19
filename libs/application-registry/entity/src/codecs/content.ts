@@ -13,12 +13,6 @@ import {
 import { generatedArtifacts } from '../tables/artifacts'
 import { contentEntries, contentRevisions } from '../tables/content'
 import { cvLinks } from '../tables/cv-links'
-import {
-  factsChannels,
-  factsReleaseAssets,
-  factsReleaseCatalogs,
-  factsReleases,
-} from '../tables/facts-releases'
 import { jobPostingSnapshots } from '../tables/job-posting-snapshots'
 import { pdfGenerationOutbox } from '../tables/pdf-generation-outbox'
 
@@ -39,29 +33,6 @@ export const JobPostingSnapshotSchema = createSelectSchema(
   }
 )
 export type JobPostingSnapshot = typeof jobPostingSnapshots.$inferSelect
-
-export const FactsReleaseSchema = createSelectSchema(factsReleases, {
-  createdAt: () => UtcIsoTimestampSchema,
-  manifestByteLength: () => NonNegativeIntegerSchema,
-})
-export type FactsRelease = typeof factsReleases.$inferSelect
-
-export const FactsReleaseCatalogSchema = createSelectSchema(
-  factsReleaseCatalogs,
-  { byteLength: () => NonNegativeIntegerSchema }
-)
-export type FactsReleaseCatalog = typeof factsReleaseCatalogs.$inferSelect
-
-export const FactsReleaseAssetSchema = createSelectSchema(factsReleaseAssets, {
-  byteLength: () => NonNegativeIntegerSchema,
-})
-export type FactsReleaseAsset = typeof factsReleaseAssets.$inferSelect
-
-export const FactsChannelSchema = createSelectSchema(factsChannels, {
-  updatedAt: () => UtcIsoTimestampSchema,
-  version: () => PositiveIntegerSchema,
-})
-export type FactsChannel = typeof factsChannels.$inferSelect
 
 export const ContentEntrySchema = createSelectSchema(contentEntries, {
   createdAt: () => UtcIsoTimestampSchema,

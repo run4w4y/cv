@@ -1,8 +1,16 @@
-export { ApplicationRegistryApi, PublicApi, RegistryApi } from './api'
+export {
+  ApplicationRegistryApi,
+  ApplicationsApi,
+  AutomationApi,
+  ContentApi,
+  PublicApi,
+  PublicationsApi,
+} from './api'
 export { RegistryAuthorization } from './auth'
 export * from './analytics'
 export * from './commands'
 export * from './content'
+export * from './cv-links'
 export {
   type ApplicationRegistryHttpError,
   BadRequestError,

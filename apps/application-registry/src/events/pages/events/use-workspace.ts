@@ -1,4 +1,4 @@
-import { eventListQuery } from '@cv/application-registry-entity/query'
+import { activityListQuery } from '@cv/application-registry-entity/query'
 import {
   emptyQueryFiltersState,
   queryFiltersStateFromFilterNodes,
@@ -54,7 +54,7 @@ export const useEventsWorkspace = () => {
   const filters = useCanonicalQueryFilters({
     searchParams,
     setSearchParams,
-    definition: eventListQuery,
+    definition: activityListQuery,
     presentation: eventFilterFieldPresentation,
     applyState: (state) => void setQueryState({ filters: state }),
   })

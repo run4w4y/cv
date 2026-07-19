@@ -3,27 +3,18 @@ import * as Atom from 'effect/unstable/reactivity/Atom'
 
 import {
   type ContentHeadIdentity,
-  contentHeadIdentityKey,
   type PreparationContextIdentity,
   type PreparationIdentity,
   type PublicationIdentity,
   preparationBootstrapReactivityKeys,
-  preparationContextIdentityKey,
   preparationContextReactivityKeys,
-  preparationIdentityKey,
   preparationReactivity,
-  publicationIdentityKey,
 } from './keys'
 import { PreparationRepository } from './repository'
 import { preparationDataRuntime } from './runtime'
 
-const contextInputs = new Map<string, PreparationContextIdentity>()
-const contextFamily = Atom.family((key: string) => {
-  const input = contextInputs.get(key)
-  if (input === undefined) {
-    throw new Error(`Missing preparation context atom input for ${key}.`)
-  }
-  return preparationDataRuntime
+const contextFamily = Atom.family((input: PreparationContextIdentity) =>
+  preparationDataRuntime
     .atom(
       PreparationRepository.use((repository) => repository.loadContext(input))
     )
@@ -32,26 +23,14 @@ const contextFamily = Atom.family((key: string) => {
         preparationContextReactivityKeys(input)
       )
     )
-})
+)
 
 /** Stable context query keyed by application and facts locale. */
-export const preparationContextAtom = (input: PreparationContextIdentity) => {
-  const key = preparationContextIdentityKey(input)
-  contextInputs.set(key, input)
-  try {
-    return contextFamily(key)
-  } finally {
-    contextInputs.delete(key)
-  }
-}
+export const preparationContextAtom = (input: PreparationContextIdentity) =>
+  contextFamily(input)
 
-const revisionInputs = new Map<string, ContentHeadIdentity>()
-const revisionFamily = Atom.family((key: string) => {
-  const input = revisionInputs.get(key)
-  if (input === undefined) {
-    throw new Error(`Missing content revision atom input for ${key}.`)
-  }
-  return preparationDataRuntime
+const revisionFamily = Atom.family((input: ContentHeadIdentity) =>
+  preparationDataRuntime
     .atom(
       PreparationRepository.use((repository) =>
         repository.loadContentHead(input)
@@ -62,26 +41,14 @@ const revisionFamily = Atom.family((key: string) => {
         preparationReactivity.content(input.applicationId, input.entryId),
       ])
     )
-})
+)
 
 /** Stable immutable-revision query; a null revision resolves to null. */
-export const contentRevisionAtom = (input: ContentHeadIdentity) => {
-  const key = contentHeadIdentityKey(input)
-  revisionInputs.set(key, input)
-  try {
-    return revisionFamily(key)
-  } finally {
-    revisionInputs.delete(key)
-  }
-}
+export const contentRevisionAtom = (input: ContentHeadIdentity) =>
+  revisionFamily(input)
 
-const headInputs = new Map<string, PreparationIdentity>()
-const headFamily = Atom.family((key: string) => {
-  const input = headInputs.get(key)
-  if (input === undefined) {
-    throw new Error(`Missing content head atom input for ${key}.`)
-  }
-  return preparationDataRuntime
+const headFamily = Atom.family((input: PreparationIdentity) =>
+  preparationDataRuntime
     .atom(
       PreparationRepository.use((repository) =>
         repository.loadPreparationHead(input)
@@ -92,26 +59,13 @@ const headFamily = Atom.family((key: string) => {
         preparationReactivity.entry(input),
       ])
     )
-})
+)
 
 /** Stable live content-head query keyed by application, kind, and locale. */
-export const contentHeadAtom = (input: PreparationIdentity) => {
-  const key = preparationIdentityKey(input)
-  headInputs.set(key, input)
-  try {
-    return headFamily(key)
-  } finally {
-    headInputs.delete(key)
-  }
-}
+export const contentHeadAtom = (input: PreparationIdentity) => headFamily(input)
 
-const bootstrapInputs = new Map<string, PreparationIdentity>()
-const bootstrapFamily = Atom.family((key: string) => {
-  const input = bootstrapInputs.get(key)
-  if (input === undefined) {
-    throw new Error(`Missing preparation bootstrap atom input for ${key}.`)
-  }
-  return preparationDataRuntime
+const bootstrapFamily = Atom.family((input: PreparationIdentity) =>
+  preparationDataRuntime
     .atom(
       PreparationRepository.use((repository) => repository.loadBootstrap(input))
     )
@@ -120,18 +74,11 @@ const bootstrapFamily = Atom.family((key: string) => {
         preparationBootstrapReactivityKeys(input)
       )
     )
-})
+)
 
 /** Stable preparation bootstrap keyed by application, document kind, and locale. */
-export const preparationBootstrapAtom = (input: PreparationIdentity) => {
-  const key = preparationIdentityKey(input)
-  bootstrapInputs.set(key, input)
-  try {
-    return bootstrapFamily(key)
-  } finally {
-    bootstrapInputs.delete(key)
-  }
-}
+export const preparationBootstrapAtom = (input: PreparationIdentity) =>
+  bootstrapFamily(input)
 
 const modelsFamily = Atom.family((enabled: boolean) =>
   preparationDataRuntime
@@ -150,16 +97,11 @@ const modelsFamily = Atom.family((enabled: boolean) =>
 /** Model discovery stays dormant until the external ChatGPT session is ready. */
 export const preparationModelsAtom = (enabled: boolean) => modelsFamily(enabled)
 
-const publicationInputs = new Map<string, PublicationIdentity>()
-const publicationFamily = Atom.family((key: string) => {
-  const input = publicationInputs.get(key)
-  if (input === undefined) {
-    throw new Error(`Missing publication atom input for ${key}.`)
-  }
-  return preparationDataRuntime
+const publicationFamily = Atom.family((input: PublicationIdentity) =>
+  preparationDataRuntime
     .atom(
       PreparationRepository.use((repository) =>
-        repository.loadPublishedCvState(input)
+        repository.loadCvPageState(input)
       )
     )
     .pipe(
@@ -168,15 +110,8 @@ const publicationFamily = Atom.family((key: string) => {
         preparationReactivity.pdf(input.applicationId, input.entryId),
       ])
     )
-})
+)
 
 /** Stable publication read model keyed by entry and optional renderer version. */
-export const publishedCvStateAtom = (input: PublicationIdentity) => {
-  const key = publicationIdentityKey(input)
-  publicationInputs.set(key, input)
-  try {
-    return publicationFamily(key)
-  } finally {
-    publicationInputs.delete(key)
-  }
-}
+export const cvPageStateAtom = (input: PublicationIdentity) =>
+  publicationFamily(input)

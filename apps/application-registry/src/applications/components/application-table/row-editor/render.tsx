@@ -94,10 +94,8 @@ export const ApplicationRowEditor = ({
       submission.current = operationSubmissionFor(submission.current, input)
       await saveApplication({
         applicationId: draft.current.applicationId,
-        input: {
-          ...input,
-          operationId: submission.current.operationId,
-        },
+        idempotencyKey: submission.current.operationId,
+        input,
       })
       submission.current = undefined
       onCancel()

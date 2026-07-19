@@ -1,6 +1,7 @@
 import babel from '@rolldown/plugin-babel'
 import tailwindcss from '@tailwindcss/vite'
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
+import { fileURLToPath, URL } from 'node:url'
 import { defineConfig, loadEnv, type ProxyOptions } from 'vite'
 
 const registryApiProxyPath = '/api/registry'
@@ -39,6 +40,11 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
     ],
     build: { outDir: 'dist', emptyOutDir: true },
+    resolve: {
+      alias: {
+        '@': fileURLToPath(new URL('./src', import.meta.url)),
+      },
+    },
     server: {
       port: 4300,
       strictPort: true,

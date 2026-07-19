@@ -1,11 +1,10 @@
 import {
-  applicationIdentityAliases,
   applicationLabels,
   applicationPublicColumns,
   applications,
 } from '@cv/application-registry-entity'
 import { finalizeQuery } from '@cv/drizzle-query-effect'
-import { and, asc, desc, eq, exists, or, type SQL } from 'drizzle-orm'
+import { asc, desc, eq, type SQL } from 'drizzle-orm'
 import { Effect } from 'effect'
 import {
   databaseFailure,
@@ -38,46 +37,25 @@ export const findApplication = (
 export const findApplicationByIdentifier = (
   database: RegistryQueryDatabase,
   identifier: string
-) =>
-  findApplication(
-    database,
-    or(eq(applications.id, identifier), eq(applications.jobKey, identifier))
-  )
+) => findApplication(database, eq(applications.id, identifier))
 
-export const findApplicationByJobKey = (
+export const findApplicationByPostingFingerprint = (
   database: RegistryQueryDatabase,
-  jobKey: string
-) =>
-  findApplication(
-    database,
-    or(
-      eq(applications.jobKey, jobKey),
-      exists(
-        database
-          .select({ applicationId: applicationIdentityAliases.applicationId })
-          .from(applicationIdentityAliases)
-          .where(
-            and(
-              eq(applicationIdentityAliases.applicationId, applications.id),
-              eq(applicationIdentityAliases.jobKey, jobKey)
-            )
-          )
-      )
-    )
-  )
+  fingerprint: string
+) => findApplication(database, eq(applications.postingFingerprint, fingerprint))
 
-export const findApplicationsByCanonicalUrl = (
+export const findApplicationsByPostingUrl = (
   database: RegistryQueryDatabase,
-  canonicalUrl: string
+  postingUrlNormalized: string
 ) =>
   database
     .select(applicationPublicColumns)
     .from(applications)
-    .where(eq(applications.canonicalUrl, canonicalUrl))
+    .where(eq(applications.postingUrlNormalized, postingUrlNormalized))
     .orderBy(asc(applications.createdAt), asc(applications.id))
     .pipe(
       Effect.mapError(
-        databaseFailure('Failed to load applications by canonical URL')
+        databaseFailure('Failed to load applications by posting URL')
       )
     )
 
@@ -92,7 +70,7 @@ export const listApplications = (
     const relational = resolved.relational({ select: ['noteCount'] })
     const query = database.query.applications.findMany({
       ...relational.config,
-      columns: { companyNormalized: false },
+      columns: { postingFingerprint: false, postingUrlNormalized: false },
       with: {
         compensations: {
           orderBy: (compensation) => [
@@ -100,14 +78,10 @@ export const listApplications = (
             asc(compensation.id),
           ],
         },
-        events: {
+        activities: {
           columns: { kind: true, occurredAt: true },
           limit: 1,
-          orderBy: (event) => desc(event.revision),
-        },
-        identityAliases: {
-          columns: { jobKey: true },
-          orderBy: (identityAlias) => asc(identityAlias.jobKey),
+          orderBy: (activity) => desc(activity.revision),
         },
         labels: {
           columns: { label: true },
@@ -123,22 +97,15 @@ export const listApplications = (
 
     const page = yield* finalizeQuery(relational, rows).pipe(Effect.orDie)
     const records = page.items.map((row) => {
-      const {
-        compensations,
-        events,
-        identityAliases,
-        labels,
-        noteCount,
-        ...application
-      } = row
-      const latestEvent = events.at(0) ?? null
+      const { compensations, activities, labels, noteCount, ...application } =
+        row
+      const latestActivity = activities.at(0) ?? null
       return {
         ...application,
         compensations,
         counts: { notes: noteCount },
-        identityAliases: identityAliases.map(({ jobKey }) => jobKey),
         labels: labels.map(({ label }) => label),
-        latestEvent,
+        latestActivity,
       } satisfies ApplicationListRecord
     })
 

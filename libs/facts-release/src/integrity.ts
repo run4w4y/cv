@@ -38,12 +38,10 @@ const equalBytes = (left: Uint8Array, right: Uint8Array) => {
 const descriptorMatches = (
   descriptor: {
     readonly byteLength: number
-    readonly key: string
     readonly sha256: string
   },
   object: FactsReleaseObject
 ) =>
-  descriptor.key === object.key &&
   descriptor.sha256 === object.sha256 &&
   descriptor.byteLength === object.byteLength
 
@@ -120,7 +118,7 @@ export const verifyFactsReleaseBundle = Effect.fn('FactsRelease.verifyBundle')(
         )
         const catalogueDigest = yield* sha256Hex(catalogueBytes)
         const catalogueObject = bundle.objects.find(
-          (object) => object.key === reference.object.key
+          (object) => object.key === contentAddress(reference.object.sha256)
         )
         if (
           reference.object.sha256 !== catalogueDigest ||
@@ -130,7 +128,7 @@ export const verifyFactsReleaseBundle = Effect.fn('FactsRelease.verifyBundle')(
           !equalBytes(catalogueBytes, catalogueObject.bytes)
         ) {
           return yield* integrityFailure(
-            reference.object.key,
+            contentAddress(reference.object.sha256),
             `Facts release ${catalogue.locale} catalogue does not match its manifest descriptor.`
           )
         }
@@ -170,7 +168,8 @@ export const verifyFactsReleaseBundle = Effect.fn('FactsRelease.verifyBundle')(
         const reference = manifestAssets.get(asset.id)
         const object = reference
           ? bundle.objects.find(
-              (candidate) => candidate.key === reference.object.key
+              (candidate) =>
+                candidate.key === contentAddress(reference.object.sha256)
             )
           : undefined
         if (
@@ -181,7 +180,9 @@ export const verifyFactsReleaseBundle = Effect.fn('FactsRelease.verifyBundle')(
           !descriptorMatches(reference.object, object)
         ) {
           return yield* integrityFailure(
-            reference?.object.key ?? bundle.manifestObject.key,
+            reference === undefined
+              ? bundle.manifestObject.key
+              : contentAddress(reference.object.sha256),
             `Facts asset "${asset.id}" does not match its manifest descriptor.`
           )
         }
@@ -189,8 +190,12 @@ export const verifyFactsReleaseBundle = Effect.fn('FactsRelease.verifyBundle')(
 
       const expectedKeys = new Set([
         bundle.manifestObject.key,
-        ...bundle.manifest.catalogues.map((catalogue) => catalogue.object.key),
-        ...bundle.manifest.assets.map((asset) => asset.object.key),
+        ...bundle.manifest.catalogues.map((catalogue) =>
+          contentAddress(catalogue.object.sha256)
+        ),
+        ...bundle.manifest.assets.map((asset) =>
+          contentAddress(asset.object.sha256)
+        ),
       ])
       const unexpectedObject = bundle.objects.find(
         (object) => !expectedKeys.has(object.key)

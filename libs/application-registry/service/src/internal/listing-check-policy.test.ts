@@ -1,10 +1,35 @@
 import { describe, expect, test } from 'bun:test'
-import type { ListingObservation } from '@cv/application-registry-entity'
+import type {
+  Application,
+  ListingObservation,
+} from '@cv/application-registry-entity'
 
-import { application } from '../../test/support/fixtures'
 import { decideListingCheck } from './listing-check-policy'
 
 const checkedAt = '2026-07-13T12:00:00.000Z'
+
+const application = {
+  applicationStatus: 'not_started',
+  appliedAt: null,
+  company: 'Example',
+  createdAt: '2026-07-12T12:00:00.000Z',
+  followUpAt: null,
+  id: 'application-1',
+  listingAvailability: 'open',
+  listingCheckedAt: null,
+  listingClosedCandidateAt: null,
+  listingConfidence: null,
+  listingConsecutiveClosedChecks: 0,
+  listingReasonCode: null,
+  location: null,
+  personalPriority: null,
+  postingUrl: 'https://example.test/jobs/one',
+  role: 'Engineer',
+  targetStage: 'apply_next',
+  updatedAt: '2026-07-12T12:00:00.000Z',
+  updatedRevision: 1,
+  version: 1,
+} satisfies Application
 
 const observation = (
   input: Partial<ListingObservation> = {}
@@ -14,12 +39,12 @@ const observation = (
   confidence: 'high',
   contentHash: null,
   evidence: [],
-  finalUrl: application.canonicalUrl,
+  finalUrl: application.postingUrl,
   httpStatus: 404,
   outcome: 'closed',
   provider: 'example.test',
   reasonCode: 'http_404',
-  requestedUrl: application.canonicalUrl,
+  requestedUrl: application.postingUrl,
   ...input,
 })
 

@@ -1,9 +1,9 @@
 import {
-  applicationEvents,
+  applicationActivities,
   applicationListingCheckSchedules,
   applicationListingChecks,
   applications,
-  commandReceipts,
+  idempotencyReceipts,
   listingCheckRuns,
   registrySequence,
 } from '@cv/application-registry-entity'
@@ -49,22 +49,19 @@ const applicationVersionCondition = (
 const listingCheckReceiptMatches = (
   database: RegistryConnections['batch'],
   applicationId: string,
-  operationId: string,
-  operationRequestSignature: string
+  idempotencyKey: string,
+  requestHash: string
 ) =>
   exists(
     database
-      .select({ operationId: commandReceipts.operationId })
-      .from(commandReceipts)
+      .select({ idempotencyKey: idempotencyReceipts.idempotencyKey })
+      .from(idempotencyReceipts)
       .where(
         and(
-          eq(commandReceipts.applicationId, applicationId),
-          eq(commandReceipts.kind, 'listing_check'),
-          eq(commandReceipts.operationId, operationId),
-          eq(
-            commandReceipts.operationRequestSignature,
-            operationRequestSignature
-          )
+          eq(idempotencyReceipts.applicationId, applicationId),
+          eq(idempotencyReceipts.scope, 'listing_check'),
+          eq(idempotencyReceipts.idempotencyKey, idempotencyKey),
+          eq(idempotencyReceipts.requestHash, requestHash)
         )
       )
   )
@@ -342,10 +339,10 @@ export const persistListingCheck = (
     archiveApplication,
     closedCandidateAt,
     consecutiveClosedChecks,
-    eventId,
+    activityId,
     expectedVersion,
     listingAvailability,
-    operationRequestSignature,
+    requestHash,
     recordedAt,
     ...listingCheck
   } = input
@@ -353,26 +350,23 @@ export const persistListingCheck = (
     database.batch,
     listingCheck.applicationId,
     listingCheck.operationId,
-    operationRequestSignature
+    requestHash
   )
   const versionMatches = applicationVersionCondition(
     listingCheck.applicationId,
     expectedVersion
   )
-  const receiptInsert = database.batch.insert(commandReceipts).select(
+  const receiptInsert = database.batch.insert(idempotencyReceipts).select(
     database.batch
       .select({
         applicationId: applications.id,
-        eventId: sql<string | null>`${eventId}`.as('event_id'),
-        kind: sql<'listing_check'>`'listing_check'`.as('kind'),
-        noteId: sql<null>`null`.as('note_id'),
-        operationId: sql<string>`${listingCheck.operationId}`.as(
-          'operation_id'
+        idempotencyKey: sql<string>`${listingCheck.operationId}`.as(
+          'idempotency_key'
         ),
-        operationRequestSignature: sql<string>`${operationRequestSignature}`.as(
-          'operation_request_signature'
-        ),
-        recordedAt: sql<string>`${recordedAt}`.as('recorded_at'),
+        requestHash: sql<string>`${requestHash}`.as('request_hash'),
+        scope: sql<'listing_check'>`'listing_check'`.as('scope'),
+        resourceId: sql<string>`${listingCheck.id}`.as('resource_id'),
+        createdAt: sql<string>`${recordedAt}`.as('created_at'),
       })
       .from(applications)
       .where(versionMatches)
@@ -422,31 +416,27 @@ export const persistListingCheck = (
         .from(applications)
         .where(and(versionMatches, receiptMatches))
     )
-  const eventInsert = database.batch.insert(applicationEvents).select(
+  const activityInsert = database.batch.insert(applicationActivities).select(
     database.batch
       .select({
         applicationId: applications.id,
-        deviceId: sql<null>`null`.as('device_id'),
-        id: sql<string>`${eventId}`.as('id'),
-        kind: sql<'listing_closed'>`'listing_closed'`.as('kind'),
-        occurredAt: sql<string>`${listingCheck.checkedAt}`.as('occurred_at'),
-        operationId: sql<string>`${`${listingCheck.operationId}:closed`}`.as(
-          'operation_id'
+        actor: sql<'automation'>`'automation'`.as('actor'),
+        source: sql<'listing_checker'>`'listing_checker'`.as('source'),
+        id: sql<string>`${activityId}`.as('id'),
+        kind: sql<'listing_availability_changed'>`'listing_availability_changed'`.as(
+          'kind'
         ),
+        occurredAt: sql<string>`${listingCheck.checkedAt}`.as('occurred_at'),
         payload: sql`${JSON.stringify({
           listingCheckId: listingCheck.id,
+          availability: listingAvailability,
           reasonCode: listingCheck.reasonCode,
         })}`.as('payload'),
-        recordedAt: sql<string>`${recordedAt}`.as('recorded_at'),
         revision: currentRevision.as('revision'),
       })
       .from(applications)
       .where(
-        and(
-          versionMatches,
-          receiptMatches,
-          inArray(applications.applicationStatus, checkableStatuses)
-        )
+        and(versionMatches, receiptMatches, sql`${activityId} is not null`)
       )
   )
 
@@ -458,7 +448,7 @@ export const persistListingCheck = (
     ),
     receiptInsert,
     listingCheckInsert,
-    ...(archiveApplication && eventId !== null ? [eventInsert] : []),
+    ...(activityId === null ? [] : [activityInsert]),
     database.batch
       .update(applicationListingCheckSchedules)
       .set({

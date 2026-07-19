@@ -1,31 +1,28 @@
 import type { AiProviderShape } from '@cv/ai-provider'
 import type { JobPostingSnapshot } from '@cv/application-registry-entity'
-import { FactsCatalogueV1Schema } from '@cv/contracts/facts'
-import { Effect, Schema } from 'effect'
+import type { FactsReaderShape } from '@cv/facts-r2'
+import { Effect } from 'effect'
 
-import type { RegistryClient } from '../../../lib/registry-client'
-import { startApplicationPreparation } from '../../application-lifecycle'
+import type { RegistryClient } from '@/lib/registry-client'
+import { startApplicationPreparation } from '@/preparation/application-lifecycle'
 import type { PreparationContextIdentity, PreparationIdentity } from '../keys'
 import type {
-  ManualJobContextInput,
   PreparationRepositoryShape,
+  WorkflowBootstrapInput,
 } from '../types'
 import { PreparationDataError } from '../types'
-import { dataError, decodeOpaqueValue, encodeOpaqueText } from './shared'
-
-export const manualJobContextMaxBytes = 256 * 1_024
-export const manualJobContextFetcherVersion =
-  'application-registry-management-job-context/v1'
+import { dataError, decodeOpaqueValue } from './shared'
 
 export const makePreparationContextRepository = (
   registry: RegistryClient['Service'],
+  facts: FactsReaderShape,
   ai: AiProviderShape,
   loadContentHead: PreparationRepositoryShape['loadContentHead']
 ) => {
   const latestSnapshotOrNull = Effect.fn(
     'PreparationRepository.latestSnapshotOrNull'
   )((applicationId: string) =>
-    registry.registry
+    registry.content
       .getLatestJobPostingSnapshot({ params: { id: applicationId } })
       .pipe(
         Effect.map((snapshot): JobPostingSnapshot | null => snapshot),
@@ -40,86 +37,130 @@ export const makePreparationContextRepository = (
   )(function* (applicationId: string) {
     const latest = yield* latestSnapshotOrNull(applicationId)
     if (latest !== null) return latest
-    return yield* registry.registry.captureJobPostingSnapshot({
+    return yield* registry.content.captureJobPostingSnapshot({
       params: { id: applicationId },
     })
   })
 
+  const loadSnapshotContext = Effect.fn(
+    'PreparationRepository.loadSnapshotContext'
+  )(function* (
+    identity: PreparationContextIdentity,
+    jobSnapshot: JobPostingSnapshot
+  ) {
+    if (jobSnapshot.status === 'failed') {
+      return yield* Effect.fail(
+        new PreparationDataError({
+          message:
+            jobSnapshot.errorMessage ?? 'The latest job snapshot failed.',
+          operation: 'load-preparation-context',
+        })
+      )
+    }
+
+    const payloadKind =
+      jobSnapshot.normalizedObjectKey !== null
+        ? 'normalized'
+        : jobSnapshot.rawObjectKey !== null
+          ? 'raw'
+          : null
+    if (payloadKind === null) {
+      return yield* Effect.fail(
+        new PreparationDataError({
+          message:
+            'The latest job snapshot does not contain a readable payload.',
+          operation: 'load-preparation-context',
+        })
+      )
+    }
+
+    const loaded = yield* Effect.all(
+      {
+        factsRelease: facts.read(identity.locale),
+        jobPayload: registry.content.getJobPostingSnapshotPayload({
+          params: {
+            id: identity.applicationId,
+            kind: payloadKind,
+            snapshotId: jobSnapshot.id,
+          },
+        }),
+      },
+      { concurrency: 2 }
+    )
+    const factsCatalogue = loaded.factsRelease.catalogue
+    if (factsCatalogue.locale !== identity.locale) {
+      return yield* Effect.fail(
+        new PreparationDataError({
+          message: `Active facts locale ${factsCatalogue.locale} did not match requested locale ${identity.locale}.`,
+          operation: 'load-preparation-context',
+        })
+      )
+    }
+    const jobContext = yield* decodeOpaqueValue(
+      'decode-job-context',
+      loaded.jobPayload,
+      payloadKind === 'normalized'
+        ? (jobSnapshot.normalizedMediaType ?? 'application/octet-stream')
+        : (jobSnapshot.rawMediaType ?? 'application/octet-stream')
+    )
+
+    return {
+      factsCatalogue,
+      factsRelease: {
+        id: loaded.factsRelease.releaseId,
+        locales: loaded.factsRelease.manifest.catalogues.map(
+          ({ locale }) => locale
+        ),
+        provenance: loaded.factsRelease.manifest.provenance,
+      },
+      factsReleaseId: loaded.factsRelease.releaseId,
+      jobContext,
+      jobSnapshot,
+      locale: identity.locale,
+    }
+  })
+
   const loadContext = Effect.fn('PreparationRepository.loadContext')(
     function* (identity: PreparationContextIdentity) {
+      const jobSnapshot = yield* readOrCaptureSnapshot(identity.applicationId)
+      return yield* loadSnapshotContext(identity, jobSnapshot)
+    },
+    (effect) => effect.pipe(dataError('load-preparation-context'))
+  )
+
+  const loadWorkflowBootstrap = Effect.fn(
+    'PreparationRepository.loadWorkflowBootstrap'
+  )(
+    function* (input: WorkflowBootstrapInput) {
+      const jobSnapshot = yield* input.snapshotId === null
+        ? registry.content.captureJobPostingSnapshot({
+            params: { id: input.application.id },
+          })
+        : registry.content.getJobPostingSnapshot({
+            params: {
+              id: input.application.id,
+              snapshotId: input.snapshotId,
+            },
+          })
       const loaded = yield* Effect.all(
         {
-          factsRelease: registry.registry.getActiveFactsRelease({
-            query: { locale: identity.locale },
+          context: loadSnapshotContext(
+            { applicationId: input.application.id, locale: input.locale },
+            jobSnapshot
+          ),
+          entry: registry.content.ensureContentEntry({
+            params: {
+              id: input.application.id,
+              kind: input.kind,
+              locale: input.locale,
+            },
           }),
-          jobSnapshot: readOrCaptureSnapshot(identity.applicationId),
         },
         { concurrency: 2 }
       )
-      const { jobSnapshot } = loaded
-      if (jobSnapshot.status === 'failed') {
-        return yield* Effect.fail(
-          new PreparationDataError({
-            message:
-              jobSnapshot.errorMessage ?? 'The latest job snapshot failed.',
-            operation: 'load-preparation-context',
-          })
-        )
-      }
-
-      const payloadKind =
-        jobSnapshot.normalizedObjectKey !== null
-          ? 'normalized'
-          : jobSnapshot.rawObjectKey !== null
-            ? 'raw'
-            : null
-      if (payloadKind === null) {
-        return yield* Effect.fail(
-          new PreparationDataError({
-            message:
-              'The latest job snapshot does not contain a readable payload.',
-            operation: 'load-preparation-context',
-          })
-        )
-      }
-
-      const jobPayload = yield* registry.registry.getJobPostingSnapshotPayload({
-        params: {
-          id: identity.applicationId,
-          kind: payloadKind,
-          snapshotId: jobSnapshot.id,
-        },
-      })
-      const factsValue = yield* decodeOpaqueValue(
-        'decode-facts-catalogue',
-        loaded.factsRelease.catalogue
-      )
-      const factsCatalogue = yield* Schema.decodeUnknownEffect(
-        FactsCatalogueV1Schema
-      )(factsValue).pipe(dataError('decode-facts-catalogue'))
-      if (factsCatalogue.locale !== identity.locale) {
-        return yield* Effect.fail(
-          new PreparationDataError({
-            message: `Active facts locale ${factsCatalogue.locale} did not match requested locale ${identity.locale}.`,
-            operation: 'load-preparation-context',
-          })
-        )
-      }
-      const jobContext = yield* decodeOpaqueValue(
-        'decode-job-context',
-        jobPayload
-      )
-
-      return {
-        factsCatalogue,
-        factsRelease: loaded.factsRelease,
-        factsReleaseId: loaded.factsRelease.release.id,
-        jobContext,
-        jobSnapshot,
-        locale: identity.locale,
-      }
+      return loaded
     },
-    (effect) => effect.pipe(dataError('load-preparation-context'))
+    (effect) => effect.pipe(dataError('load-workflow-bootstrap'))
   )
 
   const loadBootstrap = Effect.fn('PreparationRepository.loadBootstrap')(
@@ -131,9 +172,12 @@ export const makePreparationContextRepository = (
       const loaded = yield* Effect.all(
         {
           context: loadContext(identity),
-          entry: registry.registry.ensureContentEntry({
-            params: { id: identity.applicationId },
-            payload: { kind: identity.kind, locale: identity.locale },
+          entry: registry.content.ensureContentEntry({
+            params: {
+              id: identity.applicationId,
+              kind: identity.kind,
+              locale: identity.locale,
+            },
           }),
         },
         { concurrency: 2 }
@@ -157,77 +201,10 @@ export const makePreparationContextRepository = (
     ai.discoverModels().pipe(dataError('discover-models'))
   )
 
-  const refreshSnapshot = Effect.fn('PreparationRepository.refreshSnapshot')(
-    (applicationId: string) =>
-      registry.registry
-        .captureJobPostingSnapshot({ params: { id: applicationId } })
-        .pipe(dataError('refresh-job-snapshot'))
-  )
-
-  const persistManualJobContext = Effect.fn(
-    'PreparationRepository.persistManualJobContext'
-  )(
-    function* ({ applicationId, value }: ManualJobContextInput) {
-      const normalized = value.trim()
-      if (normalized.length === 0) {
-        return yield* Effect.fail(
-          new PreparationDataError({
-            message: 'Job context cannot be empty.',
-            operation: 'persist-manual-job-context',
-          })
-        )
-      }
-      if (
-        new TextEncoder().encode(normalized).byteLength >
-        manualJobContextMaxBytes
-      ) {
-        return yield* Effect.fail(
-          new PreparationDataError({
-            message: `Job context must not exceed ${manualJobContextMaxBytes} UTF-8 bytes.`,
-            operation: 'persist-manual-job-context',
-          })
-        )
-      }
-
-      const loaded = yield* Effect.all(
-        {
-          application: registry.registry.getApplication({
-            params: { id: applicationId },
-          }),
-          latest: latestSnapshotOrNull(applicationId),
-        },
-        { concurrency: 2 }
-      )
-      const data = yield* encodeOpaqueText(
-        'encode-manual-job-context',
-        normalized
-      )
-      return yield* registry.registry
-        .persistJobPostingSnapshot({
-          params: { id: applicationId },
-          payload: {
-            fetcherVersion: manualJobContextFetcherVersion,
-            finalUrl:
-              loaded.latest?.finalUrl ?? loaded.application.canonicalUrl,
-            normalized: {
-              data,
-              mediaType: 'text/plain; charset=utf-8',
-            },
-            requestedUrl:
-              loaded.latest?.requestedUrl ?? loaded.application.canonicalUrl,
-            status: 'provided',
-          },
-        })
-        .pipe(dataError('persist-manual-job-context'))
-    },
-    (effect) => effect.pipe(dataError('persist-manual-job-context'))
-  )
-
   return {
     discoverModels,
     loadBootstrap,
     loadContext,
-    persistManualJobContext,
-    refreshSnapshot,
+    loadWorkflowBootstrap,
   }
 }

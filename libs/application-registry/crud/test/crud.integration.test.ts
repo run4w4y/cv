@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import { after, afterEach, before, test } from 'node:test'
 import type { FxRate } from '@cv/application-registry-entity'
 import {
+  activityListQuery,
   applicationListQuery,
-  eventListQuery,
 } from '@cv/application-registry-entity/query'
 import {
   makeRegistryFactory,
@@ -14,13 +14,12 @@ import { Effect } from 'effect'
 
 import {
   AnnotationsCrud,
+  ActivitiesCrud,
   ApplicationsCrud,
   CompensationsCrud,
-  EventsCrud,
   FxRatesCrud,
   ListingChecksCrud,
   type PersistedApplication,
-  type PersistedEvent,
   type PersistedNote,
 } from '../src'
 import { makeRegistryCrudLive } from '../src/live'
@@ -33,42 +32,38 @@ const resolveApplicationList = (
   request: Parameters<typeof applicationListQuery.resolve>[0]
 ) => applicationListQuery.resolve(request)
 
-const resolveEventList = (
-  request: Parameters<typeof eventListQuery.resolve>[0]
-) => eventListQuery.resolve(request)
+const resolveActivityList = (
+  request: Parameters<typeof activityListQuery.resolve>[0]
+) => activityListQuery.resolve(request)
 
 const application: PersistedApplication = {
+  activity: {
+    activityId: 'crud-application-created',
+    actor: 'system',
+    kind: 'application_created',
+    occurredAt: recordedAt,
+    payload: {},
+    source: 'migration',
+  },
   applicationId: 'crud-application-1',
-  canonicalUrl: 'https://example.test/jobs/crud-1',
   company: 'CRUD Test',
-  jobKey: 'test:crud-1',
   location: null,
+  postingFingerprint: 'https://example.test/jobs/crud-1',
+  postingUrl: 'https://example.test/jobs/crud-1',
+  postingUrlNormalized: 'https://example.test/jobs/crud-1',
   recordedAt,
   role: 'Database Engineer',
-  source: 'test',
-  sourceJobId: null,
 }
 
 const note = (noteId: string): PersistedNote => ({
+  activityId: `activity-${noteId}`,
   body: `Note ${noteId}`,
-  eventId: `event-${noteId}`,
+  idempotencyKey: 'crud-note-operation',
   kind: 'general',
   noteId,
-  operationId: 'crud-note-operation',
-  operationRequestSignature: 'crud-note-signature',
   recordedAt,
+  requestHash: 'crud-note-signature',
   source: 'crud-test',
-})
-
-const event = (sequence: number): PersistedEvent => ({
-  deviceId: null,
-  eventId: `crud-event-${sequence}`,
-  kind: 'research_updated',
-  occurredAt: recordedAt,
-  operationId: `crud-event-operation-${sequence}`,
-  operationRequestSignature: `crud-event-signature-${sequence}`,
-  payload: { sequence },
-  recordedAt,
 })
 
 const fxRate: FxRate = {
@@ -85,9 +80,9 @@ const runCrud = <A, E>(
     A,
     E,
     | AnnotationsCrud
+    | ActivitiesCrud
     | ApplicationsCrud
     | CompensationsCrud
-    | EventsCrud
     | FxRatesCrud
     | ListingChecksCrud
   >
@@ -334,7 +329,7 @@ test('updates a managed application aggregate in one version transition', async 
       const annotations = yield* AnnotationsCrud
       const applications = yield* ApplicationsCrud
       const compensations = yield* CompensationsCrud
-      const events = yield* EventsCrud
+      const activities = yield* ActivitiesCrud
       yield* applications.persist(
         {
           ...application,
@@ -369,30 +364,27 @@ test('updates a managed application aggregate in one version transition', async 
               source: 'manual',
             },
           },
-          event: {
-            deviceId: null,
-            eventId: 'managed-status-event',
-            kind: 'submitted',
+          activity: {
+            activityId: 'managed-status-activity',
+            actor: 'user',
+            kind: 'status_changed',
             occurredAt: '2026-07-12T13:00:00.000Z',
-            operationId: 'managed-operation',
-            operationRequestSignature: 'managed-signature',
             payload: {
-              source: 'application_registry_management',
               previousApplicationStatus: 'not_started',
               nextApplicationStatus: 'applied',
             },
-            recordedAt: '2026-07-12T13:00:00.000Z',
+            source: 'management',
           },
           expectedVersion: 1,
+          idempotencyKey: 'managed-operation',
           labels: ['remote', 'priority', 'remote'],
-          operationId: 'managed-operation',
-          operationRequestSignature: 'managed-signature',
           patch: {
             applicationStatus: 'applied',
             company: 'Managed Company',
             personalPriority: 'high',
           },
           recordedAt: '2026-07-12T13:00:00.000Z',
+          requestHash: 'managed-signature',
         }
       )
       const stale = yield* applications.updateManaged(
@@ -401,13 +393,20 @@ test('updates a managed application aggregate in one version transition', async 
           annualCompensation: {
             replacement: null,
           },
-          event: undefined,
+          activity: {
+            activityId: 'managed-stale-activity',
+            actor: 'user',
+            kind: 'details_changed',
+            occurredAt: '2026-07-12T14:00:00.000Z',
+            payload: {},
+            source: 'management',
+          },
           expectedVersion: 1,
+          idempotencyKey: 'managed-operation-stale',
           labels: ['stale'],
-          operationId: 'managed-operation-stale',
-          operationRequestSignature: 'managed-signature-stale',
           patch: { personalPriority: 'low' },
           recordedAt: '2026-07-12T14:00:00.000Z',
+          requestHash: 'managed-signature-stale',
         }
       )
 
@@ -419,7 +418,9 @@ test('updates a managed application aggregate in one version transition', async 
         compensations: yield* compensations.listByApplication(
           application.applicationId
         ),
-        events: yield* events.listByApplication(application.applicationId),
+        activities: yield* activities.listByApplication(
+          application.applicationId
+        ),
         stale,
         updated,
       }
@@ -456,21 +457,26 @@ test('updates a managed application aggregate in one version transition', async 
     ]
   )
   assert.deepEqual(
-    result.events.map(({ kind, operationId, revision }) => ({
+    result.activities.map(({ kind, revision }) => ({
       kind,
-      operationId,
       revision,
     })),
-    [{ kind: 'submitted', operationId: 'managed-operation', revision: 2 }]
+    [
+      { kind: 'application_created', revision: 1 },
+      { kind: 'status_changed', revision: 2 },
+    ]
   )
 })
 
 test('filters before pagination and returns dashboard details and facets', async () => {
   const pastFollowUp: PersistedApplication = {
     ...application,
+    activity: {
+      ...application.activity,
+      activityId: 'crud-dashboard-past-created',
+    },
     applicationId: 'crud-dashboard-past',
     applicationStatus: 'applied',
-    canonicalUrl: 'https://example.test/jobs/dashboard-past',
     company: 'Alpha Corp',
     compensations: [
       {
@@ -485,23 +491,30 @@ test('filters before pagination and returns dashboard details and facets', async
       },
     ],
     followUpAt: '2026-07-12T11:00:00.000Z',
-    jobKey: 'test:dashboard-past',
     labels: ['remote', 'priority'],
     location: 'Remote',
     personalPriority: 'high',
+    postingFingerprint: 'https://example.test/jobs/dashboard-past',
+    postingUrl: 'https://example.test/jobs/dashboard-past',
+    postingUrlNormalized: 'https://example.test/jobs/dashboard-past',
     role: 'Platform Engineer',
     targetStage: 'apply_next',
   }
   const futureFollowUp: PersistedApplication = {
     ...application,
+    activity: {
+      ...application.activity,
+      activityId: 'crud-dashboard-future-created',
+    },
     applicationId: 'crud-dashboard-future',
     applicationStatus: 'preparing',
-    canonicalUrl: 'https://example.test/jobs/dashboard-future',
     company: 'Beta Corp',
     followUpAt: '2026-07-12T13:00:00.000Z',
-    jobKey: 'test:dashboard-future',
     labels: ['remote'],
     personalPriority: 'low',
+    postingFingerprint: 'https://example.test/jobs/dashboard-future',
+    postingUrl: 'https://example.test/jobs/dashboard-future',
+    postingUrlNormalized: 'https://example.test/jobs/dashboard-future',
     targetStage: 'backlog',
   }
 
@@ -518,37 +531,6 @@ test('filters before pagination and returns dashboard details and facets', async
       yield* annotations.persistNote(
         pastFollowUp.applicationId,
         note('crud-dashboard-note')
-      )
-
-      yield* Effect.promise(() =>
-        harness.database.batch([
-          harness.database
-            .prepare(
-              `insert into application_identity_aliases (
-                job_key,
-                application_id,
-                created_at
-              ) values (?1, ?2, ?3)`
-            )
-            .bind(
-              'test:dashboard-past:z-alias',
-              pastFollowUp.applicationId,
-              recordedAt
-            ),
-          harness.database
-            .prepare(
-              `insert into application_identity_aliases (
-                job_key,
-                application_id,
-                created_at
-              ) values (?1, ?2, ?3)`
-            )
-            .bind(
-              'test:dashboard-past:a-alias',
-              pastFollowUp.applicationId,
-              recordedAt
-            ),
-        ])
       )
 
       const page = yield* applications.list(
@@ -629,10 +611,6 @@ test('filters before pagination and returns dashboard details and facets', async
     [pastFollowUp.applicationId]
   )
   assert.deepEqual(result.page.items[0]?.labels, ['priority', 'remote'])
-  assert.deepEqual(result.page.items[0]?.identityAliases, [
-    'test:dashboard-past:a-alias',
-    'test:dashboard-past:z-alias',
-  ])
   assert.deepEqual(result.page.items[0]?.compensations, [
     {
       applicationId: pastFollowUp.applicationId,
@@ -649,7 +627,7 @@ test('filters before pagination and returns dashboard details and facets', async
     },
   ])
   assert.deepEqual(result.page.items[0]?.counts, { notes: 1 })
-  assert.deepEqual(result.page.items[0]?.latestEvent, {
+  assert.deepEqual(result.page.items[0]?.latestActivity, {
     kind: 'note_added',
     occurredAt: recordedAt,
   })
@@ -663,21 +641,21 @@ test('filters before pagination and returns dashboard details and facets', async
   })
 })
 
-test('paginates every application and event with numeric page sizes', async () => {
+test('paginates every application and activity with numeric page sizes', async () => {
   const itemCount = 101
   await seedRegistryDatabase(
     harness.database,
     makeRegistryFactory({ now: recordedAt, seed: 7_171 }).graph({
       applicationCount: itemCount,
       applicationStatus: 'not_started',
-      eventsPerApplication: 1,
+      activitiesPerApplication: 1,
     })
   )
 
   const result = await runCrud(
     Effect.gen(function* () {
       const applications = yield* ApplicationsCrud
-      const events = yield* EventsCrud
+      const activities = yield* ActivitiesCrud
       const firstApplicationPage = yield* applications.list(
         resolveApplicationList({ pagination: { size: 100 } })
       )
@@ -689,22 +667,22 @@ test('paginates every application and event with numeric page sizes', async () =
           },
         })
       )
-      const firstEventPage = yield* events.list(
-        resolveEventList({ pagination: { size: 100 } })
+      const firstActivityPage = yield* activities.list(
+        resolveActivityList({ pagination: { size: 100 } })
       )
-      const secondEventPage = yield* events.list(
-        resolveEventList({
+      const secondActivityPage = yield* activities.list(
+        resolveActivityList({
           pagination: {
-            after: firstEventPage.pageInfo.nextCursor ?? undefined,
+            after: firstActivityPage.pageInfo.nextCursor ?? undefined,
             size: 100,
           },
         })
       )
       return {
         firstApplicationPage,
-        firstEventPage,
+        firstActivityPage,
         secondApplicationPage,
-        secondEventPage,
+        secondActivityPage,
       }
     })
   )
@@ -712,15 +690,15 @@ test('paginates every application and event with numeric page sizes', async () =
   assert.equal(result.firstApplicationPage.items.length, 100)
   assert.equal(result.firstApplicationPage.pageInfo.hasNextPage, true)
   assert.equal(
-    result.firstApplicationPage.items[0]?.latestEvent?.kind,
-    'research_updated'
+    result.firstApplicationPage.items[0]?.latestActivity?.kind,
+    'details_changed'
   )
   assert.equal(result.secondApplicationPage.items.length, 1)
   assert.equal(result.secondApplicationPage.pageInfo.hasNextPage, false)
-  assert.equal(result.firstEventPage.items.length, 100)
-  assert.equal(result.firstEventPage.pageInfo.hasNextPage, true)
-  assert.equal(result.secondEventPage.items.length, 1)
-  assert.equal(result.secondEventPage.pageInfo.hasNextPage, false)
+  assert.equal(result.firstActivityPage.items.length, 100)
+  assert.equal(result.firstActivityPage.pageInfo.hasNextPage, true)
+  assert.equal(result.secondActivityPage.items.length, 1)
+  assert.equal(result.secondActivityPage.pageInfo.hasNextPage, false)
 })
 
 test('rolls back an atomic note write when its operation receipt conflicts', async () => {
@@ -751,41 +729,6 @@ test('rolls back an atomic note write when its operation receipt conflicts', asy
     'select id from application_notes order by id'
   )
   assert.deepEqual(notes, [{ id: 'crud-note-1' }])
-})
-
-test('persists events with an explicit optional application status transition', async () => {
-  const result = await runCrud(
-    Effect.gen(function* () {
-      const applications = yield* ApplicationsCrud
-      yield* seedApplication
-      yield* applications.persistEvent(
-        application.applicationId,
-        1,
-        undefined,
-        event(1)
-      )
-      const unchanged = yield* applications.findByIdentifier(
-        application.applicationId
-      )
-      yield* applications.persistEvent(
-        application.applicationId,
-        2,
-        'applied',
-        event(2)
-      )
-      const transitioned = yield* applications.findByIdentifier(
-        application.applicationId
-      )
-      return { transitioned, unchanged }
-    })
-  )
-
-  assert.ok(result.unchanged)
-  assert.equal(result.unchanged.applicationStatus, 'not_started')
-  assert.equal(result.unchanged.version, 2)
-  assert.ok(result.transitioned)
-  assert.equal(result.transitioned.applicationStatus, 'applied')
-  assert.equal(result.transitioned.version, 3)
 })
 
 test('persists and retrieves FX cache rows through FxRatesCrud', async () => {
@@ -832,24 +775,24 @@ test('claims, records, and archives listing checks through migrated D1 tables', 
         confidence: 'high',
         consecutiveClosedChecks: 1,
         contentHash: null,
-        eventId: null,
+        activityId: null,
         evidence: [
           { code: 'http_status', detail: 'HTTP 404', sourceUrl: null },
         ],
-        finalUrl: application.canonicalUrl,
+        finalUrl: application.postingUrl,
         httpStatus: 404,
         id: 'listing-check-1',
         listingAvailability: 'suspected_closed',
         nextCheckAt: '2026-07-13T12:00:00.000Z',
         operationId: 'listing-check-operation-1',
-        operationRequestSignature: 'listing-check-signature-1',
+        requestHash: 'listing-check-signature-1',
         outcome: 'closed',
         provider: 'example.test',
         receivedAt: recordedAt,
         reasonCode: 'http_404',
         recommendedAction: 'recheck',
         recordedAt,
-        requestedUrl: application.canonicalUrl,
+        requestedUrl: application.postingUrl,
         runId: 'listing-run-1',
       })
       const firstProjection = yield* applications.findByIdentifier(
@@ -864,24 +807,24 @@ test('claims, records, and archives listing checks through migrated D1 tables', 
         confidence: 'high',
         consecutiveClosedChecks: 2,
         contentHash: null,
-        eventId: 'listing-closed-event-1',
+        activityId: 'listing-closed-activity-1',
         evidence: [
           { code: 'http_status', detail: 'HTTP 404', sourceUrl: null },
         ],
-        finalUrl: application.canonicalUrl,
+        finalUrl: application.postingUrl,
         httpStatus: 404,
         id: 'listing-check-2',
         listingAvailability: 'closed',
         nextCheckAt: '2026-07-14T12:00:00.000Z',
         operationId: 'listing-check-operation-2',
-        operationRequestSignature: 'listing-check-signature-2',
+        requestHash: 'listing-check-signature-2',
         outcome: 'closed',
         provider: 'example.test',
         receivedAt: '2026-07-13T12:00:00.000Z',
         reasonCode: 'http_404',
         recommendedAction: 'archive',
         recordedAt: '2026-07-13T12:00:00.000Z',
-        requestedUrl: application.canonicalUrl,
+        requestedUrl: application.postingUrl,
         runId: null,
       })
       yield* checks.completeRun(
@@ -919,11 +862,11 @@ test('claims, records, and archives listing checks through migrated D1 tables', 
   assert.equal(result.checks.length, 2)
   assert.equal(result.run?.state, 'completed')
 
-  const events = await harness.query<{ kind: string }>(
-    `select kind from application_events where id = ?1`,
-    ['listing-closed-event-1']
+  const activities = await harness.query<{ kind: string }>(
+    `select kind from application_activities where id = ?1`,
+    ['listing-closed-activity-1']
   )
-  assert.deepEqual(events, [{ kind: 'listing_closed' }])
+  assert.deepEqual(activities, [{ kind: 'listing_availability_changed' }])
 })
 
 test('enforces migrated D1 foreign keys and cascades application children', async () => {
@@ -962,13 +905,13 @@ test('enforces migrated D1 foreign keys and cascades application children', asyn
       where application_id = ?1`,
     [application.applicationId]
   )
-  const events = await harness.query<{ count: number }>(
+  const activities = await harness.query<{ count: number }>(
     `select count(*) as count
-       from application_events
+       from application_activities
       where application_id = ?1`,
     [application.applicationId]
   )
 
   assert.deepEqual(notes, [{ count: 0 }])
-  assert.deepEqual(events, [{ count: 0 }])
+  assert.deepEqual(activities, [{ count: 0 }])
 })

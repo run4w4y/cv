@@ -7,16 +7,15 @@ import {
   ServiceUnavailableError,
 } from '@cv/application-registry-api-contract'
 import {
+  ActivitiesService,
   AnnotationsService,
   type ApplicationRegistryError,
   ApplicationsService,
   applicationRejectedDisableReason,
   CompensationsService,
   ContentEntriesService,
-  CvPublicationsService,
   CvAnalyticsService,
-  EventsService,
-  FactsReleasesService,
+  CvPublicationsService,
   JobPostingCaptureService,
   JobPostingSnapshotsService,
   ListingChecksService,
@@ -25,12 +24,8 @@ import {
 } from '@cv/application-registry-service'
 import { Effect, Match } from 'effect'
 import { HttpApiBuilder } from 'effect/unstable/httpapi'
+import { invalidateCvCache } from '../../worker/cv-cache'
 import { dispatchPdfJob, pdfJobResponse } from '../../worker/pdf-queue'
-import {
-  decodeBase64,
-  decodeOpaquePayload,
-  encodeBase64,
-} from '../opaque-payload'
 
 const toApiError = Match.type<ApplicationRegistryError>().pipe(
   Match.tag('RegistryBadRequestError', (error) =>
@@ -54,17 +49,20 @@ const toApiError = Match.type<ApplicationRegistryError>().pipe(
   Match.tag('RegistryAnalyticsError', (error) =>
     ServiceUnavailableError.make({ message: error.message })
   ),
-  Match.tag('FactsReleaseObjectNotFoundError', (error) =>
-    BadRequestError.make({ message: error.message })
-  ),
-  Match.tag('FactsReleaseObjectMetadataError', (error) =>
-    BadRequestError.make({ message: error.message })
-  ),
   Match.exhaustive
 )
 
 const expose = <A>(effect: Effect.Effect<A, ApplicationRegistryError>) =>
   effect.pipe(Effect.mapError(toApiError))
+
+const invalidatePublicationCache = (
+  invalidation: Parameters<typeof invalidateCvCache>[0]
+) =>
+  invalidateCvCache(invalidation).pipe(
+    Effect.mapError((error) =>
+      InternalServerError.make({ message: error.message })
+    )
+  )
 
 const syncCvLinksForStatus = (
   cvPublications: CvPublicationsService,
@@ -78,61 +76,61 @@ const syncCvLinksForStatus = (
       )
     : cvPublications.restoreAfterRejection(applicationId)
   ).pipe(
+    Effect.tap(() => invalidateCvCache({ all: true })),
     Effect.asVoid,
-    // The application transition has already committed. Public resolution
-    // independently reconciles this derived link state and fails closed for a
-    // rejected application, so a transient repair failure must not turn a
-    // successful status update into a stale-version retry trap.
     Effect.catch((error) => Effect.logWarning(error.message))
   )
 
-export const RegistryHandlersLayer = HttpApiBuilder.group(
+export const ApplicationsHandlersLayer = HttpApiBuilder.group(
   ApplicationRegistryApi,
-  'registry',
+  'applications',
   (handlers) =>
     Effect.gen(function* () {
+      const activities = yield* ActivitiesService
       const annotations = yield* AnnotationsService
       const applications = yield* ApplicationsService
       const compensations = yield* CompensationsService
-      const contentEntries = yield* ContentEntriesService
-      const cvPublications = yield* CvPublicationsService
       const cvAnalytics = yield* CvAnalyticsService
-      const events = yield* EventsService
-      const factsReleases = yield* FactsReleasesService
-      const jobCapture = yield* JobPostingCaptureService
-      const jobSnapshots = yield* JobPostingSnapshotsService
+      const cvPublications = yield* CvPublicationsService
       const listingChecks = yield* ListingChecksService
-      const opaqueObjects = yield* OpaqueObjectsService
-      const pdfArtifacts = yield* PdfArtifactsService
 
       return handlers.handleAll({
-        createApplication: ({ payload }) =>
-          expose(applications.create(payload)),
-        upsertApplication: ({ payload }) =>
-          expose(applications.upsert(payload)),
-        getCvAnalytics: ({ query }) => expose(cvAnalytics.read(query)),
-        listApplications: ({ query }) => expose(applications.list(query)),
-        listApplicationFacets: () => expose(applications.facets()),
-        getApplication: ({ params }) => expose(applications.find(params.id)),
-        patchApplication: ({ params, payload }) =>
+        addApplicationNote: ({ headers, params, payload }) =>
           expose(
-            Effect.gen(function* () {
-              const updated = yield* applications.patch(params.id, payload)
-              yield* syncCvLinksForStatus(
-                cvPublications,
-                updated.id,
-                updated.applicationStatus
-              )
-              return updated
+            annotations.addNote(params.id, {
+              ...payload,
+              idempotencyKey: headers['idempotency-key'],
             })
           ),
-        updateManagedApplication: ({ params, payload }) =>
+        createApplication: ({ payload }) =>
+          expose(applications.create(payload)),
+        getApplication: ({ params }) => expose(applications.find(params.id)),
+        getCvAnalytics: ({ query }) => expose(cvAnalytics.read(query)),
+        listActivities: ({ query }) => expose(activities.list(query)),
+        listApplicationActivities: ({ params }) =>
+          expose(activities.listByApplication(params.id)),
+        listApplicationAnnotations: ({ params }) =>
+          expose(annotations.list(params.id)),
+        listApplicationCompensations: ({ params, query }) =>
+          expose(compensations.listByApplication(params.id, query.currency)),
+        listApplicationFacets: () => expose(applications.facets()),
+        listApplicationListingChecks: ({ params }) =>
+          expose(listingChecks.listByApplication(params.id)),
+        listApplications: ({ query }) => expose(applications.list(query)),
+        resolveApplicationListingAvailability: ({ headers, params, payload }) =>
+          expose(
+            listingChecks.resolveAvailability(params.id, {
+              ...payload,
+              idempotencyKey: headers['idempotency-key'],
+            })
+          ),
+        updateApplication: ({ headers, params, payload }) =>
           expose(
             Effect.gen(function* () {
-              const updated = yield* applications.updateManaged(
-                params.id,
-                payload
-              )
+              const updated = yield* applications.update(params.id, {
+                ...payload,
+                idempotencyKey: headers['idempotency-key'],
+              })
               yield* syncCvLinksForStatus(
                 cvPublications,
                 updated.application.id,
@@ -141,192 +139,138 @@ export const RegistryHandlersLayer = HttpApiBuilder.group(
               return updated
             })
           ),
-        deleteApplication: ({ params, query }) =>
-          expose(applications.remove(params.id, query.expectedVersion)),
-        listApplicationCompensations: ({ params, query }) =>
-          expose(compensations.listByApplication(params.id, query.currency)),
-        replaceAnnualCompensation: ({ params, payload }) =>
-          expose(compensations.replaceAnnual(params.id, payload)),
-        listApplicationEvents: ({ params }) =>
-          expose(events.listByApplication(params.id)),
-        appendApplicationEvent: ({ params, payload }) =>
-          expose(
-            Effect.gen(function* () {
-              const result = yield* events.append(params.id, payload)
-              yield* syncCvLinksForStatus(
-                cvPublications,
-                result.application.id,
-                result.application.applicationStatus
-              )
-              return result
-            })
-          ),
-        listApplicationAnnotations: ({ params }) =>
-          expose(annotations.list(params.id)),
-        listApplicationLabels: ({ params }) =>
-          expose(annotations.list(params.id)).pipe(
-            Effect.map(({ labels }) => ({ items: labels }))
-          ),
-        replaceApplicationLabels: ({ params, payload }) =>
-          expose(
-            applications.replaceLabels(
-              params.id,
-              payload.labels,
-              payload.expectedVersion
-            )
-          ),
-        addApplicationNote: ({ params, payload }) =>
-          expose(annotations.addNote(params.id, payload)),
-        listEvents: ({ query }) => expose(events.list(query)),
-        listApplicationListingChecks: ({ params }) =>
-          expose(listingChecks.listByApplication(params.id)),
-        resolveApplicationListingAvailability: ({ params, payload }) =>
-          expose(listingChecks.resolveAvailability(params.id, payload)),
-        submitListingCheckFindings: ({ payload }) =>
-          expose(listingChecks.submitFindings(payload)),
-        getListingCheckRun: ({ params }) =>
-          expose(listingChecks.findRun(params.id)),
-        putOpaqueObject: ({ payload }) =>
-          expose(
-            decodeBase64(payload.data).pipe(
-              Effect.flatMap((bytes) => opaqueObjects.put(bytes))
-            )
-          ),
-        registerFactsRelease: ({ payload }) =>
-          expose(factsReleases.register(payload)),
-        getFactsRelease: ({ params }) =>
-          expose(factsReleases.find(params.releaseId)),
-        activateFactsRelease: ({ params, payload }) =>
-          expose(
-            factsReleases.activate(
-              params.channel,
-              payload.releaseId,
-              payload.expectedVersion
-            )
-          ),
-        getActiveFactsRelease: ({ query }) =>
-          expose(
-            factsReleases.readActive(
-              query.channel ?? 'production',
-              query.locale
-            )
-          ).pipe(
-            Effect.map((active) => ({
-              assets: active.assetContents.map(({ asset, bytes }) => ({
-                assetId: asset.assetId,
-                data: encodeBase64(bytes),
-                fileName: asset.fileName,
-                mediaType: asset.mediaType,
-                sha256: asset.sha256,
-              })),
-              catalogue: {
-                data: encodeBase64(active.catalogBytes),
-                locale: active.catalog.locale,
-                mediaType: active.catalog.mediaType,
-                sha256: active.catalog.sha256,
-              },
-              locales: active.catalogs.map(({ locale }) => locale),
-              channel: active.channel,
-              release: active.release,
-            }))
-          ),
-        persistJobPostingSnapshot: ({ params, payload }) =>
-          expose(
-            Effect.gen(function* () {
-              const [raw, normalized] = yield* Effect.all([
-                payload.raw
-                  ? decodeOpaquePayload(payload.raw)
-                  : Effect.succeed(payload.raw),
-                payload.normalized
-                  ? decodeOpaquePayload(payload.normalized)
-                  : Effect.succeed(payload.normalized),
-              ])
+      })
+    })
+)
 
-              return yield* jobSnapshots.persist(params.id, {
-                ...payload,
-                normalized,
-                raw,
-              })
-            })
-          ),
-        captureJobPostingSnapshot: ({ params }) =>
-          expose(jobCapture.capture(params.id)),
-        getLatestJobPostingSnapshot: ({ params }) =>
-          expose(jobSnapshots.latest(params.id)),
-        getJobPostingSnapshot: ({ params }) =>
-          expose(jobSnapshots.find(params.id, params.snapshotId)),
-        getJobPostingSnapshotPayload: ({ params }) =>
-          expose(
-            Effect.gen(function* () {
-              const snapshot = yield* jobSnapshots.find(
-                params.id,
-                params.snapshotId
-              )
-              const bytes = yield* jobSnapshots.readPayload(
-                params.id,
-                params.snapshotId,
-                params.kind
-              )
-              const mediaType =
-                params.kind === 'raw'
-                  ? snapshot.rawMediaType
-                  : snapshot.normalizedMediaType
-              return {
-                data: encodeBase64(bytes),
-                mediaType: mediaType ?? 'application/octet-stream',
-              }
-            })
-          ),
-        ensureContentEntry: ({ params, payload }) =>
-          expose(contentEntries.ensure(params.id, payload)),
-        getContentEntry: ({ params }) =>
-          expose(contentEntries.find(params.id, params.entryId)),
-        listContentRevisions: ({ params }) =>
-          expose(contentEntries.listRevisions(params.id, params.entryId)).pipe(
-            Effect.map((items) => ({ items }))
-          ),
-        appendContentRevision: ({ params, payload }) =>
-          expose(
-            decodeOpaquePayload(payload.payload).pipe(
-              Effect.flatMap((decoded) =>
+export const ContentHandlersLayer = HttpApiBuilder.group(
+  ApplicationRegistryApi,
+  'content',
+  (handlers) =>
+    Effect.gen(function* () {
+      const contentEntries = yield* ContentEntriesService
+      const jobCapture = yield* JobPostingCaptureService
+      const jobSnapshots = yield* JobPostingSnapshotsService
+      const opaqueObjects = yield* OpaqueObjectsService
+
+      const readBlobReference = (reference: {
+        readonly mediaType: string
+        readonly sha256: string
+      }) =>
+        expose(opaqueObjects.read(reference.sha256)).pipe(
+          Effect.map((bytes) => ({ bytes, mediaType: reference.mediaType }))
+        )
+
+      return handlers.handleAll({
+        appendContentRevision: ({ headers, params, payload }) =>
+          readBlobReference(payload.blob).pipe(
+            Effect.flatMap((decoded) =>
+              expose(
                 contentEntries.appendRevision(params.id, params.entryId, {
-                  ...payload,
+                  contractId: payload.contractId,
+                  contractVersion: payload.contractVersion,
+                  expectedVersion: payload.expectedVersion,
+                  factsReleaseId: payload.factsReleaseId,
+                  jobSnapshotId: payload.jobSnapshotId,
+                  operationId: headers['idempotency-key'],
                   payload: decoded,
+                  source: payload.source,
                 })
               )
             )
           ),
-        readContentRevision: ({ params }) =>
-          expose(
-            contentEntries
-              .readRevision(params.id, params.entryId, params.revisionId)
-              .pipe(
-                Effect.map(({ bytes, entry, revision }) => ({
-                  entry,
-                  payload: {
-                    data: encodeBase64(bytes),
-                    mediaType: revision.mediaType,
-                  },
-                  revision,
-                }))
-              )
-          ),
         approveContentRevision: ({ params, payload }) =>
           expose(
-            contentEntries.approveRevision(params.id, params.entryId, payload)
+            contentEntries.approveRevision(params.id, params.entryId, {
+              expectedVersion: payload.expectedVersion,
+              revisionId: payload.approvedRevisionId,
+            })
           ),
-        publishCv: ({ params, payload }) =>
-          expose(cvPublications.publish(params.id, params.entryId, payload)),
-        getCvLink: ({ params }) =>
-          expose(cvPublications.findByEntry(params.id, params.entryId)),
-        setCvLinkAvailability: ({ params, payload }) =>
+        captureJobPostingSnapshot: ({ params }) =>
+          expose(jobCapture.capture(params.id)),
+        ensureContentEntry: ({ params }) =>
           expose(
-            cvPublications.setAvailability(params.id, params.entryId, payload)
+            contentEntries.ensure(params.id, {
+              kind: params.kind,
+              locale: params.locale,
+            })
           ),
-        disableApplicationCvLinks: ({ params, payload }) =>
+        getBlob: ({ params }) => expose(opaqueObjects.read(params.sha256)),
+        getContentEntry: ({ params }) =>
+          expose(contentEntries.find(params.id, params.entryId)),
+        getJobPostingSnapshot: ({ params }) =>
+          expose(jobSnapshots.find(params.id, params.snapshotId)),
+        getJobPostingSnapshotPayload: ({ params }) =>
           expose(
-            cvPublications.disableForApplication(params.id, payload.reason)
-          ).pipe(Effect.map((count) => ({ count }))),
+            jobSnapshots.readPayload(params.id, params.snapshotId, params.kind)
+          ),
+        getLatestJobPostingSnapshot: ({ params }) =>
+          expose(jobSnapshots.latest(params.id)),
+        listContentRevisions: ({ params }) =>
+          expose(contentEntries.listRevisions(params.id, params.entryId)).pipe(
+            Effect.map((items) => ({ items }))
+          ),
+        persistJobPostingSnapshot: ({ params, payload }) =>
+          Effect.gen(function* () {
+            const raw = payload.raw
+              ? yield* readBlobReference(payload.raw)
+              : payload.raw
+            const normalized = payload.normalized
+              ? yield* readBlobReference(payload.normalized)
+              : payload.normalized
+            return yield* expose(
+              jobSnapshots.persist(params.id, {
+                ...payload,
+                normalized,
+                raw,
+              })
+            )
+          }),
+        putBlob: ({ params, payload }) =>
+          expose(opaqueObjects.put(payload)).pipe(
+            Effect.flatMap((metadata) =>
+              metadata.sha256 === params.sha256
+                ? Effect.succeed({
+                    byteLength: metadata.byteLength,
+                    sha256: metadata.sha256,
+                  })
+                : Effect.fail(
+                    BadRequestError.make({
+                      message:
+                        'Blob path digest does not match the request body.',
+                    })
+                  )
+            )
+          ),
+        readContentRevision: ({ params }) =>
+          expose(
+            contentEntries.readRevision(
+              params.id,
+              params.entryId,
+              params.revisionId
+            )
+          ).pipe(Effect.map(({ bytes: _, ...result }) => result)),
+        readContentRevisionPayload: ({ params }) =>
+          expose(
+            contentEntries.readRevision(
+              params.id,
+              params.entryId,
+              params.revisionId
+            )
+          ).pipe(Effect.map(({ bytes }) => bytes)),
+      })
+    })
+)
+
+export const PublicationsHandlersLayer = HttpApiBuilder.group(
+  ApplicationRegistryApi,
+  'publications',
+  (handlers) =>
+    Effect.gen(function* () {
+      const cvPublications = yield* CvPublicationsService
+      const pdfArtifacts = yield* PdfArtifactsService
+
+      return handlers.handleAll({
         getCurrentPdfArtifact: ({ params, query }) =>
           expose(
             pdfArtifacts.findCurrent(
@@ -335,19 +279,35 @@ export const RegistryHandlersLayer = HttpApiBuilder.group(
               query.rendererVersion
             )
           ),
-        readCurrentPdfArtifact: ({ params, query }) =>
+        getCvLink: ({ params }) =>
+          expose(cvPublications.findByEntry(params.id, params.entryId)),
+        getPdfJob: ({ params }) =>
           expose(
             pdfArtifacts
-              .readCurrent(params.id, params.entryId, query.rendererVersion)
-              .pipe(
-                Effect.map(({ artifact, bytes }) => ({
-                  artifact,
-                  payload: {
-                    data: encodeBase64(bytes),
-                    mediaType: artifact.mediaType ?? 'application/pdf',
-                  },
-                }))
-              )
+              .findJob(params.id, params.entryId, params.jobId)
+              .pipe(Effect.map(({ artifact }) => pdfJobResponse(artifact)))
+          ),
+        stageCv: ({ params, payload }) =>
+          expose(cvPublications.stage(params.id, params.entryId, payload)).pipe(
+            Effect.tap((link) =>
+              invalidatePublicationCache({ token: link.token })
+            )
+          ),
+        readCurrentPdfArtifact: ({ params, query }) =>
+          expose(
+            pdfArtifacts.readCurrent(
+              params.id,
+              params.entryId,
+              query.rendererVersion
+            )
+          ).pipe(Effect.map(({ bytes }) => bytes)),
+        setCvLinkAvailability: ({ params, payload }) =>
+          expose(
+            cvPublications.setAvailability(params.id, params.entryId, payload)
+          ).pipe(
+            Effect.tap((link) =>
+              invalidatePublicationCache({ token: link.token })
+            )
           ),
         startPdfJob: ({ params, payload }) =>
           expose(
@@ -369,12 +329,34 @@ export const RegistryHandlersLayer = HttpApiBuilder.group(
               return pdfJobResponse(artifact)
             })
           ),
-        getPdfJob: ({ params }) =>
+      })
+    })
+)
+
+export const AutomationHandlersLayer = HttpApiBuilder.group(
+  ApplicationRegistryApi,
+  'automation',
+  (handlers) =>
+    Effect.gen(function* () {
+      const listingChecks = yield* ListingChecksService
+
+      return handlers.handleAll({
+        getListingCheckRun: ({ params }) =>
+          expose(listingChecks.findRun(params.id)),
+        submitListingCheckFindings: ({ params, payload }) =>
           expose(
-            pdfArtifacts
-              .findJob(params.id, params.entryId, params.jobId)
-              .pipe(Effect.map(({ artifact }) => pdfJobResponse(artifact)))
+            listingChecks.submitFindings({
+              ...payload,
+              runId: params.runId,
+            })
           ),
       })
     })
 )
+
+export const RegistryHandlersLayers = [
+  ApplicationsHandlersLayer,
+  AutomationHandlersLayer,
+  ContentHandlersLayer,
+  PublicationsHandlersLayer,
+] as const

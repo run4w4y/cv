@@ -23,7 +23,7 @@ const linkRecord = (
   application: {
     appliedAt: null,
     applicationStatus: 'preparing',
-    canonicalUrl: `https://example.test/jobs/${id}`,
+    postingUrl: `https://example.test/jobs/${id}`,
     company,
     createdAt: '2026-07-01T00:00:00.000Z',
     id: `application-${id}`,
@@ -36,7 +36,7 @@ const linkRecord = (
     createdAt: '2026-07-10T00:00:00.000Z',
     enabled,
     id,
-    publishedRevisionId: `revision-${id}`,
+    currentRevisionId: `revision-${id}`,
     token: `secret-${id}`,
     updatedAt: '2026-07-11T00:00:00.000Z',
   },

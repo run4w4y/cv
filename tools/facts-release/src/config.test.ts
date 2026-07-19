@@ -6,22 +6,24 @@ import { readFactsPublisherConfig } from './config'
 const environment = {
   FACTS_COMPILER_COMMIT: 'b'.repeat(40),
   FACTS_CONTENT_ROOT: '/tmp/reviewed-facts',
+  FACTS_R2_ACCESS_KEY_ID: 'access-key',
+  FACTS_R2_ACCOUNT_ID: 'c'.repeat(32),
+  FACTS_R2_BUCKET: 'cv-facts',
+  FACTS_R2_SECRET_ACCESS_KEY: 'private-token',
   FACTS_SOURCE_COMMIT: 'a'.repeat(40),
-  REGISTRY_API_TOKEN: 'private-token',
-  REGISTRY_API_URL: 'https://registry.example.test',
 }
 
 describe('facts publisher configuration', () => {
-  test('accepts full immutable commits and redacts the registry token', async () => {
+  test('accepts full immutable commits and redacts the R2 credentials', async () => {
     const config = await Effect.runPromise(
       readFactsPublisherConfig(environment)
     )
 
-    expect(config.channel).toBe('production')
     expect(config.sourceCommit).toBe(environment.FACTS_SOURCE_COMMIT)
-    expect(String(config.registryToken)).not.toContain(
-      Redacted.value(config.registryToken)
+    expect(String(config.r2SecretAccessKey)).not.toContain(
+      Redacted.value(config.r2SecretAccessKey)
     )
+    expect(config.r2Bucket).toBe('cv-facts')
   })
 
   test('rejects refs and abbreviated commit IDs', async () => {

@@ -110,9 +110,9 @@ export const useListingAvailabilityReview = ({
       saveResolution === undefined
         ? saveListingResolution({
             applicationId: activeSession.applicationId,
+            idempotencyKey: operationId,
             input: {
               expectedVersion: activeSession.expectedVersion,
-              operationId,
               resolution,
             },
           }).then((response) => response.application)

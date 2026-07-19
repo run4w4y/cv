@@ -1,0 +1,26 @@
+html,
+body {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #f8fafc;
+}
+
+.cv-public-message {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 2rem;
+  font-family: system-ui, sans-serif;
+  text-align: center;
+}
+
+.cv-preview-shell {
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding: 1rem;
+  background: #f1f5f9;
+}

@@ -83,6 +83,14 @@ export interface RawDescriptor extends DescriptorMetadata {
   readonly expected?: string
 }
 
+/** A schema node whose encoded values cannot be represented by JSON. */
+export interface UnrepresentableDescriptor extends DescriptorMetadata {
+  readonly kind: 'unrepresentable'
+  readonly astTag: string
+  readonly reason: string
+  readonly expected?: string
+}
+
 export type EditorDescriptor =
   | StringDescriptor
   | NumberDescriptor
@@ -94,17 +102,23 @@ export type EditorDescriptor =
   | ObjectDescriptor
   | UnionDescriptor
   | RawDescriptor
+  | UnrepresentableDescriptor
+
+export type UnsupportedFallback = 'raw-json' | 'unrepresentable'
 
 export interface UnsupportedNode {
   readonly pointer: string
   readonly astTag: string
   readonly reason: string
+  readonly fallback: UnsupportedFallback
 }
 
 export interface SchemaInspection {
   readonly descriptor: EditorDescriptor
   readonly unsupported: ReadonlyArray<UnsupportedNode>
   readonly structurallyEditable: boolean
+  /** True when every unsupported node can still be edited as raw JSON. */
+  readonly jsonEditable: boolean
 }
 
 export interface ValidationIssue {
@@ -125,5 +139,9 @@ export type ValidationResult<A = unknown> =
     }
 
 export type RawJsonResult =
-  | { readonly valid: true; readonly value: unknown }
+  | { readonly valid: true; readonly value: JsonValue }
+  | { readonly valid: false; readonly message: string }
+
+export type RawJsonFormatResult =
+  | { readonly valid: true; readonly source: string }
   | { readonly valid: false; readonly message: string }

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 
 import {
   type CvPublicResolverBinding,
+  loadCvPreview,
   loadCvPublication,
   sha256Hex,
 } from './publication'
@@ -119,6 +120,25 @@ describe('public CV publication loader', () => {
     expect(result).toEqual({ tag: 'unavailable' })
     expect(requestedUrls).toEqual([
       'https://registry.internal/cv-publications/stable-token',
+    ])
+  })
+
+  test('sends preview capabilities only to the private resolver route', async () => {
+    const requestedUrls: string[] = []
+    const result = await loadCvPreview(
+      {
+        fetch: (request) => {
+          requestedUrls.push(request.url)
+          return responseFor(validDocument)
+        },
+      },
+      'stable-token',
+      'preview-secret'
+    )
+
+    expect(result.tag).toBe('success')
+    expect(requestedUrls).toEqual([
+      'https://registry.internal/cv-previews/stable-token?access=preview-secret',
     ])
   })
 })

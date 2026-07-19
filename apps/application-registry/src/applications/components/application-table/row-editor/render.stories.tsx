@@ -6,10 +6,7 @@ import { ApplicationsTable } from '..'
 
 const application: ApplicationListItem = {
   id: 'application-1',
-  jobKey: 'web:one',
-  source: 'web',
-  sourceJobId: 'one',
-  canonicalUrl: 'https://example.test/jobs/one',
+  postingUrl: 'https://example.test/jobs/one',
   company: 'Example Systems',
   role: 'Staff Platform Engineer working across a distributed systems estate',
   location: 'Remote — Europe',
@@ -18,7 +15,6 @@ const application: ApplicationListItem = {
   personalPriority: 'high',
   followUpAt: '2026-07-20T09:30:00.000Z',
   appliedAt: null,
-  lastContactAt: null,
   listingAvailability: 'open',
   listingCheckedAt: '2026-07-15T09:30:00.000Z',
   listingClosedCandidateAt: null,
@@ -35,10 +31,9 @@ const application: ApplicationListItem = {
     maximumMinor: 18_000_000,
   },
   counts: { notes: 2 },
-  identityAliases: [],
   labels: ['TypeScript', 'Remote'],
-  latestEvent: {
-    kind: 'stage_changed',
+  latestActivity: {
+    kind: 'status_changed',
     occurredAt: '2026-07-15T09:30:00.000Z',
   },
 }
@@ -57,7 +52,7 @@ const RegistryMutationStub = ({
       const url = String(input)
       if (
         init?.method === 'PATCH' &&
-        url.endsWith(`/v1/applications/${application.id}/management`)
+        url.endsWith(`/api/registry/applications/${application.id}`)
       ) {
         const request = JSON.parse(String(init.body)) as {
           readonly annualCompensation: ApplicationListItem['annualCompensation']

@@ -1,11 +1,12 @@
 import {
-  type UpsertApplicationRequest,
-  UpsertApplicationRequestSchema,
+  type CreateApplicationRequest,
+  CreateApplicationRequestSchema,
 } from '@cv/application-registry-api-contract'
 import {
-  type applicationEvents,
+  type applicationActivities,
   applicationStatusValues,
   type applications,
+  normalizeApplicationPostingUrl,
   personalPriorityValues,
   targetStageValues,
 } from '@cv/application-registry-entity'
@@ -22,16 +23,16 @@ export interface RegistryFactoryOptions {
 export interface RegistryGraphOptions {
   readonly applicationStatus?: (typeof applicationStatusValues)[number]
   readonly applicationCount: number
-  readonly eventsPerApplication?: number
+  readonly activitiesPerApplication?: number
 }
 
 export type RegistrySeedApplication = typeof applications.$inferInsert
 
-export type RegistrySeedEvent = typeof applicationEvents.$inferInsert
+export type RegistrySeedActivity = typeof applicationActivities.$inferInsert
 
 export interface RegistrySeedGraph {
   readonly applications: readonly RegistrySeedApplication[]
-  readonly events: readonly RegistrySeedEvent[]
+  readonly activities: readonly RegistrySeedActivity[]
 }
 
 /** Deterministic domain factories with per-record Faker instances. */
@@ -48,12 +49,12 @@ export class RegistryFactory {
   }
 
   application(
-    overrides: Partial<UpsertApplicationRequest> = {}
-  ): UpsertApplicationRequest {
+    overrides: Partial<CreateApplicationRequest> = {}
+  ): CreateApplicationRequest {
     const sequence = ++this.#applicationSequence
     const faker = this.#fakerFor(1, sequence)
     const company = faker.company.name()
-    const canonicalUrl = `https://${faker.internet.domainName()}/jobs/${sequence}`
+    const postingUrl = `https://${faker.internet.domainName()}/jobs/${sequence}`
     const minimumMinor = faker.number.int({
       max: 12_000_000,
       min: 5_000_000,
@@ -61,7 +62,6 @@ export class RegistryFactory {
     const input = {
       applicationStatus: faker.helpers.arrayElement(applicationStatusValues),
       appliedAt: null,
-      canonicalUrl,
       company,
       compensations: [
         {
@@ -75,21 +75,18 @@ export class RegistryFactory {
         },
       ],
       followUpAt: null,
-      jobKey: `factory:${this.seed}:${sequence}`,
       labels: faker.helpers.arrayElements(
         ['priority', 'remote', 'platform', 'typescript'],
         { max: 3, min: 1 }
       ),
-      lastContactAt: null,
       location: faker.location.city(),
       personalPriority: faker.helpers.arrayElement(personalPriorityValues),
+      postingUrl,
       role: faker.person.jobTitle(),
-      source: 'worker-test-kit',
-      sourceJobId: `factory-source-${this.seed}-${sequence}`,
       targetStage: faker.helpers.arrayElement(targetStageValues),
       ...overrides,
     }
-    return Schema.decodeUnknownSync(UpsertApplicationRequestSchema)(input)
+    return Schema.decodeUnknownSync(CreateApplicationRequestSchema)(input)
   }
 
   graph(options: RegistryGraphOptions): RegistrySeedGraph {
@@ -99,17 +96,20 @@ export class RegistryFactory {
     if (options.applicationCount < 0) {
       throw new Error('Registry graph applicationCount cannot be negative.')
     }
-    const eventsPerApplication = options.eventsPerApplication ?? 1
-    if (!Number.isInteger(eventsPerApplication) || eventsPerApplication < 0) {
+    const activitiesPerApplication = options.activitiesPerApplication ?? 1
+    if (
+      !Number.isInteger(activitiesPerApplication) ||
+      activitiesPerApplication < 0
+    ) {
       throw new Error(
-        'Registry graph eventsPerApplication must be a non-negative integer.'
+        'Registry graph activitiesPerApplication must be a non-negative integer.'
       )
     }
 
     const graphSequence = ++this.#graphSequence
     const applications: RegistrySeedApplication[] = []
-    const events: RegistrySeedEvent[] = []
-    let eventRevision = 0
+    const activities: RegistrySeedActivity[] = []
+    let activityRevision = 0
 
     for (
       let applicationIndex = 0;
@@ -121,48 +121,48 @@ export class RegistryFactory {
       const id = faker.string.uuid()
       const company = faker.company.name()
       const timestamp = this.#timestamp(sequence)
+      const postingUrl = `https://${faker.internet.domainName()}/jobs/${id}`
+      const postingUrlNormalized = normalizeApplicationPostingUrl(postingUrl)
       applications.push({
         applicationStatus:
           options.applicationStatus ??
           faker.helpers.arrayElement(applicationStatusValues),
-        canonicalUrl: `https://${faker.internet.domainName()}/jobs/${id}`,
         company,
-        companyNormalized: company.trim().toLocaleLowerCase('en-US'),
         createdAt: timestamp,
         id,
-        jobKey: `seed:${this.seed}:${graphSequence}:${sequence}`,
         location: faker.datatype.boolean() ? faker.location.city() : null,
         personalPriority: faker.datatype.boolean()
           ? faker.helpers.arrayElement(personalPriorityValues)
           : null,
+        postingFingerprint: postingUrlNormalized,
+        postingUrl,
+        postingUrlNormalized,
         role: faker.person.jobTitle(),
-        source: 'worker-test-kit-seed',
-        sourceJobId: null,
         targetStage: faker.helpers.arrayElement(targetStageValues),
         updatedAt: timestamp,
         updatedRevision: sequence,
       })
 
       for (
-        let eventIndex = 0;
-        eventIndex < eventsPerApplication;
-        eventIndex += 1
+        let activityIndex = 0;
+        activityIndex < activitiesPerApplication;
+        activityIndex += 1
       ) {
-        eventRevision += 1
-        events.push({
+        activityRevision += 1
+        activities.push({
+          actor: 'system',
           applicationId: id,
           id: faker.string.uuid(),
-          kind: 'research_updated',
+          kind: 'details_changed',
           occurredAt: timestamp,
-          operationId: `seed:event:${this.seed}:${graphSequence}:${eventRevision}`,
-          payload: { applicationIndex, eventIndex },
-          recordedAt: timestamp,
-          revision: eventRevision,
+          payload: { activityIndex, applicationIndex },
+          revision: activityRevision,
+          source: 'migration',
         })
       }
     }
 
-    return { applications, events }
+    return { activities, applications }
   }
 
   #fakerFor(scope: number, sequence: number) {

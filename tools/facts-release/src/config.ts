@@ -6,12 +6,13 @@ import { FactsPublisherConfigError } from './errors'
 const fullCommitPattern = /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u
 
 export type FactsPublisherConfig = {
-  readonly channel: string
   readonly compilerCommit: string
   readonly compilerRepository: string
   readonly contentRoot: string
-  readonly registryToken: Redacted.Redacted<string>
-  readonly registryUrl: URL
+  readonly r2AccessKeyId: Redacted.Redacted<string>
+  readonly r2AccountId: string
+  readonly r2Bucket: string
+  readonly r2SecretAccessKey: Redacted.Redacted<string>
   readonly sourceCommit: string
   readonly sourceRepository: string
 }
@@ -40,22 +41,17 @@ const fullCommit = (value: string, name: string) =>
         })
       )
 
-const registryUrl = (value: string) =>
-  Effect.try({
-    try: () => new URL(value),
-    catch: () =>
-      new FactsPublisherConfigError({
-        message: 'REGISTRY_API_URL must be an absolute HTTP(S) URL.',
-      }),
-  }).pipe(
-    Effect.filterOrFail(
-      (url) => url.protocol === 'https:' || url.protocol === 'http:',
-      () =>
+const accountIdPattern = /^[a-f0-9]{32}$/u
+const bucketPattern = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/u
+
+const matching = (value: string, name: string, pattern: RegExp) =>
+  pattern.test(value)
+    ? Effect.succeed(value)
+    : Effect.fail(
         new FactsPublisherConfigError({
-          message: 'REGISTRY_API_URL must use HTTP or HTTPS.',
+          message: `${name} has an invalid value.`,
         })
-    )
-  )
+      )
 
 export const readFactsPublisherConfig = Effect.fn('FactsPublisher.readConfig')(
   (environment: FactsPublisherEnvironment) =>
@@ -65,9 +61,9 @@ export const readFactsPublisherConfig = Effect.fn('FactsPublisher.readConfig')(
         environment,
         'FACTS_COMPILER_COMMIT'
       )
-      const token = yield* required(environment, 'REGISTRY_API_TOKEN')
+      const r2AccountId = yield* required(environment, 'FACTS_R2_ACCOUNT_ID')
+      const r2Bucket = yield* required(environment, 'FACTS_R2_BUCKET')
       return {
-        channel: environment.FACTS_CHANNEL?.trim() || 'production',
         compilerCommit: yield* fullCommit(
           compilerCommit,
           'FACTS_COMPILER_COMMIT'
@@ -77,9 +73,17 @@ export const readFactsPublisherConfig = Effect.fn('FactsPublisher.readConfig')(
         contentRoot: resolve(
           yield* required(environment, 'FACTS_CONTENT_ROOT')
         ),
-        registryToken: Redacted.make(token),
-        registryUrl: yield* registryUrl(
-          yield* required(environment, 'REGISTRY_API_URL')
+        r2AccessKeyId: Redacted.make(
+          yield* required(environment, 'FACTS_R2_ACCESS_KEY_ID')
+        ),
+        r2AccountId: yield* matching(
+          r2AccountId,
+          'FACTS_R2_ACCOUNT_ID',
+          accountIdPattern
+        ),
+        r2Bucket: yield* matching(r2Bucket, 'FACTS_R2_BUCKET', bucketPattern),
+        r2SecretAccessKey: Redacted.make(
+          yield* required(environment, 'FACTS_R2_SECRET_ACCESS_KEY')
         ),
         sourceCommit: yield* fullCommit(sourceCommit, 'FACTS_SOURCE_COMMIT'),
         sourceRepository:

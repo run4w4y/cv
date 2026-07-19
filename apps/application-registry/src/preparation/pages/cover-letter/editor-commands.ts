@@ -1,31 +1,30 @@
 import { useAtom, useAtomSet } from '@effect/atom-react'
-import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
-import * as Atom from 'effect/unstable/reactivity/Atom'
-
-import {
-  anyAsyncResultWaiting,
-  asyncResultFailureMessage,
-} from '../../async-result'
-import { preparationCommandGateKey } from '../../command-gate'
 import {
   coverLetterContractId,
   coverLetterContractVersion,
-} from '../../cover-letter-contract'
+} from '@cv/application-preparation-workflow/cover-letter'
+import {
+  isRevisionBoundToPreparationRun,
+  ReviewDecisionSchema,
+} from '@cv/application-preparation-workflow/domain'
+import { Cause } from 'effect'
+import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
+import * as Atom from 'effect/unstable/reactivity/Atom'
+
+import { preparationCommandGateKey } from '@/preparation/command-gate'
 import {
   makeAppendPreparationRevisionAtom,
   makeApprovePreparationRevisionAtom,
-} from '../../data'
+} from '@/preparation/data'
 import {
   editPreparationDraftAtom,
   type PreparationEditorIdentity,
   recordPreparationSaveAtom,
   releaseDetachedPreparationWorkflowAtom,
-} from '../../editor'
-import { keyedCommandFamily } from '../../keyed-command'
-import { makeSubmitPreparationReviewAtom } from '../../workflow/atoms'
-import { ReviewDecisionSchema } from '../../workflow/domain'
-import { isRevisionBoundToPreparationRun } from '../../workflow/review'
-import type { PreparationWorkspace } from '../../workspace/atoms'
+} from '@/preparation/editor'
+import { keyedCommandFamily } from '@/preparation/keyed-command'
+import { makeSubmitPreparationReviewAtom } from '@/preparation/workflow/atoms'
+import type { PreparationWorkspace } from '@/preparation/workspace/atoms'
 import { workflowIsExecuting } from './preparation-commands'
 
 const appendRevisionFamily = keyedCommandFamily(
@@ -73,11 +72,10 @@ export const useCoverLetterEditorCommands = ({
   const saving = AsyncResult.isWaiting(saveResult)
   const approving = AsyncResult.isWaiting(approveResult)
   const reviewPending = AsyncResult.isWaiting(reviewResult)
-  const mutationPending = anyAsyncResultWaiting(
-    saveResult,
-    approveResult,
-    reviewResult
-  )
+  const mutationPending =
+    AsyncResult.isWaiting(saveResult) ||
+    AsyncResult.isWaiting(approveResult) ||
+    AsyncResult.isWaiting(reviewResult)
   const workflowReviewBound =
     workspace === null ||
     workspace.editor.approvalMode !== 'workflow' ||
@@ -149,7 +147,6 @@ export const useCoverLetterEditorCommands = ({
             revisionId: revision.revision.id,
           }),
           runId: run.runId,
-          token: run.reviewToken,
         })
         return
       }
@@ -175,7 +172,6 @@ export const useCoverLetterEditorCommands = ({
           reason: 'Rejected during human cover-letter review.',
         }),
         runId: run.runId,
-        token: run.reviewToken,
       })
     } catch {
       // The keyed command atom retains the typed failure rendered by the page.
@@ -209,19 +205,16 @@ export const useCoverLetterEditorCommands = ({
     approvePending: approving,
     bindingError,
     changeDraft,
-    error:
-      asyncResultFailureMessage(
-        saveResult,
-        'The cover-letter revision could not be saved.'
-      ) ??
-      asyncResultFailureMessage(
-        approveResult,
-        'The cover-letter revision could not be approved.'
-      ) ??
-      asyncResultFailureMessage(
-        reviewResult,
-        'The Workflow review decision could not be recorded.'
-      ),
+    error: AsyncResult.isFailure(saveResult)
+      ? (Cause.prettyErrors(saveResult.cause)[0]?.message ??
+        'The cover-letter revision could not be saved.')
+      : AsyncResult.isFailure(approveResult)
+        ? (Cause.prettyErrors(approveResult.cause)[0]?.message ??
+          'The cover-letter revision could not be approved.')
+        : AsyncResult.isFailure(reviewResult)
+          ? (Cause.prettyErrors(reviewResult.cause)[0]?.message ??
+            'The Workflow review decision could not be recorded.')
+          : null,
     mutationPending,
     reject,
     reset,

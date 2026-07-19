@@ -1,7 +1,4 @@
-import type {
-  Application,
-  ApplicationStatus,
-} from '@cv/application-registry-entity'
+import type { Application } from '@cv/application-registry-entity'
 import { Context, type Effect } from 'effect'
 
 import type {
@@ -15,7 +12,6 @@ import type {
   ApplicationPatch,
   PersistApplicationOptions,
   PersistedApplication,
-  PersistedEvent,
   PersistedManagedApplicationUpdate,
 } from '../types'
 
@@ -24,11 +20,11 @@ export interface ApplicationsCrud {
   readonly findByIdentifier: (
     identifier: string
   ) => Effect.Effect<Application | undefined, RegistryDatabaseError>
-  readonly findByJobKey: (
-    jobKey: string
+  readonly findByPostingFingerprint: (
+    fingerprint: string
   ) => Effect.Effect<Application | undefined, RegistryDatabaseError>
-  readonly findByCanonicalUrl: (
-    canonicalUrl: string
+  readonly findByPostingUrl: (
+    postingUrlNormalized: string
   ) => Effect.Effect<readonly Application[], RegistryDatabaseError>
   readonly list: (
     query: ApplicationListResolution
@@ -49,12 +45,6 @@ export interface ApplicationsCrud {
     input: PersistedApplication,
     options: PersistApplicationOptions
   ) => Effect.Effect<void, RegistryDatabaseError>
-  readonly persistEvent: (
-    applicationId: string,
-    expectedVersion: number,
-    nextApplicationStatus: ApplicationStatus | undefined,
-    input: PersistedEvent
-  ) => Effect.Effect<boolean, RegistryDatabaseError>
   readonly remove: (
     applicationId: string,
     expectedVersion?: number

@@ -1,26 +1,18 @@
 import { describe, expect, test } from 'bun:test'
-import type {
-  PdfJobResponse,
-  SetCvLinkAvailabilityRequest,
-} from '@cv/application-registry-api-contract'
-import type {
-  ContentEntry,
-  CvLink,
-  GeneratedArtifact,
-} from '@cv/application-registry-entity'
+import type { PdfJobResponse } from '@cv/application-registry-api-contract'
+import type { ContentEntry, CvLink } from '@cv/application-registry-entity'
 import {
   Cause,
   Deferred,
   Effect,
   Exit,
-  Fiber,
   Layer,
   Option,
   SubscriptionRef,
 } from 'effect'
-import { TestClock } from 'effect/testing'
 import * as Reactivity from 'effect/unstable/reactivity/Reactivity'
 import * as WorkflowEngine from 'effect/unstable/workflow/WorkflowEngine'
+
 import { publicationMutationReactivityKeys } from '../data/keys'
 import { PreparationRepository } from '../data/repository'
 import {
@@ -55,58 +47,30 @@ const link: CvLink = {
   applicationId: entry.applicationId,
   contentEntryId: entry.id,
   createdAt: recordedAt,
+  currentRevisionId: 'revision-1',
   disabledAt: null,
   disabledReason: null,
   enabled: true,
   id: 'link-1',
+  previewToken: 'preview-token',
   publicationVersion: 2,
-  publishedRevisionId: 'revision-1',
-  publicUrl: 'https://cv.example.test/public/link-1',
+  publicUrl: 'https://cv.example.test/c/public-token',
   token: 'public-token',
   updatedAt: recordedAt,
   version: 2,
 }
 
-const artifact: GeneratedArtifact = {
-  byteLength: 1_024,
-  contentRevisionId: 'revision-1',
-  createdAt: recordedAt,
-  cvLinkId: link.id,
-  errorCode: null,
-  errorMessage: null,
-  generatedAt: recordedAt,
-  id: 'artifact-1',
-  kind: 'pdf',
-  mediaType: 'application/pdf',
-  objectKey: 'artifacts/artifact-1.pdf',
-  publicationVersion: link.publicationVersion,
-  qrTarget: link.publicUrl,
-  rendererVersion: 'renderer-v1',
-  sha256: 'abc123',
-  status: 'ready',
-  updatedAt: recordedAt,
-  requestId: 'pdf-request-1',
-}
-
 const runningPdf: PdfJobResponse = {
   errorCode: null,
   errorMessage: null,
-  jobId: artifact.id,
+  jobId: 'artifact-1',
   status: 'pending',
-}
-
-const completePdf: PdfJobResponse = {
-  errorCode: null,
-  errorMessage: null,
-  jobId: artifact.id,
-  status: 'ready',
 }
 
 const input: CvPublicationWorkflowInput = {
   applicationId: entry.applicationId,
   entry,
-  publicBaseUrl: 'https://cv.example.test',
-  rendererVersion: artifact.rendererVersion,
+  expectedPublicationVersion: link.publicationVersion,
   runId: 'publication-run-1',
 }
 
@@ -118,19 +82,25 @@ const makeRepository = (
 ): PreparationRepositoryShape => ({
   appendRevision: () => unimplemented(),
   approveRevision: () => unimplemented(),
+  createPreparationApplication: () => unimplemented(),
   discoverModels: () => unimplemented(),
   loadBootstrap: () => unimplemented(),
+  loadContentEntry: () => unimplemented(),
   loadContentHead: () => unimplemented(),
+  loadContentRevisionHistory: () => unimplemented(),
   loadContext: () => unimplemented(),
+  loadCvPageState: () => unimplemented(),
   loadPreparationHead: () => unimplemented(),
-  loadPublishedCvState: () => unimplemented(),
+  loadWorkflowBootstrap: () => unimplemented(),
   persistManualJobContext: () => unimplemented(),
-  publishCv: () => unimplemented(),
   readCurrentPdf: () => unimplemented(),
   readPdfJob: () => unimplemented(),
   refreshSnapshot: () => unimplemented(),
   setPublicationAvailability: () => unimplemented(),
+  stageCv: () => unimplemented(),
   startPdfGeneration: () => unimplemented(),
+  startPreparation: () => unimplemented(),
+  updatePreparationApplication: () => unimplemented(),
   ...overrides,
 })
 
@@ -146,224 +116,96 @@ const testLayer = (repository: PreparationRepositoryShape) =>
     Layer.provideMerge(WorkflowEngine.layerMemory)
   )
 
-describe('session CV publication Workflow', () => {
-  test('polls with Schedule/TestClock and verifies the current artifact', async () => {
-    const observed = await Effect.runPromise(
-      Effect.gen(function* () {
-        const firstPoll = yield* Deferred.make<void>()
-        let pollReads = 0
-        const repository = makeRepository({
-          loadPublishedCvState: () => Effect.succeed({ artifact, link }),
-          publishCv: () => Effect.succeed(link),
-          readPdfJob: () =>
-            Effect.sync(() => {
-              pollReads += 1
-              return pollReads === 1 ? runningPdf : completePdf
-            }).pipe(
-              Effect.tap(() =>
-                pollReads === 1
-                  ? Deferred.succeed(firstPoll, undefined)
-                  : Effect.void
-              )
-            ),
-          startPdfGeneration: () => Effect.succeed(runningPdf),
-        })
-
-        return yield* Effect.gen(function* () {
-          const progress = yield* CvPublicationProgress
-          const executionId = yield* PublishCvWorkflow.executionId(input)
-          yield* progress.reserve(input, executionId)
-          const execution = yield* PublishCvWorkflow.execute(input).pipe(
-            Effect.forkChild
-          )
-
-          yield* Deferred.await(firstPoll)
-          yield* Effect.yieldNow
-          expect(
-            (yield* SubscriptionRef.get(progress.runs)).get(input.runId)?._tag
-          ).toBe('PollingPdf')
-
-          yield* TestClock.adjust('2 seconds')
-          const result = yield* Fiber.join(execution)
-          return {
-            pollReads,
-            result,
-            run: (yield* SubscriptionRef.get(progress.runs)).get(input.runId),
-          }
-        }).pipe(Effect.provide(testLayer(repository)))
-      }).pipe(Effect.provide(TestClock.layer()))
-    )
-
-    expect(observed.pollReads).toBe(2)
-    expect(observed.result.artifact.id).toBe(artifact.id)
-    expect(observed.result.link.id).toBe(link.id)
-    expect(observed.run?._tag).toBe('Published')
-  })
-
-  test('retries a transient PDF job read with a bounded Schedule', async () => {
-    const observed = await Effect.runPromise(
-      Effect.gen(function* () {
-        const firstReadFailed = yield* Deferred.make<void>()
-        let pollReads = 0
-        const repository = makeRepository({
-          loadPublishedCvState: () => Effect.succeed({ artifact, link }),
-          publishCv: () => Effect.succeed(link),
-          readPdfJob: () =>
-            Effect.suspend(() => {
-              pollReads += 1
-              if (pollReads === 1) {
-                return Deferred.succeed(firstReadFailed, undefined).pipe(
-                  Effect.andThen(
-                    Effect.fail(
-                      new PreparationDataError({
-                        message: 'The PDF job read timed out.',
-                        operation: 'read-pdf-job',
-                      })
-                    )
-                  )
-                )
-              }
-              return Effect.succeed(completePdf)
-            }),
-          startPdfGeneration: () => Effect.succeed(runningPdf),
-        })
-
-        return yield* Effect.gen(function* () {
-          const progress = yield* CvPublicationProgress
-          const executionId = yield* PublishCvWorkflow.executionId(input)
-          yield* progress.reserve(input, executionId)
-          const execution = yield* PublishCvWorkflow.execute(input).pipe(
-            Effect.forkChild
-          )
-
-          yield* Deferred.await(firstReadFailed)
-          yield* TestClock.adjust('1 second')
-          const result = yield* Fiber.join(execution)
-          return {
-            pollReads,
-            result,
-            run: (yield* SubscriptionRef.get(progress.runs)).get(input.runId),
-          }
-        }).pipe(Effect.provide(testLayer(repository)))
-      }).pipe(Effect.provide(TestClock.layer()))
-    )
-
-    expect(observed.pollReads).toBe(2)
-    expect(observed.result.artifact.id).toBe(artifact.id)
-    expect(observed.run?._tag).toBe('Published')
-  })
-
-  test('does not retry an ambiguous publish response and invalidates authoritative state', async () => {
-    let publishCalls = 0
-    let pdfStarts = 0
-    const repository = makeRepository({
-      publishCv: () =>
-        Effect.sync(() => {
-          publishCalls += 1
-        }).pipe(
-          Effect.andThen(
-            Effect.fail(
-              new PreparationDataError({
-                message: 'The publish response was lost.',
-                operation: 'publish-cv',
-              })
-            )
-          )
-        ),
-      startPdfGeneration: () =>
-        Effect.sync(() => {
-          pdfStarts += 1
-          return runningPdf
-        }),
-    })
-
-    const observed = await Effect.runPromise(
-      Effect.gen(function* () {
-        const progress = yield* CvPublicationProgress
-        const reactivity = yield* Reactivity.Reactivity
-        const keys = publicationMutationReactivityKeys(
-          input.applicationId,
-          input.entry.id
-        )
-        const invalidations = keys.map(() => 0)
-        const unregister = keys.map((key, index) =>
-          reactivity.registerUnsafe([key], () => {
-            invalidations[index] = (invalidations[index] ?? 0) + 1
-          })
-        )
-        const executionId = yield* PublishCvWorkflow.executionId(input)
-        yield* progress.reserve(input, executionId)
-        const exit = yield* Effect.exit(PublishCvWorkflow.execute(input))
-        unregister.forEach((cancel) => {
-          cancel()
-        })
-        return {
-          exit,
-          invalidations,
-          run: (yield* SubscriptionRef.get(progress.runs)).get(input.runId),
-        }
-      }).pipe(Effect.provide(testLayer(repository)))
-    )
-
-    expect(publishCalls).toBe(1)
-    expect(pdfStarts).toBe(0)
-    expect(observed.invalidations).toEqual([1, 1, 1])
-    expect(Exit.isFailure(observed.exit)).toBe(true)
-    expect(observed.run?._tag).toBe('Failed')
-    if (observed.run?._tag !== 'Failed') throw new Error('Expected failure.')
-    expect(observed.run.error.stage).toBe('publish-link')
-  })
-
-  test('disables the new link when PDF startup fails', async () => {
-    let availability: SetCvLinkAvailabilityRequest | undefined
-    const disabledLink = {
-      ...link,
-      disabledAt: recordedAt,
-      disabledReason: 'PDF generation could not be started.',
-      enabled: false,
-      version: link.version + 1,
+const execute = (repository: PreparationRepositoryShape) =>
+  Effect.gen(function* () {
+    const progress = yield* CvPublicationProgress
+    const executionId = yield* PublishCvWorkflow.executionId(input)
+    yield* progress.reserve(input, executionId)
+    const exit = yield* Effect.exit(PublishCvWorkflow.execute(input))
+    return {
+      exit,
+      run: (yield* SubscriptionRef.get(progress.runs)).get(input.runId),
     }
-    const repository = makeRepository({
-      publishCv: () => Effect.succeed(link),
-      setPublicationAvailability: ({ input: requested }) =>
-        Effect.sync(() => {
-          availability = requested
-          return disabledLink
-        }),
-      startPdfGeneration: () =>
-        Effect.fail(
-          new PreparationDataError({
-            message: 'PDF worker is unavailable.',
-            operation: 'start-pdf-generation',
-          })
-        ),
-    })
+  }).pipe(Effect.provide(testLayer(repository)), Effect.runPromise)
 
-    const observed = await Effect.runPromise(
-      Effect.gen(function* () {
-        const progress = yield* CvPublicationProgress
-        const executionId = yield* PublishCvWorkflow.executionId(input)
-        yield* progress.reserve(input, executionId)
-        const exit = yield* Effect.exit(PublishCvWorkflow.execute(input))
-        return {
-          exit,
-          run: (yield* SubscriptionRef.get(progress.runs)).get(input.runId),
-        }
-      }).pipe(Effect.provide(testLayer(repository)))
+describe('session CV publication Workflow', () => {
+  test('makes the staged page public and starts PDF generation', async () => {
+    const availabilityRequests: boolean[] = []
+    const observed = await execute(
+      makeRepository({
+        setPublicationAvailability: ({ input: request }) =>
+          Effect.sync(() => {
+            availabilityRequests.push(request.enabled)
+            return link
+          }),
+        startPdfGeneration: () => Effect.succeed(runningPdf),
+      })
     )
 
-    expect(availability).toEqual({
-      enabled: false,
-      expectedPublicationVersion: link.publicationVersion,
-      reason: 'PDF generation could not be started.',
-    })
+    expect(Exit.isSuccess(observed.exit)).toBe(true)
+    if (Exit.isFailure(observed.exit)) throw new Error('Expected success.')
+    expect(observed.exit.value.link).toEqual(link)
+    expect(observed.exit.value.job).toEqual(runningPdf)
+    expect(observed.exit.value.pdfStartError).toBeNull()
+    expect(availabilityRequests).toEqual([true])
+    expect(observed.run?._tag).toBe('Published')
+  })
+
+  test('keeps the page public when PDF generation cannot start', async () => {
+    const availabilityRequests: boolean[] = []
+    const observed = await execute(
+      makeRepository({
+        setPublicationAvailability: ({ input: request }) =>
+          Effect.sync(() => {
+            availabilityRequests.push(request.enabled)
+            return link
+          }),
+        startPdfGeneration: () =>
+          Effect.fail(
+            new PreparationDataError({
+              message: 'PDF Queue unavailable.',
+              operation: 'start-pdf-generation',
+            })
+          ),
+      })
+    )
+
+    expect(Exit.isSuccess(observed.exit)).toBe(true)
+    if (Exit.isFailure(observed.exit)) throw new Error('Expected success.')
+    expect(observed.exit.value.link.enabled).toBe(true)
+    expect(observed.exit.value.job).toBeNull()
+    expect(observed.exit.value.pdfStartError).toContain('PDF Queue unavailable')
+    expect(availabilityRequests).toEqual([true])
+    expect(observed.run?._tag).toBe('Published')
+  })
+
+  test('fails before PDF generation when the page cannot be enabled', async () => {
+    let pdfStarts = 0
+    const observed = await execute(
+      makeRepository({
+        setPublicationAvailability: () =>
+          Effect.fail(
+            new PreparationDataError({
+              message: 'Publication version changed.',
+              operation: 'set-publication-availability',
+            })
+          ),
+        startPdfGeneration: () =>
+          Effect.sync(() => {
+            pdfStarts += 1
+            return runningPdf
+          }),
+      })
+    )
+
     expect(Exit.isFailure(observed.exit)).toBe(true)
     if (Exit.isSuccess(observed.exit)) throw new Error('Expected failure.')
     const error = Cause.findErrorOption(observed.exit.cause)
     expect(Option.isSome(error)).toBe(true)
     if (Option.isNone(error)) throw new Error('Expected typed failure.')
     expect(error.value).toBeInstanceOf(CvPublicationWorkflowError)
-    expect(error.value.stage).toBe('start-pdf')
+    expect(error.value.stage).toBe('enable-page')
+    expect(pdfStarts).toBe(0)
     expect(observed.run?._tag).toBe('Failed')
   })
 
@@ -371,13 +213,13 @@ describe('session CV publication Workflow', () => {
     const cancelledInput = { ...input, runId: 'publication-run-cancelled' }
     const observed = await Effect.runPromise(
       Effect.gen(function* () {
-        const publishing = yield* Deferred.make<void>()
-        const neverPublish = yield* Deferred.make<void>()
+        const enabling = yield* Deferred.make<void>()
+        const neverEnable = yield* Deferred.make<void>()
         const repository = makeRepository({
-          publishCv: () =>
+          setPublicationAvailability: () =>
             Effect.gen(function* () {
-              yield* Deferred.succeed(publishing, undefined)
-              yield* Deferred.await(neverPublish)
+              yield* Deferred.succeed(enabling, undefined)
+              yield* Deferred.await(neverEnable)
               return link
             }),
         })
@@ -399,7 +241,7 @@ describe('session CV publication Workflow', () => {
             yield* PublishCvWorkflow.executionId(cancelledInput)
           yield* progress.reserve(cancelledInput, executionId)
           yield* PublishCvWorkflow.execute(cancelledInput, { discard: true })
-          yield* Deferred.await(publishing)
+          yield* Deferred.await(enabling)
           yield* cancelCvPublication({
             executionId,
             runId: cancelledInput.runId,

@@ -2,10 +2,6 @@ import type {
   ContentEntry,
   ContentRevision,
   CvLink,
-  FactsChannel,
-  FactsRelease,
-  FactsReleaseAsset,
-  FactsReleaseCatalog,
   GeneratedArtifact,
   JobPostingSnapshot,
   PdfGenerationOutbox,
@@ -17,10 +13,9 @@ import type {
   PersistedContentEntry,
   PersistedContentRevision,
   PersistedCvLink,
-  PersistedFactsRelease,
   PersistedGeneratedArtifact,
-  PersistedPdfGenerationOutbox,
   PersistedJobPostingSnapshot,
+  PersistedPdfGenerationOutbox,
 } from '../types'
 
 export interface JobPostingSnapshotsCrud {
@@ -36,40 +31,6 @@ export interface JobPostingSnapshotsCrud {
 }
 export const JobPostingSnapshotsCrud = Context.Service<JobPostingSnapshotsCrud>(
   '@cv/application-registry-crud/JobPostingSnapshotsCrud'
-)
-
-export type ActiveFactsCatalog = {
-  readonly channel: FactsChannel
-  readonly release: FactsRelease
-  readonly catalog: FactsReleaseCatalog
-}
-
-export interface FactsReleasesCrud {
-  readonly activate: (
-    channel: string,
-    releaseId: string,
-    expectedVersion: number,
-    updatedAt: string
-  ) => Effect.Effect<boolean, RegistryDatabaseError>
-  readonly assets: (
-    releaseId: string
-  ) => Effect.Effect<readonly FactsReleaseAsset[], RegistryDatabaseError>
-  readonly catalogs: (
-    releaseId: string
-  ) => Effect.Effect<readonly FactsReleaseCatalog[], RegistryDatabaseError>
-  readonly find: (
-    releaseId: string
-  ) => Effect.Effect<FactsRelease | undefined, RegistryDatabaseError>
-  readonly findActiveCatalog: (
-    channel: string,
-    locale: string
-  ) => Effect.Effect<ActiveFactsCatalog | undefined, RegistryDatabaseError>
-  readonly register: (
-    release: PersistedFactsRelease
-  ) => Effect.Effect<void, RegistryDatabaseError>
-}
-export const FactsReleasesCrud = Context.Service<FactsReleasesCrud>(
-  '@cv/application-registry-crud/FactsReleasesCrud'
 )
 
 export interface ContentCrud {
@@ -123,7 +84,7 @@ export interface CvLinksCrud {
   readonly findByToken: (
     token: string
   ) => Effect.Effect<CvLink | undefined, RegistryDatabaseError>
-  readonly publish: (
+  readonly stage: (
     link: PersistedCvLink
   ) => Effect.Effect<void, RegistryDatabaseError>
   readonly setEnabled: (
@@ -149,6 +110,13 @@ export interface ArtifactsCrud {
   readonly findPendingDispatch: (
     artifactId: string
   ) => Effect.Effect<PdfGenerationOutbox | undefined, RegistryDatabaseError>
+  readonly findCurrentForPublication: (
+    cvLinkId: string,
+    contentRevisionId: string,
+    rendererVersion: string | null,
+    publicationVersion: number,
+    qrTarget: string
+  ) => Effect.Effect<GeneratedArtifact | undefined, RegistryDatabaseError>
   readonly findReadyForPublication: (
     cvLinkId: string,
     contentRevisionId: string,

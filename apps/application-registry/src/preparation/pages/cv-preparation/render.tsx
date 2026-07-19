@@ -7,21 +7,21 @@ import {
   CardContent,
 } from '@cv/internal-ui'
 import { useAtom, useAtomSet, useAtomValue } from '@effect/atom-react'
+import { Cause } from 'effect'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import * as Atom from 'effect/unstable/reactivity/Atom'
 import { CircleAlert, RefreshCw, Sparkles } from 'lucide-react'
 import { useParams, useSearchParams } from 'react-router'
 
-import { asyncResultFailureMessage } from '../../async-result'
-import { usePreparationCommandGate } from '../../command-gate'
-import { ChatGptAccess } from '../../components/chatgpt-access'
-import { JobContextEditor } from '../../components/job-context-editor'
-import { PreparationPageFrame } from '../../components/page-frame'
-import { refreshJobSnapshotCommandAtom } from '../../snapshot-command'
+import { usePreparationCommandGate } from '@/preparation/command-gate'
+import { ChatGptAccess } from '@/preparation/components/chatgpt-access'
+import { JobContextEditor } from '@/preparation/components/job-context-editor'
+import { PreparationPageFrame } from '@/preparation/components/page-frame'
+import { refreshJobSnapshotCommandAtom } from '@/preparation/snapshot-command'
 import {
   type PreparationWorkspace,
   preparationWorkspaceAtom,
-} from '../../workspace/atoms'
+} from '@/preparation/workspace/atoms'
 import { type CvPreparationActions, useCvPreparationActions } from './actions'
 import { CvEditorCard } from './editor-card'
 import { CvGenerationCard } from './generation-card'
@@ -166,14 +166,14 @@ export const CvPreparationPage = () => {
   const resetRefreshResult = useAtomSet(refreshCommandAtom)
   const commandGate = usePreparationCommandGate(editorIdentity)
   const refreshPending = AsyncResult.isWaiting(refreshResult)
-  const refreshError = asyncResultFailureMessage(
-    refreshResult,
-    'The job posting could not be refreshed.'
-  )
-  const workspaceError = asyncResultFailureMessage(
-    workspaceResult,
-    'The job snapshot, active facts release, or CV entry could not be loaded.'
-  )
+  const refreshError = AsyncResult.isFailure(refreshResult)
+    ? (Cause.prettyErrors(refreshResult.cause)[0]?.message ??
+      'The job posting could not be refreshed.')
+    : null
+  const workspaceError = AsyncResult.isFailure(workspaceResult)
+    ? (Cause.prettyErrors(workspaceResult.cause)[0]?.message ??
+      'The job snapshot, active facts release, or CV entry could not be loaded.')
+    : null
 
   const updateRun = (runId: string) => {
     setSearchParams((current) => {

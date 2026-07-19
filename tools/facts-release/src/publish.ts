@@ -3,27 +3,26 @@ import type {
   FactsAuthoringValidationError,
 } from '@cv/facts-authoring'
 import {
+  cloudflareR2Endpoint,
+  factsR2ObjectStoreLayer,
+  factsR2PublicationTargetLayer,
+} from '@cv/facts-r2'
+import {
   type FactsReleaseAssetError,
   type FactsReleaseHashError,
   type FactsReleaseIntegrityError,
   type FactsReleasePublicationError,
+  type FactsReleasePublicationTarget,
   type FactsReleaseValidationError,
   publishFactsRelease,
 } from '@cv/facts-release'
-import { Effect } from 'effect'
+import { Effect, Layer } from 'effect'
 
 import type { FactsPublisherConfig } from './config'
-import {
-  type FactsPublisherHttpError,
-  type FactsPublisherIntegrityError,
-  FactsPublisherSourceError,
-} from './errors'
-import { type FactsPublisherFetch, makeFactsPublisherHttpClient } from './http'
+import type { FactsPublisherSourceError } from './errors'
 import { compileFactsCheckout } from './source'
 
 export type PublishFactsResult = {
-  readonly channel: string
-  readonly channelVersion: number
   readonly objectCount: number
   readonly releaseId: string
   readonly sourceCommit: string
@@ -33,8 +32,6 @@ export type PublishFactsResult = {
 export type PublishFactsError =
   | FactsAuthoringCompositionError
   | FactsAuthoringValidationError
-  | FactsPublisherHttpError
-  | FactsPublisherIntegrityError
   | FactsPublisherSourceError
   | FactsReleaseAssetError
   | FactsReleaseHashError
@@ -42,10 +39,24 @@ export type PublishFactsError =
   | FactsReleasePublicationError
   | FactsReleaseValidationError
 
+const publicationLayer = (config: FactsPublisherConfig) =>
+  factsR2PublicationTargetLayer.pipe(
+    Layer.provide(
+      factsR2ObjectStoreLayer({
+        accessKeyId: config.r2AccessKeyId,
+        bucket: config.r2Bucket,
+        endpoint: cloudflareR2Endpoint(config.r2AccountId),
+        secretAccessKey: config.r2SecretAccessKey,
+      })
+    )
+  )
+
 export const publishFactsCheckout = Effect.fn('FactsPublisher.publishCheckout')(
   (
     config: FactsPublisherConfig,
-    fetchImplementation: FactsPublisherFetch = globalThis.fetch
+    targetLayer: Layer.Layer<FactsReleasePublicationTarget> = publicationLayer(
+      config
+    )
   ): Effect.Effect<PublishFactsResult, PublishFactsError> =>
     Effect.gen(function* () {
       const bundle = yield* compileFactsCheckout(config.contentRoot, {
@@ -54,40 +65,14 @@ export const publishFactsCheckout = Effect.fn('FactsPublisher.publishCheckout')(
         sourceCommit: config.sourceCommit,
         sourceRepository: config.sourceRepository,
       })
-      const client = makeFactsPublisherHttpClient(config, fetchImplementation)
-      yield* publishFactsRelease(bundle, new Date().toISOString()).pipe(
-        Effect.provide(client.targetLayer)
-      )
-      const firstCatalogue = bundle.catalogues[0]
-      if (!firstCatalogue) {
-        return yield* new FactsPublisherSourceError({
-          cause: new Error('The compiled release has no locale catalogues.'),
-          message: 'The compiled release has no locale catalogues.',
-          operation: 'load-source',
-        })
-      }
-      const current = yield* client.current(firstCatalogue.locale)
-      if (current.activeReleaseId === bundle.releaseId) {
-        return {
-          channel: config.channel,
-          channelVersion: current.version,
-          objectCount: bundle.objects.length,
-          releaseId: bundle.releaseId,
-          sourceCommit: config.sourceCommit,
-          status: 'already-active',
-        }
-      }
-      const activated = yield* client.activate(
-        bundle.releaseId,
-        current.version
+      const publication = yield* publishFactsRelease(bundle).pipe(
+        Effect.provide(targetLayer)
       )
       return {
-        channel: activated.name,
-        channelVersion: activated.version,
-        objectCount: bundle.objects.length,
-        releaseId: bundle.releaseId,
+        objectCount: publication.immutableObjectCount,
+        releaseId: publication.releaseId,
         sourceCommit: config.sourceCommit,
-        status: 'activated',
+        status: publication.status,
       }
     })
 )

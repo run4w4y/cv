@@ -1,34 +1,30 @@
 import {
+  isRevisionBoundToPreparationRun,
+  ReviewDecisionSchema,
+} from '@cv/application-preparation-workflow/domain'
+import {
   cvDocumentV1ContractId,
   cvDocumentV1Version,
 } from '@cv/contracts/document'
-import type { CvPageLayoutAssessment } from '@cv/renderer'
 import { useAtom, useAtomSet } from '@effect/atom-react'
+import { Cause } from 'effect'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import * as Atom from 'effect/unstable/reactivity/Atom'
-import { useCallback } from 'react'
 
-import {
-  anyAsyncResultWaiting,
-  asyncResultFailureMessage,
-} from '../../async-result'
-import { preparationCommandGateKey } from '../../command-gate'
+import { preparationCommandGateKey } from '@/preparation/command-gate'
 import {
   makeAppendPreparationRevisionAtom,
   makeApprovePreparationRevisionAtom,
-} from '../../data'
+} from '@/preparation/data'
 import {
   editPreparationDraftAtom,
   recordPreparationSaveAtom,
   releaseDetachedPreparationWorkflowAtom,
-  setPreparationLayoutAssessmentAtom,
   validCvEditorDocument,
-} from '../../editor'
-import { keyedCommandFamily } from '../../keyed-command'
-import { makeSubmitPreparationReviewAtom } from '../../workflow/atoms'
-import { ReviewDecisionSchema } from '../../workflow/domain'
-import { isRevisionBoundToPreparationRun } from '../../workflow/review'
-import type { PreparationWorkspace } from '../../workspace/atoms'
+} from '@/preparation/editor'
+import { keyedCommandFamily } from '@/preparation/keyed-command'
+import { makeSubmitPreparationReviewAtom } from '@/preparation/workflow/atoms'
+import type { PreparationWorkspace } from '@/preparation/workspace/atoms'
 import { workflowIsExecuting } from './preparation-commands'
 
 const appendRevisionFamily = keyedCommandFamily(
@@ -54,7 +50,6 @@ export const useCvEditorCommands = (workspace: PreparationWorkspace) => {
   const editDraft = useAtomSet(editPreparationDraftAtom)
   const recordSave = useAtomSet(recordPreparationSaveAtom)
   const releaseDetached = useAtomSet(releaseDetachedPreparationWorkflowAtom)
-  const setLayout = useAtomSet(setPreparationLayoutAssessmentAtom)
   const [saveResult, appendRevision] = useAtom(appendRevisionCommandAtom, {
     mode: 'promise',
   })
@@ -71,11 +66,10 @@ export const useCvEditorCommands = (workspace: PreparationWorkspace) => {
   const saving = AsyncResult.isWaiting(saveResult)
   const approving = AsyncResult.isWaiting(approveResult)
   const reviewPending = AsyncResult.isWaiting(reviewResult)
-  const mutationPending = anyAsyncResultWaiting(
-    saveResult,
-    approveResult,
-    reviewResult
-  )
+  const mutationPending =
+    AsyncResult.isWaiting(saveResult) ||
+    AsyncResult.isWaiting(approveResult) ||
+    AsyncResult.isWaiting(reviewResult)
   const workflowReviewBound =
     editor.approvalMode !== 'workflow' ||
     (editor.baseRevision !== null &&
@@ -138,7 +132,6 @@ export const useCvEditorCommands = (workspace: PreparationWorkspace) => {
             revisionId: base.revision.id,
           }),
           runId: run.runId,
-          token: run.reviewToken,
         })
         return
       }
@@ -161,7 +154,6 @@ export const useCvEditorCommands = (workspace: PreparationWorkspace) => {
           reason: 'Rejected during human CV review.',
         }),
         runId: run.runId,
-        token: run.reviewToken,
       })
     } catch {
       // The command atom retains the typed failure rendered by the page.
@@ -185,11 +177,6 @@ export const useCvEditorCommands = (workspace: PreparationWorkspace) => {
     if (mutationPending || workflowIsExecuting(run)) return
     editDraft({ document: value, identity })
   }
-  const changeLayout = useCallback(
-    (assessment: CvPageLayoutAssessment | null) =>
-      setLayout({ assessment, document: editor.document, identity }),
-    [editor.document, identity, setLayout]
-  )
 
   const reset = () => {
     resetSaveResult(Atom.Reset)
@@ -203,21 +190,17 @@ export const useCvEditorCommands = (workspace: PreparationWorkspace) => {
     bindingError,
     canApprove: editor.canApprove && workflowReviewBound,
     changeDraft,
-    changeLayout,
     document: validCvEditorDocument(editor),
-    error:
-      asyncResultFailureMessage(
-        saveResult,
-        'The CV revision could not be saved.'
-      ) ??
-      asyncResultFailureMessage(
-        approveResult,
-        'The CV revision could not be approved.'
-      ) ??
-      asyncResultFailureMessage(
-        reviewResult,
-        'The Workflow review could not be recorded.'
-      ),
+    error: AsyncResult.isFailure(saveResult)
+      ? (Cause.prettyErrors(saveResult.cause)[0]?.message ??
+        'The CV revision could not be saved.')
+      : AsyncResult.isFailure(approveResult)
+        ? (Cause.prettyErrors(approveResult.cause)[0]?.message ??
+          'The CV revision could not be approved.')
+        : AsyncResult.isFailure(reviewResult)
+          ? (Cause.prettyErrors(reviewResult.cause)[0]?.message ??
+            'The Workflow review could not be recorded.')
+          : null,
     mutationPending,
     reject,
     releaseDetachedCandidate,

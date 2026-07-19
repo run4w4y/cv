@@ -1,8 +1,8 @@
 import type {
   Application,
+  ApplicationActivity,
   ApplicationCompensation,
   ApplicationCompensationInput,
-  ApplicationEvent,
   ApplicationListingCheck,
   ApplicationListingCheckSchedule,
   ApplicationMutable,
@@ -11,9 +11,6 @@ import type {
   ContentEntry,
   ContentRevision,
   CvLink,
-  FactsRelease,
-  FactsReleaseAsset,
-  FactsReleaseCatalog,
   GeneratedArtifact,
   JobPostingSnapshot,
   PdfGenerationOutbox,
@@ -27,9 +24,9 @@ import type {
 } from '@cv/application-registry-entity'
 import type {
   AnnualCompensation,
+  activityListQuery,
   applicationListQuery,
-  eventListQuery,
-  RegistryEventListItem,
+  RegistryActivityListItem,
 } from '@cv/application-registry-entity/query'
 import type {
   CursorPageInfo,
@@ -41,23 +38,22 @@ export type ApplicationListResolution = QueryResolutionOf<
   typeof applicationListQuery
 >
 
-export type EventListResolution = QueryResolutionOf<typeof eventListQuery>
+export type ActivityListResolution = QueryResolutionOf<typeof activityListQuery>
 
 export type ApplicationListCounts = {
   readonly notes: number
 }
 
-export type ApplicationListLatestEvent = Pick<
-  ApplicationEvent,
+export type ApplicationListLatestActivity = Pick<
+  ApplicationActivity,
   'kind' | 'occurredAt'
 >
 
 export type ApplicationListRecord = Application & {
   readonly compensations: readonly ApplicationCompensation[]
   readonly counts: ApplicationListCounts
-  readonly identityAliases: readonly string[]
   readonly labels: readonly string[]
-  readonly latestEvent: ApplicationListLatestEvent | null
+  readonly latestActivity: ApplicationListLatestActivity | null
 }
 
 export type ApplicationListPage = QueryPage<
@@ -70,7 +66,10 @@ export type ApplicationFacets = {
   readonly labels: readonly string[]
 }
 
-export type EventListPage = QueryPage<RegistryEventListItem, CursorPageInfo>
+export type ActivityListPage = QueryPage<
+  RegistryActivityListItem,
+  CursorPageInfo
+>
 
 export type ApplicationPatch = ApplicationMutable & {
   readonly expectedVersion?: number
@@ -80,12 +79,16 @@ export type PersistedManagedApplicationUpdate = {
   readonly annualCompensation?: {
     readonly replacement: PersistedAnnualCompensation | null
   }
-  readonly event: PersistedEvent | undefined
+  readonly activity: PersistedActivity
   readonly expectedVersion: number
   readonly labels?: readonly string[]
-  readonly operationId: string
-  readonly operationRequestSignature: string
+  readonly idempotencyKey: string
+  readonly requestHash: string
   readonly patch: ApplicationMutable
+  readonly postingIdentity?: {
+    readonly fingerprint: string
+    readonly normalizedUrl: string
+  }
   readonly recordedAt: UtcIsoTimestamp
 }
 
@@ -115,30 +118,29 @@ export type PersistedAnnualCompensation = Pick<
 >
 
 export type PersistedApplication = ApplicationWritable & {
+  readonly activity: PersistedActivity
   readonly applicationId: string
+  readonly postingFingerprint: string
+  readonly postingUrlNormalized: string
   readonly compensations?: readonly PersistedCompensation[]
   readonly labels?: readonly string[]
   readonly recordedAt: UtcIsoTimestamp
 }
 
-export type PersistedEvent = Pick<
-  ApplicationEvent,
-  'deviceId' | 'kind' | 'occurredAt' | 'operationId' | 'payload'
-> & {
-  readonly eventId: string
-  readonly recordedAt: UtcIsoTimestamp
-  readonly operationRequestSignature: string
-}
+export type PersistedActivity = Pick<
+  ApplicationActivity,
+  'actor' | 'kind' | 'occurredAt' | 'payload' | 'source'
+> & { readonly activityId: string }
 
 export type PersistedNote = Pick<
   ApplicationNote,
   'body' | 'kind' | 'source'
 > & {
-  readonly eventId: string
+  readonly activityId: string
   readonly noteId: string
-  readonly operationId: string
+  readonly idempotencyKey: string
   readonly recordedAt: UtcIsoTimestamp
-  readonly operationRequestSignature: string
+  readonly requestHash: string
 }
 
 export type ListingCheckRunCounts = Pick<
@@ -155,10 +157,10 @@ export type PersistedListingCheck = ApplicationListingCheck & {
   readonly archiveApplication: boolean
   readonly closedCandidateAt: string | null
   readonly consecutiveClosedChecks: number
-  readonly eventId: string | null
+  readonly activityId: string | null
   readonly expectedVersion?: number
   readonly listingAvailability: ListingAvailability
-  readonly operationRequestSignature: string
+  readonly requestHash: string
   readonly recordedAt: string
 }
 
@@ -184,12 +186,6 @@ export type ListingCheckProjection = {
   readonly reasonCode: ListingCheckReason
 }
 
-export type PersistedFactsRelease = {
-  readonly release: FactsRelease
-  readonly catalogs: readonly FactsReleaseCatalog[]
-  readonly assets: readonly FactsReleaseAsset[]
-}
-
 export type PersistedContentEntry = Omit<
   ContentEntry,
   'approvedRevisionId' | 'headRevisionId' | 'state' | 'version'
@@ -207,7 +203,7 @@ export type CvAnalyticsLinkRecord = {
     Application,
     | 'appliedAt'
     | 'applicationStatus'
-    | 'canonicalUrl'
+    | 'postingUrl'
     | 'company'
     | 'createdAt'
     | 'id'
@@ -221,7 +217,7 @@ export type CvAnalyticsLinkRecord = {
     | 'createdAt'
     | 'enabled'
     | 'id'
-    | 'publishedRevisionId'
+    | 'currentRevisionId'
     | 'token'
     | 'updatedAt'
   >

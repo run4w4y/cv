@@ -14,14 +14,14 @@ describe('registry factories', () => {
   test('builds a connected bulk graph with stable counts', () => {
     const graph = makeRegistryFactory({ seed: 73 }).graph({
       applicationCount: 12,
-      eventsPerApplication: 2,
+      activitiesPerApplication: 2,
     })
 
     expect(graph.applications).toHaveLength(12)
-    expect(graph.events).toHaveLength(24)
+    expect(graph.activities).toHaveLength(24)
     expect(new Set(graph.applications.map(({ id }) => id)).size).toBe(12)
     expect(
-      graph.events.every(({ applicationId }) =>
+      graph.activities.every(({ applicationId }) =>
         graph.applications.some(({ id }) => id === applicationId)
       )
     ).toBe(true)
@@ -34,13 +34,13 @@ describe('registry factories', () => {
       concurrency: 2,
       factory: makeRegistryFactory({ seed: 91 }),
       persist: async (input) => {
-        persisted.push(input.jobKey)
+        persisted.push(input.postingUrl)
         return input.company
       },
     })
 
     expect(seeded.inputs).toHaveLength(5)
     expect(seeded.results).toHaveLength(5)
-    expect(persisted).toEqual(seeded.inputs.map(({ jobKey }) => jobKey))
+    expect(persisted).toEqual(seeded.inputs.map(({ postingUrl }) => postingUrl))
   })
 })

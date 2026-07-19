@@ -68,7 +68,7 @@ export const createApplicationColumns = ({
         <div className="min-w-52 whitespace-normal break-words">
           <p className="line-clamp-3 font-medium">{row.original.role}</p>
           <p className="mt-0.5 line-clamp-2 break-all font-mono text-[0.6875rem] text-muted-foreground">
-            {row.original.jobKey}
+            {row.original.id}
           </p>
         </div>
       ),
@@ -163,19 +163,19 @@ export const createApplicationColumns = ({
       ),
   },
   {
-    id: 'latestEventAt',
-    accessorFn: (row) => row.latestEvent?.occurredAt ?? null,
-    header: 'Latest event',
+    id: 'latestActivityAt',
+    accessorFn: (row) => row.latestActivity?.occurredAt ?? null,
+    header: 'Latest activity',
     size: 180,
     cell: ({ row }) => (
       <div className="whitespace-normal break-words text-xs">
         <p className="line-clamp-2">
-          {row.original.latestEvent === null
-            ? 'No events'
-            : formatLabel(row.original.latestEvent.kind)}
+          {row.original.latestActivity === null
+            ? 'No activity'
+            : formatLabel(row.original.latestActivity.kind)}
         </p>
         <p className="mt-0.5 text-muted-foreground">
-          {formatDateTime(row.original.latestEvent?.occurredAt)}
+          {formatDateTime(row.original.latestActivity?.occurredAt)}
         </p>
       </div>
     ),
@@ -229,7 +229,7 @@ export const createApplicationColumns = ({
             <FolderOpen />
           </Link>
           <a
-            href={row.original.canonicalUrl}
+            href={row.original.postingUrl}
             target="_blank"
             rel="noreferrer"
             aria-label={`Open ${row.original.company} listing`}

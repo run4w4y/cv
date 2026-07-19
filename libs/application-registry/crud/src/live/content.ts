@@ -3,44 +3,38 @@ import { type Effect, Layer } from 'effect'
 
 import { withRegistryConnections } from '../internal/connection'
 import {
-  activateFactsRelease,
   appendContentRevision,
   approveContentRevision,
   createContentEntry,
   disableCvLinksForApplication,
   enableCvLinksForApplication,
-  findActiveFactsCatalog,
   findArtifact,
   findArtifactByRequestId,
-  findPendingPdfDispatch,
+  findCurrentArtifactForPublication,
   findContentEntry,
   findContentEntryByApplication,
   findContentRevision,
   findCvLinkByEntry,
   findCvLinkByToken,
-  findFactsRelease,
   findJobPostingSnapshot,
   findLatestJobPostingSnapshot,
+  findPendingPdfDispatch,
   findReadyArtifactForPublication,
   listContentRevisions,
-  listFactsReleaseAssets,
-  listFactsReleaseCatalogs,
+  listPendingPdfDispatches,
   markArtifactFailed,
   markArtifactReady,
-  markPdfDispatchFailed,
   markPdfDispatched,
-  listPendingPdfDispatches,
+  markPdfDispatchFailed,
   persistJobPostingSnapshot,
   persistPendingArtifact,
-  publishCvLink,
-  registerFactsRelease,
+  stageCvLink,
   setCvLinkEnabled,
 } from '../persistence/content'
 import {
   ArtifactsCrud,
   ContentCrud,
   CvLinksCrud,
-  FactsReleasesCrud,
   JobPostingSnapshotsCrud,
 } from '../services/content'
 
@@ -58,38 +52,6 @@ export const makeContentCrudLive = (database: Effect.Effect<D1Database>) =>
       persist: (snapshot) =>
         withRegistryConnections(database, ({ query }) =>
           persistJobPostingSnapshot(query, snapshot)
-        ),
-    }),
-    Layer.succeed(FactsReleasesCrud, {
-      activate: (channel, releaseId, expectedVersion, updatedAt) =>
-        withRegistryConnections(database, ({ query }) =>
-          activateFactsRelease(
-            query,
-            channel,
-            releaseId,
-            expectedVersion,
-            updatedAt
-          )
-        ),
-      assets: (releaseId) =>
-        withRegistryConnections(database, ({ query }) =>
-          listFactsReleaseAssets(query, releaseId)
-        ),
-      catalogs: (releaseId) =>
-        withRegistryConnections(database, ({ query }) =>
-          listFactsReleaseCatalogs(query, releaseId)
-        ),
-      find: (releaseId) =>
-        withRegistryConnections(database, ({ query }) =>
-          findFactsRelease(query, releaseId)
-        ),
-      findActiveCatalog: (channel, locale) =>
-        withRegistryConnections(database, ({ query }) =>
-          findActiveFactsCatalog(query, channel, locale)
-        ),
-      register: (release) =>
-        withRegistryConnections(database, (connections) =>
-          registerFactsRelease(connections, release)
         ),
     }),
     Layer.succeed(ContentCrud, {
@@ -155,9 +117,9 @@ export const makeContentCrudLive = (database: Effect.Effect<D1Database>) =>
         withRegistryConnections(database, ({ query }) =>
           findCvLinkByToken(query, token)
         ),
-      publish: (link) =>
+      stage: (link) =>
         withRegistryConnections(database, ({ query }) =>
-          publishCvLink(query, link)
+          stageCvLink(query, link)
         ),
       setEnabled: (
         id,
@@ -191,6 +153,23 @@ export const makeContentCrudLive = (database: Effect.Effect<D1Database>) =>
       findPendingDispatch: (artifactId) =>
         withRegistryConnections(database, ({ query }) =>
           findPendingPdfDispatch(query, artifactId)
+        ),
+      findCurrentForPublication: (
+        cvLinkId,
+        contentRevisionId,
+        rendererVersion,
+        publicationVersion,
+        qrTarget
+      ) =>
+        withRegistryConnections(database, ({ query }) =>
+          findCurrentArtifactForPublication(
+            query,
+            cvLinkId,
+            contentRevisionId,
+            rendererVersion,
+            publicationVersion,
+            qrTarget
+          )
         ),
       findReadyForPublication: (
         cvLinkId,

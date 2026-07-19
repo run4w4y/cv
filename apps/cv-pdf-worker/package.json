@@ -14,7 +14,6 @@
     "@cv/application-registry-artifact-store": "workspace:*",
     "@cv/application-registry-crud": "workspace:*",
     "@cv/application-registry-service": "workspace:*",
-    "@cv/renderer": "workspace:*",
     "effect": "4.0.0-beta.99"
   },
   "devDependencies": {

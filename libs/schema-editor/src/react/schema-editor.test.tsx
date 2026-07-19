@@ -88,4 +88,72 @@ describe('SchemaEditor', () => {
     })
     expect(onChange).toHaveBeenCalledWith({ dynamic: [1, 2] })
   })
+
+  it('selects a tagged object union from its literal discriminant', () => {
+    const schema = Schema.Union([
+      Schema.Struct({
+        kind: Schema.Literal('a'),
+        a: Schema.String.annotate({ title: 'A value' }),
+      }).annotate({ title: 'A variant' }),
+      Schema.Struct({
+        kind: Schema.Literal('b'),
+        b: Schema.Number.annotate({ title: 'B value' }),
+      }).annotate({ title: 'B variant' }),
+    ])
+    const view = render(
+      <SchemaEditor
+        schema={schema}
+        value={{ kind: 'b', b: 2 }}
+        onChange={() => {}}
+      />
+    )
+
+    expect(view.getByRole('combobox').textContent).toContain('B variant')
+    expect(view.getByLabelText('B value')).toBeTruthy()
+    expect(view.queryByLabelText('A value')).toBeNull()
+  })
+
+  it('surfaces and removes properties outside the schema', () => {
+    const onChange = mock(() => undefined)
+    const view = render(
+      <SchemaEditor
+        schema={Schema.Struct({ a: Schema.String })}
+        value={{ a: 'ok', extra: 1 }}
+        onChange={onChange}
+      />
+    )
+
+    expect(view.getAllByText(/unexpected field/i)[0]?.textContent).toContain(
+      'extra'
+    )
+    expect(view.getByText(/unexpected key/i)).toBeTruthy()
+    fireEvent.click(
+      view.getByRole('button', { name: 'Remove unexpected field extra' })
+    )
+    expect(onChange).toHaveBeenCalledWith({ a: 'ok' })
+  })
+
+  it('does not present non-JSON schemas as a raw JSON editor', () => {
+    const view = render(
+      <SchemaEditor schema={Schema.BigInt} value={1n} onChange={() => {}} />
+    )
+
+    expect(view.getByText(/bigint values cannot be represented/i)).toBeTruthy()
+    expect(view.queryByLabelText('Raw JSON')).toBeNull()
+  })
+
+  it('reports a non-JSON current value instead of formatting it as null', () => {
+    const view = render(
+      <SchemaEditor schema={Schema.Unknown} value={1n} onChange={() => {}} />
+    )
+
+    expect(
+      view.getByText(/current value cannot be represented as json/i)
+    ).toBeTruthy()
+    const textarea = view.getByLabelText('Raw JSON')
+    if (!(textarea instanceof HTMLTextAreaElement)) {
+      throw new Error('Expected the raw JSON control to be a textarea')
+    }
+    expect(textarea.value).toBe('')
+  })
 })

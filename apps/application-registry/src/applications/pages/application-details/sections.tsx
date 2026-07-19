@@ -84,11 +84,11 @@ export const ApplicationSummary = ({
               <MapPin className="size-3.5" />
               {application.location ?? 'Location not specified'}
             </span>
-            <span className="font-mono">{application.jobKey}</span>
+            <span className="font-mono">{application.id}</span>
           </div>
         </div>
         <a
-          href={application.canonicalUrl}
+          href={application.postingUrl}
           target="_blank"
           rel="noreferrer"
           className={cn(buttonVariants({ variant: 'outline' }))}
@@ -141,9 +141,6 @@ export const ApplicationMetadata = ({
         <dl className="mt-5 grid gap-5">
           <Detail label="Listing availability">
             <ListingAvailabilityReviewDialog application={application} />
-          </Detail>
-          <Detail label="Source">
-            <Badge variant="outline">{application.source}</Badge>
           </Detail>
           <Detail label="Version">{application.version}</Detail>
           <Detail label="Revision">{application.updatedRevision}</Detail>

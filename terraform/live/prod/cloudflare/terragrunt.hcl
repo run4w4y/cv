@@ -11,6 +11,8 @@ inputs = {
 
   cv_objects_bucket_name           = get_env("CV_OBJECTS_BUCKET_NAME", "cv-objects")
   cv_objects_bucket_location       = get_env("CV_OBJECTS_BUCKET_LOCATION", "weur")
+  facts_r2_bucket_name             = get_env("FACTS_R2_BUCKET", "cv-facts")
+  facts_r2_bucket_location         = get_env("FACTS_R2_BUCKET_LOCATION", "weur")
   chatgpt_sessions_namespace_title = get_env("CHATGPT_SESSIONS_NAMESPACE_TITLE", "cv-chatgpt-sessions")
 
   workers_dev_account_subdomain = get_env("CLOUDFLARE_WORKERS_DEV_ACCOUNT_SUBDOMAIN")
@@ -35,6 +37,7 @@ inputs = {
   infisical_analytics_folder_path            = "/cv/analytics"
   infisical_application_registry_folder_path = "/cv/application-registry"
   infisical_cv_public_folder_path            = "/cv/deploy"
+  infisical_content_folder_path              = "/cv/content"
 }
 
 generate "backend" {

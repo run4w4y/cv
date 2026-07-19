@@ -5,10 +5,10 @@ import { EventKindBadge } from './render'
 
 afterEach(cleanup)
 
-describe('EventKindBadge', () => {
-  test('renders event labels with semantic variants', () => {
-    const view = render(<EventKindBadge kind="offer_received" />)
-    const badge = view.getByText('Offer received')
+describe('ActivityKindBadge', () => {
+  test('renders activity labels with semantic variants', () => {
+    const view = render(<EventKindBadge kind="content_approved" />)
+    const badge = view.getByText('Content approved')
 
     expect(badge.className).toContain('emerald')
     expect(badge.className).toContain('whitespace-normal')

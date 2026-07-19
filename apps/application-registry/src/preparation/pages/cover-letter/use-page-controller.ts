@@ -1,14 +1,14 @@
 import { useAtomValue } from '@effect/atom-react'
+import { Cause } from 'effect'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import { useParams, useSearchParams } from 'react-router'
 
-import { asyncResultFailureMessage } from '../../async-result'
-import { usePreparationCommandGate } from '../../command-gate'
-import type { PreparationEditorIdentity } from '../../editor'
+import { usePreparationCommandGate } from '@/preparation/command-gate'
+import type { PreparationEditorIdentity } from '@/preparation/editor'
 import {
   type PreparationWorkspace,
   preparationWorkspaceAtom,
-} from '../../workspace/atoms'
+} from '@/preparation/workspace/atoms'
 import { useCoverLetterEditorCommands } from './editor-commands'
 import { useCoverLetterPreparationCommands } from './preparation-commands'
 
@@ -85,10 +85,8 @@ export const useCoverLetterPageController = () => {
       : workspaceResult._tag === 'Failure'
         ? ({
             message:
-              asyncResultFailureMessage(
-                workspaceResult,
-                'The preparation context could not be loaded.'
-              ) ?? 'The preparation context could not be loaded.',
+              Cause.prettyErrors(workspaceResult.cause)[0]?.message ??
+              'The preparation context could not be loaded.',
             status: 'error',
           } as const)
         : ({ status: 'loading' } as const)

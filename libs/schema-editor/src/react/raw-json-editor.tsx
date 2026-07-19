@@ -7,11 +7,11 @@ import {
 } from '@cv/internal-ui'
 import * as React from 'react'
 
-import { formatRawJson, parseRawJson } from '../core'
+import { formatRawJson, type JsonValue, parseRawJson } from '../core'
 
 export interface RawJsonEditorProps {
   readonly value: unknown
-  readonly onChange: (value: unknown) => void
+  readonly onChange: (value: JsonValue) => void
   readonly label?: string
   readonly description?: string
   readonly disabled?: boolean
@@ -29,7 +29,12 @@ export const RawJsonEditor = ({
   className,
 }: RawJsonEditorProps) => {
   const id = React.useId()
-  const [source, setSource] = React.useState(() => formatRawJson(value))
+  const [draft, setDraft] = React.useState(() => {
+    const formatted = formatRawJson(value)
+    return formatted.valid
+      ? { source: formatted.source, formatError: null }
+      : { source: '', formatError: formatted.message }
+  })
   const [parseError, setParseError] = React.useState<string | null>(null)
   const lastEmitted = React.useRef<unknown>(undefined)
 
@@ -38,11 +43,17 @@ export const RawJsonEditor = ({
       lastEmitted.current = undefined
       return
     }
-    setSource(formatRawJson(value))
+    const formatted = formatRawJson(value)
+    setDraft(
+      formatted.valid
+        ? { source: formatted.source, formatError: null }
+        : { source: '', formatError: formatted.message }
+    )
     setParseError(null)
   }, [value])
 
-  const invalid = parseError !== null || issues.length > 0
+  const invalid =
+    draft.formatError !== null || parseError !== null || issues.length > 0
 
   return (
     <Field className={className} invalid={invalid}>
@@ -50,14 +61,14 @@ export const RawJsonEditor = ({
       {description ? <FieldDescription>{description}</FieldDescription> : null}
       <Textarea
         id={id}
-        value={source}
+        value={draft.source}
         disabled={disabled}
         spellCheck={false}
         aria-invalid={invalid}
         className="min-h-48 font-mono text-xs"
         onChange={(event) => {
           const nextSource = event.currentTarget.value
-          setSource(nextSource)
+          setDraft({ source: nextSource, formatError: null })
           const parsed = parseRawJson(nextSource)
           if (!parsed.valid) {
             setParseError(parsed.message)
@@ -68,6 +79,9 @@ export const RawJsonEditor = ({
           onChange(parsed.value)
         }}
       />
+      {draft.formatError ? (
+        <FieldError match>{draft.formatError}</FieldError>
+      ) : null}
       {parseError ? <FieldError match>{parseError}</FieldError> : null}
       {issues.map((issue) => (
         <FieldError match key={issue}>

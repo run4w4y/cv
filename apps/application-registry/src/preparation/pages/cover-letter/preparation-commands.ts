@@ -1,23 +1,20 @@
 import { useAtom, useAtomSet, useAtomValue } from '@effect/atom-react'
+import type { PreparationRun } from '@cv/application-preparation-workflow/domain'
+import { Cause } from 'effect'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import * as Atom from 'effect/unstable/reactivity/Atom'
 
-import {
-  anyAsyncResultWaiting,
-  asyncResultFailureMessage,
-} from '../../async-result'
-import { chatGptAuthenticatedAtom } from '../../auth/atoms'
-import { preparationCommandGateKey } from '../../command-gate'
-import type { PreparationEditorIdentity } from '../../editor'
+import { chatGptAuthenticatedAtom } from '@/preparation/auth/atoms'
+import { preparationCommandGateKey } from '@/preparation/command-gate'
+import type { PreparationEditorIdentity } from '@/preparation/editor'
 import {
   coverLetterPromptAtom,
   selectedPreparationModelAtom,
-} from '../../forms/atoms'
-import { keyedCommandFamily } from '../../keyed-command'
-import { refreshJobSnapshotCommandAtom } from '../../snapshot-command'
-import { makeStartPreparationAtom } from '../../workflow/atoms'
-import type { PreparationRun } from '../../workflow/domain'
-import type { PreparationWorkspace } from '../../workspace/atoms'
+} from '@/preparation/forms/atoms'
+import { keyedCommandFamily } from '@/preparation/keyed-command'
+import { refreshJobSnapshotCommandAtom } from '@/preparation/snapshot-command'
+import { makeStartPreparationAtom } from '@/preparation/workflow/atoms'
+import type { PreparationWorkspace } from '@/preparation/workspace/atoms'
 
 const startPreparationFamily = keyedCommandFamily(
   'preparation/cover-letter/command/start',
@@ -62,7 +59,8 @@ export const useCoverLetterPreparationCommands = ({
   const workflowOpen = workflowIsOpen(run)
   const startPending = AsyncResult.isWaiting(startResult)
   const refreshPending = AsyncResult.isWaiting(refreshResult)
-  const mutationPending = anyAsyncResultWaiting(startResult, refreshResult)
+  const mutationPending =
+    AsyncResult.isWaiting(startResult) || AsyncResult.isWaiting(refreshResult)
 
   const generate = async () => {
     if (
@@ -117,15 +115,13 @@ export const useCoverLetterPreparationCommands = ({
 
   return {
     authenticated,
-    error:
-      asyncResultFailureMessage(
-        startResult,
-        'The cover-letter preparation Workflow could not start.'
-      ) ??
-      asyncResultFailureMessage(
-        refreshResult,
-        'The job posting could not be refreshed.'
-      ),
+    error: AsyncResult.isFailure(startResult)
+      ? (Cause.prettyErrors(startResult.cause)[0]?.message ??
+        'The cover-letter preparation Workflow could not start.')
+      : AsyncResult.isFailure(refreshResult)
+        ? (Cause.prettyErrors(refreshResult.cause)[0]?.message ??
+          'The job posting could not be refreshed.')
+        : null,
     generate,
     mutationPending,
     prompt,

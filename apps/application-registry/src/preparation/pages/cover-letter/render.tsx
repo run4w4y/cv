@@ -8,8 +8,8 @@ import {
 } from '@cv/internal-ui'
 import { CircleAlert, RefreshCw } from 'lucide-react'
 
-import { JobContextEditor } from '../../components/job-context-editor'
-import { PreparationPageFrame } from '../../components/page-frame'
+import { JobContextEditor } from '@/preparation/components/job-context-editor'
+import { PreparationPageFrame } from '@/preparation/components/page-frame'
 import { CoverLetterEditorCard } from './editor-card'
 import { CoverLetterGenerationSettings } from './generation-settings'
 import { useCoverLetterPageController } from './use-page-controller'

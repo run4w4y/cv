@@ -23,6 +23,6 @@ describe('management route wiring', () => {
     expect(paths).toContain('/applications/:applicationId/prepare')
     expect(paths).toContain('/applications/:applicationId/cover-letter')
     expect(paths).toContain('/schema/cv-document')
-    expect(paths).toContain('/events')
+    expect(paths).toContain('/activities')
   })
 })

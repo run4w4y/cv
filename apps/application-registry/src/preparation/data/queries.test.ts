@@ -3,10 +3,10 @@ import { describe, expect, test } from 'bun:test'
 import {
   contentHeadAtom,
   contentRevisionAtom,
+  cvPageStateAtom,
   preparationBootstrapAtom,
   preparationContextAtom,
   preparationModelsAtom,
-  publishedCvStateAtom,
 } from './queries'
 
 describe('preparation query atom families', () => {
@@ -75,13 +75,13 @@ describe('preparation query atom families', () => {
       })
     )
     expect(
-      publishedCvStateAtom({
+      cvPageStateAtom({
         applicationId: 'application-1',
         entryId: 'entry-1',
         rendererVersion: 'renderer-1',
       })
     ).not.toBe(
-      publishedCvStateAtom({
+      cvPageStateAtom({
         applicationId: 'application-1',
         entryId: 'entry-1',
         rendererVersion: 'renderer-2',

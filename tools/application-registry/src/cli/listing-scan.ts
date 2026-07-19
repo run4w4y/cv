@@ -56,7 +56,7 @@ export type ListingScanSummary = {
 const targetFor = (application: ApplicationListItem): ListingCheckTarget => ({
   company: application.company,
   role: application.role,
-  url: application.canonicalUrl,
+  url: application.postingUrl,
 })
 
 const retryable = (observation: ListingObservation) =>
@@ -138,9 +138,7 @@ export const runLocalListingScan = (input: ListingScanOptions) =>
     )
 
     const hostnames = new Set(
-      applications.map((application) =>
-        hostnameFor(targetFor(application).url)
-      )
+      applications.map((application) => hostnameFor(targetFor(application).url))
     )
     const hostSemaphores = new Map<string, Semaphore.Semaphore>()
     for (const hostname of hostnames) {
@@ -163,9 +161,9 @@ export const runLocalListingScan = (input: ListingScanOptions) =>
       }
       return {
         applicationId: application.id,
-        canonicalUrl: application.canonicalUrl,
+        postingUrl: application.postingUrl,
         observation,
-        operationId: `${runId}:${application.id}`,
+        idempotencyKey: `${runId}:${application.id}`,
         target,
       }
     })
@@ -204,10 +202,9 @@ export const runLocalListingScan = (input: ListingScanOptions) =>
           finalBatch: index === batches.length - 1,
           findings: batch,
           mode: options.archive ? 'archive_eligible' : 'report',
-          runId,
           startedAt,
         }
-        return client.submitListingCheckFindings(batchId, request)
+        return client.submitListingCheckFindings(runId, batchId, request)
       },
       { concurrency: 4 }
     )

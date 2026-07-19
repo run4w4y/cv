@@ -93,9 +93,9 @@ resource "cloudflare_workers_route" "application_registry" {
   script  = var.application_registry_worker_name
 }
 
-# Wrangler owns the cv-public Worker version and its one-way named registry
-# service binding. Terraform owns only its workers.dev exposure and the exact
-# path overlay on the frozen Pages hostname.
+# Wrangler owns the cv-public Worker version and service bindings. Terraform
+# owns only its workers.dev exposure and the exact path overlay on the frozen
+# Pages hostname.
 resource "cloudflare_workers_script_subdomain" "cv_public" {
   count = var.enable_cv_public_worker_dev_subdomain ? 1 : 0
 

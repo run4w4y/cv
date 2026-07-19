@@ -1,10 +1,13 @@
 import { Schema } from 'effect'
+import {
+  type ApplicationActivity,
+  ApplicationActivitySchema,
+} from '../codecs/activities'
 import { type Application, ApplicationSchema } from '../codecs/applications'
 import {
   type ApplicationCompensation,
   ApplicationCompensationSchema,
 } from '../codecs/compensations'
-import { type ApplicationEvent, ApplicationEventSchema } from '../codecs/events'
 import { NonEmptyTrimmedStringSchema } from '../model/constraints'
 
 /** Annual range in the list query's requested display currency. */
@@ -41,9 +44,11 @@ export const AnnualCompensationSchema: Schema.Codec<AnnualCompensation> =
 export type ApplicationListItem = Application & {
   readonly annualCompensation: AnnualCompensation | null
   readonly counts: { readonly notes: number }
-  readonly identityAliases: readonly string[]
   readonly labels: readonly string[]
-  readonly latestEvent: Pick<ApplicationEvent, 'kind' | 'occurredAt'> | null
+  readonly latestActivity: Pick<
+    ApplicationActivity,
+    'kind' | 'occurredAt'
+  > | null
 }
 
 /** Runtime schema for {@link ApplicationListItem}. */
@@ -55,27 +60,26 @@ export const ApplicationListItemSchema: Schema.Codec<ApplicationListItem> =
       counts: Schema.Struct({
         notes: Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0))),
       }),
-      identityAliases: Schema.Array(NonEmptyTrimmedStringSchema),
       labels: Schema.Array(NonEmptyTrimmedStringSchema),
-      latestEvent: Schema.NullOr(
+      latestActivity: Schema.NullOr(
         Schema.Struct({
-          kind: ApplicationEventSchema.fields.kind,
-          occurredAt: ApplicationEventSchema.fields.occurredAt,
+          kind: ApplicationActivitySchema.fields.kind,
+          occurredAt: ApplicationActivitySchema.fields.occurredAt,
         })
       ),
     })
   )
 
-/** Event representation returned by registry-wide list queries. */
-export type RegistryEventListItem = ApplicationEvent &
-  Pick<Application, 'canonicalUrl' | 'company' | 'role'>
+/** Activity representation returned by registry-wide list queries. */
+export type RegistryActivityListItem = ApplicationActivity &
+  Pick<Application, 'postingUrl' | 'company' | 'role'>
 
-/** Runtime schema for {@link RegistryEventListItem}. */
-export const RegistryEventListItemSchema: Schema.Codec<RegistryEventListItem> =
+/** Runtime schema for {@link RegistryActivityListItem}. */
+export const RegistryActivityListItemSchema: Schema.Codec<RegistryActivityListItem> =
   Schema.revealCodec(
     Schema.Struct({
-      ...ApplicationEventSchema.fields,
-      canonicalUrl: ApplicationSchema.fields.canonicalUrl,
+      ...ApplicationActivitySchema.fields,
+      postingUrl: ApplicationSchema.fields.postingUrl,
       company: ApplicationSchema.fields.company,
       role: ApplicationSchema.fields.role,
     })

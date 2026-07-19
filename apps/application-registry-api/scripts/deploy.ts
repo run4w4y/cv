@@ -61,10 +61,16 @@ const requiredSecret = (name: string) =>
 const program = Effect.all({
   chatgptSessionSecret: requiredSecret('CHATGPT_SESSION_SECRET'),
   cloudflareAnalyticsApiToken: requiredSecret('CLOUDFLARE_ANALYTICS_API_TOKEN'),
+  cvRevalidationSecret: requiredSecret('CV_REVALIDATION_SECRET'),
   registryApiToken: requiredSecret('REGISTRY_API_TOKEN'),
 }).pipe(
   Effect.flatMap(
-    ({ chatgptSessionSecret, cloudflareAnalyticsApiToken, registryApiToken }) =>
+    ({
+      chatgptSessionSecret,
+      cloudflareAnalyticsApiToken,
+      cvRevalidationSecret,
+      registryApiToken,
+    }) =>
       Effect.acquireUseRelease(
         Effect.tryPromise({
           try: () => mkdtemp(join(tmpdir(), 'cv-registry-deploy-')),
@@ -86,6 +92,7 @@ const program = Effect.all({
                   CLOUDFLARE_ANALYTICS_API_TOKEN: Redacted.value(
                     cloudflareAnalyticsApiToken
                   ),
+                  CV_REVALIDATION_SECRET: Redacted.value(cvRevalidationSecret),
                   REGISTRY_API_TOKEN: Redacted.value(registryApiToken),
                 })}\n`,
                 { mode: 0o600 }

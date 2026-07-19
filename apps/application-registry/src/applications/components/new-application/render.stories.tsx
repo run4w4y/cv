@@ -5,10 +5,7 @@ import { NewApplicationDialog } from './render'
 
 const createdApplication: Application = {
   id: 'application-story-created',
-  jobKey: 'story:new-application',
-  source: 'story',
-  sourceJobId: null,
-  canonicalUrl: 'https://example.test/jobs/new-application',
+  postingUrl: 'https://example.test/jobs/new-application',
   company: 'Example Systems',
   role: 'Staff Engineer',
   location: 'Remote',
@@ -17,7 +14,6 @@ const createdApplication: Application = {
   personalPriority: null,
   followUpAt: null,
   appliedAt: null,
-  lastContactAt: null,
   listingAvailability: 'unknown',
   listingCheckedAt: null,
   listingClosedCandidateAt: null,
@@ -35,7 +31,6 @@ const NewApplicationDialogPreview = () => (
     saveApplication={async (input) => ({
       ...createdApplication,
       ...input,
-      sourceJobId: input.sourceJobId ?? null,
       location: input.location ?? null,
     })}
   />

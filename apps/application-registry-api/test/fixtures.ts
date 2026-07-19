@@ -8,7 +8,6 @@ const factory = makeRegistryFactory({
 export const applicationInput = factory.application({
   applicationStatus: 'not_started',
   appliedAt: null,
-  canonicalUrl: 'https://example.com/jobs/e2e-registry',
   company: 'Example Company',
   compensations: [
     {
@@ -22,13 +21,10 @@ export const applicationInput = factory.application({
     },
   ],
   followUpAt: null,
-  jobKey: 'url:https://example.com/jobs/e2e-registry',
   labels: ['e2e', 'remote'],
-  lastContactAt: null,
   location: 'Tokyo or remote',
   personalPriority: 'high',
+  postingUrl: 'https://example.com/jobs/e2e-registry',
   role: 'Integration Engineer',
-  source: 'e2e',
-  sourceJobId: null,
   targetStage: 'apply_next',
 })

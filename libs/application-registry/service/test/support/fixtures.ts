@@ -1,26 +1,23 @@
 import type { ApplicationListRecord } from '@cv/application-registry-crud'
 import type {
   Application,
+  ApplicationActivity,
   ApplicationCompensation,
-  ApplicationEvent,
-  ApplicationLabel,
   ApplicationNote,
-  CommandReceipt,
   FxRate,
+  IdempotencyReceipt,
 } from '@cv/application-registry-entity'
+import type { RegistryActivityListItem } from '@cv/application-registry-entity/query'
 
 export const recordedAt = '2026-07-12T12:00:00.000Z'
 
 export const application: Application = {
   applicationStatus: 'preparing',
   appliedAt: null,
-  canonicalUrl: 'https://example.test/jobs/one',
   company: 'Example',
   createdAt: recordedAt,
   followUpAt: null,
   id: 'application-1',
-  jobKey: 'test:one',
-  lastContactAt: null,
   listingAvailability: 'unchecked',
   listingCheckedAt: null,
   listingClosedCandidateAt: null,
@@ -29,19 +26,12 @@ export const application: Application = {
   listingReasonCode: null,
   location: null,
   personalPriority: null,
+  postingUrl: 'https://example.test/jobs/one',
   role: 'Engineer',
-  source: 'test',
-  sourceJobId: null,
   targetStage: 'backlog',
   updatedAt: recordedAt,
   updatedRevision: 3,
   version: 1,
-}
-
-export const label: ApplicationLabel = {
-  applicationId: application.id,
-  createdAt: recordedAt,
-  label: 'priority',
 }
 
 export const note: ApplicationNote = {
@@ -54,22 +44,21 @@ export const note: ApplicationNote = {
   updatedAt: recordedAt,
 }
 
-export const event: ApplicationEvent = {
+export const activity: ApplicationActivity = {
+  actor: 'user',
   applicationId: application.id,
-  deviceId: 'test',
-  id: 'event-1',
-  kind: 'stage_changed',
+  id: 'activity-1',
+  kind: 'details_changed',
   occurredAt: recordedAt,
-  operationId: 'event-operation-1',
   payload: {},
-  recordedAt,
   revision: 4,
+  source: 'management',
 }
 
-export const registryEventListItem = {
-  ...event,
-  canonicalUrl: application.canonicalUrl,
+export const registryActivityListItem: RegistryActivityListItem = {
+  ...activity,
   company: application.company,
+  postingUrl: application.postingUrl,
   role: application.role,
 }
 
@@ -91,9 +80,8 @@ export const applicationListRecord: ApplicationListRecord = {
   ...application,
   compensations: [],
   counts: { notes: 0 },
-  identityAliases: [],
   labels: [],
-  latestEvent: null,
+  latestActivity: null,
 }
 
 export const fxRate: FxRate = {
@@ -106,14 +94,13 @@ export const fxRate: FxRate = {
 }
 
 export const receipt = (
-  input: Partial<CommandReceipt> = {}
-): CommandReceipt => ({
+  input: Partial<IdempotencyReceipt> = {}
+): IdempotencyReceipt => ({
   applicationId: application.id,
-  eventId: null,
-  kind: 'application_note',
-  noteId: note.id,
-  operationId: 'note-operation-1',
-  recordedAt,
-  operationRequestSignature: '',
+  createdAt: recordedAt,
+  idempotencyKey: 'note-operation-1',
+  requestHash: '',
+  resourceId: note.id,
+  scope: 'application_note',
   ...input,
 })

@@ -1,4 +1,4 @@
-import { eventListQuery } from '@cv/application-registry-entity/query'
+import { activityListQuery } from '@cv/application-registry-entity/query'
 import {
   normalizeQueryFilterNodes,
   parseQueryFilterNodes,
@@ -43,7 +43,7 @@ const hideableEventColumnIds = new Set(
 )
 
 const sortableFields = new Set(
-  eventListQuery.fields
+  activityListQuery.fields
     .filter((field) => field.sortable && eventColumnIds.has(field.name))
     .map((field) => field.name)
 )

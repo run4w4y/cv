@@ -1,11 +1,10 @@
 import type {
   AddApplicationNoteRequest,
   CreateApplicationRequest,
+  ListActivitiesQuery,
   ListApplicationCompensationsQuery,
   ListApplicationsQuery,
-  ListEventsQuery,
-  PatchApplicationRequest,
-  ReplaceApplicationLabelsRequest,
+  UpdateApplicationRequest,
 } from '@cv/application-registry-api-contract'
 import { Effect } from 'effect'
 
@@ -13,10 +12,13 @@ import { ApplicationRegistryClient } from './model'
 
 export const addApplicationNote = (
   identifier: string,
+  idempotencyKey: string,
   request: AddApplicationNoteRequest
 ) =>
   ApplicationRegistryClient.pipe(
-    Effect.flatMap((client) => client.addNote(identifier, request))
+    Effect.flatMap((client) =>
+      client.addNote(identifier, idempotencyKey, request)
+    )
   )
 
 export const createApplication = (request: CreateApplicationRequest) =>
@@ -41,43 +43,25 @@ export const listApplicationFacets = ApplicationRegistryClient.pipe(
   Effect.flatMap((client) => client.facets())
 )
 
-export const listRegistryEvents = (query: ListEventsQuery = {}) =>
+export const listRegistryActivities = (query: ListActivitiesQuery = {}) =>
   ApplicationRegistryClient.pipe(
-    Effect.flatMap((client) => client.listEvents(query))
+    Effect.flatMap((client) => client.listActivities(query))
   )
 
-export const patchApplication = (
+export const updateApplication = (
   identifier: string,
-  request: PatchApplicationRequest
+  idempotencyKey: string,
+  request: UpdateApplicationRequest
 ) =>
   ApplicationRegistryClient.pipe(
-    Effect.flatMap((client) => client.patch(identifier, request))
+    Effect.flatMap((client) =>
+      client.update(identifier, idempotencyKey, request)
+    )
   )
 
-export const removeApplication = (
-  identifier: string,
-  expectedVersion?: number
-) =>
+export const listApplicationActivities = (identifier: string) =>
   ApplicationRegistryClient.pipe(
-    Effect.flatMap((client) => client.remove(identifier, expectedVersion))
-  )
-
-export const replaceApplicationLabels = (
-  identifier: string,
-  request: ReplaceApplicationLabelsRequest
-) =>
-  ApplicationRegistryClient.pipe(
-    Effect.flatMap((client) => client.replaceLabels(identifier, request))
-  )
-
-export const upsertApplication = (request: CreateApplicationRequest) =>
-  ApplicationRegistryClient.pipe(
-    Effect.flatMap((client) => client.upsert(request))
-  )
-
-export const listApplicationEvents = (identifier: string) =>
-  ApplicationRegistryClient.pipe(
-    Effect.flatMap((client) => client.events(identifier))
+    Effect.flatMap((client) => client.activities(identifier))
   )
 
 export const listApplicationCompensations = (

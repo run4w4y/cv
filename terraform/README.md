@@ -129,6 +129,11 @@ The private R2 bucket defaults to `CV_OBJECTS_BUCKET_NAME=cv-objects` and the
 resulting bucket name and namespace ID back to `/cv/application-registry` for
 Wrangler.
 
+Reviewed facts use a separate private bucket, defaulting to
+`FACTS_R2_BUCKET=cv-facts` and `FACTS_R2_BUCKET_LOCATION=weur`. It has no
+Worker binding, `r2.dev` endpoint, custom domain, or project hostname. Clients
+use `https://<account-id>.r2.cloudflarestorage.com` and signed S3 requests.
+
 Required under `/cv/analytics`:
 
 - `CLOUDFLARE_ANALYTICS_API_TOKEN`
@@ -151,6 +156,12 @@ Required under `/cv/content`:
 
 - `CONTENT_REPO_TOKEN`, a GitHub token or GitHub App installation token that CI
   can use to read your private content repository.
+
+The Cloudflare stack creates two permanent account tokens restricted to the
+facts bucket: Object Read for the owner-only management browser and Object Read
+& Write for the publisher. It derives their S3 secrets according to Cloudflare's
+R2 token contract and writes `FACTS_R2_*` plus `VITE_FACTS_R2_*` into this
+folder. The Terraform Cloud state is therefore sensitive.
 
 `PUBLIC_CV_FULL_ACCESS_EMAIL` is a frozen-v1 placeholder retained only so
 Terraform preserves the existing Infisical object. CV v2 does not read it and
@@ -200,6 +211,7 @@ terragrunt apply \
   -target=infisical_secret.application_registry_database_name \
   -target=infisical_secret.application_registry_worker_name \
   -target=infisical_secret.cv_objects_bucket_name \
+  -target=infisical_secret.facts_r2 \
   -target=infisical_secret.chatgpt_sessions_namespace_id
 direnv reload
 ```
@@ -221,7 +233,9 @@ This stack creates:
 - the `cv-application-registry` D1 database, protected from accidental
   Terraform destruction;
 - the private `cv-objects` R2 bucket, protected from accidental Terraform
-  destruction, for facts payloads, job snapshots, CV revisions, and PDFs;
+  destruction, for job snapshots, CV revisions, and PDFs;
+- the private `cv-facts` R2 bucket and separate bucket-scoped reader/publisher
+  credentials, all protected from accidental Terraform destruction;
 - the `cv-chatgpt-sessions` Workers KV namespace for encrypted ChatGPT auth
   sessions and short-lived proxy rate counters;
 - a single-owner Cloudflare Access application for the management UI and BFF,
@@ -238,6 +252,15 @@ This stack creates:
 - `CV_PUBLIC_WORKER_NAME`, `CV_PUBLIC_REGISTRY_SERVICE_NAME`,
   `CV_PUBLIC_RESOLVER_ENTRYPOINT`, and `CV_PUBLIC_ROUTE_PATTERN` in `/cv/deploy`
   when Infisical sync is enabled.
+- `FACTS_R2_*` publisher values and `VITE_FACTS_R2_*` direct-reader values in
+  `/cv/content` when Infisical sync is enabled.
+
+The Cloudflare provider can create R2 buckets but does not expose a writable
+R2 CORS resource. The registry deployment therefore applies the checked-in
+direct-read policy with Wrangler: only the Access-protected management origin
+and `http://localhost:4300` may issue browser `GET`/`HEAD` requests. CORS does
+not grant object access; every request still needs the bucket-scoped SigV4
+credential.
 
 The old Pages project, custom-domain attachment, and proxied CNAME are frozen
 in place. The `removed` blocks in `modules/cloudflare-cv/pages.tf` remove them
@@ -344,6 +367,7 @@ permissions for both Terraform-managed resources and Wrangler deployments:
 - Account: `D1` `Write`
 - Account: `Workers KV Storage` `Write`
 - Account: `Workers R2 Storage` `Write`
+- Account: `Account API Tokens` `Write`
 - Account: `Access: Apps and Policies Write`
 - Account: `Account Settings` `Read`
 - Zone: `DNS` `Write`
@@ -395,16 +419,17 @@ The registry deployment reads these Infisical values in addition to the
 account settings: `APPLICATION_REGISTRY_DB_ID`,
 `APPLICATION_REGISTRY_DB_NAME`, `APPLICATION_REGISTRY_WORKER_NAME`,
 `CHATGPT_SESSIONS_KV_ID`, `CHATGPT_SESSION_SECRET`, `CV_OBJECTS_BUCKET_NAME`,
-`CV_WEB_HOST`, and `REGISTRY_API_TOKEN`. After the full Cloudflare apply it also
+`CV_WEB_HOST`, `FACTS_R2_BUCKET`, `REGISTRY_API_URL`, `REGISTRY_API_TOKEN`, and
+the four `VITE_FACTS_R2_*` build values. After the full Cloudflare apply it also
 reads Terraform-synced `APPLICATION_REGISTRY_WORKERS_DEV_ENABLED=true`; before
 that point the default is `false`. `CV_PDF_QUEUE_NAME` and `CV_PDF_DLQ_NAME`
 optionally select the PDF job and dead-letter queues; they default to
 `cv-pdf-generation` and `cv-pdf-generation-dead-letter`.
 
-The CV deploy workflow contains no content-repository checkout. Tailored facts
-and document revisions reach the registry through their own publish and
-management flows; deploying `cv-public` only publishes the schema-aware SSR
-runtime.
+The CV deploy workflow contains no content-repository checkout. Reviewed facts
+are published independently to their private static bucket; tailored document
+revisions reach the registry through the management flow. Deploying `cv-public`
+only publishes the schema-aware SSR runtime.
 
 ## Secret State
 
@@ -423,9 +448,9 @@ Wrangler configuration can bind the correct resources and preserve the safe
 exposure state without checking environment-specific values into source
 control.
 
-The Cloudflare Terraform stack should only manage `workers.dev` exposure,
-derived deployment values, and non-secret infrastructure. Treat HCP Terraform
-state as sensitive anyway:
+The Cloudflare Terraform stack manages `workers.dev` exposure, derived
+deployment values, durable infrastructure, and the two scoped R2 tokens. Treat
+HCP Terraform state as sensitive:
 Infisical and Grafana provider state can include generated or provider-managed
 secret values.
 
@@ -434,7 +459,7 @@ secret values.
 - `modules/infisical-cv`: folder tree, placeholder secrets, generated analytics
   and application-registry secrets, and frozen-v1 compatibility state.
 - `modules/cloudflare-cv`: frozen Pages state removal, public CV and analytics
-  Worker routing, application registry D1/R2/KV/Access resources, and registry
-  Worker routing.
+  Worker routing, application registry D1/R2/KV/Access resources, the isolated
+  facts bucket and scoped tokens, and registry Worker routing.
 - `modules/grafana-cv`: analytics and application-registry Infinity
   datasources, dashboard folders, and dashboard template bindings.

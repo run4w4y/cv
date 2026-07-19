@@ -1,1 +1,1 @@
-export * from './harness'
+export * from './harness.js'

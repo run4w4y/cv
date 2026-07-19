@@ -1,7 +1,7 @@
 import type { ApplicationCompensationResponseItem } from '@cv/application-registry-api-contract'
 import type {
   Application,
-  ApplicationEvent,
+  ApplicationActivity,
   CurrencyCode,
 } from '@cv/application-registry-entity'
 import { Console, Effect } from 'effect'
@@ -20,10 +20,9 @@ const formatApplication = (application: Application) =>
   [
     `${application.company} — ${application.role}`,
     `ID: ${application.id}`,
-    `Job key: ${application.jobKey}`,
     `Status: ${application.applicationStatus}`,
     `Target stage: ${application.targetStage}`,
-    `URL: ${application.canonicalUrl}`,
+    `URL: ${application.postingUrl}`,
     `Location: ${application.location ?? '—'}`,
     `Updated: ${application.updatedAt}`,
   ].join('\n')
@@ -44,18 +43,18 @@ export const printApplications = (
 export const printApplication = (application: Application, json: boolean) =>
   json ? printJson(application) : Console.log(formatApplication(application))
 
-const formatEvent = (event: ApplicationEvent) =>
-  `${event.occurredAt}  ${event.kind}  ${JSON.stringify(event.payload)}`
+const formatActivity = (activity: ApplicationActivity) =>
+  `${activity.occurredAt}  ${activity.kind}  ${activity.actor}/${activity.source}  ${JSON.stringify(activity.payload)}`
 
-export const printEvents = (
-  events: readonly ApplicationEvent[],
+export const printActivities = (
+  activities: readonly ApplicationActivity[],
   json: boolean
 ) =>
   json
-    ? printJson(events)
-    : events.length === 0
-      ? Console.log('No events found.')
-      : Console.log(events.map(formatEvent).join('\n'))
+    ? printJson(activities)
+    : activities.length === 0
+      ? Console.log('No activities found.')
+      : Console.log(activities.map(formatActivity).join('\n'))
 
 const currencyFractionDigits = (currencyCode: CurrencyCode) =>
   new Intl.NumberFormat('en-US', {

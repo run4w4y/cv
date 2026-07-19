@@ -25,7 +25,7 @@ describe('CvAnalyticsPage', () => {
             application: {
               appliedAt: null,
               applicationStatus: 'preparing',
-              canonicalUrl: 'https://example.test/jobs/one',
+              postingUrl: 'https://example.test/jobs/one',
               company: 'Example Company',
               createdAt: '2026-07-01T00:00:00.000Z',
               id: 'application-1',
@@ -54,7 +54,7 @@ describe('CvAnalyticsPage', () => {
             application: {
               appliedAt: null,
               applicationStatus: 'preparing',
-              canonicalUrl: 'https://example.test/jobs/one',
+              postingUrl: 'https://example.test/jobs/one',
               company: 'Example Company',
               createdAt: '2026-07-01T00:00:00.000Z',
               id: 'application-1',

@@ -5,13 +5,6 @@ export {
 } from './config'
 export * from './errors'
 export {
-  type CurrentChannel,
-  type FactsPublisherFetch,
-  type FactsPublisherHttpClient,
-  makeFactsPublisherHttpClient,
-  type PublishedChannel,
-} from './http'
-export {
   type PublishFactsError,
   type PublishFactsResult,
   publishFactsCheckout,

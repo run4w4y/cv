@@ -18,6 +18,7 @@ export interface PdfArtifactsService {
   readonly complete: (
     applicationIdentifier: string,
     artifactId: string,
+    rendererVersion: string,
     bytes: Uint8Array
   ) => Effect.Effect<GeneratedArtifact, ApplicationRegistryError>
   readonly fail: (

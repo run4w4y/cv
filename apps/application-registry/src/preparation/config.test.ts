@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 
-import { publicCvBaseUrlFromEnvironment } from './config'
+import { Redacted } from 'effect'
+import {
+  factsR2OptionsFromEnvironment,
+  publicCvBaseUrlFromEnvironment,
+} from './config'
 
 describe('frontend preparation configuration', () => {
   test('trims and normalizes a configured public CV base URL', () => {
@@ -19,5 +23,24 @@ describe('frontend preparation configuration', () => {
         'https://registry.example.test'
       )
     ).toBe('https://registry.example.test/c')
+  })
+})
+
+describe('private facts R2 configuration', () => {
+  test('builds the account endpoint and redacts browser credentials', () => {
+    const options = factsR2OptionsFromEnvironment({
+      VITE_FACTS_R2_ACCESS_KEY_ID: 'read-access-key',
+      VITE_FACTS_R2_ACCOUNT_ID: 'a'.repeat(32),
+      VITE_FACTS_R2_BUCKET: 'cv-facts',
+      VITE_FACTS_R2_SECRET_ACCESS_KEY: 'read-secret-key',
+    })
+
+    expect(options.endpoint).toBe(
+      `https://${'a'.repeat(32)}.r2.cloudflarestorage.com`
+    )
+    expect(options.bucket).toBe('cv-facts')
+    expect(String(options.secretAccessKey)).not.toContain(
+      Redacted.value(options.secretAccessKey)
+    )
   })
 })

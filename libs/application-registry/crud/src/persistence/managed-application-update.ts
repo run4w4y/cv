@@ -1,9 +1,9 @@
 import {
   applicationCompensations,
-  applicationEvents,
+  applicationActivities,
   applicationLabels,
   applications,
-  commandReceipts,
+  idempotencyReceipts,
   registrySequence,
 } from '@cv/application-registry-entity'
 import { and, eq, exists, inArray, sql } from 'drizzle-orm'
@@ -13,7 +13,7 @@ import { uniq } from 'es-toolkit'
 
 import type { RegistryConnections } from '../internal/connection'
 import type { PersistedManagedApplicationUpdate } from '../types'
-import { currentRevision, normalizeCompany, runBatch } from './shared'
+import { currentRevision, runBatch } from './shared'
 
 const applicationHasVersion = (
   database: RegistryConnections['batch'],
@@ -60,41 +60,35 @@ const receiptMatches = (
 ) =>
   exists(
     database
-      .select({ operationId: commandReceipts.operationId })
-      .from(commandReceipts)
+      .select({ idempotencyKey: idempotencyReceipts.idempotencyKey })
+      .from(idempotencyReceipts)
       .where(
         and(
-          eq(commandReceipts.applicationId, applicationId),
-          eq(commandReceipts.kind, 'managed_application_update'),
-          eq(commandReceipts.operationId, input.operationId),
-          eq(
-            commandReceipts.operationRequestSignature,
-            input.operationRequestSignature
-          )
+          eq(idempotencyReceipts.applicationId, applicationId),
+          eq(idempotencyReceipts.scope, 'application_update'),
+          eq(idempotencyReceipts.idempotencyKey, input.idempotencyKey),
+          eq(idempotencyReceipts.requestHash, input.requestHash)
         )
       )
   )
 
-const eventInsert = (
+const activityInsert = (
   database: RegistryConnections['batch'],
   applicationId: string,
   input: PersistedManagedApplicationUpdate
 ) => {
-  const event = input.event
-  if (event === undefined) return undefined
-
-  return database.insert(applicationEvents).select(
+  const activity = input.activity
+  return database.insert(applicationActivities).select(
     database
       .select({
-        id: sql<string>`${event.eventId}`.as('id'),
+        id: sql<string>`${activity.activityId}`.as('id'),
         applicationId: applications.id,
-        kind: sql`${event.kind}`.as('kind'),
+        kind: sql`${activity.kind}`.as('kind'),
+        actor: sql`${activity.actor}`.as('actor'),
+        source: sql`${activity.source}`.as('source'),
         revision: currentRevision.as('revision'),
-        occurredAt: sql<string>`${event.occurredAt}`.as('occurred_at'),
-        recordedAt: sql<string>`${event.recordedAt}`.as('recorded_at'),
-        deviceId: sql<string | null>`${event.deviceId}`.as('device_id'),
-        payload: sql`${JSON.stringify(event.payload)}`.as('payload'),
-        operationId: sql<string>`${event.operationId}`.as('operation_id'),
+        occurredAt: sql<string>`${activity.occurredAt}`.as('occurred_at'),
+        payload: sql`${JSON.stringify(activity.payload)}`.as('payload'),
       })
       .from(applications)
       .where(
@@ -111,23 +105,17 @@ const receiptInsert = (
   applicationId: string,
   input: PersistedManagedApplicationUpdate
 ) =>
-  database.insert(commandReceipts).select(
+  database.insert(idempotencyReceipts).select(
     database
       .select({
-        operationId: sql<string>`${input.operationId}`.as('operation_id'),
-        operationRequestSignature:
-          sql<string>`${input.operationRequestSignature}`.as(
-            'operation_request_signature'
-          ),
-        kind: sql<'managed_application_update'>`'managed_application_update'`.as(
-          'kind'
+        idempotencyKey: sql<string>`${input.idempotencyKey}`.as(
+          'idempotency_key'
         ),
+        requestHash: sql<string>`${input.requestHash}`.as('request_hash'),
+        scope: sql<'application_update'>`'application_update'`.as('scope'),
         applicationId: applications.id,
-        eventId: sql<string | null>`${input.event?.eventId ?? null}`.as(
-          'event_id'
-        ),
-        noteId: sql<null>`null`.as('note_id'),
-        recordedAt: sql<string>`${input.recordedAt}`.as('recorded_at'),
+        resourceId: sql<string>`${input.activity.activityId}`.as('resource_id'),
+        createdAt: sql<string>`${input.recordedAt}`.as('created_at'),
       })
       .from(applications)
       .where(
@@ -252,14 +240,13 @@ export const updateManagedApplication = (
   applicationId: string,
   input: PersistedManagedApplicationUpdate
 ) => {
-  const eventStatement = eventInsert(database.batch, applicationId, input)
   const statements = [
     allocateManagedUpdateRevision(
       database.batch,
       applicationId,
       input.expectedVersion
     ),
-    ...(eventStatement === undefined ? [] : [eventStatement]),
+    activityInsert(database.batch, applicationId, input),
     receiptInsert(database.batch, applicationId, input),
     ...labelStatements(database.batch, applicationId, input),
     ...compensationStatements(database.batch, applicationId, input),
@@ -267,9 +254,12 @@ export const updateManagedApplication = (
       .update(applications)
       .set({
         ...input.patch,
-        ...(input.patch.company === undefined
+        ...(input.postingIdentity === undefined
           ? {}
-          : { companyNormalized: normalizeCompany(input.patch.company) }),
+          : {
+              postingFingerprint: input.postingIdentity.fingerprint,
+              postingUrlNormalized: input.postingIdentity.normalizedUrl,
+            }),
         updatedAt: input.recordedAt,
         updatedRevision: currentRevision,
         version: sql`${applications.version} + 1`,

@@ -1,38 +1,29 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import type { RegistryEventListItem } from '@cv/application-registry-api-contract'
+import type { ApplicationActivity } from '@cv/application-registry-entity'
 import { cleanup, render, within } from '@testing-library/react'
-import { ApplicationEventsTable } from './render'
+import { ApplicationActivitiesTable } from './render'
 
 afterEach(cleanup)
 
-const event: RegistryEventListItem = {
-  id: 'event-1',
+const activity: ApplicationActivity = {
+  actor: 'system',
   applicationId: 'application-1',
-  kind: 'stage_changed',
-  revision: 9,
+  id: 'activity-1',
+  kind: 'status_changed',
   occurredAt: '2026-07-16T09:30:00.000Z',
-  recordedAt: '2026-07-16T09:31:00.000Z',
   payload: { nextStatus: 'technical_screen' },
-  operationId: 'operation-1',
-  deviceId: null,
-  canonicalUrl: 'https://example.test/jobs/one',
-  company: 'Example',
-  role: 'Staff Engineer',
+  revision: 9,
+  source: 'management',
 }
 
-describe('ApplicationEventsTable', () => {
-  test('renders a compact application-scoped event history', () => {
-    const view = render(<ApplicationEventsTable events={[event]} />)
-    const table = view.getByRole('table')
-
-    expect(within(table).getAllByRole('columnheader')).toHaveLength(4)
-    expect(view.getByText('Related events')).toBeTruthy()
-    expect(view.getByText('Stage changed')).toBeTruthy()
-    expect(view.getByText('#9')).toBeTruthy()
+describe('ApplicationActivitiesTable', () => {
+  test('renders read-only application activity history', () => {
+    const view = render(<ApplicationActivitiesTable activities={[activity]} />)
     expect(
-      view.container
-        .querySelector('[data-slot="application-events-table"]')
-        ?.classList.contains('max-h-80')
-    ).toBe(true)
+      within(view.getByRole('table')).getAllByRole('columnheader')
+    ).toHaveLength(4)
+    expect(view.getByText('Related activities')).toBeTruthy()
+    expect(view.getByText('Status changed')).toBeTruthy()
+    expect(view.getByText('#9')).toBeTruthy()
   })
 })

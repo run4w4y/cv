@@ -30,7 +30,7 @@ export const persistApplication = (
         : Effect.fail(
             new RegistryDatabaseError({
               cause: new Error(
-                `Job key ${input.jobKey} was claimed by another application.`
+                `Posting ${input.postingUrlNormalized} is already registered.`
               ),
               message: `Failed to execute ${options.operation}`,
             })

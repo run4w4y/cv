@@ -17,13 +17,11 @@ afterEach(() => {
 const application: Application = {
   applicationStatus: 'not_started',
   appliedAt: null,
-  canonicalUrl: 'https://example.test/jobs/one',
+  postingUrl: 'https://example.test/jobs/one',
   company: 'Example',
   createdAt: '2026-07-16T09:00:00.000Z',
   followUpAt: null,
   id: 'application-1',
-  jobKey: 'web:one',
-  lastContactAt: null,
   listingAvailability: 'suspected_closed',
   listingCheckedAt: '2026-07-16T09:30:00.000Z',
   listingClosedCandidateAt: '2026-07-16T09:30:00.000Z',
@@ -33,8 +31,6 @@ const application: Application = {
   location: null,
   personalPriority: null,
   role: 'Staff Engineer',
-  source: 'web',
-  sourceJobId: 'one',
   targetStage: 'apply_next',
   updatedAt: '2026-07-16T09:30:00.000Z',
   updatedRevision: 2,
@@ -48,7 +44,7 @@ const listingCheck: ApplicationListingCheck = {
   confidence: 'high',
   contentHash: null,
   evidence: [],
-  finalUrl: application.canonicalUrl,
+  finalUrl: application.postingUrl,
   httpStatus: 200,
   id: 'check-1',
   nextCheckAt: '2026-07-23T09:30:00.000Z',
@@ -58,7 +54,7 @@ const listingCheck: ApplicationListingCheck = {
   receivedAt: application.updatedAt,
   reasonCode: 'provider_open',
   recommendedAction: 'keep',
-  requestedUrl: application.canonicalUrl,
+  requestedUrl: application.postingUrl,
   runId: null,
 }
 
@@ -110,7 +106,7 @@ describe('ListingAvailabilityReviewDialog', () => {
 
     await waitFor(() => expect(onResolved).toHaveBeenCalledWith(updated))
     expect(requests).toHaveLength(1)
-    expect(requests[0]?.method).toBe('PUT')
+    expect(requests[0]?.method).toBe('POST')
     expect(await requests[0]?.json()).toMatchObject({
       expectedVersion: 2,
       resolution: 'open',
@@ -157,8 +153,12 @@ describe('ListingAvailabilityReviewDialog', () => {
     expect(bodies.map(({ expectedVersion }) => expectedVersion)).toEqual([
       2, 2, 2,
     ])
-    expect(bodies[1]?.operationId).toBe(bodies[0]?.operationId)
-    expect(bodies[2]?.operationId).not.toBe(bodies[0]?.operationId)
+    expect(requests[1]?.headers.get('idempotency-key')).toBe(
+      requests[0]?.headers.get('idempotency-key')
+    )
+    expect(requests[2]?.headers.get('idempotency-key')).not.toBe(
+      requests[0]?.headers.get('idempotency-key')
+    )
   })
 
   test('locks stale actions after a conflict and reloads before the dialog can be used again', async () => {
@@ -167,7 +167,7 @@ describe('ListingAvailabilityReviewDialog', () => {
     globalThis.fetch = mock(async (input: string | URL | Request, init) => {
       const request = new Request(String(input), init)
       requests.push(request)
-      if (request.method === 'PUT') {
+      if (request.method === 'POST') {
         return Response.json(
           {
             code: 'conflict',
@@ -206,7 +206,7 @@ describe('ListingAvailabilityReviewDialog', () => {
       view.getByRole('button', { name: 'Reload latest application' })
     )
     await waitFor(() => {
-      expect(requests.map(({ method }) => method)).toEqual(['PUT', 'GET'])
+      expect(requests.map(({ method }) => method)).toEqual(['POST', 'GET'])
     })
 
     expect(view.queryByText(/Could not reload/)).toBeNull()

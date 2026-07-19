@@ -28,7 +28,7 @@ export type RegistryOutboundService = (
 ) => Response | Promise<Response>
 
 export type RegistryRequestInit = {
-  readonly body?: string
+  readonly body?: string | Uint8Array
   readonly headers?: Readonly<Record<string, string>>
   readonly method?: string
 }

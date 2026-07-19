@@ -17,11 +17,11 @@ export const listCvAnalyticsLinks = (database: RegistryQueryDatabase) =>
       application: {
         appliedAt: applications.appliedAt,
         applicationStatus: applications.applicationStatus,
-        canonicalUrl: applications.canonicalUrl,
         company: applications.company,
         createdAt: applications.createdAt,
         id: applications.id,
         listingAvailability: applications.listingAvailability,
+        postingUrl: applications.postingUrl,
         role: applications.role,
       },
       label: applicationLabels.label,
@@ -30,7 +30,7 @@ export const listCvAnalyticsLinks = (database: RegistryQueryDatabase) =>
         createdAt: cvLinks.createdAt,
         enabled: cvLinks.enabled,
         id: cvLinks.id,
-        publishedRevisionId: cvLinks.publishedRevisionId,
+        currentRevisionId: cvLinks.currentRevisionId,
         token: cvLinks.token,
         updatedAt: cvLinks.updatedAt,
       },
@@ -44,7 +44,7 @@ export const listCvAnalyticsLinks = (database: RegistryQueryDatabase) =>
       eq(applicationLabels.applicationId, applications.id)
     )
     .orderBy(
-      asc(applications.companyNormalized),
+      asc(applications.company),
       asc(applications.role),
       asc(cvLinks.id),
       asc(applicationLabels.label)

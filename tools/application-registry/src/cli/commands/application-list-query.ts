@@ -123,7 +123,7 @@ export const applicationFilters = (
       ? undefined
       : {
           type: 'condition' as const,
-          field: 'canonicalUrl' as const,
+          field: 'postingUrl' as const,
           operator: 'contains' as const,
           value: options.url,
         },

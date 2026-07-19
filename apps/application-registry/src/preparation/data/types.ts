@@ -1,15 +1,14 @@
 import type { AiModel } from '@cv/ai-provider'
 import type {
-  ActiveFactsReleaseResponse,
   ContentRevisionResultResponse,
   PdfJobResponse,
-  ReadyPdfArtifactResponse,
   SetCvLinkAvailabilityRequest,
   StartPdfJobRequest,
 } from '@cv/application-registry-api-contract'
 import type {
   Application,
   ContentEntry,
+  ContentRevision,
   ContentRevisionSource,
   CvLink,
   GeneratedArtifact,
@@ -28,9 +27,19 @@ import type {
 
 export type PreparationContext = {
   readonly factsCatalogue: FactsCatalogueV1
-  readonly factsRelease: ActiveFactsReleaseResponse
+  readonly factsRelease: {
+    readonly id: string
+    readonly locales: ReadonlyArray<string>
+    readonly provenance: {
+      readonly compiler: {
+        readonly commit: string
+        readonly repository: string
+      }
+      readonly source: { readonly commit: string; readonly repository: string }
+    }
+  }
   readonly factsReleaseId: string
-  readonly jobContext: unknown
+  readonly jobContext: Schema.Json
   readonly jobSnapshot: JobPostingSnapshot
   readonly locale: PreparationContextIdentity['locale']
 }
@@ -46,9 +55,44 @@ export type PreparationBootstrap = {
   readonly head: SavedContentRevision | null
 }
 
-export type PublishedCvState = {
-  readonly artifact: GeneratedArtifact
+export type WorkflowBootstrapInput = {
+  readonly application: Application
+  readonly kind: ContentEntry['kind']
+  readonly locale: PreparationContextIdentity['locale']
+  readonly snapshotId: string | null
+}
+
+export type WorkflowBootstrap = {
+  readonly context: PreparationContext
+  readonly entry: ContentEntry
+}
+
+export type PreparationApplicationDetailsInput = {
+  readonly application: Application
+  readonly company: string | null
+  readonly location: string | null
+  readonly operationId: string
+  readonly role: string
+}
+
+export type ContentRevisionHistoryInput = {
+  readonly applicationId: string
+  readonly entryId: string
+}
+
+export type ContentRevisionHistory = {
+  readonly entry: ContentEntry
+  readonly revisions: ReadonlyArray<ContentRevision>
+}
+
+export type CvPageState = {
+  readonly artifact: GeneratedArtifact | null
   readonly link: CvLink
+}
+
+export type ReadyPdfArtifact = {
+  readonly artifact: GeneratedArtifact
+  readonly bytes: Uint8Array
 }
 
 export type ManualJobContextInput = {
@@ -74,10 +118,11 @@ export type ApproveRevisionInput = {
   readonly revisionId: string
 }
 
-export type PublishCvInput = {
+export type StageCvInput = {
   readonly applicationId: string
   readonly entry: ContentEntry
   readonly publicBaseUrl: string
+  readonly revisionId: string
 }
 
 export type SetPublicationAvailabilityInput = {
@@ -111,30 +156,42 @@ export type PreparationRepositoryShape = {
     ReadonlyArray<AiModel>,
     PreparationDataError
   >
+  readonly createPreparationApplication: (
+    postingUrl: string
+  ) => Effect.Effect<Application, PreparationDataError>
   readonly loadBootstrap: (
     identity: PreparationIdentity
   ) => Effect.Effect<PreparationBootstrap, PreparationDataError>
   readonly loadContentHead: (
     identity: ContentHeadIdentity
   ) => Effect.Effect<SavedContentRevision | null, PreparationDataError>
+  readonly loadContentEntry: (
+    input: ContentRevisionHistoryInput
+  ) => Effect.Effect<ContentEntry, PreparationDataError>
+  readonly loadContentRevisionHistory: (
+    input: ContentRevisionHistoryInput
+  ) => Effect.Effect<ContentRevisionHistory, PreparationDataError>
   readonly loadPreparationHead: (
     identity: PreparationIdentity
   ) => Effect.Effect<SavedContentRevision | null, PreparationDataError>
   readonly loadContext: (
     identity: PreparationContextIdentity
   ) => Effect.Effect<PreparationContext, PreparationDataError>
-  readonly loadPublishedCvState: (
+  readonly loadCvPageState: (
     identity: PublicationIdentity
-  ) => Effect.Effect<PublishedCvState | null, PreparationDataError>
+  ) => Effect.Effect<CvPageState | null, PreparationDataError>
+  readonly loadWorkflowBootstrap: (
+    input: WorkflowBootstrapInput
+  ) => Effect.Effect<WorkflowBootstrap, PreparationDataError>
   readonly persistManualJobContext: (
     input: ManualJobContextInput
   ) => Effect.Effect<JobPostingSnapshot, PreparationDataError>
-  readonly publishCv: (
-    input: PublishCvInput
+  readonly stageCv: (
+    input: StageCvInput
   ) => Effect.Effect<CvLink, PreparationDataError>
   readonly readCurrentPdf: (
     input: ReadCurrentPdfInput
-  ) => Effect.Effect<ReadyPdfArtifactResponse, PreparationDataError>
+  ) => Effect.Effect<ReadyPdfArtifact, PreparationDataError>
   readonly readPdfJob: (
     input: ReadPdfJobInput
   ) => Effect.Effect<PdfJobResponse, PreparationDataError>
@@ -147,6 +204,12 @@ export type PreparationRepositoryShape = {
   readonly startPdfGeneration: (
     input: StartPdfGenerationInput
   ) => Effect.Effect<PdfJobResponse, PreparationDataError>
+  readonly startPreparation: (
+    applicationId: string
+  ) => Effect.Effect<Application, PreparationDataError>
+  readonly updatePreparationApplication: (
+    input: PreparationApplicationDetailsInput
+  ) => Effect.Effect<Application, PreparationDataError>
 }
 
 export class PreparationDataError extends Schema.TaggedErrorClass<PreparationDataError>()(

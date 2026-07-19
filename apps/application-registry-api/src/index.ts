@@ -18,11 +18,7 @@ export { CvPublicResolver } from './internal/cv-public-resolver-entrypoint'
 
 const withPrivateCachePolicy = (request: Request, response: Response) => {
   const path = new URL(request.url).pathname
-  if (
-    path.startsWith('/v1/') ||
-    path.startsWith('/api/chatgpt/') ||
-    path.startsWith('/api/registry/')
-  ) {
+  if (path.startsWith('/api/chatgpt/') || path.startsWith('/api/registry/')) {
     response.headers.set('Cache-Control', 'private, no-store')
   }
 
@@ -31,7 +27,10 @@ const withPrivateCachePolicy = (request: Request, response: Response) => {
 
 const isRegistryBffRequest = (request: Request) => {
   const path = new URL(request.url).pathname
-  return path === '/api/registry' || path.startsWith('/api/registry/')
+  return (
+    request.headers.get('authorization') === null &&
+    (path === '/api/registry' || path.startsWith('/api/registry/'))
+  )
 }
 
 const isDirectRegistryRequest = (request: Request) => {
@@ -39,8 +38,8 @@ const isDirectRegistryRequest = (request: Request) => {
   return (
     path === '/health' ||
     path === '/openapi.json' ||
-    path === '/v1' ||
-    path.startsWith('/v1/')
+    path === '/api/registry' ||
+    path.startsWith('/api/registry/')
   )
 }
 
@@ -56,9 +55,7 @@ const registryBffConfigurationError = () =>
 const registryBffRequestEffect = Effect.fn('RegistryBff.prepareRequest')(
   function* (request: Request) {
     const token = yield* readRegistryApiToken
-    const url = new URL(request.url)
-    url.pathname = url.pathname.slice('/api/registry'.length) || '/'
-    const proxied = new Request(url, request)
+    const proxied = new Request(request)
     proxied.headers.set('authorization', `Bearer ${Redacted.value(token)}`)
     return proxied
   }

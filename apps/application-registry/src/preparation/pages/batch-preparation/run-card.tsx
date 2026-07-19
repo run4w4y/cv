@@ -10,13 +10,13 @@ import {
   CardTitle,
 } from '@cv/internal-ui'
 import { useAtom } from '@effect/atom-react'
+import { Cause } from 'effect'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import { Ban, CircleAlert, ExternalLink } from 'lucide-react'
 import { Link } from 'react-router'
 
-import { asyncResultFailureMessage } from '../../async-result'
-import { cancelPreparationRunAtom } from '../../workflow/atoms'
-import type { PreparationRun } from '../../workflow/domain'
+import { cancelPreparationRunAtom } from '@/preparation/workflow/atoms'
+import type { PreparationRun } from '@cv/application-preparation-workflow/domain'
 
 const reviewPath = (run: PreparationRun): string | null => {
   if (run.applicationId === null) return null
@@ -25,10 +25,9 @@ const reviewPath = (run: PreparationRun): string | null => {
 }
 
 const canCancel = (run: PreparationRun) =>
-  run.executionId !== null &&
-  (run.status === 'queued' ||
-    run.status === 'running' ||
-    run.status === 'awaiting_review')
+  run.status === 'queued' ||
+  run.status === 'running' ||
+  run.status === 'awaiting_review'
 
 export const PreparationRunCard = ({
   run,
@@ -39,10 +38,10 @@ export const PreparationRunCard = ({
     mode: 'promise',
   })
   const cancelling = AsyncResult.isWaiting(cancelResult)
-  const cancelError = asyncResultFailureMessage(
-    cancelResult,
-    'The preparation workflow could not be cancelled.'
-  )
+  const cancelError = AsyncResult.isFailure(cancelResult)
+    ? (Cause.prettyErrors(cancelResult.cause)[0]?.message ??
+      'The preparation workflow could not be cancelled.')
+    : null
   const path = reviewPath(run)
   const totalTokens =
     run.candidate?.candidate.metadata.reduce(
@@ -101,11 +100,7 @@ export const PreparationRunCard = ({
               variant="outline"
               disabled={cancelling}
               onClick={() => {
-                if (run.executionId === null) return
-                void cancel({
-                  executionId: run.executionId,
-                  runId: run.runId,
-                }).catch(() => undefined)
+                void cancel({ runId: run.runId }).catch(() => undefined)
               }}
             >
               <Ban />

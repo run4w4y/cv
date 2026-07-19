@@ -4,7 +4,6 @@ import {
 } from '@cv/application-registry-api-client'
 import type {
   AddApplicationNoteRequest,
-  AppendApplicationEventRequest,
   SubmitListingCheckFindingsRequest,
 } from '@cv/application-registry-api-contract'
 import { Effect, Layer } from 'effect'
@@ -37,39 +36,41 @@ const makeApplicationRegistryClient = Effect.gen(function* () {
   const api = yield* ApplicationRegistryHttpClient
   const outbox = yield* RegistryOutbox
 
-  const appendEvent = (
+  const addNote = (
     identifier: string,
-    request: AppendApplicationEventRequest
-  ) => {
-    const params = { id: identifier }
-
-    // HttpApiClient exposes each Schema.Union member as an overload, so the
-    // discriminated request must be narrowed before selecting that overload.
-    return 'nextApplicationStatus' in request
-      ? api.registry.appendApplicationEvent({ params, payload: request })
-      : api.registry.appendApplicationEvent({ params, payload: request })
-  }
-
-  const addNote = (identifier: string, request: AddApplicationNoteRequest) =>
-    api.registry.addApplicationNote({
+    idempotencyKey: string,
+    request: AddApplicationNoteRequest
+  ) =>
+    api.applications.addApplicationNote({
+      headers: { 'idempotency-key': idempotencyKey },
       params: { id: identifier },
       payload: request,
     })
 
   const submitListingCheckFindings = (
+    runId: string,
+    _batchId: string,
     request: SubmitListingCheckFindingsRequest
-  ) => api.registry.submitListingCheckFindings({ payload: request })
+  ) =>
+    api.automation.submitListingCheckFindings({
+      params: { runId },
+      payload: request,
+    })
 
   const replay = (command: RegistryCommand) => {
     switch (command._tag) {
       case 'AddApplicationNote':
-        return addNote(command.identifier, command.request).pipe(Effect.asVoid)
-      case 'AppendApplicationEvent':
-        return appendEvent(command.identifier, command.request).pipe(
-          Effect.asVoid
-        )
+        return addNote(
+          command.identifier,
+          command.idempotencyKey,
+          command.request
+        ).pipe(Effect.asVoid)
       case 'SubmitListingCheckFindings':
-        return submitListingCheckFindings(command.request).pipe(Effect.asVoid)
+        return submitListingCheckFindings(
+          command.runId,
+          command.batchId,
+          command.request
+        ).pipe(Effect.asVoid)
     }
   }
 
@@ -139,107 +140,79 @@ const makeApplicationRegistryClient = Effect.gen(function* () {
     )
 
   return {
-    addNote: (identifier, request) => {
+    activities: (identifier) =>
+      normalizeHttpFailure(
+        api.applications.listApplicationActivities({
+          params: { id: identifier },
+        })
+      ),
+    addNote: (identifier, idempotencyKey, request) => {
       const command = {
         _tag: 'AddApplicationNote' as const,
+        idempotencyKey,
         identifier,
         request,
       }
       return write({
         command,
-        operationId: request.operationId,
-        send: normalizeHttpFailure(addNote(identifier, request)),
+        operationId: idempotencyKey,
+        send: normalizeHttpFailure(
+          addNote(identifier, idempotencyKey, request)
+        ),
       })
     },
     annotations: (identifier) =>
       normalizeHttpFailure(
-        api.registry.listApplicationAnnotations({
+        api.applications.listApplicationAnnotations({
           params: { id: identifier },
         })
       ),
-    appendEvent: (identifier, request) => {
-      const command = {
-        _tag: 'AppendApplicationEvent' as const,
-        identifier,
-        request,
-      }
-      return write({
-        command,
-        operationId: request.operationId,
-        send: normalizeHttpFailure(appendEvent(identifier, request)),
-      })
-    },
-    create: (request) =>
-      normalizeHttpFailure(
-        api.registry.createApplication({ payload: request })
-      ),
     compensations: (identifier, query = {}) =>
       normalizeHttpFailure(
-        api.registry.listApplicationCompensations({
+        api.applications.listApplicationCompensations({
           params: { id: identifier },
           query,
         })
       ),
-    events: (identifier) =>
+    create: (request) =>
       normalizeHttpFailure(
-        api.registry.listApplicationEvents({ params: { id: identifier } })
+        api.applications.createApplication({ payload: request })
       ),
-    facets: () => normalizeHttpFailure(api.registry.listApplicationFacets()),
+    facets: () =>
+      normalizeHttpFailure(api.applications.listApplicationFacets()),
     health: () => normalizeHttpFailure(api.health()),
-    labels: (identifier) =>
-      normalizeHttpFailure(
-        api.registry.listApplicationLabels({ params: { id: identifier } })
-      ),
     list: (query) =>
-      normalizeHttpFailure(api.registry.listApplications({ query })),
-    listEvents: (query) =>
-      normalizeHttpFailure(api.registry.listEvents({ query })),
+      normalizeHttpFailure(api.applications.listApplications({ query })),
+    listActivities: (query) =>
+      normalizeHttpFailure(api.applications.listActivities({ query })),
     listingCheckRun: (identifier) =>
       normalizeHttpFailure(
-        api.registry.getListingCheckRun({ params: { id: identifier } })
+        api.automation.getListingCheckRun({ params: { id: identifier } })
       ),
     listingChecks: (identifier) =>
       normalizeHttpFailure(
-        api.registry.listApplicationListingChecks({
+        api.applications.listApplicationListingChecks({
           params: { id: identifier },
         })
       ),
     outbox: () => outbox.list(),
-    patch: (identifier, request) =>
-      normalizeHttpFailure(
-        api.registry.patchApplication({
-          params: { id: identifier },
-          payload: request,
-        })
-      ),
-    remove: (identifier, expectedVersion) =>
-      normalizeHttpFailure(
-        api.registry.deleteApplication({
-          params: { id: identifier },
-          query: { expectedVersion },
-        })
-      ),
-    replaceLabels: (identifier, request) =>
-      normalizeHttpFailure(
-        api.registry.replaceApplicationLabels({
-          params: { id: identifier },
-          payload: request,
-        })
-      ),
     show: (identifier) =>
       normalizeHttpFailure(
-        api.registry.getApplication({ params: { id: identifier } })
+        api.applications.getApplication({ params: { id: identifier } })
       ),
-    submitListingCheckFindings: (batchId, request) => {
+    submitListingCheckFindings: (runId, batchId, request) => {
       const command = {
         _tag: 'SubmitListingCheckFindings' as const,
         batchId,
         request,
+        runId,
       }
       return write({
         command,
         operationId: batchId,
-        send: normalizeHttpFailure(submitListingCheckFindings(request)),
+        send: normalizeHttpFailure(
+          submitListingCheckFindings(runId, batchId, request)
+        ),
       })
     },
     sync: Effect.fn('ApplicationRegistryClient.sync')(function* () {
@@ -274,9 +247,13 @@ const makeApplicationRegistryClient = Effect.gen(function* () {
         synced: results.length - failed.length,
       }
     }),
-    upsert: (request) =>
+    update: (identifier, idempotencyKey, request) =>
       normalizeHttpFailure(
-        api.registry.upsertApplication({ payload: request })
+        api.applications.updateApplication({
+          headers: { 'idempotency-key': idempotencyKey },
+          params: { id: identifier },
+          payload: request,
+        })
       ),
   } satisfies ApplicationRegistryClientService
 })

@@ -60,7 +60,7 @@ export const ApplicationEditFields = ({
       />
       <FormField
         control={form.control}
-        name="canonicalUrl"
+        name="postingUrl"
         render={({ field }) => (
           <FormItem className="sm:col-span-2">
             <FormLabel required>Canonical URL</FormLabel>

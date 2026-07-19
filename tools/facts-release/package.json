@@ -12,6 +12,7 @@
   "dependencies": {
     "@cv/facts-authoring": "workspace:*",
     "@cv/facts-release": "workspace:*",
+    "@cv/facts-r2": "workspace:*",
     "effect": "4.0.0-beta.99",
     "vite": "^8.1.3"
   },

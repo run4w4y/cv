@@ -8,11 +8,15 @@ type PreparationCommandGate = {
   readonly hasStarted: boolean
 }
 
-const commandGateFamily = Atom.family((identity: string) =>
+const commandGateFamily = Atom.family((identity: PreparationEditorIdentity) =>
   Atom.make<PreparationCommandGate>({
     executing: false,
     hasStarted: false,
-  }).pipe(Atom.withLabel(`preparation/command-gate/${identity}`))
+  }).pipe(
+    Atom.withLabel(
+      `preparation/command-gate/${preparationCommandGateKey(identity)}`
+    )
+  )
 )
 
 export const preparationCommandGateKey = (
@@ -28,9 +32,7 @@ export const preparationCommandGateKey = (
 export const usePreparationCommandGate = (
   identity: PreparationEditorIdentity
 ) => {
-  const [state, setState] = useAtom(
-    commandGateFamily(preparationCommandGateKey(identity))
-  )
+  const [state, setState] = useAtom(commandGateFamily(identity))
 
   const claim = (): boolean => {
     let claimed = false

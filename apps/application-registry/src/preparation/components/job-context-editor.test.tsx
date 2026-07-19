@@ -2,7 +2,6 @@ import { afterEach, describe, expect, mock, test } from 'bun:test'
 import type { Application } from '@cv/application-registry-entity'
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 
-import { decodeUtf8Base64 } from '../base64'
 import { JobContextEditor } from './job-context-editor'
 
 const originalFetch = globalThis.fetch
@@ -15,13 +14,11 @@ afterEach(() => {
 const application: Application = {
   applicationStatus: 'preparing',
   appliedAt: null,
-  canonicalUrl: 'https://example.test/jobs/platform',
+  postingUrl: 'https://example.test/jobs/platform',
   company: 'Example',
   createdAt: '2026-07-16T09:00:00.000Z',
   followUpAt: null,
   id: 'application-1',
-  jobKey: 'web:platform',
-  lastContactAt: null,
   listingAvailability: 'open',
   listingCheckedAt: null,
   listingClosedCandidateAt: null,
@@ -31,8 +28,6 @@ const application: Application = {
   location: null,
   personalPriority: null,
   role: 'Platform Engineer',
-  source: 'web',
-  sourceJobId: 'platform',
   targetStage: 'apply_next',
   updatedAt: '2026-07-16T09:00:00.000Z',
   updatedRevision: 1,
@@ -45,7 +40,7 @@ const capturedSnapshot = {
   errorMessage: null,
   fetchedAt: '2026-07-16T10:00:00.000Z',
   fetcherVersion: 'application-registry-job-posting-fetch/v2',
-  finalUrl: application.canonicalUrl,
+  finalUrl: application.postingUrl,
   id: 'job-snapshot-captured',
   normalizedByteLength: 80,
   normalizedMediaType: 'text/plain; charset=utf-8',
@@ -55,7 +50,7 @@ const capturedSnapshot = {
   rawMediaType: 'text/html; charset=utf-8',
   rawObjectKey: 'opaque/sha256/captured-raw',
   rawSha256: 'captured-raw',
-  requestedUrl: application.canonicalUrl,
+  requestedUrl: application.postingUrl,
   status: 'fetched',
 }
 
@@ -66,7 +61,14 @@ describe('JobContextEditor', () => {
       const request = new Request(String(input), init)
       requests.push(request.clone())
       const path = new URL(request.url).pathname
-      if (request.method === 'POST') {
+      if (request.method === 'PUT') {
+        const sha256 = path.split('/').at(-1) ?? ''
+        return Response.json({
+          byteLength: (await request.arrayBuffer()).byteLength,
+          sha256,
+        })
+      }
+      if (request.method === 'POST' && path.endsWith('/job-snapshots')) {
         return Response.json({
           ...capturedSnapshot,
           fetcherVersion: 'application-registry-management-job-context/v1',
@@ -102,8 +104,17 @@ Requirements:
       view.getByRole('button', { name: 'Save corrected context' })
     )
 
-    await waitFor(() =>
+    await waitFor(() => {
+      expect(requests.some((request) => request.method === 'PUT')).toBe(true)
       expect(requests.some((request) => request.method === 'POST')).toBe(true)
+    })
+    const uploaded = requests.find((request) => request.method === 'PUT')
+    if (uploaded === undefined) {
+      throw new Error('Expected a raw blob upload request.')
+    }
+    expect(await uploaded.text()).toBe(corrected)
+    expect(uploaded.headers.get('content-type')).toBe(
+      'application/octet-stream'
     )
     const persisted = requests.find((request) => request.method === 'POST')
     if (persisted === undefined) {
@@ -120,12 +131,14 @@ Requirements:
       !('normalized' in body) ||
       typeof body.normalized !== 'object' ||
       body.normalized === null ||
-      !('data' in body.normalized) ||
-      typeof body.normalized.data !== 'string'
+      !('sha256' in body.normalized) ||
+      typeof body.normalized.sha256 !== 'string'
     ) {
-      throw new Error('Expected normalized job context bytes.')
+      throw new Error('Expected a normalized job context blob reference.')
     }
-    expect(decodeUtf8Base64(body.normalized.data)).toBe(corrected)
+    expect(new URL(uploaded.url).pathname).toEndWith(
+      `/blobs/${body.normalized.sha256}`
+    )
     expect('raw' in body).toBe(false)
   })
 })

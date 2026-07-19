@@ -23,7 +23,7 @@
     "@cv/application-registry-service": "workspace:*",
     "@cv/cloudflare-analytics-client": "workspace:*",
     "@cv/effect-http-auth": "workspace:*",
-    "@cv/effect-web-crypto": "workspace:*",
+    "@effect/platform-browser": "4.0.0-beta.99",
     "effect": "4.0.0-beta.99"
   },
   "devDependencies": {

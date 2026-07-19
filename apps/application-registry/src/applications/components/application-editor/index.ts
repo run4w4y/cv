@@ -1,4 +1,4 @@
-export { ApplicationEditDialog, DeleteApplicationDialog } from './render'
+export { ApplicationEditDialog } from './render'
 export {
   type ApplicationDetailEditFormInput,
   type ApplicationDetailEditFormOutput,

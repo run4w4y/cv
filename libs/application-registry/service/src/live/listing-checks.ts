@@ -1,15 +1,13 @@
 import {
   ApplicationsCrud,
-  EventsCrud,
+  IdempotencyCrud,
   type ListingCheckRunCounts,
   ListingChecksCrud,
-  OperationsCrud,
   RegistryDatabaseError,
 } from '@cv/application-registry-crud'
 import type {
   Application,
   ApplicationListingCheck,
-  ListingObservation,
 } from '@cv/application-registry-entity'
 import { ListingAvailabilityChecker } from '@cv/application-registry-listing-check'
 import { Effect, Layer } from 'effect'
@@ -20,7 +18,7 @@ import { decideListingCheck } from '../internal/listing-check-policy'
 import { operationRequestSignature } from '../internal/operation-request-signature'
 import {
   findRequiredApplication,
-  findValidatedOperation,
+  findValidatedIdempotency,
   newRegistryId,
   registryNow,
 } from '../internal/shared'
@@ -46,8 +44,7 @@ const make = Effect.gen(function* () {
   const applications = yield* ApplicationsCrud
   const checks = yield* ListingChecksCrud
   const checker = yield* ListingAvailabilityChecker
-  const events = yield* EventsCrud
-  const operations = yield* OperationsCrud
+  const idempotency = yield* IdempotencyCrud
 
   const loadCheckResult = (
     applicationId: string,
@@ -60,13 +57,12 @@ const make = Effect.gen(function* () {
         applications,
         applicationId
       )
-      const closureEvent = replayed
-        ? yield* events.findByOperation(`${check.operationId}:closed`)
-        : undefined
       return {
         application,
         archived:
-          closureEvent !== undefined ||
+          (replayed &&
+            check.recommendedAction === 'archive' &&
+            application.applicationStatus === 'archived') ||
           (statusBefore !== 'archived' &&
             application.applicationStatus === 'archived'),
         check,
@@ -78,7 +74,7 @@ const make = Effect.gen(function* () {
     checker.check({
       company: application.company,
       role: application.role,
-      url: application.canonicalUrl,
+      url: application.postingUrl,
     })
 
   const recordObservation = (
@@ -88,17 +84,17 @@ const make = Effect.gen(function* () {
     Effect.gen(function* () {
       const identity = {
         applicationId: application.id,
-        kind: 'listing_check' as const,
-        operationId: input.operationId,
-        operationRequestSignature: input.operationRequestSignature,
+        scope: 'listing_check' as const,
+        idempotencyKey: input.idempotencyKey,
+        requestHash: input.requestHash,
       }
-      const receipt = yield* findValidatedOperation(operations, identity)
+      const receipt = yield* findValidatedIdempotency(idempotency, identity)
       if (receipt) {
-        const replay = yield* checks.findByOperation(input.operationId)
+        const replay = yield* checks.findByOperation(input.idempotencyKey)
         if (!replay) {
           return yield* new RegistryDatabaseError({
             cause: new Error('A listing-check receipt has no listing check.'),
-            message: `Listing check is missing for ${input.operationId}`,
+            message: `Listing check is missing for ${input.idempotencyKey}`,
           })
         }
         return yield* loadCheckResult(
@@ -130,7 +126,7 @@ const make = Effect.gen(function* () {
         applicationId: application.id,
         id: newRegistryId(),
         nextCheckAt: decision.nextCheckAt,
-        operationId: input.operationId,
+        operationId: input.idempotencyKey,
         receivedAt: recordedAt,
         recommendedAction: decision.action,
         runId: input.runId ?? null,
@@ -141,16 +137,16 @@ const make = Effect.gen(function* () {
           archiveApplication: decision.archiveApplication,
           closedCandidateAt: decision.closedCandidateAt,
           consecutiveClosedChecks: decision.consecutiveClosedChecks,
-          eventId: decision.archiveApplication ? newRegistryId() : null,
+          activityId: newRegistryId(),
           expectedVersion: input.expectedVersion,
           listingAvailability: decision.availability,
-          operationRequestSignature: input.operationRequestSignature,
+          requestHash: input.requestHash,
           recordedAt,
         })
         .pipe(
           Effect.map((applied) => ({ applied, replayed: false })),
           Effect.catchTag('RegistryDatabaseError', (failure) =>
-            findValidatedOperation(operations, identity).pipe(
+            findValidatedIdempotency(idempotency, identity).pipe(
               Effect.flatMap((concurrentReceipt) =>
                 concurrentReceipt
                   ? Effect.succeed({ applied: true, replayed: true })
@@ -160,11 +156,11 @@ const make = Effect.gen(function* () {
           )
         )
       if (applied.replayed) {
-        const replay = yield* checks.findByOperation(input.operationId)
+        const replay = yield* checks.findByOperation(input.idempotencyKey)
         if (!replay) {
           return yield* new RegistryDatabaseError({
             cause: new Error('A listing-check receipt has no listing check.'),
-            message: `Listing check is missing for ${input.operationId}`,
+            message: `Listing check is missing for ${input.idempotencyKey}`,
           })
         }
         return yield* loadCheckResult(
@@ -251,11 +247,11 @@ const make = Effect.gen(function* () {
           return yield* recordObservation(application, {
             expectedVersion: input.expectedVersion,
             mode: 'archive_eligible',
-            operationId: input.operationId,
-            operationRequestSignature: operationRequestSignature(
-              'listing_check',
-              { applicationId: application.id, input }
-            ),
+            idempotencyKey: input.idempotencyKey,
+            requestHash: operationRequestSignature('listing_check', {
+              applicationId: application.id,
+              input,
+            }),
             observation: {
               checkedAt,
               checkerVersion: 'manual-review/v1',
@@ -269,15 +265,15 @@ const make = Effect.gen(function* () {
                   detail: open
                     ? 'A registry user confirmed that the listing is accepting applications.'
                     : 'A registry user confirmed that the listing is no longer accepting applications.',
-                  sourceUrl: application.canonicalUrl,
+                  sourceUrl: application.postingUrl,
                 },
               ],
-              finalUrl: application.canonicalUrl,
+              finalUrl: application.postingUrl,
               httpStatus: null,
               outcome: input.resolution,
               provider: 'manual-review',
               reasonCode: open ? 'provider_open' : 'provider_closed',
-              requestedUrl: application.canonicalUrl,
+              requestedUrl: application.postingUrl,
             },
           })
         })
@@ -311,16 +307,13 @@ const make = Effect.gen(function* () {
                 Effect.flatMap((application) =>
                   checkApplication(application, {
                     mode: input.mode,
-                    operationId: `${runId}:${application.id}`,
-                    operationRequestSignature: operationRequestSignature(
-                      'listing_check',
-                      {
-                        applicationId: application.id,
-                        mode: input.mode,
-                        runId,
-                        trigger: 'scheduled',
-                      }
-                    ),
+                    idempotencyKey: `${runId}:${application.id}`,
+                    requestHash: operationRequestSignature('listing_check', {
+                      applicationId: application.id,
+                      mode: input.mode,
+                      runId,
+                      trigger: 'scheduled',
+                    }),
                     runId,
                   })
                 ),
@@ -408,10 +401,10 @@ const make = Effect.gen(function* () {
                   finding.applicationId
                 )
                 if (
-                  application.canonicalUrl !== finding.canonicalUrl ||
+                  application.postingUrl !== finding.postingUrl ||
                   application.company !== finding.target.company ||
                   application.role !== finding.target.role ||
-                  application.canonicalUrl !== finding.target.url ||
+                  application.postingUrl !== finding.target.url ||
                   finding.observation.requestedUrl !== finding.target.url
                 ) {
                   return yield* new RegistryConflictError({
@@ -421,16 +414,13 @@ const make = Effect.gen(function* () {
                 return yield* recordObservation(application, {
                   mode: input.mode,
                   observation: finding.observation,
-                  operationId: finding.operationId,
-                  operationRequestSignature: operationRequestSignature(
-                    'listing_check',
-                    {
-                      finding,
-                      mode: input.mode,
-                      runId: input.runId,
-                      trigger: 'cli',
-                    }
-                  ),
+                  idempotencyKey: finding.idempotencyKey,
+                  requestHash: operationRequestSignature('listing_check', {
+                    finding,
+                    mode: input.mode,
+                    runId: input.runId,
+                    trigger: 'cli',
+                  }),
                   runId: input.runId,
                 })
               }).pipe(

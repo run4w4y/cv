@@ -1,19 +1,14 @@
 import type {
-  AppendApplicationEventRequest,
   CreateApplicationRequest,
   ResolveListingAvailabilityRequest,
-  UpdateManagedApplicationRequest,
+  UpdateApplicationRequest,
 } from '@cv/application-registry-api-contract'
 
 import { RegistryClient, registryMutation } from '../../lib/registry-client'
 import { applicationMutationKeys, createApplicationMutationKeys } from './keys'
 
 const createApplicationRequest = registryMutation('createApplication')
-const updateManagedApplicationRequest = registryMutation(
-  'updateManagedApplication'
-)
-const deleteApplicationRequest = registryMutation('deleteApplication')
-const appendApplicationEventRequest = registryMutation('appendApplicationEvent')
+const updateApplicationRequest = registryMutation('updateApplication')
 const resolveApplicationListingAvailabilityRequest = registryMutation(
   'resolveApplicationListingAvailability'
 )
@@ -28,67 +23,32 @@ export const createApplication =
 
 export type UpdateManagedApplicationInput = {
   readonly applicationId: string
-  readonly input: UpdateManagedApplicationRequest
+  readonly idempotencyKey: string
+  readonly input: UpdateApplicationRequest
 }
 
 export const updateManagedApplication =
   RegistryClient.runtime.fn<UpdateManagedApplicationInput>()(
-    ({ applicationId, input }, get) =>
-      get.setResult(updateManagedApplicationRequest, {
+    ({ applicationId, idempotencyKey, input }, get) =>
+      get.setResult(updateApplicationRequest, {
+        headers: { 'idempotency-key': idempotencyKey },
         params: { id: applicationId },
         payload: input,
         reactivityKeys: applicationMutationKeys(applicationId),
       })
-  )
-
-export type DeleteApplicationInput = {
-  readonly applicationId: string
-  readonly expectedVersion: number
-}
-
-export const deleteApplication =
-  RegistryClient.runtime.fn<DeleteApplicationInput>()(
-    ({ applicationId, expectedVersion }, get) =>
-      get.setResult(deleteApplicationRequest, {
-        params: { id: applicationId },
-        query: { expectedVersion },
-        reactivityKeys: applicationMutationKeys(applicationId),
-      })
-  )
-
-export type AppendApplicationEventInput = {
-  readonly applicationId: string
-  readonly input: AppendApplicationEventRequest
-}
-
-export const appendApplicationEvent =
-  RegistryClient.runtime.fn<AppendApplicationEventInput>()(
-    ({ applicationId, input }, get) => {
-      const reactivityKeys = applicationMutationKeys(applicationId)
-      if ('nextApplicationStatus' in input) {
-        return get.setResult(appendApplicationEventRequest, {
-          params: { id: applicationId },
-          payload: input,
-          reactivityKeys,
-        })
-      }
-      return get.setResult(appendApplicationEventRequest, {
-        params: { id: applicationId },
-        payload: input,
-        reactivityKeys,
-      })
-    }
   )
 
 export type ResolveApplicationListingAvailabilityInput = {
   readonly applicationId: string
+  readonly idempotencyKey: string
   readonly input: ResolveListingAvailabilityRequest
 }
 
 export const resolveApplicationListingAvailability =
   RegistryClient.runtime.fn<ResolveApplicationListingAvailabilityInput>()(
-    ({ applicationId, input }, get) =>
+    ({ applicationId, idempotencyKey, input }, get) =>
       get.setResult(resolveApplicationListingAvailabilityRequest, {
+        headers: { 'idempotency-key': idempotencyKey },
         params: { id: applicationId },
         payload: input,
         reactivityKeys: applicationMutationKeys(applicationId),

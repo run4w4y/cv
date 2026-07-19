@@ -1,1 +1,1 @@
-export const eventListsReactivityKey = 'registry:events:list'
+export const activityListsReactivityKey = 'registry:activities:list'

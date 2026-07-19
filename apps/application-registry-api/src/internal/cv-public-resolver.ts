@@ -32,6 +32,11 @@ export type ResolvePublicCv = (
   token: string
 ) => Effect.Effect<PublicCvResolution, ApplicationRegistryError>
 
+export type ResolveCvPreview = (
+  token: string,
+  previewToken: string
+) => Effect.Effect<PublicCvResolution, ApplicationRegistryError>
+
 const notFound = () =>
   new Response('Not found', {
     headers: {
@@ -75,6 +80,20 @@ export const parseCvPublicationResolverToken = (
   }
 }
 
+export const parseCvPreviewResolverToken = (
+  pathname: string
+): string | null => {
+  const match = /^\/cv-previews\/([^/]+)$/u.exec(pathname)
+  if (!match?.[1]) return null
+
+  try {
+    const token = decodeURIComponent(match[1])
+    return token.length > 0 && !token.includes('/') ? token : null
+  } catch {
+    return null
+  }
+}
+
 const publicationResponse = (publication: PublicCvResolution) =>
   new Response(Uint8Array.from(publication.bytes).buffer, {
     headers: {
@@ -90,15 +109,30 @@ const publicationResponse = (publication: PublicCvResolution) =>
     status: 200,
   })
 
-export const makeCvPublicResolverHandler = (resolve: ResolvePublicCv) =>
+export const makeCvPublicResolverHandler = (
+  resolve: ResolvePublicCv,
+  resolvePreview?: ResolveCvPreview
+) =>
   async function handleCvPublicResolverRequest(
     request: Request
   ): Promise<Response> {
-    const token = parseCvPublicationResolverToken(new URL(request.url).pathname)
-    if (!token) return notFound()
+    const url = new URL(request.url)
+    const publicToken = parseCvPublicationResolverToken(url.pathname)
+    const previewToken = parseCvPreviewResolverToken(url.pathname)
+    if (!publicToken && !previewToken) return notFound()
     if (request.method !== 'GET') return methodNotAllowed()
 
-    return resolve(token).pipe(
+    const resolution = publicToken
+      ? resolve(publicToken)
+      : resolvePreview && previewToken
+        ? (() => {
+            const access = url.searchParams.get('access')
+            return access ? resolvePreview(previewToken, access) : null
+          })()
+        : null
+    if (resolution === null) return notFound()
+
+    return resolution.pipe(
       Effect.match({
         onFailure: (error) =>
           error._tag === 'RegistryNotFoundError' ? notFound() : internalError(),
@@ -131,8 +165,34 @@ const resolvePublicCv =
       Effect.provide(WorkerEnv.context(env))
     )
 
+const resolveCvPreview =
+  (env: ApplicationRegistryEnv): ResolveCvPreview =>
+  (token, previewToken) =>
+    Effect.gen(function* () {
+      const publications = yield* CvPublicationsService
+      const { bytes, entry, link, revision } =
+        yield* publications.resolvePreview(token, previewToken)
+
+      return {
+        byteLength: revision.byteLength,
+        bytes,
+        contractId: revision.contractId,
+        contractVersion: revision.contractVersion,
+        locale: entry.locale,
+        mediaType: revision.mediaType,
+        publicUrl: link.publicUrl,
+        sha256: revision.sha256,
+      }
+    }).pipe(
+      Effect.provide(makeRegistryServiceLayer(env)),
+      Effect.provide(WorkerEnv.context(env))
+    )
+
 export const handleCvPublicResolverRequest = (
   request: Request,
   env: ApplicationRegistryEnv
 ): Promise<Response> =>
-  makeCvPublicResolverHandler(resolvePublicCv(env))(request)
+  makeCvPublicResolverHandler(
+    resolvePublicCv(env),
+    resolveCvPreview(env)
+  )(request)

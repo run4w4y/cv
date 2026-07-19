@@ -1,14 +1,14 @@
-import type { CommandReceipt } from '@cv/application-registry-entity'
+import type { IdempotencyReceipt } from '@cv/application-registry-entity'
 import { Context, type Effect } from 'effect'
 
 import type { RegistryDatabaseError } from '../errors'
 
-export interface OperationsCrud {
+export interface IdempotencyCrud {
   readonly find: (
-    operationId: string
-  ) => Effect.Effect<CommandReceipt | undefined, RegistryDatabaseError>
+    idempotencyKey: string
+  ) => Effect.Effect<IdempotencyReceipt | undefined, RegistryDatabaseError>
 }
 
-export const OperationsCrud = Context.Service<OperationsCrud>(
-  '@cv/application-registry-crud/OperationsCrud'
+export const IdempotencyCrud = Context.Service<IdempotencyCrud>(
+  '@cv/application-registry-crud/IdempotencyCrud'
 )

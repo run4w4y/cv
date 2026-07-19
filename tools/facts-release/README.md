@@ -2,8 +2,8 @@
 
 Compiles a checked-out `cv-content` facts source into deterministic,
 content-addressed objects with `@cv/facts-release`, publishes the exact bytes to
-the private registry API, registers immutable release metadata, and advances a
-versioned facts channel.
+the private `cv-facts` R2 bucket, and replaces `current.json` only after every
+immutable release object has been verified and uploaded.
 
 The source checkout is a human-authored TypeScript repository. Its
 `facts.config.ts` is the source of truth for `defaultLocale`, `factsDir`, and the
@@ -34,20 +34,22 @@ Required environment variables:
 - `FACTS_CONTENT_ROOT`
 - `FACTS_SOURCE_COMMIT`
 - `FACTS_COMPILER_COMMIT`
-- `REGISTRY_API_URL`
-- `REGISTRY_API_TOKEN`
+- `FACTS_R2_ACCOUNT_ID`
+- `FACTS_R2_BUCKET`
+- `FACTS_R2_ACCESS_KEY_ID`
+- `FACTS_R2_SECRET_ACCESS_KEY`
 
-Optional variables select the repositories and channel:
-`FACTS_SOURCE_REPOSITORY`, `FACTS_COMPILER_REPOSITORY`, and `FACTS_CHANNEL`.
-Both commits must be full lowercase 40- or 64-character hexadecimal IDs.
+Optional variables select the repositories: `FACTS_SOURCE_REPOSITORY` and
+`FACTS_COMPILER_REPOSITORY`. Both commits must be full lowercase 40- or
+64-character hexadecimal IDs.
 
 The production repository-dispatch workflow also verifies that the requested
 source commit is still `run4w4y/cv-content`'s authoritative `main` head
 immediately before invoking the publisher. This prevents an older queued push
 or a historical manual request from superseding the reviewed main release.
 
-The command logs release hashes, counts, and channel state only. It never logs
-the bearer token, catalogue, asset bytes, or registry response bodies.
+The command logs release hashes, counts, and pointer state only. It never logs
+S3 credentials, catalogue content, or asset bytes.
 
 ```sh
 bunx nx run facts-release-publisher:publish

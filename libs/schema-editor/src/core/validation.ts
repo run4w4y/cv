@@ -1,5 +1,6 @@
 import { Result, Schema, SchemaIssue } from 'effect'
 
+import { isJsonValue } from './inspection/json-value'
 import { toJsonPointer } from './json-pointer'
 import type { ValidationIssue, ValidationResult } from './types'
 
@@ -24,6 +25,18 @@ export const validateSchemaValue = <
   schema: S,
   value: unknown
 ): ValidationResult<S['Type']> => {
+  if (!isJsonValue(value)) {
+    return {
+      valid: false,
+      issues: [
+        {
+          pointer: '',
+          path: [],
+          message: 'The value cannot be represented as JSON.',
+        },
+      ],
+    }
+  }
   const result = Schema.decodeUnknownResult(schema, {
     errors: 'all',
     onExcessProperty: 'error',

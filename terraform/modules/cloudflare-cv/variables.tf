@@ -10,7 +10,7 @@ variable "cloudflare_account_id" {
 
 variable "cloudflare_api_token" {
   type        = string
-  description = "Cloudflare deploy token with Workers Scripts, Workers Routes, D1, R2, Access, and Zone DNS write permissions."
+  description = "Cloudflare deploy token with Workers Scripts, Workers Routes, D1, R2, Access, Account API Tokens, and Zone DNS write permissions."
   sensitive   = true
 
   validation {
@@ -19,9 +19,34 @@ variable "cloudflare_api_token" {
   }
 }
 
+variable "facts_r2_bucket_name" {
+  type        = string
+  description = "Private R2 bucket containing immutable reviewed-facts releases."
+  default     = "cv-facts"
+
+  validation {
+    condition     = length(trimspace(var.facts_r2_bucket_name)) > 0
+    error_message = "facts_r2_bucket_name must be set."
+  }
+}
+
+variable "facts_r2_bucket_location" {
+  type        = string
+  description = "Best-effort location hint used only when the facts R2 bucket is first created."
+  default     = "weur"
+
+  validation {
+    condition = contains(
+      ["apac", "eeur", "enam", "weur", "wnam", "oc"],
+      trimspace(var.facts_r2_bucket_location)
+    )
+    error_message = "facts_r2_bucket_location must be one of apac, eeur, enam, weur, wnam, or oc."
+  }
+}
+
 variable "cv_objects_bucket_name" {
   type        = string
-  description = "Private R2 bucket for immutable facts, job snapshots, document revisions, and PDFs."
+  description = "Private R2 bucket for job snapshots, document revisions, and PDFs."
   default     = "cv-objects"
 
   validation {
@@ -294,5 +319,16 @@ variable "infisical_cv_public_folder_path" {
   validation {
     condition     = startswith(var.infisical_cv_public_folder_path, "/")
     error_message = "infisical_cv_public_folder_path must start with '/'."
+  }
+}
+
+variable "infisical_content_folder_path" {
+  type        = string
+  description = "Infisical folder path that receives facts publication and direct-reader values."
+  default     = "/cv/content"
+
+  validation {
+    condition     = startswith(var.infisical_content_folder_path, "/")
+    error_message = "infisical_content_folder_path must start with '/'."
   }
 }

@@ -9,12 +9,7 @@ type WranglerConfig = {
     readonly binding: 'ASSETS'
     readonly directory: '../application-registry/dist'
     readonly not_found_handling: 'single-page-application'
-    readonly run_worker_first: readonly [
-      '/api/*',
-      '/v1/*',
-      '/health',
-      '/openapi.json',
-    ]
+    readonly run_worker_first: readonly ['/api/*', '/health', '/openapi.json']
   }
   readonly compatibility_date: string
   readonly compatibility_flags: readonly ['nodejs_compat']
@@ -43,10 +38,15 @@ type WranglerConfig = {
     readonly binding: 'CV_OBJECTS'
     readonly bucket_name: string
   }[]
+  readonly services: readonly {
+    readonly binding: 'CV_APP'
+    readonly service: string
+  }[]
   readonly secrets: {
     readonly required: readonly [
       'CHATGPT_SESSION_SECRET',
       'CLOUDFLARE_ANALYTICS_API_TOKEN',
+      'CV_REVALIDATION_SECRET',
       'REGISTRY_API_TOKEN',
     ]
   }
@@ -93,6 +93,7 @@ const readConfig = Effect.all({
     'cv-application-registry'
   ),
   cvObjectsBucketName: optionalString('CV_OBJECTS_BUCKET_NAME', 'cv-objects'),
+  cvPublicWorkerName: optionalString('CV_PUBLIC_WORKER_NAME', 'cv-public'),
   cvWebHost: Config.nonEmptyString('CV_WEB_HOST'),
   pdfQueueName: optionalString('CV_PDF_QUEUE_NAME', 'cv-pdf-generation'),
   workersDev: applicationRegistryWorkersDevEnabled,
@@ -108,6 +109,7 @@ const readConfig = Effect.all({
       cloudflareZoneId,
       compatibilityDate,
       cvObjectsBucketName,
+      cvPublicWorkerName,
       cvWebHost,
       databaseId,
       databaseName,
@@ -121,7 +123,7 @@ const readConfig = Effect.all({
           binding: 'ASSETS',
           directory: '../application-registry/dist',
           not_found_handling: 'single-page-application',
-          run_worker_first: ['/api/*', '/v1/*', '/health', '/openapi.json'],
+          run_worker_first: ['/api/*', '/health', '/openapi.json'],
         },
         compatibility_date: compatibilityDate,
         compatibility_flags: ['nodejs_compat'],
@@ -159,10 +161,17 @@ const readConfig = Effect.all({
             bucket_name: cvObjectsBucketName,
           },
         ],
+        services: [
+          {
+            binding: 'CV_APP',
+            service: cvPublicWorkerName,
+          },
+        ],
         secrets: {
           required: [
             'CHATGPT_SESSION_SECRET',
             'CLOUDFLARE_ANALYTICS_API_TOKEN',
+            'CV_REVALIDATION_SECRET',
             'REGISTRY_API_TOKEN',
           ],
         },

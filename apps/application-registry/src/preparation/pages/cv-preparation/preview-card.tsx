@@ -7,10 +7,9 @@ import {
 } from '@cv/internal-ui'
 import { Eye } from 'lucide-react'
 
-import { CvDocumentPreview } from '../../components/cv-document-preview'
-import { CvPublicationPanel } from '../../components/cv-publication-panel'
-import { publicCvBaseUrl } from '../../config'
-import type { PreparationWorkspace } from '../../workspace/atoms'
+import { CvDocumentPreview } from '@/preparation/components/cv-document-preview'
+import { CvPublicationPanel } from '@/preparation/components/cv-publication-panel'
+import type { PreparationWorkspace } from '@/preparation/workspace/atoms'
 import type { CvPreparationActions } from './actions'
 
 export const CvPreviewCard = ({
@@ -20,10 +19,6 @@ export const CvPreviewCard = ({
   readonly actions: CvPreparationActions
   readonly workspace: PreparationWorkspace
 }) => {
-  const publicUrl =
-    actions.publication?.link.publicUrl ??
-    `${publicCvBaseUrl()}/${'0'.repeat(32)}`
-
   return (
     <Card className="h-fit xl:sticky xl:top-0">
       <CardHeader>
@@ -32,21 +27,17 @@ export const CvPreviewCard = ({
           Internal preview
         </CardTitle>
         <CardDescription>
-          The browser uses the same renderer and A4 layout as the public Worker.
-          Unsaved draft data never becomes public.
+          Saving a revision stages it as a private page. This is the same stored
+          document and renderer used by the public page and PDF worker.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {actions.document === null ? (
+        {actions.publication === null ? (
           <div className="grid min-h-80 place-items-center rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-            Fix the schema issues to render a live preview.
+            Save a valid CV revision to create its private preview.
           </div>
         ) : (
-          <CvDocumentPreview
-            document={actions.document}
-            onPageLayoutChange={actions.changeLayout}
-            publicUrl={publicUrl}
-          />
+          <CvDocumentPreview link={actions.publication.link} />
         )}
         {actions.publication === null ? null : (
           <CvPublicationPanel
@@ -58,11 +49,17 @@ export const CvPreviewCard = ({
             pendingAction={
               actions.downloading
                 ? 'download'
-                : actions.changingAvailability
-                  ? 'availability'
-                  : null
+                : actions.refreshingPublication
+                  ? 'refresh'
+                  : actions.generatingPdf
+                    ? 'pdf'
+                    : actions.changingAvailability
+                      ? 'availability'
+                      : null
             }
             onDownload={() => void actions.downloadPdf()}
+            onGeneratePdf={() => void actions.generatePdf()}
+            onRefresh={() => void actions.refreshPublication()}
             onSetAvailability={(enabled) =>
               void actions.setPublicationAvailability(enabled)
             }

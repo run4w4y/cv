@@ -5,8 +5,8 @@ import {
   noteCommand,
 } from './commands/annotations'
 import { applicationCommand } from './commands/applications'
+import { activityCommand } from './commands/activities'
 import { compensationCommand } from './commands/compensations'
-import { eventCommand } from './commands/events'
 import { listingCommand } from './commands/listings'
 import { outboxCommand } from './commands/outbox'
 import { healthCommand } from './commands/system'
@@ -20,9 +20,9 @@ const rootCommand = Command.make('application-registry').pipe(
 export const applicationRegistryCommand = rootCommand.pipe(
   Command.withSubcommands([
     applicationCommand,
+    activityCommand,
     annotationCommand,
     compensationCommand,
-    eventCommand,
     healthCommand,
     labelCommand,
     listingCommand,

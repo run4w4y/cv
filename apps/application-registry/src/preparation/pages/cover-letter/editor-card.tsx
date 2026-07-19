@@ -14,7 +14,7 @@ import {
 import { RawJsonEditor, SchemaEditor } from '@cv/schema-editor/react'
 import { Check, Save, X } from 'lucide-react'
 
-import { CoverLetterDocumentSchema } from '../../cover-letter-contract'
+import { CoverLetterDocumentSchema } from '@cv/application-preparation-workflow/cover-letter'
 import type {
   CoverLetterPageController,
   CoverLetterWorkspace,

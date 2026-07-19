@@ -20,13 +20,11 @@ import { ListingScanOptionsSchema, runLocalListingScan } from './listing-scan'
 const application: Application = {
   applicationStatus: 'preparing',
   appliedAt: null,
-  canonicalUrl: 'https://host0.example/jobs/one',
+  postingUrl: 'https://host0.example/jobs/one',
   company: 'Example',
   createdAt: '2026-07-10T00:00:00.000Z',
   followUpAt: null,
   id: 'application-1',
-  jobKey: 'web:one',
-  lastContactAt: null,
   listingAvailability: 'unchecked',
   listingCheckedAt: null,
   listingClosedCandidateAt: null,
@@ -36,8 +34,6 @@ const application: Application = {
   location: null,
   personalPriority: null,
   role: 'Engineer',
-  source: 'web',
-  sourceJobId: null,
   targetStage: 'backlog',
   updatedAt: '2026-07-10T00:00:00.000Z',
   updatedRevision: 1,
@@ -49,13 +45,11 @@ const applications: readonly ApplicationListItem[] = Array.from(
   (_, index) => ({
     ...application,
     annualCompensation: null,
-    canonicalUrl: `https://host${index % 4}.example/jobs/${index}`,
+    postingUrl: `https://host${index % 4}.example/jobs/${index}`,
     counts: { notes: 0 },
-    identityAliases: [],
     id: `application-${index}`,
-    jobKey: `web:${index}`,
     labels: [],
-    latestEvent: null,
+    latestActivity: null,
     updatedRevision: index + 1,
   })
 )
@@ -253,6 +247,7 @@ describe('local listing scan', () => {
           },
         }),
       submitListingCheckFindings: (
+        _runId: string,
         batchId: string,
         request: SubmitListingCheckFindingsRequest
       ) =>

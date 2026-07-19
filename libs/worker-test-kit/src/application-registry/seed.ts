@@ -1,7 +1,7 @@
 import type { D1Database } from '@cloudflare/workers-types'
-import type { UpsertApplicationRequest } from '@cv/application-registry-api-contract'
+import type { CreateApplicationRequest } from '@cv/application-registry-api-contract'
 import {
-  applicationEvents,
+  applicationActivities,
   applications,
   registrySequence,
 } from '@cv/application-registry-entity'
@@ -15,17 +15,17 @@ export interface RegistryServiceSeedOptions<Result> {
   readonly applicationCount: number
   readonly applicationOverrides?: (
     index: number
-  ) => Partial<UpsertApplicationRequest>
+  ) => Partial<CreateApplicationRequest>
   readonly concurrency?: number
   readonly factory: RegistryFactory
   readonly persist: (
-    input: UpsertApplicationRequest,
+    input: CreateApplicationRequest,
     index: number
   ) => Promise<Result>
 }
 
 export interface RegistryServiceSeedResult<Result> {
-  readonly inputs: readonly UpsertApplicationRequest[]
+  readonly inputs: readonly CreateApplicationRequest[]
   readonly results: readonly Result[]
 }
 
@@ -86,15 +86,15 @@ export const seedRegistryDatabase = async (
   )
   await batch(connection, applicationStatements)
 
-  const eventStatements = graph.events.map((event) =>
-    connection.insert(applicationEvents).values(event)
+  const activityStatements = graph.activities.map((activity) =>
+    connection.insert(applicationActivities).values(activity)
   )
-  await batch(connection, eventStatements)
+  await batch(connection, activityStatements)
 
   const maximumRevision = Math.max(
     1,
     ...graph.applications.map(({ updatedRevision }) => updatedRevision),
-    ...graph.events.map(({ revision }) => revision)
+    ...graph.activities.map(({ revision }) => revision)
   )
   await connection
     .insert(registrySequence)

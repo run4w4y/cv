@@ -1,0 +1,90 @@
+import { CvLocaleSchema } from '@cv/contracts/facts'
+import { Schema } from 'effect'
+
+export const DocumentKindSchema = Schema.Literals(['cv', 'cover_letter'])
+export type DocumentKind = typeof DocumentKindSchema.Type
+
+export const HttpUrlSchema = Schema.String.pipe(
+  Schema.check(Schema.isMaxLength(2_048)),
+  Schema.check(
+    Schema.makeFilter((value) => {
+      try {
+        const url = new URL(value)
+        if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+          return 'Only HTTP(S) job URLs can be prepared.'
+        }
+        if (url.username !== '' || url.password !== '') {
+          return 'Job URLs containing credentials cannot be prepared.'
+        }
+        return true
+      } catch {
+        return 'Enter a valid absolute job URL.'
+      }
+    })
+  )
+)
+
+export const canonicalPreparationUrl = (value: string): string => {
+  const url = new URL(value.trim())
+  url.hash = ''
+  const href = url.href.endsWith('#') ? url.href.slice(0, -1) : url.href
+  return new URL(href).toString()
+}
+
+export const maximumPreparationBatchSize = 25
+
+export const PreparationBatchUrlsSchema = Schema.Array(HttpUrlSchema).pipe(
+  Schema.check(Schema.isMinLength(1)),
+  Schema.check(Schema.isMaxLength(maximumPreparationBatchSize))
+)
+
+export const maximumCoverLetterPromptLength = 20_000
+export const CoverLetterPromptSchema = Schema.String.pipe(
+  Schema.check(Schema.isMaxLength(maximumCoverLetterPromptLength))
+)
+
+export const PreparationSourceSchema = Schema.TaggedUnion({
+  CaptureUrl: {
+    url: HttpUrlSchema,
+  },
+  ReviewedContext: {
+    applicationId: Schema.NonEmptyString,
+    factsReleaseId: Schema.NonEmptyString,
+    jobSnapshotId: Schema.NonEmptyString,
+    url: HttpUrlSchema,
+  },
+})
+export type PreparationSource = typeof PreparationSourceSchema.Type
+
+export const preparationSourceApplicationId = (
+  source: PreparationSource
+): string | null =>
+  source._tag === 'ReviewedContext' ? source.applicationId : null
+
+export const preparationSourceUrl = (source: PreparationSource): string =>
+  source.url
+
+export const PreparationWorkflowInputSchema = Schema.Struct({
+  coverLetterPrompt: Schema.NullOr(CoverLetterPromptSchema),
+  kind: DocumentKindSchema,
+  locale: CvLocaleSchema,
+  modelId: Schema.NonEmptyString,
+  runId: Schema.NonEmptyString,
+  source: PreparationSourceSchema,
+})
+export interface PreparationWorkflowInput
+  extends Schema.Schema.Type<typeof PreparationWorkflowInputSchema> {}
+
+export type StartPreparationInput = Omit<PreparationWorkflowInput, 'runId'>
+
+export type StartPreparationResult = {
+  readonly runId: string
+}
+
+export type StartPreparationBatchInput = {
+  readonly coverLetterPrompt: string | null
+  readonly kind: DocumentKind
+  readonly locale: typeof CvLocaleSchema.Type
+  readonly modelId: string
+  readonly urls: ReadonlyArray<string>
+}

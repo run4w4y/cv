@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { ContentEntry } from '@cv/application-registry-entity'
 
-import { decodeJsonBase64 } from '../base64'
 import { buildAppendRevisionRequest } from './revision-request'
 
 const entry: ContentEntry = {
@@ -18,24 +17,23 @@ const entry: ContentEntry = {
 }
 
 describe('revision request construction', () => {
-  test('serializes opaque JSON and pins provenance and concurrency fields', () => {
-    const value = { noKnownFieldsRequired: ['a', 2, false] }
+  test('pins a previously uploaded blob, provenance, and concurrency fields', () => {
     const request = buildAppendRevisionRequest({
+      blob: { mediaType: 'application/json', sha256: 'abc123' },
       contractId: 'dynamic.contract',
       contractVersion: '99',
       entry,
       factsReleaseId: 'facts-release-1',
       jobSnapshotId: 'job-snapshot-1',
-      operationId: 'operation-1',
       source: 'human',
-      value,
     })
 
     expect(request.expectedVersion).toBe(7)
     expect(request.factsReleaseId).toBe('facts-release-1')
     expect(request.jobSnapshotId).toBe('job-snapshot-1')
-    expect(request.operationId).toBe('operation-1')
-    expect(request.payload.mediaType).toBe('application/json')
-    expect(decodeJsonBase64(request.payload.data)).toEqual(value)
+    expect(request.blob).toEqual({
+      mediaType: 'application/json',
+      sha256: 'abc123',
+    })
   })
 })

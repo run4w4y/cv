@@ -15,10 +15,7 @@ afterEach(() => {
 
 const application = {
   id: 'application-1',
-  jobKey: 'web:one',
-  source: 'web',
-  sourceJobId: 'one',
-  canonicalUrl: 'https://example.test/jobs/one',
+  postingUrl: 'https://example.test/jobs/one',
   company: 'Example',
   role: 'Staff Engineer',
   location: 'Remote',
@@ -27,7 +24,6 @@ const application = {
   personalPriority: 'high',
   followUpAt: '2026-07-20T09:30:00.000Z',
   appliedAt: null,
-  lastContactAt: null,
   listingAvailability: 'open',
   listingCheckedAt: '2026-07-15T09:30:00.000Z',
   listingClosedCandidateAt: null,
@@ -44,10 +40,9 @@ const application = {
     maximumMinor: 18_000_000,
   },
   counts: { notes: 2 },
-  identityAliases: [],
   labels: ['TypeScript', 'Remote'],
-  latestEvent: {
-    kind: 'stage_changed',
+  latestActivity: {
+    kind: 'status_changed',
     occurredAt: '2026-07-15T09:30:00.000Z',
   },
 } as ApplicationListItem
@@ -138,7 +133,7 @@ describe('ApplicationsTable', () => {
 
     await waitFor(() => expect(requests).toHaveLength(1))
     expect(requests[0]?.method).toBe('PATCH')
-    expect(requests[0]?.url).toContain('/applications/application-1/management')
+    expect(requests[0]?.url).toContain('/applications/application-1')
     expect(await requests[0]?.json()).toMatchObject({
       company: 'Updated Example',
       expectedVersion: 1,

@@ -1,1 +1,1 @@
-export { ApplicationEventsTable } from './render'
+export { ApplicationActivitiesTable } from './render'

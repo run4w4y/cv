@@ -2,29 +2,23 @@ import { describe, expect, test } from 'bun:test'
 import { Schema } from 'effect'
 import {
   ApplicationCompensationInputSchema,
-  ApplicationEventInsertSchema,
+  ApplicationActivityInsertSchema,
   ApplicationMutableSchema,
   ApplicationRowSelectSchema,
   ApplicationWritableSchema,
   ContentRevisionSchema,
   CvLinkSchema,
   FxRateInputSchema,
-  normalizeApplicationCanonicalUrl,
+  normalizeApplicationPostingUrl,
 } from './index'
-import {
-  appendableApplicationEventKindValues,
-  informationalApplicationEventKindValues,
-  statusChangingApplicationEventKindValues,
-} from './model/values'
+import { applicationActivityKindValues } from './model/values'
 
 const applicationRow = {
   id: 'application-1',
-  jobKey: 'web:one',
-  source: 'web',
-  sourceJobId: null,
-  canonicalUrl: 'https://example.test/jobs/one',
+  postingUrl: 'https://example.test/jobs/one',
+  postingUrlNormalized: 'https://example.test/jobs/one',
+  postingFingerprint: 'abc123',
   company: 'Example',
-  companyNormalized: 'example',
   role: 'Engineer',
   location: 'Tokyo / Remote',
   applicationStatus: 'not_started',
@@ -32,7 +26,6 @@ const applicationRow = {
   personalPriority: 'high',
   followUpAt: null,
   appliedAt: null,
-  lastContactAt: null,
   listingAvailability: 'unchecked',
   listingCheckedAt: null,
   listingClosedCandidateAt: null,
@@ -75,30 +68,24 @@ describe('application registry database schemas', () => {
 
   test('preserves Drizzle insert and update optionality around refinements', () => {
     const writable = Schema.decodeUnknownSync(ApplicationWritableSchema)({
-      canonicalUrl: 'https://example.test/jobs/two',
+      postingUrl: 'https://example.test/jobs/two',
       company: 'Example',
-      jobKey: 'web:two',
       role: 'Engineer',
-      source: 'web',
     })
     const nullableWritable = Schema.decodeUnknownSync(
       ApplicationWritableSchema
     )({
-      canonicalUrl: 'https://example.test/jobs/three',
+      postingUrl: 'https://example.test/jobs/three',
       company: 'Example',
       followUpAt: null,
-      jobKey: 'web:three',
       role: 'Engineer',
-      source: 'web',
     })
     const mutable = Schema.decodeUnknownSync(ApplicationMutableSchema)({
-      canonicalUrl: 'https://example.test/jobs/updated',
+      postingUrl: 'https://example.test/jobs/updated',
       company: 'Updated Example',
       followUpAt: null,
       location: null,
       role: 'Staff Engineer',
-      source: 'official',
-      sourceJobId: null,
     })
 
     expect(writable.followUpAt).toBeUndefined()
@@ -108,24 +95,20 @@ describe('application registry database schemas', () => {
     expect(mutable.location).toBeNull()
   })
 
-  test('derives event insert optionality and lifecycle classifications once', () => {
-    const event = Schema.decodeUnknownSync(ApplicationEventInsertSchema)({
+  test('derives backend activity insert schemas from the table', () => {
+    const activity = Schema.decodeUnknownSync(ApplicationActivityInsertSchema)({
+      actor: 'system',
       applicationId: applicationRow.id,
-      id: 'event-1',
-      kind: 'research_updated',
+      id: 'activity-1',
+      kind: 'application_created',
       occurredAt: applicationRow.createdAt,
-      operationId: 'operation-1',
       payload: {},
-      recordedAt: applicationRow.createdAt,
       revision: 2,
+      source: 'management',
     })
 
-    expect(event.deviceId).toBeUndefined()
-    expect(appendableApplicationEventKindValues).toEqual([
-      ...statusChangingApplicationEventKindValues,
-      ...informationalApplicationEventKindValues,
-    ])
-    expect(appendableApplicationEventKindValues).not.toContain('discovered')
+    expect(activity.kind).toBe('application_created')
+    expect(applicationActivityKindValues).not.toContain('submitted' as never)
   })
 
   test('applies domain checks that SQLite metadata cannot express', () => {
@@ -158,7 +141,7 @@ describe('application registry database schemas', () => {
 
   test('normalizes empty fragments and tracking parameters from identity URLs', () => {
     expect(
-      normalizeApplicationCanonicalUrl(
+      normalizeApplicationPostingUrl(
         'https://example.test/jobs/one?utm_source=mail#'
       )
     ).toBe('https://example.test/jobs/one')
@@ -198,7 +181,8 @@ describe('application registry database schemas', () => {
       id: 'link-1',
       applicationId: 'application-1',
       contentEntryId: 'entry-1',
-      publishedRevisionId: 'revision-1',
+      currentRevisionId: 'revision-1',
+      previewToken: 'preview-token-1',
       token: 'public-token',
       publicUrl: 'https://cv.example.test/c/public-token',
       enabled: true,

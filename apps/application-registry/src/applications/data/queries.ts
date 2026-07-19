@@ -145,10 +145,10 @@ export const applicationCompensationsAtom = Atom.family(
     })
 )
 
-export const applicationEventsAtom = Atom.family((applicationId: string) =>
-  registryQuery('listApplicationEvents', {
+export const applicationActivitiesAtom = Atom.family((applicationId: string) =>
+  registryQuery('listApplicationActivities', {
     params: { id: applicationId },
-    reactivityKeys: [applicationReactivity.events(applicationId)],
+    reactivityKeys: [applicationReactivity.activities(applicationId)],
     timeToLive: '2 minutes',
   })
 )

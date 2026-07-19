@@ -44,5 +44,5 @@ export class FactsReleasePublicationError extends Data.TaggedError(
 )<{
   readonly cause: unknown
   readonly message: string
-  readonly operation: 'register' | 'upload'
+  readonly operation: 'activate' | 'upload'
 }> {}

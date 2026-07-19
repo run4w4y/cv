@@ -21,9 +21,10 @@ continue to run unchanged.
 - `apps/application-registry` is the browser management application. It owns
   the schema-aware drafting/editing experience while treating the imported
   Effect schema generically.
-- `apps/cv` is the Astro SSR Worker. It accepts only `/c/:token`, resolves an
-  enabled publication through a named Worker service binding, validates the
-  code-owned document contract, and renders the page.
+- `apps/cv` is the Next.js App Router/OpenNext Worker. It owns the CV renderer,
+  accepts only `/c/:token`, resolves an enabled publication through a named
+  Worker service binding, validates the code-owned document contract, and
+  renders the page as a React Server Component.
 
 ## Important boundaries
 
@@ -41,14 +42,18 @@ continue to run unchanged.
   of this repository.
 - `@cv/facts-release` deterministically compiles and verifies every configured
   locale as one atomic facts release. `tools/facts-release` loads the sectioned
-  TypeScript source, uploads exact bytes, registers the immutable release, and
-  advances a versioned channel.
+  TypeScript source and publishes immutable static objects plus `current.json`
+  to a dedicated private R2 bucket.
+- `@cv/facts-r2` signs direct S3 requests with Effect-native services. The
+  private management app has a bucket-scoped Object Read credential; the
+  publisher has a separate Object Read & Write credential. No Worker, registry
+  API, database table, or project hostname sits in the facts read path.
 - `@cv/ai-provider` exposes a provider-neutral interface. Its live adapter uses
   Login with ChatGPT and the signed-in user's existing ChatGPT subscription;
   this workspace has no API-key or separately billed OpenAI API path.
-- `@cv/renderer` is shared by the management iframe preview, public SSR page,
-  and PDF render. The final public URL is also the exact QR target embedded in
-  the PDF.
+- The renderer belongs to `apps/cv`. Management previews it through the app's
+  isolated iframe route, and the PDF worker renders the actual public URL. The
+  final public URL is also the exact QR target embedded in the PDF.
 - `@cv/cloudflare-analytics-client` retains the framework-neutral Cloudflare
   GraphQL analytics query and sanitization boundary without owning a deployed
   runtime.
@@ -56,13 +61,14 @@ continue to run unchanged.
 ## Tailored application flow
 
 1. Add an application in `not_started` state.
-2. Start preparation. The Worker captures the canonical posting URL into an
+2. Start preparation. The Worker captures the application's posting URL into an
    immutable snapshot, or records a failed capture that can be refreshed.
-3. The browser loads the active reviewed facts release and sends facts, posting
+3. The browser loads the current reviewed facts release directly from private
+   R2, verifies its manifest and requested locale, and sends facts, posting
    context, the current document schema, and code-owned authoring guidance to
    the selected ChatGPT-subscription model.
 4. Validate and save the opaque draft, edit it through the generic schema
-   editor, and preview it locally with the shared renderer.
+   editor, and preview it through the CV application's isolated iframe route.
 5. Approve the selected revision and create/reuse the stable public token.
 6. Atomically create a pending artifact and PDF outbox row, dispatch the job to
    Cloudflare Queues, render the exact public URL, and persist the PDF in R2.
@@ -95,7 +101,8 @@ bunx nx run cv:dev
 ```
 
 The management SPA is built into and served by the registry Worker. Direct
-`/v1/*` requests require `Authorization: Bearer <REGISTRY_API_TOKEN>`.
+`/api/registry/*` requests require `Authorization: Bearer <REGISTRY_API_TOKEN>`;
+the same-origin management BFF injects that token server-side.
 Production additionally puts the browser-facing Worker routes behind
 Cloudflare Access for the configured owner email.
 
@@ -112,7 +119,7 @@ bunx nx run cv:build
 
 ## Deployment and legacy coexistence
 
-The first v2 deployment order is:
+The deployment order is:
 
 1. apply D1 migrations and deploy `cv-application-registry` without a public
    hostname;
@@ -121,8 +128,8 @@ The first v2 deployment order is:
 3. apply Terraform, which configures the personal management Access policy
    before enabling the registry hostname, then attaches only
    `CV_WEB_HOST/c/*` to `cv-public`;
-4. publish and activate a facts release from the facts-only `cv-content`
-   repository.
+4. publish a facts release from the facts-only `cv-content` repository; its
+   immutable objects are uploaded before `current.json` changes.
 
 The old Pages resources use Terraform `removed` blocks with `destroy = false`.
 Keep them through the first successful production apply; the deployed Pages

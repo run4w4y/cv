@@ -3,8 +3,8 @@ import { type Effect, Layer } from 'effect'
 import { withRegistryConnections } from '../internal/connection'
 import {
   findApplicationByIdentifier,
-  findApplicationByJobKey,
-  findApplicationsByCanonicalUrl,
+  findApplicationByPostingFingerprint,
+  findApplicationsByPostingUrl,
   listApplicationFacets,
   listApplications,
   patchApplication,
@@ -12,7 +12,6 @@ import {
   removeApplication,
   updateManagedApplication,
 } from '../persistence/applications'
-import { persistEvent } from '../persistence/event-write'
 import { ApplicationsCrud } from '../services/applications'
 
 export const makeApplicationsCrudLive = (database: Effect.Effect<D1Database>) =>
@@ -25,13 +24,13 @@ export const makeApplicationsCrudLive = (database: Effect.Effect<D1Database>) =>
       withRegistryConnections(database, ({ query }) =>
         findApplicationByIdentifier(query, identifier)
       ),
-    findByJobKey: (jobKey) =>
+    findByPostingFingerprint: (fingerprint) =>
       withRegistryConnections(database, ({ query }) =>
-        findApplicationByJobKey(query, jobKey)
+        findApplicationByPostingFingerprint(query, fingerprint)
       ),
-    findByCanonicalUrl: (canonicalUrl) =>
+    findByPostingUrl: (postingUrlNormalized) =>
       withRegistryConnections(database, ({ query }) =>
-        findApplicationsByCanonicalUrl(query, canonicalUrl)
+        findApplicationsByPostingUrl(query, postingUrlNormalized)
       ),
     list: (resolved) =>
       withRegistryConnections(database, ({ query }) =>
@@ -48,21 +47,6 @@ export const makeApplicationsCrudLive = (database: Effect.Effect<D1Database>) =>
     persist: (input, options) =>
       withRegistryConnections(database, (connections) =>
         persistApplication(connections, input, options)
-      ),
-    persistEvent: (
-      applicationId,
-      expectedVersion,
-      nextApplicationStatus,
-      input
-    ) =>
-      withRegistryConnections(database, (connections) =>
-        persistEvent(
-          connections,
-          applicationId,
-          expectedVersion,
-          nextApplicationStatus,
-          input
-        )
       ),
     remove: (applicationId, expectedVersion) =>
       withRegistryConnections(database, ({ query }) =>

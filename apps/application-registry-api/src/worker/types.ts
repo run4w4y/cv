@@ -19,7 +19,9 @@ export type ApplicationRegistryEnv = {
   readonly ASSETS?: WorkerFetcher
   readonly CHATGPT_SESSIONS: KVNamespace
   readonly CV_OBJECTS: R2Bucket
+  readonly CV_APP?: WorkerFetcher
   readonly CV_PDF_QUEUE?: Queue<PdfGenerationRequested>
+  readonly CV_REVALIDATION_SECRET?: string
   readonly CHATGPT_SESSION_SECRET?: string
   readonly CLOUDFLARE_ANALYTICS_API_TOKEN: string
   readonly CLOUDFLARE_GRAPHQL_ENDPOINT?: string

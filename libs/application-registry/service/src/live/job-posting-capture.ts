@@ -18,7 +18,7 @@ const make = Effect.gen(function* () {
         Effect.gen(function* () {
           const application = yield* applications.find(applicationIdentifier)
           const capture = yield* prepareJobPostingCapture(
-            application.canonicalUrl
+            application.postingUrl
           )
           return yield* snapshots.persist(application.id, capture)
         })

@@ -22,9 +22,9 @@ const validUrl = Schema.makeFilter((value: string) => {
     const protocol = new URL(value).protocol
     return protocol === 'http:' || protocol === 'https:'
       ? true
-      : 'Canonical URL must use HTTP or HTTPS.'
+      : 'Posting URL must use HTTP or HTTPS.'
   } catch {
-    return 'Enter a valid canonical URL.'
+    return 'Enter a valid posting URL.'
   }
 })
 
@@ -75,10 +75,7 @@ const compensationIssues = (value: {
 }
 
 export const NewApplicationFormSchema = Schema.Struct({
-  jobKey: requiredText('Job key'),
-  source: requiredText('Source'),
-  sourceJobId: Schema.String,
-  canonicalUrl: requiredText('Canonical URL').pipe(Schema.check(validUrl)),
+  postingUrl: requiredText('Posting URL').pipe(Schema.check(validUrl)),
   company: requiredText('Company'),
   role: requiredText('Role'),
   location: Schema.String,
@@ -97,10 +94,7 @@ export type NewApplicationFormOutput = Schema.Schema.Type<
 >
 
 export const newApplicationDefaults: NewApplicationFormInput = {
-  jobKey: '',
-  source: 'manual',
-  sourceJobId: '',
-  canonicalUrl: '',
+  postingUrl: '',
   company: '',
   role: '',
   location: '',
@@ -118,10 +112,7 @@ export const newApplicationRequestFromOutput = (
     values.annualFrom.trim().length > 0 || values.annualTo.trim().length > 0
   const currencyCode = values.currencyCode.trim().toUpperCase()
   return {
-    jobKey: values.jobKey,
-    source: values.source,
-    sourceJobId: optionalText(values.sourceJobId),
-    canonicalUrl: values.canonicalUrl,
+    postingUrl: values.postingUrl,
     company: values.company,
     role: values.role,
     location: optionalText(values.location),

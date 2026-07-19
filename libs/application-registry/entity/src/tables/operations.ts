@@ -1,28 +1,27 @@
 import { sql } from 'drizzle-orm'
 import { check, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
-import { commandKindValues } from '../model/values'
+import { idempotencyScopeValues } from '../model/values'
 import { applications } from './applications'
 import { sqlStringList } from './checks'
 
-export const commandReceipts = sqliteTable(
-  'command_receipts',
+export const idempotencyReceipts = sqliteTable(
+  'idempotency_receipts',
   {
-    operationId: text('operation_id').notNull(),
-    operationRequestSignature: text('operation_request_signature').notNull(),
-    kind: text('kind', { enum: commandKindValues }).notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    requestHash: text('request_hash').notNull(),
+    scope: text('scope', { enum: idempotencyScopeValues }).notNull(),
     applicationId: text('application_id')
       .notNull()
       .references(() => applications.id, { onDelete: 'cascade' }),
-    eventId: text('event_id'),
-    noteId: text('note_id'),
-    recordedAt: text('recorded_at').notNull(),
+    resourceId: text('resource_id'),
+    createdAt: text('created_at').notNull(),
   },
   (table) => [
-    primaryKey({ columns: [table.operationId] }),
+    primaryKey({ columns: [table.idempotencyKey] }),
     check(
-      'command_receipts_kind_check',
-      sql`${table.kind} in (${sqlStringList(commandKindValues)})`
+      'idempotency_receipts_scope_check',
+      sql`${table.scope} in (${sqlStringList(idempotencyScopeValues)})`
     ),
   ]
 )

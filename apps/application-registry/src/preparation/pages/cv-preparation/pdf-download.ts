@@ -1,15 +1,13 @@
-import { decodeBase64Bytes } from '../../base64'
-
-export const downloadBase64Pdf = ({
-  data,
+export const downloadPdf = ({
+  bytes,
   filename,
   mediaType,
 }: {
-  readonly data: string
+  readonly bytes: Uint8Array
   readonly filename: string
   readonly mediaType: string
 }) => {
-  const blob = new Blob([decodeBase64Bytes(data)], { type: mediaType })
+  const blob = new Blob([Uint8Array.from(bytes)], { type: mediaType })
   const objectUrl = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = objectUrl

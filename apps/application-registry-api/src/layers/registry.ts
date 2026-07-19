@@ -9,7 +9,7 @@ import { ListingAvailabilityCheckerLive } from '@cv/application-registry-listing
 import { RegistryAnalyticsError } from '@cv/application-registry-service'
 import { RegistryServicesLive } from '@cv/application-registry-service/live'
 import { CloudflareAnalytics } from '@cv/cloudflare-analytics-client'
-import { WebCryptoLayer } from '@cv/effect-web-crypto'
+import * as BrowserCrypto from '@effect/platform-browser/BrowserCrypto'
 import { Effect, Layer } from 'effect'
 import * as FetchHttpClient from 'effect/unstable/http/FetchHttpClient'
 
@@ -83,6 +83,6 @@ export const makeRegistryServiceLayer = (environment: ApplicationRegistryEnv) =>
     Layer.provide(RegistryCrudLayer),
     Layer.provide(FxLayer),
     Layer.provide(
-      ListingAvailabilityCheckerLive.pipe(Layer.provide(WebCryptoLayer))
+      ListingAvailabilityCheckerLive.pipe(Layer.provide(BrowserCrypto.layer))
     )
   )

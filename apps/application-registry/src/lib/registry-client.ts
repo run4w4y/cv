@@ -1,6 +1,9 @@
 import {
   ApplicationRegistryApi,
-  type RegistryApi,
+  type ApplicationsApi,
+  type AutomationApi,
+  type ContentApi,
+  type PublicationsApi,
 } from '@cv/application-registry-api-contract'
 import { type Duration, Layer } from 'effect'
 import * as FetchHttpClient from 'effect/unstable/http/FetchHttpClient'
@@ -34,17 +37,31 @@ export class RegistryClient extends AtomHttpApi.Service<RegistryClient>()(
   '@cv/application-registry-management/RegistryClient',
   {
     api: ApplicationRegistryApi,
-    baseUrl: '/api/registry/',
+    baseUrl: '/',
     httpClient: browserHttpClientLayer,
   }
 ) {}
 
-type RegistryEndpoints = typeof RegistryApi.endpoints
-type RegistryEndpointIdentifier = Extract<keyof RegistryEndpoints, string>
-type RegistryEndpoint<Identifier extends RegistryEndpointIdentifier> = Extract<
-  RegistryEndpoints[Identifier],
-  HttpApiEndpoint.ConstraintRequest
->
+type RegistryGroups = {
+  readonly applications: typeof ApplicationsApi
+  readonly automation: typeof AutomationApi
+  readonly content: typeof ContentApi
+  readonly publications: typeof PublicationsApi
+}
+type RegistryEndpointIdentifier = {
+  [Group in keyof RegistryGroups]: Extract<
+    keyof RegistryGroups[Group]['endpoints'],
+    string
+  >
+}[keyof RegistryGroups]
+type RegistryEndpoint<Identifier extends RegistryEndpointIdentifier> = {
+  [Group in keyof RegistryGroups]: Identifier extends keyof RegistryGroups[Group]['endpoints']
+    ? Extract<
+        RegistryGroups[Group]['endpoints'][Identifier],
+        HttpApiEndpoint.ConstraintRequest
+      >
+    : never
+}[keyof RegistryGroups]
 type RegistryEndpointRequest<Identifier extends RegistryEndpointIdentifier> =
   HttpApiEndpoint.ClientRequest<
     RegistryEndpoint<Identifier>['~Params'],
@@ -80,7 +97,11 @@ export const registryMutation = <Identifier extends RegistryEndpointIdentifier>(
   },
   RegistryEndpointSuccess<Identifier>,
   RegistryEndpointError<Identifier>
-> => RegistryClient.mutation('registry' as never, endpoint as never) as never
+> =>
+  RegistryClient.mutation(
+    endpointGroup(endpoint) as never,
+    endpoint as never
+  ) as never
 
 export const registryQuery = <Identifier extends RegistryEndpointIdentifier>(
   endpoint: Identifier,
@@ -96,7 +117,7 @@ export const registryQuery = <Identifier extends RegistryEndpointIdentifier>(
   >
 > =>
   RegistryClient.query(
-    'registry' as never,
+    endpointGroup(endpoint) as never,
     endpoint as never,
     request as never
   ) as never
@@ -111,6 +132,48 @@ export const registryQuery = <Identifier extends RegistryEndpointIdentifier>(
 export const registryClientLayer = Layer.effect(
   RegistryClient,
   HttpApiClient.make(ApplicationRegistryApi, {
-    baseUrl: '/api/registry/',
+    baseUrl: '/',
   })
 ).pipe(Layer.provide(browserHttpClientLayer))
+
+const endpointGroups = {
+  addApplicationNote: 'applications',
+  appendContentRevision: 'content',
+  approveContentRevision: 'content',
+  captureJobPostingSnapshot: 'content',
+  createApplication: 'applications',
+  ensureContentEntry: 'content',
+  getApplication: 'applications',
+  getBlob: 'content',
+  getContentEntry: 'content',
+  getCurrentPdfArtifact: 'publications',
+  getCvAnalytics: 'applications',
+  getCvLink: 'publications',
+  getJobPostingSnapshot: 'content',
+  getJobPostingSnapshotPayload: 'content',
+  getLatestJobPostingSnapshot: 'content',
+  getListingCheckRun: 'automation',
+  getPdfJob: 'publications',
+  listActivities: 'applications',
+  listApplicationActivities: 'applications',
+  listApplicationAnnotations: 'applications',
+  listApplicationCompensations: 'applications',
+  listApplicationFacets: 'applications',
+  listApplicationListingChecks: 'applications',
+  listApplications: 'applications',
+  listContentRevisions: 'content',
+  persistJobPostingSnapshot: 'content',
+  stageCv: 'publications',
+  putBlob: 'content',
+  readContentRevision: 'content',
+  readContentRevisionPayload: 'content',
+  readCurrentPdfArtifact: 'publications',
+  resolveApplicationListingAvailability: 'applications',
+  setCvLinkAvailability: 'publications',
+  startPdfJob: 'publications',
+  submitListingCheckFindings: 'automation',
+  updateApplication: 'applications',
+} as const satisfies Record<RegistryEndpointIdentifier, keyof RegistryGroups>
+
+const endpointGroup = (endpoint: RegistryEndpointIdentifier) =>
+  endpointGroups[endpoint]

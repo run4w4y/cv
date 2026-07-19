@@ -6,9 +6,10 @@ another.
 | Owner | Owns | Does not own |
 | --- | --- | --- |
 | `data/` | Registry queries, remote mutations, cache invalidation | Drafts, Workflow progress |
-| `workflow/` | CV/letter generation execution, review token, cancellation, run progress | React form state, publication |
-| `publication/` | Link publication, PDF polling/verification/compensation, publication run progress | Document generation or editing |
-| `editor/` + `workspace/` | Human override, layout gate, detached-candidate decision, pure joined read model | Registry heads or Workflow runs |
+| `@cv/application-preparation-workflow` | CV/letter generation execution, private review/execution handles, cancellation, run progress | React form state, publication |
+| `workflow/` | Browser layers, memory-engine composition, and Effect Atom adapters for the package | Workflow invariants or generation logic |
+| `publication/` | Public-page enablement, independent PDF start, publication run progress | Document generation or editing |
+| `editor/` + `workspace/` | Human override, detached-candidate decision, pure joined read model | Registry heads or Workflow runs |
 
 React routes subscribe to `preparationWorkspaceAtom` and issue commands through
 identity-keyed `Atom.fn` values. Each key owns its execution and result channel;
@@ -19,7 +20,7 @@ Command results and the synchronous claim gate are keyed by application, kind,
 and locale so failures and busy state cannot leak between route identities or
 let a second click replace an in-flight command.
 Component-local state is reserved for actual DOM/widget lifecycles, such as the
-iframe preview mount, `ResizeObserver`, and the external ChatGPT login hook.
+external ChatGPT login hook.
 
 ## Preparation run
 
@@ -27,12 +28,14 @@ iframe preview mount, `ResizeObserver`, and the external ChatGPT login hook.
    a batch-only `CaptureUrl` source.
 2. Reviewed sources pin application, snapshot, facts release, and URL. The
    gateway rejects drift; it does not silently substitute current context.
-3. The Workflow analyzes the job, plans evidence, generates section briefs,
-   composes an exact tagged document, validates it, and persists a candidate.
+3. The package Workflow analyzes the job, plans evidence, generates section briefs,
+   composes a schema-decoded tagged document, checks its cross-object
+   provenance invariants, and persists a candidate.
 4. It suspends on the typed human-review deferred. Approval verifies revision
    ancestry and pins before mutating the registry.
-5. The progress service projects one tagged `PreparationRun`; keyed selector
-   atoms expose only the run needed by a route or card.
+5. The progress service projects one tagged public `PreparationRun`; execution
+   IDs and review tokens remain package-private. Keyed selector atoms expose
+   only the run needed by a route or card.
 
 The engine uses `WorkflowEngine.layerMemory`. A refresh loses execution and
 review tokens but not an already persisted candidate. `editor/` detects that
@@ -47,20 +50,24 @@ Workflow run, and keyed editor-local atom. The pure projection in
 computes validation, dirty/source state, save and approval gates, detached
 state, and approval mode. `editor/atoms.ts` owns only local mutations.
 
-CV approval additionally requires a `fits` layout assessment bound to the
-current document fingerprint. A measurement from an older document can never
-unlock approval for a newer candidate.
+CV approval depends on the document schema and review decision. The PDF worker
+owns exact A4 measurement because Browser Rendering is the authoritative print
+environment; a layout failure is recorded on the PDF artifact and never changes
+page visibility.
 
 ## Publication run
 
-The publication Workflow accepts an approved CV entry, publishes its link,
-starts PDF generation, polls with an Effect `Schedule`, and verifies the exact
-revision, publication version, link, artifact, and renderer version. PDF-start
-failure runs a compensating link-disable activity. Completion and compensation
-invalidate the typed publication query.
+Saving a CV revision stages the single page record as private and rotates its
+preview capability. The management iframe and PDF worker render that protected
+stored preview; unsaved browser state is never a second rendering protocol.
 
-Publication execution is also memory-backed. Registry links and ready artifacts
-remain authoritative and survive browser runtime loss.
+The publication Workflow accepts an approved staged revision, flips the page's
+`enabled` boolean, then attempts to start PDF generation. PDF-start failure is
+reported separately and does not roll back visibility. Artifact state is read
+from the registry and can be refreshed, generated, or regenerated explicitly.
+
+Publication execution is also memory-backed. The registry page record and every
+artifact attempt remain authoritative and survive browser runtime loss.
 
 ## Where to change code
 
@@ -68,9 +75,15 @@ remain authoritative and survive browser runtime loss.
   query or mutation atom.
 - Change the shared `not_started` → `preparing` invariant in
   `application-lifecycle.ts`; both page bootstrap and Workflow startup use it.
-- Change generation orchestration in `workflow/workflow.ts`; change external
-  adapters in `workflow/gateway/`.
-- Change run transitions atomically in `workflow/progress.ts`.
+- Change generation orchestration, schemas, the cover-letter contract, review
+  binding, and run transitions in
+  `libs/application-registry/preparation-workflow/`.
+- Change registry/facts/browser integration in `data/repository/` and
+  `workflow/store.ts`; the package depends only on its narrow
+  `PreparationStore` port.
+- Change browser Workflow wiring and command/selector atoms in
+  `workflow/atoms/`. These adapters call `ApplicationPreparation`; they do not
+  manipulate engine execution IDs or review tokens.
 - Change editor policy in `editor/session.ts` and local mutations in
   `editor/atoms.ts`.
 - Keep route `render.tsx` files declarative; put commands and cohesive UI cards

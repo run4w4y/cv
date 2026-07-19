@@ -1,110 +1,41 @@
 # Application registry service
 
-Slice-oriented Effect services for registry workflows. The package root exports
-stable service interfaces, Context keys, inputs, outputs, and errors. Consumers
-can build programs entirely against those contracts. Concrete workflow Layers
-are available separately from `@cv/application-registry-service/live` and are
-installed only by runtime composition roots.
+Slice-oriented Effect workflows for the registry. The package root exports
+service contracts and errors; concrete Layers are exported from
+`@cv/application-registry-service/live`.
 
-This package owns replay and conflict handling, explicit status transitions,
-and coordination across CRUD and FX services. List requests use the shared
-query definitions and their pagination implementation; this package contains
-no HTTP, D1, or Drizzle implementation concerns.
+The service owns optimistic concurrency, idempotent replay, URL normalization,
+status update semantics, backend activities, and coordination across CRUD,
+artifact storage, listing checks, analytics, and FX services. It contains no
+HTTP routing or D1 binding code.
 
-Idempotent commands store a canonical operation request signature with their
-receipt. Reusing an operation ID with the same request safely replays its
-result; reusing it for different content is rejected instead of silently
-returning the first command's result.
+Key services are:
 
-The public services are split by registry slice:
+- `ApplicationsService`: UUID creation, normalized posting deduplication,
+  lookup/listing, and one aggregate update for scalar fields, labels, and annual
+  compensation;
+- `ActivitiesService`: read-only per-application and registry-wide history;
+- `AnnotationsService`: annotation reads and idempotent note creation;
+- `ListingChecksService`: findings, runs, grace windows, and safe archival;
+- `OpaqueObjectsService`: schema-free content-addressed bytes;
+- `JobPostingSnapshotsService`: immutable raw/normalized posting context;
+- `ContentEntriesService`: linear opaque revisions and head approval;
+- `CvPublicationsService`, `CvAnalyticsService`, and `PdfArtifactsService`:
+  stable publications, traffic, and exact PDF artifacts.
 
-- `ApplicationsService` owns application upsert, patch, lookup, deletion,
-  cursor pagination, dashboard row decoration and facets, plus the atomic
-  management update spanning scalar fields, labels, annual compensation, and
-  server-owned status audit events.
-- `AnnotationsService` owns annotation lookup and idempotent note creation.
-- `EventsService` owns idempotent event append and cursor pagination.
-- `CompensationsService` owns original and converted compensation views.
-- `ListingChecksService` owns idempotent local-finding ingestion, internal
-  scheduled runs, grace windows, lifecycle safeguards, and listing-check
-  history.
-- `JobPostingSnapshotsService` stores and retrieves raw or normalized job
-  context as opaque, content-addressed bytes associated with one application.
-  Preparation and management clients may derive or correct normalized text,
-  while this backend remains unaware of job, CV, and facts document shapes.
-- `OpaqueObjectsService` is the schema-free content-addressed byte boundary used
-  by publication clients and internal content workflows.
-- `FactsReleasesService` verifies every manifest, locale catalog, and asset
-  reference before registering immutable release metadata. It owns optimistic
-  channel activation and resolves active catalogs and assets without importing
-  either CV contract.
-- `ContentEntriesService` owns one linear revision chain per application,
-  content kind, and locale. It derives revision numbers and parent IDs,
-  compare-and-swaps the entry version, and approves only the current head.
-- `CvPublicationsService` publishes approved CV revisions behind a stable
-  revocable token. Re-publication advances the pinned revision without
-  replacing the token; disabled links resolve as not found.
-- `CvAnalyticsService` joins published CV-link metadata to provider traffic and
-  returns application-aware totals, daily series, and country breakdowns.
-- `PdfArtifactsService` records the pending, ready, or failed PDF lifecycle.
-  It derives both the content revision and QR target from the current public
-  link, then stores completed PDF bytes in the artifact store.
+Activities are annotations, not authoritative commands. Application creation,
+aggregate updates, notes, and listing decisions issue them from the backend as
+part of the same persistence operation. Clients never ask the service to append
+an arbitrary activity.
 
-The content services inspect transport metadata (contract ID/version, media
-type, hashes, byte lengths, release IDs, locales, and asset IDs) but never
-import the document or facts schema and never parse payload fields. Concrete
-schema validation remains a renderer and management-frontend concern.
-`RegistryContentServicesLive` exposes the content-only Layer group;
-`RegistryServicesLive` includes it with the original registry services.
+List workflows accept the request inferred from the entity package's
+`drizzle-query` definition and return standard `{ items, pageInfo }` cursor
+pages. No alternate filter or ordering syntax is maintained here.
 
-`ListingAvailabilityChecker` lives in the runtime-neutral
-`@cv/application-registry-listing-check` package. Both the local Bun CLI and the
-internal Worker scheduler use its provider and bounded-page strategies. This
-service owns the durable decision: target validation, target-stage cadence,
-suspected-closed confirmation windows, safe archival eligibility, leases, and
-failure backoff all remain server-side.
-
-Both global list services accept the generic definition-derived request shape
-and return ordinary `{ items, pageInfo }` query pages.
-`pageInfo.nextCursor` continues the same filtered and ordered traversal through
-`pagination.after`. Numeric page sizes default to 50 and are capped at 100.
-
-Revision-based reads do not have a separate service protocol. Applications can
-be filtered with `updatedRevision gt <revision>` and ordered by
-`updatedRevision asc`; events expose the equivalent `revision` field. The
-regular query model remains responsible for binding those filters and ordering
-terms to the cursor.
-
-The service returns the stored `followUpAt` timestamp without deriving a
-request-time follow-up category. Consumers can express those categories with
-ordinary filters: `isNull` for no follow-up, `lt <reference-time>` for overdue,
-and `gte <reference-time>` for upcoming. The consumer chooses the reference
-time and must keep it stable while following cursors through one traversal.
-Application listing still formats stored minor-unit compensation into a concise
-original-currency summary.
-
-Application rows retain the entity's natural nested shape: `counts` contains
-the note total, while `latestEvent` is a nullable object. The service adds the
-requested compensation presentation without
-flattening persistence relations into a set of unrelated scalar aliases.
-
-Event status changes are explicit. Status-changing kinds (`submitted`,
-`stage_changed`, `interview_scheduled`, `rejected`, `withdrawn`, and
-`offer_received`) carry `nextApplicationStatus`; the service passes that value
-to the atomic projection/event write. Informational kinds (`note_added`,
-`contact_logged`, `follow_up_scheduled`, and `research_updated`) omit it and
-leave the projection status unchanged. No event-name-to-status conversion is
-hidden in the service.
-
-Unit tests live beside the `/live` implementations and replace CRUD and FX
-dependencies with `Layer.succeed` fakes. `test/service.integration.test.ts`
-composes a managed Effect runtime from the live services, the real CRUD layer,
-and the shared `@cv/worker-test-kit/application-registry` D1 harness, without an
-HTTP test Worker, a browser bundle, or network FX requests. The integration
-suite owns workflow-level coverage for idempotency and operation conflicts,
-concurrent job-key convergence, database defaults, nullable patches, optimistic
-races, explicit lifecycle transitions, atomic rollback, and ordinary filtered
-and cursor-paginated listing.
+Content services inspect only contract IDs, media types, hashes, byte lengths,
+release IDs, and locales. Document field validation stays with the management
+and rendering boundaries. Facts are read and verified directly by the
+management client, not this service. Payload bytes remain opaque.
 
 ```bash
 bunx nx run application-registry-service:test:unit

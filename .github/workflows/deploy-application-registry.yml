@@ -60,7 +60,15 @@ jobs:
             CLOUDFLARE_ZONE_ID \
             CV_WEB_HOST \
             CV_OBJECTS_BUCKET_NAME \
-            REGISTRY_API_TOKEN
+            CV_PUBLIC_WORKER_NAME \
+            CV_REVALIDATION_SECRET \
+            FACTS_R2_BUCKET \
+            REGISTRY_API_URL \
+            REGISTRY_API_TOKEN \
+            VITE_FACTS_R2_ACCESS_KEY_ID \
+            VITE_FACTS_R2_ACCOUNT_ID \
+            VITE_FACTS_R2_BUCKET \
+            VITE_FACTS_R2_SECRET_ACCESS_KEY
           do
             if [[ -z "${!name:-}" ]]; then
               missing+=("$name")
@@ -71,6 +79,37 @@ jobs:
             printf '::error title=Missing production registry configuration::Missing: %s\n' "${missing[*]}"
             exit 1
           fi
+
+      - name: Configure direct facts-read CORS
+        run: |
+          management_origin="${REGISTRY_API_URL%/}"
+          if [[ ! "$management_origin" =~ ^https://[^/?#]+$ ]]; then
+            echo '::error title=Invalid management origin::REGISTRY_API_URL must be an HTTPS origin without a path, query, or fragment.'
+            exit 1
+          fi
+
+          jq -n --arg origin "$management_origin" '{
+            rules: [{
+              allowed: {
+                origins: [$origin, "http://localhost:4300"],
+                methods: ["GET", "HEAD"],
+                headers: [
+                  "authorization",
+                  "content-type",
+                  "x-amz-content-sha256",
+                  "x-amz-date",
+                  "x-amz-security-token"
+                ]
+              },
+              exposeHeaders: ["cache-control", "content-length", "content-type", "etag"],
+              maxAgeSeconds: 3600
+            }]
+          }' > "$RUNNER_TEMP/facts-r2-cors.json"
+
+          node node_modules/wrangler/bin/wrangler.js r2 bucket cors set \
+            "$FACTS_R2_BUCKET" \
+            --file "$RUNNER_TEMP/facts-r2-cors.json" \
+            --force
 
       - name: Build management application
         run: |

@@ -8,7 +8,7 @@
     "dev": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "../../node_modules/.bin/astro dev --host 0.0.0.0",
+        "command": "bun run dev",
         "cwd": "apps/cv",
         "color": true
       }
@@ -16,9 +16,9 @@
     "build": {
       "executor": "nx:run-commands",
       "dependsOn": ["^build"],
-      "outputs": ["{projectRoot}/dist"],
+      "outputs": ["{projectRoot}/.next", "{projectRoot}/.open-next"],
       "options": {
-        "command": "../../node_modules/.bin/tsc --pretty --noEmit --project tsconfig.config.json && ../../node_modules/.bin/astro check && ../../node_modules/.bin/astro build",
+        "command": "./node_modules/.bin/opennextjs-cloudflare build",
         "cwd": "apps/cv",
         "color": true
       }
@@ -29,8 +29,8 @@
       "outputs": [],
       "options": {
         "commands": [
-          "bun apps/cv/scripts/write-wrangler-config.ts apps/cv/dist/server/wrangler.deploy.json",
-          "bunx wrangler deploy --config apps/cv/dist/server/wrangler.deploy.json"
+          "bun apps/cv/scripts/write-wrangler-config.ts apps/cv/wrangler.deploy.jsonc",
+          "bun apps/cv/scripts/deploy.ts apps/cv/wrangler.deploy.jsonc"
         ],
         "parallel": false,
         "cwd": ".",
@@ -41,7 +41,7 @@
       "executor": "nx:run-commands",
       "dependsOn": ["build"],
       "options": {
-        "command": "../../node_modules/.bin/astro preview",
+        "command": "./node_modules/.bin/opennextjs-cloudflare preview",
         "cwd": "apps/cv",
         "color": true
       }
@@ -51,7 +51,11 @@
       "dependsOn": ["build"],
       "outputs": [],
       "options": {
-        "command": "node --import tsx --test apps/cv/test/public-worker.integration.test.ts",
+        "commands": [
+          "node node_modules/wrangler/bin/wrangler.js deploy --dry-run --config apps/cv/wrangler.jsonc --outfile apps/cv/.open-next/deploy-check/worker.js",
+          "node --import tsx --test apps/cv/test/public-worker.integration.test.ts"
+        ],
+        "parallel": false,
         "cwd": ".",
         "color": true
       }

@@ -2,7 +2,9 @@
   "version": "7",
   "dialect": "sqlite",
   "id": "f7cfb844-eb4d-4aa7-b493-365771e28a67",
-  "prevIds": ["12b788cc-251a-434f-acaa-47cf24c516d6"],
+  "prevIds": [
+    "12b788cc-251a-434f-acaa-47cf24c516d6"
+  ],
   "ddl": [
     {
       "name": "application_labels",
@@ -38,22 +40,6 @@
     },
     {
       "name": "application_events",
-      "entityType": "tables"
-    },
-    {
-      "name": "facts_channels",
-      "entityType": "tables"
-    },
-    {
-      "name": "facts_release_assets",
-      "entityType": "tables"
-    },
-    {
-      "name": "facts_release_catalogs",
-      "entityType": "tables"
-    },
-    {
-      "name": "facts_releases",
       "entityType": "tables"
     },
     {
@@ -1208,276 +1194,6 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
-      "name": "name",
-      "entityType": "columns",
-      "table": "facts_channels"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "active_release_id",
-      "entityType": "columns",
-      "table": "facts_channels"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": "1",
-      "generated": null,
-      "name": "version",
-      "entityType": "columns",
-      "table": "facts_channels"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "updated_at",
-      "entityType": "columns",
-      "table": "facts_channels"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "release_id",
-      "entityType": "columns",
-      "table": "facts_release_assets"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "asset_id",
-      "entityType": "columns",
-      "table": "facts_release_assets"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "file_name",
-      "entityType": "columns",
-      "table": "facts_release_assets"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "object_key",
-      "entityType": "columns",
-      "table": "facts_release_assets"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "sha256",
-      "entityType": "columns",
-      "table": "facts_release_assets"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "byte_length",
-      "entityType": "columns",
-      "table": "facts_release_assets"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "media_type",
-      "entityType": "columns",
-      "table": "facts_release_assets"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "release_id",
-      "entityType": "columns",
-      "table": "facts_release_catalogs"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "locale",
-      "entityType": "columns",
-      "table": "facts_release_catalogs"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "object_key",
-      "entityType": "columns",
-      "table": "facts_release_catalogs"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "sha256",
-      "entityType": "columns",
-      "table": "facts_release_catalogs"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "byte_length",
-      "entityType": "columns",
-      "table": "facts_release_catalogs"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "media_type",
-      "entityType": "columns",
-      "table": "facts_release_catalogs"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "id",
-      "entityType": "columns",
-      "table": "facts_releases"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "facts_schema_version",
-      "entityType": "columns",
-      "table": "facts_releases"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "source_repository",
-      "entityType": "columns",
-      "table": "facts_releases"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "source_commit",
-      "entityType": "columns",
-      "table": "facts_releases"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "compiler_repository",
-      "entityType": "columns",
-      "table": "facts_releases"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "compiler_commit",
-      "entityType": "columns",
-      "table": "facts_releases"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "manifest_object_key",
-      "entityType": "columns",
-      "table": "facts_releases"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "manifest_sha256",
-      "entityType": "columns",
-      "table": "facts_releases"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "manifest_byte_length",
-      "entityType": "columns",
-      "table": "facts_releases"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "table": "facts_releases"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
       "name": "base_currency",
       "entityType": "columns",
       "table": "fx_rates"
@@ -2293,9 +2009,13 @@
       "table": "registry_sequence"
     },
     {
-      "columns": ["application_id"],
+      "columns": [
+        "application_id"
+      ],
       "tableTo": "applications",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2304,9 +2024,13 @@
       "table": "application_labels"
     },
     {
-      "columns": ["application_id"],
+      "columns": [
+        "application_id"
+      ],
       "tableTo": "applications",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2315,9 +2039,13 @@
       "table": "application_notes"
     },
     {
-      "columns": ["cv_link_id"],
+      "columns": [
+        "cv_link_id"
+      ],
       "tableTo": "cv_links",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2326,9 +2054,13 @@
       "table": "generated_artifacts"
     },
     {
-      "columns": ["content_revision_id"],
+      "columns": [
+        "content_revision_id"
+      ],
       "tableTo": "content_revisions",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2337,9 +2069,13 @@
       "table": "generated_artifacts"
     },
     {
-      "columns": ["application_id"],
+      "columns": [
+        "application_id"
+      ],
       "tableTo": "applications",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2348,9 +2084,13 @@
       "table": "application_compensations"
     },
     {
-      "columns": ["application_id"],
+      "columns": [
+        "application_id"
+      ],
       "tableTo": "applications",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2359,9 +2099,13 @@
       "table": "content_entries"
     },
     {
-      "columns": ["content_entry_id"],
+      "columns": [
+        "content_entry_id"
+      ],
       "tableTo": "content_entries",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2370,20 +2114,13 @@
       "table": "content_revisions"
     },
     {
-      "columns": ["facts_release_id"],
-      "tableTo": "facts_releases",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
-      "nameExplicit": false,
-      "name": "fk_content_revisions_facts_release_id_facts_releases_id_fk",
-      "entityType": "fks",
-      "table": "content_revisions"
-    },
-    {
-      "columns": ["job_snapshot_id"],
+      "columns": [
+        "job_snapshot_id"
+      ],
       "tableTo": "job_posting_snapshots",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "nameExplicit": false,
@@ -2392,9 +2129,13 @@
       "table": "content_revisions"
     },
     {
-      "columns": ["application_id"],
+      "columns": [
+        "application_id"
+      ],
       "tableTo": "applications",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2403,9 +2144,13 @@
       "table": "cv_links"
     },
     {
-      "columns": ["content_entry_id"],
+      "columns": [
+        "content_entry_id"
+      ],
       "tableTo": "content_entries",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2414,9 +2159,13 @@
       "table": "cv_links"
     },
     {
-      "columns": ["published_revision_id"],
+      "columns": [
+        "published_revision_id"
+      ],
       "tableTo": "content_revisions",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2425,9 +2174,13 @@
       "table": "cv_links"
     },
     {
-      "columns": ["application_id"],
+      "columns": [
+        "application_id"
+      ],
       "tableTo": "applications",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2436,42 +2189,13 @@
       "table": "application_events"
     },
     {
-      "columns": ["active_release_id"],
-      "tableTo": "facts_releases",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
-      "nameExplicit": false,
-      "name": "fk_facts_channels_active_release_id_facts_releases_id_fk",
-      "entityType": "fks",
-      "table": "facts_channels"
-    },
-    {
-      "columns": ["release_id"],
-      "tableTo": "facts_releases",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
-      "nameExplicit": false,
-      "name": "fk_facts_release_assets_release_id_facts_releases_id_fk",
-      "entityType": "fks",
-      "table": "facts_release_assets"
-    },
-    {
-      "columns": ["release_id"],
-      "tableTo": "facts_releases",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
-      "nameExplicit": false,
-      "name": "fk_facts_release_catalogs_release_id_facts_releases_id_fk",
-      "entityType": "fks",
-      "table": "facts_release_catalogs"
-    },
-    {
-      "columns": ["application_id"],
+      "columns": [
+        "application_id"
+      ],
       "tableTo": "applications",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2480,9 +2204,13 @@
       "table": "application_identity_aliases"
     },
     {
-      "columns": ["application_id"],
+      "columns": [
+        "application_id"
+      ],
       "tableTo": "applications",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2491,9 +2219,13 @@
       "table": "job_posting_snapshots"
     },
     {
-      "columns": ["application_id"],
+      "columns": [
+        "application_id"
+      ],
       "tableTo": "applications",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2502,9 +2234,13 @@
       "table": "application_listing_check_schedules"
     },
     {
-      "columns": ["application_id"],
+      "columns": [
+        "application_id"
+      ],
       "tableTo": "applications",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2513,9 +2249,13 @@
       "table": "application_listing_checks"
     },
     {
-      "columns": ["run_id"],
+      "columns": [
+        "run_id"
+      ],
       "tableTo": "listing_check_runs",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "nameExplicit": false,
@@ -2524,9 +2264,13 @@
       "table": "application_listing_checks"
     },
     {
-      "columns": ["application_id"],
+      "columns": [
+        "application_id"
+      ],
       "tableTo": "applications",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2535,9 +2279,13 @@
       "table": "command_receipts"
     },
     {
-      "columns": ["artifact_id"],
+      "columns": [
+        "artifact_id"
+      ],
       "tableTo": "generated_artifacts",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2546,9 +2294,13 @@
       "table": "pdf_generation_outbox"
     },
     {
-      "columns": ["application_id"],
+      "columns": [
+        "application_id"
+      ],
       "tableTo": "applications",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2557,9 +2309,13 @@
       "table": "pdf_generation_outbox"
     },
     {
-      "columns": ["content_entry_id"],
+      "columns": [
+        "content_entry_id"
+      ],
       "tableTo": "content_entries",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2568,154 +2324,166 @@
       "table": "pdf_generation_outbox"
     },
     {
-      "columns": ["application_id", "label"],
+      "columns": [
+        "application_id",
+        "label"
+      ],
       "nameExplicit": false,
       "name": "application_labels_pk",
       "entityType": "pks",
       "table": "application_labels"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "application_notes_pk",
       "entityType": "pks",
       "table": "application_notes"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "applications_pk",
       "entityType": "pks",
       "table": "applications"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "generated_artifacts_pk",
       "entityType": "pks",
       "table": "generated_artifacts"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "application_compensations_pk",
       "entityType": "pks",
       "table": "application_compensations"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "content_entries_pk",
       "entityType": "pks",
       "table": "content_entries"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "content_revisions_pk",
       "entityType": "pks",
       "table": "content_revisions"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "cv_links_pk",
       "entityType": "pks",
       "table": "cv_links"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "application_events_pk",
       "entityType": "pks",
       "table": "application_events"
     },
     {
-      "columns": ["name"],
-      "nameExplicit": false,
-      "name": "facts_channels_pk",
-      "entityType": "pks",
-      "table": "facts_channels"
-    },
-    {
-      "columns": ["release_id", "asset_id"],
-      "nameExplicit": false,
-      "name": "facts_release_assets_pk",
-      "entityType": "pks",
-      "table": "facts_release_assets"
-    },
-    {
-      "columns": ["release_id", "locale"],
-      "nameExplicit": false,
-      "name": "facts_release_catalogs_pk",
-      "entityType": "pks",
-      "table": "facts_release_catalogs"
-    },
-    {
-      "columns": ["id"],
-      "nameExplicit": false,
-      "name": "facts_releases_pk",
-      "entityType": "pks",
-      "table": "facts_releases"
-    },
-    {
-      "columns": ["base_currency", "quote_currency", "provider", "observed_at"],
+      "columns": [
+        "base_currency",
+        "quote_currency",
+        "provider",
+        "observed_at"
+      ],
       "nameExplicit": false,
       "name": "fx_rates_pk",
       "entityType": "pks",
       "table": "fx_rates"
     },
     {
-      "columns": ["job_key"],
+      "columns": [
+        "job_key"
+      ],
       "nameExplicit": false,
       "name": "application_identity_aliases_pk",
       "entityType": "pks",
       "table": "application_identity_aliases"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "job_posting_snapshots_pk",
       "entityType": "pks",
       "table": "job_posting_snapshots"
     },
     {
-      "columns": ["application_id"],
+      "columns": [
+        "application_id"
+      ],
       "nameExplicit": false,
       "name": "application_listing_check_schedules_pk",
       "entityType": "pks",
       "table": "application_listing_check_schedules"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "application_listing_checks_pk",
       "entityType": "pks",
       "table": "application_listing_checks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "listing_check_runs_pk",
       "entityType": "pks",
       "table": "listing_check_runs"
     },
     {
-      "columns": ["operation_id"],
+      "columns": [
+        "operation_id"
+      ],
       "nameExplicit": false,
       "name": "command_receipts_pk",
       "entityType": "pks",
       "table": "command_receipts"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "registry_sequence_pk",
       "entityType": "pks",
       "table": "registry_sequence"
     },
     {
-      "columns": ["artifact_id"],
+      "columns": [
+        "artifact_id"
+      ],
       "nameExplicit": false,
       "name": "pdf_generation_outbox_pk",
       "table": "pdf_generation_outbox",
@@ -3160,32 +2928,6 @@
     {
       "columns": [
         {
-          "value": "source_repository",
-          "isExpression": false
-        },
-        {
-          "value": "source_commit",
-          "isExpression": false
-        },
-        {
-          "value": "compiler_commit",
-          "isExpression": false
-        },
-        {
-          "value": "facts_schema_version",
-          "isExpression": false
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "origin": "manual",
-      "name": "facts_releases_input_unique",
-      "entityType": "indexes",
-      "table": "facts_releases"
-    },
-    {
-      "columns": [
-        {
           "value": "base_currency",
           "isExpression": false
         },
@@ -3524,30 +3266,6 @@
       "table": "application_events"
     },
     {
-      "value": "\"version\" >= 1",
-      "name": "facts_channels_version_check",
-      "entityType": "checks",
-      "table": "facts_channels"
-    },
-    {
-      "value": "\"byte_length\" >= 0",
-      "name": "facts_release_assets_byte_length_check",
-      "entityType": "checks",
-      "table": "facts_release_assets"
-    },
-    {
-      "value": "\"byte_length\" >= 0",
-      "name": "facts_release_catalogs_byte_length_check",
-      "entityType": "checks",
-      "table": "facts_release_catalogs"
-    },
-    {
-      "value": "\"manifest_byte_length\" >= 0",
-      "name": "facts_releases_manifest_byte_length_check",
-      "entityType": "checks",
-      "table": "facts_releases"
-    },
-    {
       "value": "length(\"base_currency\") = 3 and \"base_currency\" glob '[A-Z][A-Z][A-Z]'",
       "name": "fx_rates_base_currency_check",
       "entityType": "checks",
@@ -3680,5 +3398,7 @@
       "table": "registry_sequence"
     }
   ],
-  "renames": ["generated_artifacts.workflow_id->generated_artifacts.request_id"]
+  "renames": [
+    "generated_artifacts.workflow_id->generated_artifacts.request_id"
+  ]
 }

@@ -24,7 +24,6 @@ import {
   makePersistManualJobContextAtom,
   manualJobContextMaxBytes,
 } from '../data'
-import { messageFromCause } from '../errors'
 import { jobContextOverrideAtom } from '../forms/atoms'
 import { keyedCommandFamily } from '../keyed-command'
 
@@ -70,7 +69,9 @@ export const JobContextEditor = ({
     onInitial: () => null,
     onError: (failure) => failure.message,
     onDefect: (defect) =>
-      messageFromCause(defect, 'The corrected job context could not be saved.'),
+      defect instanceof Error
+        ? defect.message
+        : 'The corrected job context could not be saved.',
     onSuccess: () => null,
   })
   const byteLength = React.useMemo(

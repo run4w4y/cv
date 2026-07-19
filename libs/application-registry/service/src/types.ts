@@ -1,15 +1,12 @@
 import type { ArtifactMetadata } from '@cv/application-registry-artifact-store'
 import type {
-  AppendableApplicationEventKind,
   Application,
   ApplicationCompensation,
   ApplicationCompensationInput,
-  ApplicationEvent,
   ApplicationLabel,
   ApplicationListingCheck,
   ApplicationMutable,
   ApplicationNote,
-  ApplicationStatus,
   ApplicationWritable,
   ContentEntry,
   ContentEntryKind,
@@ -17,28 +14,21 @@ import type {
   ContentRevisionSource,
   CurrencyCode,
   CvLink,
-  FactsChannel,
-  FactsRelease,
-  FactsReleaseAsset,
-  FactsReleaseCatalog,
   GeneratedArtifact,
-  InformationalApplicationEventKind,
   JobSnapshotStatus,
-  PdfGenerationOutbox,
-  JsonValue,
   ListingCheckAction,
   ListingCheckMode,
   ListingCheckRun,
   ListingCheckTarget,
   ListingObservation,
-  StatusChangingApplicationEventKind,
+  PdfGenerationOutbox,
 } from '@cv/application-registry-entity'
 import type {
+  ActivityListQueryRequest,
   AnnualCompensation,
   ApplicationListItem,
   ApplicationListQueryRequest,
-  EventListQueryRequest,
-  RegistryEventListItem,
+  RegistryActivityListItem,
 } from '@cv/application-registry-entity/query'
 import type { CursorPageInfo, QueryPage } from '@cv/drizzle-query'
 
@@ -87,11 +77,11 @@ export type CvAnalyticsItem = {
     Application,
     | 'appliedAt'
     | 'applicationStatus'
-    | 'canonicalUrl'
     | 'company'
     | 'createdAt'
     | 'id'
     | 'listingAvailability'
+    | 'postingUrl'
     | 'role'
   >
   readonly countries: readonly CvAnalyticsCountry[]
@@ -132,29 +122,19 @@ export type AddApplicationNoteResult = {
   readonly replayed: boolean
 }
 
-export type AppendApplicationEventResult = {
-  readonly application: Application
-  readonly event: ApplicationEvent
-  readonly replayed: boolean
-}
-
-export type UpsertApplicationInput = ApplicationWritable & {
+export type CreateApplicationInput = ApplicationWritable & {
   readonly compensations?: readonly ApplicationCompensationInput[]
   readonly labels?: readonly string[]
 }
 
-export type PatchApplicationInput = ApplicationMutable & {
-  readonly expectedVersion?: number
-}
-
-export type UpdateManagedApplicationInput = ApplicationMutable & {
+export type UpdateApplicationInput = ApplicationMutable & {
   readonly annualCompensation?: AnnualCompensation | null
   readonly expectedVersion: number
+  readonly idempotencyKey: string
   readonly labels?: readonly string[]
-  readonly operationId: string
 }
 
-export type UpdateManagedApplicationResult = {
+export type UpdateApplicationResult = {
   readonly annualCompensation: AnnualCompensation | null
   readonly application: Application
   readonly labels: readonly string[]
@@ -179,39 +159,18 @@ export type AddApplicationNoteInput = Pick<
   ApplicationNote,
   'body' | 'kind' | 'source'
 > & {
-  readonly operationId: string
+  readonly idempotencyKey: string
 }
 
-export type {
-  AppendableApplicationEventKind,
-  InformationalApplicationEventKind,
-  StatusChangingApplicationEventKind,
-}
+export type ListActivitiesInput = ActivityListQueryRequest
 
-type AppendApplicationEventInputBase = {
-  readonly deviceId: string | null
-  readonly expectedVersion: number | null
-  readonly occurredAt: string
-  readonly operationId: string
-  readonly payload: JsonValue
-}
+export type { RegistryActivityListItem }
 
-export type AppendApplicationEventInput =
-  | (AppendApplicationEventInputBase & {
-      readonly kind: StatusChangingApplicationEventKind
-      readonly nextApplicationStatus: ApplicationStatus
-    })
-  | (AppendApplicationEventInputBase & {
-      readonly kind: InformationalApplicationEventKind
-      readonly nextApplicationStatus?: never
-    })
-
-export type ListEventsInput = EventListQueryRequest
-
-export type { RegistryEventListItem }
-
-/** Cursor page returned by registry-wide event list operations. */
-export type EventListPage = QueryPage<RegistryEventListItem, CursorPageInfo>
+/** Cursor page returned by registry-wide activity list operations. */
+export type ActivityListPage = QueryPage<
+  RegistryActivityListItem,
+  CursorPageInfo
+>
 
 export type ConvertedCompensation = {
   readonly currencyCode: CurrencyCode
@@ -244,8 +203,8 @@ export type RecordListingObservationInput = {
   readonly expectedVersion?: number
   readonly mode: ListingCheckMode
   readonly observation: ListingObservation
-  readonly operationId: string
-  readonly operationRequestSignature: string
+  readonly idempotencyKey: string
+  readonly requestHash: string
   readonly runId?: string
 }
 
@@ -258,15 +217,15 @@ export type CheckListingResult = {
 
 export type ResolveListingAvailabilityInput = {
   readonly expectedVersion: number
-  readonly operationId: string
+  readonly idempotencyKey: string
   readonly resolution: 'open' | 'closed'
 }
 
 export type SubmitListingCheckFinding = {
   readonly applicationId: string
-  readonly canonicalUrl: string
+  readonly postingUrl: string
   readonly observation: ListingObservation
-  readonly operationId: string
+  readonly idempotencyKey: string
   readonly target: ListingCheckTarget
 }
 
@@ -317,39 +276,6 @@ export type OpaquePayloadInput = {
 
 /** Content-addressed metadata for bytes whose application shape is unknown. */
 export type OpaqueObjectMetadata = ArtifactMetadata
-
-/** Registry-owned metadata for one immutable facts release. */
-export type RegisterFactsReleaseInput = {
-  readonly assets: readonly FactsReleaseAsset[]
-  readonly catalogs: readonly FactsReleaseCatalog[]
-  readonly release: FactsRelease
-}
-
-export type FactsReleaseRecord = RegisterFactsReleaseInput
-
-export type ActiveFactsRelease = {
-  readonly assets: readonly FactsReleaseAsset[]
-  readonly catalog: FactsReleaseCatalog
-  readonly catalogs: readonly FactsReleaseCatalog[]
-  readonly channel: FactsChannel
-  readonly release: FactsRelease
-}
-
-export type ActiveFactsCatalogContent = ActiveFactsRelease & {
-  readonly catalogBytes: Uint8Array
-}
-
-export type ActiveFactsAssetContent = ActiveFactsRelease & {
-  readonly asset: FactsReleaseAsset
-  readonly bytes: Uint8Array
-}
-
-export type ActiveFactsContent = ActiveFactsCatalogContent & {
-  readonly assetContents: readonly {
-    readonly asset: FactsReleaseAsset
-    readonly bytes: Uint8Array
-  }[]
-}
 
 type PersistJobPostingSnapshotInputBase = {
   readonly fetcherVersion: string
@@ -403,9 +329,10 @@ export type ApproveContentRevisionInput = {
   readonly revisionId: string
 }
 
-export type PublishCvInput = {
+export type StageCvInput = {
   readonly expectedContentVersion: number
   readonly publicBaseUrl: string
+  readonly revisionId: string
 }
 
 export type ResolvedCvPublication = {
@@ -424,7 +351,6 @@ export type SetCvLinkAvailabilityInput = {
 export type StartPdfJobInput = {
   readonly expectedPublicationVersion: number
   readonly requestId: string
-  readonly rendererVersion: string
 }
 
 export type PdfArtifactJob = {

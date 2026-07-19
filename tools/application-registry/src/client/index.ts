@@ -6,18 +6,15 @@ export * from './model'
 export {
   addApplicationNote,
   createApplication,
+  listApplicationActivities,
   listApplicationAnnotations,
   listApplicationCompensations,
-  listApplicationEvents,
   listApplicationFacets,
   listApplications,
-  listRegistryEvents,
-  patchApplication,
-  removeApplication,
-  replaceApplicationLabels,
+  listRegistryActivities,
   showApplication,
   syncApplicationRegistry,
-  upsertApplication,
+  updateApplication,
 } from './operations'
 export {
   type RegistryFailureDisposition,

@@ -2,10 +2,6 @@ import {
   contentEntries,
   contentRevisions,
   cvLinks,
-  factsChannels,
-  factsReleaseAssets,
-  factsReleaseCatalogs,
-  factsReleases,
   generatedArtifacts,
   jobPostingSnapshots,
   pdfGenerationOutbox,
@@ -23,7 +19,6 @@ import type {
   PersistedContentEntry,
   PersistedContentRevision,
   PersistedCvLink,
-  PersistedFactsRelease,
   PersistedGeneratedArtifact,
   PersistedJobPostingSnapshot,
   PersistedPdfGenerationOutbox,
@@ -74,136 +69,6 @@ export const persistJobPostingSnapshot = (
     .pipe(
       Effect.asVoid,
       Effect.mapError(databaseFailure('Failed to persist job posting snapshot'))
-    )
-
-export const findFactsRelease = (
-  database: RegistryQueryDatabase,
-  releaseId: string
-) =>
-  database
-    .select()
-    .from(factsReleases)
-    .where(eq(factsReleases.id, releaseId))
-    .limit(1)
-    .pipe(
-      Effect.map(first),
-      Effect.mapError(databaseFailure('Failed to load facts release'))
-    )
-
-export const listFactsReleaseCatalogs = (
-  database: RegistryQueryDatabase,
-  releaseId: string
-) =>
-  database
-    .select()
-    .from(factsReleaseCatalogs)
-    .where(eq(factsReleaseCatalogs.releaseId, releaseId))
-    .orderBy(asc(factsReleaseCatalogs.locale))
-    .pipe(Effect.mapError(databaseFailure('Failed to list facts catalogs')))
-
-export const listFactsReleaseAssets = (
-  database: RegistryQueryDatabase,
-  releaseId: string
-) =>
-  database
-    .select()
-    .from(factsReleaseAssets)
-    .where(eq(factsReleaseAssets.releaseId, releaseId))
-    .orderBy(asc(factsReleaseAssets.assetId))
-    .pipe(Effect.mapError(databaseFailure('Failed to list facts assets')))
-
-export const findActiveFactsCatalog = (
-  database: RegistryQueryDatabase,
-  channel: string,
-  locale: string
-) =>
-  database
-    .select({
-      channel: factsChannels,
-      release: factsReleases,
-      catalog: factsReleaseCatalogs,
-    })
-    .from(factsChannels)
-    .innerJoin(
-      factsReleases,
-      eq(factsChannels.activeReleaseId, factsReleases.id)
-    )
-    .innerJoin(
-      factsReleaseCatalogs,
-      and(
-        eq(factsReleaseCatalogs.releaseId, factsReleases.id),
-        eq(factsReleaseCatalogs.locale, locale)
-      )
-    )
-    .where(eq(factsChannels.name, channel))
-    .limit(1)
-    .pipe(
-      Effect.map(first),
-      Effect.mapError(databaseFailure('Failed to load active facts catalog'))
-    )
-
-export const registerFactsRelease = (
-  database: RegistryConnections,
-  input: PersistedFactsRelease
-) => {
-  const statements: [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]] = [
-    database.batch
-      .insert(factsReleases)
-      .values(input.release)
-      .onConflictDoNothing({ target: factsReleases.id }),
-    ...input.catalogs.map((catalog) =>
-      database.batch
-        .insert(factsReleaseCatalogs)
-        .values(catalog)
-        .onConflictDoNothing({
-          target: [factsReleaseCatalogs.releaseId, factsReleaseCatalogs.locale],
-        })
-    ),
-    ...input.assets.map((asset) =>
-      database.batch
-        .insert(factsReleaseAssets)
-        .values(asset)
-        .onConflictDoNothing({
-          target: [factsReleaseAssets.releaseId, factsReleaseAssets.assetId],
-        })
-    ),
-  ]
-
-  return runBatch(
-    database.batch,
-    'facts release registration',
-    statements
-  ).pipe(Effect.asVoid)
-}
-
-export const activateFactsRelease = (
-  database: RegistryQueryDatabase,
-  channel: string,
-  releaseId: string,
-  expectedVersion: number,
-  updatedAt: string
-) =>
-  database
-    .insert(factsChannels)
-    .values({
-      name: channel,
-      activeReleaseId: releaseId,
-      version: 1,
-      updatedAt,
-    })
-    .onConflictDoUpdate({
-      target: factsChannels.name,
-      set: {
-        activeReleaseId: releaseId,
-        updatedAt,
-        version: sql`${factsChannels.version} + 1`,
-      },
-      setWhere: eq(factsChannels.version, expectedVersion),
-    })
-    .returning({ name: factsChannels.name })
-    .pipe(
-      Effect.map((rows) => rows.length > 0),
-      Effect.mapError(databaseFailure('Failed to activate facts release'))
     )
 
 export const createContentEntry = (
@@ -427,7 +292,7 @@ export const findCvLinkByEntry = (
       Effect.mapError(databaseFailure('Failed to load content CV link'))
     )
 
-export const publishCvLink = (
+export const stageCvLink = (
   database: RegistryQueryDatabase,
   link: PersistedCvLink
 ) =>
@@ -435,20 +300,21 @@ export const publishCvLink = (
     .insert(cvLinks)
     .values({
       ...link,
-      disabledAt: null,
-      disabledReason: null,
-      enabled: true,
+      disabledAt: link.updatedAt,
+      disabledReason: 'draft_revision',
+      enabled: false,
       publicationVersion: 1,
       version: 1,
     })
     .onConflictDoUpdate({
       target: cvLinks.contentEntryId,
       set: {
-        publishedRevisionId: link.publishedRevisionId,
+        currentRevisionId: link.currentRevisionId,
+        previewToken: link.previewToken,
         publicUrl: link.publicUrl,
-        disabledAt: null,
-        disabledReason: null,
-        enabled: true,
+        disabledAt: link.updatedAt,
+        disabledReason: 'draft_revision',
+        enabled: false,
         updatedAt: link.updatedAt,
         publicationVersion: sql`${cvLinks.publicationVersion} + 1`,
         version: sql`${cvLinks.version} + 1`,
@@ -456,7 +322,7 @@ export const publishCvLink = (
     })
     .pipe(
       Effect.asVoid,
-      Effect.mapError(databaseFailure('Failed to publish CV link'))
+      Effect.mapError(databaseFailure('Failed to stage CV page'))
     )
 
 export const setCvLinkEnabled = (
@@ -481,30 +347,7 @@ export const setCvLinkEnabled = (
       and(
         eq(cvLinks.id, id),
         eq(cvLinks.version, expectedVersion),
-        eq(cvLinks.publicationVersion, expectedPublicationVersion),
-        enabled
-          ? exists(
-              database
-                .select({ id: generatedArtifacts.id })
-                .from(generatedArtifacts)
-                .where(
-                  and(
-                    eq(generatedArtifacts.cvLinkId, cvLinks.id),
-                    eq(
-                      generatedArtifacts.contentRevisionId,
-                      cvLinks.publishedRevisionId
-                    ),
-                    eq(generatedArtifacts.kind, 'pdf'),
-                    eq(generatedArtifacts.status, 'ready'),
-                    eq(
-                      generatedArtifacts.publicationVersion,
-                      cvLinks.publicationVersion
-                    ),
-                    eq(generatedArtifacts.qrTarget, cvLinks.publicUrl)
-                  )
-                )
-            )
-          : sql`true`
+        eq(cvLinks.publicationVersion, expectedPublicationVersion)
       )
     )
     .returning({ id: cvLinks.id })
@@ -556,28 +399,7 @@ export const enableCvLinksForApplication = (
       and(
         eq(cvLinks.applicationId, applicationId),
         eq(cvLinks.enabled, false),
-        eq(cvLinks.disabledReason, disabledReason),
-        exists(
-          database
-            .select({ id: generatedArtifacts.id })
-            .from(generatedArtifacts)
-            .where(
-              and(
-                eq(generatedArtifacts.cvLinkId, cvLinks.id),
-                eq(
-                  generatedArtifacts.contentRevisionId,
-                  cvLinks.publishedRevisionId
-                ),
-                eq(generatedArtifacts.kind, 'pdf'),
-                eq(generatedArtifacts.status, 'ready'),
-                eq(
-                  generatedArtifacts.publicationVersion,
-                  cvLinks.publicationVersion
-                ),
-                eq(generatedArtifacts.qrTarget, cvLinks.publicUrl)
-              )
-            )
-        )
+        eq(cvLinks.disabledReason, disabledReason)
       )
     )
     .returning({ id: cvLinks.id })
@@ -640,6 +462,36 @@ export const findReadyArtifactForPublication = (
     .pipe(
       Effect.map(first),
       Effect.mapError(databaseFailure('Failed to load publication PDF'))
+    )
+
+export const findCurrentArtifactForPublication = (
+  database: RegistryQueryDatabase,
+  cvLinkId: string,
+  contentRevisionId: string,
+  rendererVersion: string | null,
+  publicationVersion: number,
+  qrTarget: string
+) =>
+  database
+    .select()
+    .from(generatedArtifacts)
+    .where(
+      and(
+        eq(generatedArtifacts.cvLinkId, cvLinkId),
+        eq(generatedArtifacts.contentRevisionId, contentRevisionId),
+        eq(generatedArtifacts.kind, 'pdf'),
+        rendererVersion === null
+          ? sql`true`
+          : eq(generatedArtifacts.rendererVersion, rendererVersion),
+        eq(generatedArtifacts.publicationVersion, publicationVersion),
+        eq(generatedArtifacts.qrTarget, qrTarget)
+      )
+    )
+    .orderBy(desc(generatedArtifacts.createdAt), desc(generatedArtifacts.id))
+    .limit(1)
+    .pipe(
+      Effect.map(first),
+      Effect.mapError(databaseFailure('Failed to load current CV PDF artifact'))
     )
 
 export const persistPendingArtifact = (
@@ -784,6 +636,7 @@ export const markArtifactReady = (
       sha256: artifact.sha256,
       byteLength: artifact.byteLength,
       mediaType: artifact.mediaType,
+      rendererVersion: artifact.rendererVersion,
       errorCode: null,
       errorMessage: null,
       generatedAt: artifact.generatedAt,
@@ -800,10 +653,9 @@ export const markArtifactReady = (
             .where(
               and(
                 eq(cvLinks.id, artifact.cvLinkId),
-                eq(cvLinks.enabled, true),
                 eq(cvLinks.publicationVersion, artifact.publicationVersion),
                 eq(cvLinks.publicUrl, artifact.qrTarget),
-                eq(cvLinks.publishedRevisionId, artifact.contentRevisionId)
+                eq(cvLinks.currentRevisionId, artifact.contentRevisionId)
               )
             )
         )

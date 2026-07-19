@@ -2,6 +2,7 @@ import type { FactsCatalogueV1 } from '@cv/contracts/facts'
 import type { Schema } from 'effect'
 
 import type {
+  FactsCurrentPointerV1Schema,
   FactsReleaseManifestV1Schema,
   FactsReleaseProvenanceSchema,
 } from './schema'
@@ -12,6 +13,10 @@ export type FactsReleaseProvenance = Schema.Schema.Type<
 
 export type FactsReleaseManifestV1 = Schema.Schema.Type<
   typeof FactsReleaseManifestV1Schema
+>
+
+export type FactsCurrentPointerV1 = Schema.Schema.Type<
+  typeof FactsCurrentPointerV1Schema
 >
 
 export type FactsAssetSource = {
@@ -46,34 +51,18 @@ export type CompiledFactsRelease = {
   readonly releaseId: string
 }
 
-export type FactsReleaseRegistration = {
-  readonly assets: ReadonlyArray<{
-    readonly assetId: string
-    readonly byteLength: number
-    readonly fileName: string
-    readonly mediaType: string
-    readonly objectKey: string
-    readonly releaseId: string
-    readonly sha256: string
-  }>
-  readonly catalogs: ReadonlyArray<{
-    readonly byteLength: number
-    readonly locale: string
-    readonly mediaType: string
-    readonly objectKey: string
-    readonly releaseId: string
-    readonly sha256: string
-  }>
-  readonly release: {
-    readonly compilerCommit: string
-    readonly compilerRepository: string
-    readonly createdAt: string
-    readonly factsSchemaVersion: string
-    readonly id: string
-    readonly manifestByteLength: number
-    readonly manifestObjectKey: string
-    readonly manifestSha256: string
-    readonly sourceCommit: string
-    readonly sourceRepository: string
-  }
+export type PublishedFactsObject = {
+  readonly byteLength: number
+  readonly bytes: Uint8Array
+  readonly cacheControl: string
+  readonly key: string
+  readonly mediaType: string
+  readonly sha256: string
+}
+
+export type PublishedFactsRelease = {
+  readonly immutableObjectCount: number
+  readonly pointer: FactsCurrentPointerV1
+  readonly releaseId: string
+  readonly status: 'activated' | 'already-active'
 }

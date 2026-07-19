@@ -6,14 +6,14 @@ import { HttpApiBuilder } from 'effect/unstable/httpapi'
 import { makeRegistryServiceLayer } from '../layers/registry'
 import type { ApplicationRegistryEnv } from '../worker/types'
 import { HealthHandlersLayer } from './handlers/health'
-import { RegistryHandlersLayer } from './handlers/registry'
+import { RegistryHandlersLayers } from './handlers/registry'
 import { RegistryAuthorizationLayer } from './middleware/auth'
 
 const ApiHandlersLayer = Layer.provide(
   HttpApiBuilder.layer(ApplicationRegistryApi, {
     openapiPath: '/openapi.json',
   }),
-  [HealthHandlersLayer, RegistryHandlersLayer]
+  [HealthHandlersLayer, ...RegistryHandlersLayers]
 )
 
 const handlerLayer = (environment: ApplicationRegistryEnv) => {

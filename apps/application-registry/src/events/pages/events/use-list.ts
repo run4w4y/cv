@@ -1,5 +1,5 @@
-import { decodeListEventsSearchParams } from '@cv/application-registry-api-contract'
-import { eventListQuery } from '@cv/application-registry-entity/query'
+import { decodeListActivitiesSearchParams } from '@cv/application-registry-api-contract'
+import { activityListQuery } from '@cv/application-registry-entity/query'
 import { useAtom, useAtomSet, useAtomValue } from '@effect/atom-react'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import * as React from 'react'
@@ -15,7 +15,7 @@ type EventsWorkspace = ReturnType<typeof useEventsWorkspace>
 
 export const useEventsList = (workspace: EventsWorkspace) => {
   const orderBy = workspace.sorting.flatMap((item) =>
-    eventListQuery.fields.flatMap((field) =>
+    activityListQuery.fields.flatMap((field) =>
       field.sortable && field.name === item.id
         ? [
             {
@@ -30,7 +30,7 @@ export const useEventsList = (workspace: EventsWorkspace) => {
     if (workspace.filters.decoded.canonicalValue === undefined) return undefined
     const search = new URLSearchParams()
     search.set('filters', workspace.filters.decoded.canonicalValue)
-    return decodeListEventsSearchParams(search).filters
+    return decodeListActivitiesSearchParams(search).filters
   })()
   const requestInput: EventsListRequest = {
     ...(appliedFilters === undefined ? {} : { filters: appliedFilters }),
@@ -50,17 +50,17 @@ export const useEventsList = (workspace: EventsWorkspace) => {
   const events = requestEnabled ? (page?.items ?? []) : []
   const loading = requestEnabled && eventsResult.waiting && page === undefined
   const error = workspace.filters.decoded.blocksRequest
-    ? 'The filters URL is malformed, duplicated, or invalid. Correct or remove the filters parameter before loading events.'
+    ? 'The filters URL is malformed, duplicated, or invalid. Correct or remove the filters parameter before loading activities.'
     : AsyncResult.matchWithError(eventsResult, {
         onInitial: () => undefined,
         onError: (reason) =>
           reason instanceof Error
             ? reason.message
-            : 'The event history could not be loaded.',
+            : 'The activity history could not be loaded.',
         onDefect: (reason) =>
           reason instanceof Error
             ? reason.message
-            : 'The event history could not be loaded.',
+            : 'The activity history could not be loaded.',
         onSuccess: () => undefined,
       })
 

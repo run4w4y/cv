@@ -18,7 +18,7 @@ import {
 import { RawJsonEditor, SchemaEditor } from '@cv/schema-editor/react'
 import { Ban, Check, CircleAlert, Save, Send, X } from 'lucide-react'
 
-import type { PreparationWorkspace } from '../../workspace/atoms'
+import type { PreparationWorkspace } from '@/preparation/workspace/atoms'
 import type { CvPreparationActions } from './actions'
 
 const issueSummary = (issues: ReadonlyArray<{ readonly message: string }>) =>
@@ -32,8 +32,6 @@ export const CvEditorCard = ({
   readonly workspace: PreparationWorkspace
 }) => {
   const { editor, run } = workspace
-  const previewFitsOnePage =
-    actions.document !== null && editor.layoutAssessment?.status === 'fits'
   const detachedCandidate =
     editor.workflowCandidate._tag === 'Detached'
       ? editor.workflowCandidate
@@ -61,21 +59,6 @@ export const CvEditorCard = ({
           <div className="flex flex-wrap gap-2">
             <Badge variant={editor.validation.valid ? 'secondary' : 'danger'}>
               {editor.validation.valid ? 'Schema valid' : 'Needs attention'}
-            </Badge>
-            <Badge
-              variant={
-                editor.layoutAssessment?.status === 'overflow'
-                  ? 'danger'
-                  : previewFitsOnePage
-                    ? 'secondary'
-                    : 'outline'
-              }
-            >
-              {editor.layoutAssessment?.status === 'overflow'
-                ? 'A4 overflow'
-                : previewFitsOnePage
-                  ? 'One A4 page'
-                  : 'Measuring A4'}
             </Badge>
             {editor.isApproved ? (
               <Badge variant="secondary">Approved</Badge>
@@ -172,7 +155,8 @@ export const CvEditorCard = ({
               actions.commandPending ||
               actions.publicationExecuting ||
               actions.approvedRevision === null ||
-              !previewFitsOnePage
+              actions.publication === null ||
+              actions.publication.link.enabled
             }
             onClick={() => void actions.publish()}
           >

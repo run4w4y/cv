@@ -9,11 +9,9 @@ import {
   ContentCrud,
   CvAnalyticsCrud,
   CvLinksCrud,
-  FactsReleasesCrud,
   JobPostingSnapshotsCrud,
   type PersistedApplication,
   type PersistedContentRevision,
-  type PersistedFactsRelease,
   type PersistedGeneratedArtifact,
   type PersistedPdfGenerationOutbox,
 } from '../src'
@@ -24,56 +22,24 @@ let harness: RegistryMiniflareHarness
 const recordedAt = '2026-07-17T12:00:00.000Z'
 
 const application: PersistedApplication = {
+  activity: {
+    activityId: 'content-application-created',
+    actor: 'system',
+    kind: 'application_created',
+    occurredAt: recordedAt,
+    payload: {},
+    source: 'migration',
+  },
   applicationId: 'content-application-1',
-  canonicalUrl: 'https://example.test/jobs/content-1',
   company: 'Content Test',
-  jobKey: 'test:content-1',
   location: 'Remote',
   labels: ['analytics'],
+  postingFingerprint: 'https://example.test/jobs/content-1',
+  postingUrl: 'https://example.test/jobs/content-1',
+  postingUrlNormalized: 'https://example.test/jobs/content-1',
   recordedAt,
   role: 'Platform Engineer',
-  source: 'test',
-  sourceJobId: null,
 }
-
-const factsRelease = (
-  id: string,
-  sourceCommit: string
-): PersistedFactsRelease => ({
-  release: {
-    id,
-    compilerCommit: 'compiler-commit-1',
-    compilerRepository: 'cv',
-    createdAt: recordedAt,
-    factsSchemaVersion: 'cv.facts.v1',
-    manifestByteLength: 128,
-    manifestObjectKey: `sha256/${id}-manifest`,
-    manifestSha256: `${id}-manifest`,
-    sourceCommit,
-    sourceRepository: 'cv-content',
-  },
-  catalogs: [
-    {
-      byteLength: 512,
-      locale: 'en',
-      mediaType: 'application/json',
-      objectKey: `sha256/${id}-catalog`,
-      releaseId: id,
-      sha256: `${id}-catalog`,
-    },
-  ],
-  assets: [
-    {
-      assetId: 'portrait',
-      byteLength: 1_024,
-      fileName: 'portrait.webp',
-      mediaType: 'image/webp',
-      objectKey: `sha256/${id}-portrait`,
-      releaseId: id,
-      sha256: `${id}-portrait`,
-    },
-  ],
-})
 
 const revision = (
   id: string,
@@ -145,7 +111,6 @@ const runCrud = <A, E>(
     | ContentCrud
     | CvAnalyticsCrud
     | CvLinksCrud
-    | FactsReleasesCrud
     | JobPostingSnapshotsCrud
   >
 ) =>
@@ -176,72 +141,22 @@ after(async () => {
   await harness.dispose()
 })
 
-test('registers immutable facts releases and activates them with compare-and-swap', async () => {
-  const result = await runCrud(
-    Effect.gen(function* () {
-      const facts = yield* FactsReleasesCrud
-      yield* facts.register(factsRelease('facts-release-1', 'source-commit-1'))
-      yield* facts.register(factsRelease('facts-release-2', 'source-commit-2'))
-
-      const created = yield* facts.activate(
-        'stable',
-        'facts-release-1',
-        0,
-        recordedAt
-      )
-      const stale = yield* facts.activate(
-        'stable',
-        'facts-release-2',
-        0,
-        recordedAt
-      )
-      const advanced = yield* facts.activate(
-        'stable',
-        'facts-release-2',
-        1,
-        '2026-07-17T13:00:00.000Z'
-      )
-
-      return {
-        active: yield* facts.findActiveCatalog('stable', 'en'),
-        advanced,
-        assets: yield* facts.assets('facts-release-2'),
-        created,
-        stale,
-      }
-    })
-  )
-
-  assert.equal(result.created, true)
-  assert.equal(result.stale, false)
-  assert.equal(result.advanced, true)
-  assert.equal(result.active?.release.id, 'facts-release-2')
-  assert.equal(result.active?.channel.version, 2)
-  assert.equal(result.active?.catalog.locale, 'en')
-  assert.deepEqual(
-    result.assets.map(({ assetId }) => assetId),
-    ['portrait']
-  )
-})
-
-test('keeps content history linear and preserves the public token across publications', async () => {
+test('keeps content history linear and preserves page identity while staging revisions', async () => {
   const result = await runCrud(
     Effect.gen(function* () {
       const content = yield* ContentCrud
       const analytics = yield* CvAnalyticsCrud
-      const facts = yield* FactsReleasesCrud
       const links = yield* CvLinksCrud
       const snapshots = yield* JobPostingSnapshotsCrud
 
       yield* seedApplication
-      yield* facts.register(factsRelease('facts-release-1', 'source-commit-1'))
       yield* snapshots.persist({
         applicationId: application.applicationId,
         errorCode: null,
         errorMessage: null,
         fetchedAt: recordedAt,
         fetcherVersion: 'fetcher-v1',
-        finalUrl: application.canonicalUrl,
+        finalUrl: application.postingUrl,
         id: 'job-snapshot-1',
         normalizedByteLength: 100,
         normalizedMediaType: 'text/plain',
@@ -251,7 +166,7 @@ test('keeps content history linear and preserves the public token across publica
         rawMediaType: 'text/html',
         rawObjectKey: 'sha256/job-raw',
         rawSha256: 'job-raw',
-        requestedUrl: application.canonicalUrl,
+        requestedUrl: application.postingUrl,
         status: 'fetched',
       })
       yield* content.createEntry({
@@ -280,12 +195,13 @@ test('keeps content history linear and preserves the public token across publica
         recordedAt
       )
 
-      yield* links.publish({
+      yield* links.stage({
         applicationId: application.applicationId,
         contentEntryId: 'content-entry-1',
         createdAt: recordedAt,
+        currentRevisionId: 'content-revision-1',
         id: 'cv-link-1',
-        publishedRevisionId: 'content-revision-1',
+        previewToken: 'preview-token-1',
         publicUrl: 'https://cv.example.test/cv/public-token-1',
         token: 'public-token-1',
         updatedAt: recordedAt,
@@ -302,16 +218,27 @@ test('keeps content history linear and preserves the public token across publica
         4,
         '2026-07-17T13:01:00.000Z'
       )
-      yield* links.publish({
+      yield* links.stage({
         applicationId: application.applicationId,
         contentEntryId: 'content-entry-1',
         createdAt: '2026-07-17T13:02:00.000Z',
+        currentRevisionId: 'content-revision-2',
         id: 'replacement-link-id',
-        publishedRevisionId: 'content-revision-2',
+        previewToken: 'preview-token-2',
         publicUrl: 'https://cv.example.test/cv/replacement-token',
         token: 'replacement-token',
         updatedAt: '2026-07-17T13:02:00.000Z',
       })
+
+      const stagedLink = yield* links.findByEntry('content-entry-1')
+      const initiallyEnabled = yield* links.setEnabled(
+        'cv-link-1',
+        stagedLink?.version ?? -1,
+        stagedLink?.publicationVersion ?? -1,
+        true,
+        null,
+        '2026-07-17T13:30:00.000Z'
+      )
 
       const disabled = yield* links.disableForApplication(
         application.applicationId,
@@ -356,6 +283,7 @@ test('keeps content history linear and preserves the public token across publica
         enabled,
         entry: yield* content.findEntry('content-entry-1'),
         first,
+        initiallyEnabled,
         latestSnapshot: yield* snapshots.latest(application.applicationId),
         link: yield* links.findByEntry('content-entry-1'),
         manualNotRestored,
@@ -375,28 +303,29 @@ test('keeps content history linear and preserves the public token across publica
       application: {
         appliedAt: null,
         applicationStatus: 'not_started',
-        canonicalUrl: application.canonicalUrl,
         company: application.company,
         createdAt: recordedAt,
         id: application.applicationId,
         listingAvailability: 'unchecked',
+        postingUrl: application.postingUrl,
         role: application.role,
       },
       labels: ['analytics'],
       link: {
         contentEntryId: 'content-entry-1',
         createdAt: recordedAt,
-        enabled: false,
+        enabled: true,
         id: 'cv-link-1',
-        publishedRevisionId: 'content-revision-2',
+        currentRevisionId: 'content-revision-2',
         token: 'public-token-1',
-        updatedAt: '2026-07-17T14:45:00.000Z',
+        updatedAt: '2026-07-17T15:00:00.000Z',
       },
       locale: 'en',
     },
   ])
   assert.equal(result.second, true)
   assert.equal(result.approvedSecond, true)
+  assert.equal(result.initiallyEnabled, true)
   assert.equal(result.entry?.headRevisionId, 'content-revision-2')
   assert.equal(result.entry?.approvedRevisionId, 'content-revision-2')
   assert.equal(result.entry?.version, 5)
@@ -408,17 +337,18 @@ test('keeps content history linear and preserves the public token across publica
   assert.equal(result.disabled, 1)
   assert.equal(result.disabledLink?.enabled, false)
   assert.equal(result.disabledLink?.disabledReason, 'application_rejected')
-  assert.equal(result.restored, 0)
+  assert.equal(result.restored, 1)
   assert.equal(result.manualNotRestored, 0)
-  assert.equal(result.enabled, false)
+  assert.equal(result.enabled, true)
   assert.equal(result.link?.id, 'cv-link-1')
   assert.equal(result.link?.token, 'public-token-1')
   assert.equal(
     result.link?.publicUrl,
     'https://cv.example.test/cv/replacement-token'
   )
-  assert.equal(result.link?.publishedRevisionId, 'content-revision-2')
-  assert.equal(result.link?.enabled, false)
+  assert.equal(result.link?.currentRevisionId, 'content-revision-2')
+  assert.equal(result.link?.previewToken, 'preview-token-2')
+  assert.equal(result.link?.enabled, true)
 })
 
 test('moves a PDF artifact from pending to ready without losing its QR target', async () => {
@@ -426,19 +356,17 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
     Effect.gen(function* () {
       const artifacts = yield* ArtifactsCrud
       const content = yield* ContentCrud
-      const facts = yield* FactsReleasesCrud
       const links = yield* CvLinksCrud
       const snapshots = yield* JobPostingSnapshotsCrud
 
       yield* seedApplication
-      yield* facts.register(factsRelease('facts-release-1', 'source-commit-1'))
       yield* snapshots.persist({
         applicationId: application.applicationId,
         errorCode: null,
         errorMessage: null,
         fetchedAt: recordedAt,
         fetcherVersion: 'fetcher-v1',
-        finalUrl: application.canonicalUrl,
+        finalUrl: application.postingUrl,
         id: 'job-snapshot-1',
         normalizedByteLength: null,
         normalizedMediaType: null,
@@ -448,7 +376,7 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
         rawMediaType: null,
         rawObjectKey: null,
         rawSha256: null,
-        requestedUrl: application.canonicalUrl,
+        requestedUrl: application.postingUrl,
         status: 'provided',
       })
       yield* content.createEntry({
@@ -475,12 +403,13 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
         3,
         recordedAt
       )
-      yield* links.publish({
+      yield* links.stage({
         applicationId: application.applicationId,
         contentEntryId: 'content-entry-1',
         createdAt: recordedAt,
+        currentRevisionId: 'content-revision-2',
         id: 'cv-link-1',
-        publishedRevisionId: 'content-revision-2',
+        previewToken: 'preview-token-1',
         publicUrl: 'https://cv.example.test/cv/public-token-1',
         token: 'public-token-1',
         updatedAt: recordedAt,
@@ -628,19 +557,17 @@ test('deleting an application cascades through its complete prepared CV graph', 
       const applications = yield* ApplicationsCrud
       const artifacts = yield* ArtifactsCrud
       const content = yield* ContentCrud
-      const facts = yield* FactsReleasesCrud
       const links = yield* CvLinksCrud
       const snapshots = yield* JobPostingSnapshotsCrud
 
       yield* seedApplication
-      yield* facts.register(factsRelease('facts-release-1', 'source-commit-1'))
       yield* snapshots.persist({
         applicationId: application.applicationId,
         errorCode: null,
         errorMessage: null,
         fetchedAt: recordedAt,
         fetcherVersion: 'fetcher-v1',
-        finalUrl: application.canonicalUrl,
+        finalUrl: application.postingUrl,
         id: 'job-snapshot-1',
         normalizedByteLength: 100,
         normalizedMediaType: 'text/plain',
@@ -650,7 +577,7 @@ test('deleting an application cascades through its complete prepared CV graph', 
         rawMediaType: 'text/html',
         rawObjectKey: 'sha256/job-raw',
         rawSha256: 'job-raw',
-        requestedUrl: application.canonicalUrl,
+        requestedUrl: application.postingUrl,
         status: 'fetched',
       })
       yield* content.createEntry({
@@ -672,12 +599,13 @@ test('deleting an application cascades through its complete prepared CV graph', 
         2,
         recordedAt
       )
-      yield* links.publish({
+      yield* links.stage({
         applicationId: application.applicationId,
         contentEntryId: 'content-entry-1',
         createdAt: recordedAt,
+        currentRevisionId: 'content-revision-1',
         id: 'cv-link-1',
-        publishedRevisionId: 'content-revision-1',
+        previewToken: 'preview-token-1',
         publicUrl: 'https://cv.example.test/c/public-token-1',
         token: 'public-token-1',
         updatedAt: recordedAt,
@@ -727,10 +655,4 @@ test('deleting an application cascades through its complete prepared CV graph', 
        from pdf_generation_outbox where artifact_id = 'pdf-artifact-1'`
   )
   assert.deepEqual(outboxRows, [{ count: 0 }])
-
-  const globalFacts = await harness.query<{ count: number }>(
-    `select count(*) as count from facts_releases where id = ?1`,
-    ['facts-release-1']
-  )
-  assert.deepEqual(globalFacts, [{ count: 1 }])
 })

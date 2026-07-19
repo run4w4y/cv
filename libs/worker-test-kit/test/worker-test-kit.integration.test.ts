@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { stat } from 'node:fs/promises'
 import { afterEach, test } from 'node:test'
 import {
-  applicationEvents,
+  applicationActivities,
   applications,
   registrySequence,
 } from '@cv/application-registry-entity'
@@ -31,7 +31,7 @@ test('migrates and bulk-seeds beyond one D1 batch with entity mappings', async (
   harnesses.push(harness)
   const graph = makeRegistryFactory({ seed: 101 }).graph({
     applicationCount: 101,
-    eventsPerApplication: 1,
+    activitiesPerApplication: 1,
   })
 
   await seedRegistryDatabase(harness.database, graph)
@@ -43,7 +43,7 @@ test('migrates and bulk-seeds beyond one D1 batch with entity mappings', async (
   )
   assert.deepEqual(
     await harness.query<{ readonly count: number }>(
-      'select count(*) as count from application_events'
+      'select count(*) as count from application_activities'
     ),
     [{ count: 101 }]
   )
@@ -62,14 +62,14 @@ test('migrates and bulk-seeds beyond one D1 batch with entity mappings', async (
     version: 1,
   })
 
-  const [event] = await connection
-    .select({ payload: applicationEvents.payload })
-    .from(applicationEvents)
-    .orderBy(applicationEvents.revision)
+  const [activity] = await connection
+    .select({ payload: applicationActivities.payload })
+    .from(applicationActivities)
+    .orderBy(applicationActivities.revision)
     .limit(1)
-  assert.deepEqual(event?.payload, {
+  assert.deepEqual(activity?.payload, {
+    activityIndex: 0,
     applicationIndex: 0,
-    eventIndex: 0,
   })
 
   const [sequence] = await connection
@@ -79,7 +79,7 @@ test('migrates and bulk-seeds beyond one D1 batch with entity mappings', async (
 
   const emptyGraph = makeRegistryFactory({ seed: 102 }).graph({
     applicationCount: 0,
-    eventsPerApplication: 0,
+    activitiesPerApplication: 0,
   })
   await seedRegistryDatabase(harness.database, emptyGraph)
   assert.deepEqual(

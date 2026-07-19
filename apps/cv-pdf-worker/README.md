@@ -3,8 +3,10 @@
 Private Cloudflare Queue consumer for CV PDF generation. The application
 registry API creates a pending artifact and transactional outbox record in D1,
 then emits a schema-versioned `PdfGenerationRequested` command. This Worker
-validates the pinned publication, renders its exact public URL with Browser
-Rendering, stores the content-addressed PDF in R2, and updates D1.
+validates the pinned page revision, renders its capability-protected preview
+with Browser Rendering, stores the content-addressed PDF in R2, and updates D1.
+The QR code still targets the stable public URL. Page visibility and PDF status
+are intentionally independent.
 
 Queue delivery is at least once, so every persistence operation is idempotent.
 Permanent layout/publication failures are recorded and acknowledged; transient

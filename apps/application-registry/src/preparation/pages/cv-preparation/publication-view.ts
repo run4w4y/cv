@@ -1,14 +1,12 @@
 import type { CvLink } from '@cv/application-registry-entity'
 
-import type { PublishedCvState } from '../../data'
-import type { CvPublicationRun } from '../../publication'
+import type { CvPageState } from '@/preparation/data'
+import type { CvPublicationRun } from '@/preparation/publication'
 
 const activePublicationTags = new Set<CvPublicationRun['_tag']>([
   'Queued',
   'PublishingLink',
   'StartingPdf',
-  'PollingPdf',
-  'VerifyingArtifact',
   'Cancelling',
 ])
 
@@ -23,11 +21,11 @@ const compareLinkFreshness = (left: CvLink, right: CvLink): number => {
   return left.version - right.version
 }
 
-const publicationFromRun = (
+const pageFromRun = (
   run: CvPublicationRun | null
-): PublishedCvState | null =>
+): CvPageState | null =>
   run?._tag === 'Published'
-    ? { artifact: run.result.artifact, link: run.result.link }
+    ? { artifact: null, link: run.result.link }
     : null
 
 /**
@@ -35,36 +33,36 @@ const publicationFromRun = (
  * results. The query wins ties; a newer Workflow publication remains visible
  * while its invalidated query catches up.
  */
-export const resolveCurrentCvPublication = ({
+export const resolveCurrentCvPage = ({
   availabilityLink,
   publicationRun,
-  queriedPublication,
+  queriedPage,
 }: {
   readonly availabilityLink: CvLink | null
   readonly publicationRun: CvPublicationRun | null
-  readonly queriedPublication: PublishedCvState | null
-}): PublishedCvState | null => {
-  const runPublication = publicationFromRun(publicationRun)
-  const publication =
-    runPublication === null
-      ? queriedPublication
-      : queriedPublication === null
-        ? runPublication
-        : compareLinkFreshness(queriedPublication.link, runPublication.link) >=
+  readonly queriedPage: CvPageState | null
+}): CvPageState | null => {
+  const runPage = pageFromRun(publicationRun)
+  const page =
+    runPage === null
+      ? queriedPage
+      : queriedPage === null
+        ? runPage
+        : compareLinkFreshness(queriedPage.link, runPage.link) >=
             0
-          ? queriedPublication
-          : runPublication
+          ? queriedPage
+          : runPage
   if (
-    publication === null ||
+    page === null ||
     availabilityLink === null ||
-    availabilityLink.id !== publication.link.id ||
-    availabilityLink.applicationId !== publication.link.applicationId ||
-    availabilityLink.contentEntryId !== publication.link.contentEntryId ||
+    availabilityLink.id !== page.link.id ||
+    availabilityLink.applicationId !== page.link.applicationId ||
+    availabilityLink.contentEntryId !== page.link.contentEntryId ||
     availabilityLink.publicationVersion !==
-      publication.link.publicationVersion ||
-    availabilityLink.version < publication.link.version
+      page.link.publicationVersion ||
+    availabilityLink.version < page.link.version
   ) {
-    return publication
+    return page
   }
-  return { ...publication, link: availabilityLink }
+  return { ...page, link: availabilityLink }
 }

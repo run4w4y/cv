@@ -4,7 +4,6 @@ import {
 } from '@cv/application-registry-entity'
 import {
   FormCombobox,
-  FormDescription,
   FormField,
   FormInput,
   FormItem,
@@ -61,25 +60,11 @@ export const NewApplicationFields = ({
       />
       <FormField
         control={form.control}
-        name="canonicalUrl"
+        name="postingUrl"
         render={({ field }) => (
           <FormItem className="sm:col-span-2">
-            <FormLabel required>Canonical URL</FormLabel>
+            <FormLabel required>Posting URL</FormLabel>
             <FormInput {...field} type="url" disabled={pending} />
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-      <FormField
-        control={form.control}
-        name="jobKey"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel required>Job key</FormLabel>
-            <FormInput {...field} disabled={pending} />
-            <FormDescription>
-              Stable unique identifier, for example greenhouse:12345.
-            </FormDescription>
             <FormMessage />
           </FormItem>
         )}
@@ -90,28 +75,6 @@ export const NewApplicationFields = ({
         render={({ field }) => (
           <FormItem>
             <FormLabel>Location</FormLabel>
-            <FormInput {...field} disabled={pending} />
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-      <FormField
-        control={form.control}
-        name="source"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel required>Source</FormLabel>
-            <FormInput {...field} disabled={pending} />
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-      <FormField
-        control={form.control}
-        name="sourceJobId"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Source job ID</FormLabel>
             <FormInput {...field} disabled={pending} />
             <FormMessage />
           </FormItem>

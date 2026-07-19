@@ -1,4 +1,4 @@
-import type { RegistryEventListItem } from '@cv/application-registry-api-contract'
+import type { RegistryActivityListItem } from '@cv/application-registry-api-contract'
 import { Badge } from '@cv/internal-ui'
 import type { ColumnDef } from '@tanstack/react-table'
 import { ExternalLink } from 'lucide-react'
@@ -6,7 +6,7 @@ import { formatDateTime } from '../../../lib/format'
 import { EventKindBadge } from '../event-kind-badge'
 import { EventPayload } from '../event-payload'
 
-export const eventColumns: ColumnDef<RegistryEventListItem>[] = [
+export const eventColumns: ColumnDef<RegistryActivityListItem>[] = [
   {
     accessorKey: 'occurredAt',
     header: 'Occurred',
@@ -36,7 +36,7 @@ export const eventColumns: ColumnDef<RegistryEventListItem>[] = [
   },
   {
     accessorKey: 'kind',
-    header: 'Event',
+    header: 'Activity',
     size: 190,
     cell: ({ getValue }) => <EventKindBadge kind={getValue<string>()} />,
   },
@@ -58,34 +58,18 @@ export const eventColumns: ColumnDef<RegistryEventListItem>[] = [
     ),
   },
   {
-    accessorKey: 'recordedAt',
-    header: 'Recorded',
-    size: 180,
-    cell: ({ getValue }) => (
-      <span className="whitespace-nowrap text-xs text-muted-foreground">
-        {formatDateTime(getValue<string>())}
-      </span>
-    ),
-  },
-  {
-    accessorKey: 'deviceId',
-    header: 'Device',
+    accessorKey: 'actor',
+    header: 'Actor',
     size: 180,
     cell: ({ getValue }) => {
-      const value = getValue<string | null>()
-      return value === null ? (
-        <span className="text-muted-foreground">—</span>
-      ) : (
-        <span className="whitespace-normal break-all font-mono text-xs text-muted-foreground">
-          {value}
-        </span>
-      )
+      const value = getValue<string>()
+      return <span className="text-xs text-muted-foreground">{value}</span>
     },
   },
   {
-    accessorKey: 'operationId',
-    header: 'Operation',
-    size: 240,
+    accessorKey: 'source',
+    header: 'Source',
+    size: 180,
     cell: ({ getValue }) => (
       <span className="whitespace-normal break-all font-mono text-xs text-muted-foreground">
         {getValue<string>()}
@@ -100,7 +84,7 @@ export const eventColumns: ColumnDef<RegistryEventListItem>[] = [
     size: 56,
     cell: ({ row }) => (
       <a
-        href={row.original.canonicalUrl}
+        href={row.original.postingUrl}
         target="_blank"
         rel="noreferrer"
         aria-label={`Open ${row.original.company} listing`}

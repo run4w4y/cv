@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
-import type { RegistryEventListItem } from '@cv/application-registry-api-contract'
+import type { RegistryActivityListItem } from '@cv/application-registry-api-contract'
 import type { SortingState } from '@tanstack/react-table'
 import { cleanup, render, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
@@ -13,19 +13,18 @@ afterEach(() => {
 })
 
 const event = {
-  id: 'event-1',
+  id: 'activity-1',
   applicationId: 'application-1',
-  canonicalUrl: 'https://example.test/jobs/one',
+  postingUrl: 'https://example.test/jobs/one',
   company: 'Example Company With A Name That Can Wrap',
   role: 'Staff Platform Engineer With A Long Specialization',
-  kind: 'stage_changed',
+  kind: 'status_changed',
   revision: 42,
   occurredAt: '2026-07-15T09:30:00.000Z',
-  recordedAt: '2026-07-15T09:31:00.000Z',
-  deviceId: 'device-1',
-  operationId: 'operation-1',
+  actor: 'system',
+  source: 'management',
   payload: { from: 'backlog', to: 'interviewing' },
-} as RegistryEventListItem
+} as RegistryActivityListItem
 
 const currentViewState: EventsSavedViewState = {
   filters: [],
@@ -43,8 +42,8 @@ const viewProps = {
   onApplyView: () => undefined,
 } as const
 
-describe('EventsTable', () => {
-  test('renders the complete event history table and puts View in the topbar', () => {
+describe('ActivitiesTable', () => {
+  test('renders the complete activity history table and puts View in the topbar', () => {
     const target = document.createElement('div')
     document.body.append(target)
     const sorting: SortingState = [{ id: 'revision', desc: true }]
@@ -67,13 +66,12 @@ describe('EventsTable', () => {
     )
 
     const table = view.getByRole('table')
-    expect(within(table).getAllByRole('columnheader')).toHaveLength(9)
-    expect(within(table).getAllByRole('cell')).toHaveLength(9)
-    expect(table.style.width).toBe('1816px')
+    expect(within(table).getAllByRole('columnheader')).toHaveLength(8)
+    expect(within(table).getAllByRole('cell')).toHaveLength(8)
     expect(view.getByText('From: backlog · To: interviewing')).toBeTruthy()
     expect(within(target).getByRole('button', { name: /view/i })).toBeTruthy()
     expect(
-      view.container.querySelector('[data-slot="events-table"]')
+      view.container.querySelector('[data-slot="activities-table"]')
     ).toBeTruthy()
     target.remove()
   })
@@ -138,7 +136,7 @@ describe('EventsTable', () => {
     )
     expect(
       initial.container.querySelectorAll('[data-slot="skeleton"]')
-    ).toHaveLength(81)
+    ).toHaveLength(72)
     initial.unmount()
 
     const refresh = render(
@@ -157,7 +155,9 @@ describe('EventsTable', () => {
       </MemoryRouter>
     )
     expect(
-      refresh.container.querySelector('[data-slot="events-refresh-overlay"]')
+      refresh.container.querySelector(
+        '[data-slot="activities-refresh-overlay"]'
+      )
     ).toBeTruthy()
   })
 })

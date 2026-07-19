@@ -33,7 +33,7 @@ import {
   CvPublicationsService,
   type CvPublicationsService as CvPublicationsServiceShape,
 } from '../services/cv-publications'
-import type { PublishCvInput, SetCvLinkAvailabilityInput } from '../types'
+import type { SetCvLinkAvailabilityInput, StageCvInput } from '../types'
 
 const requireCvEntry = (entry: ContentEntry) =>
   entry.kind === 'cv'
@@ -143,18 +143,24 @@ const make = Effect.gen(function* () {
       })
   )
 
-  const requirePublishableRevision = (
-    entry: ContentEntry,
-    revisionId: string | null
-  ) =>
-    revisionId
-      ? requireAssociatedRevision(content, entry.id, revisionId)
-      : Effect.fail(
-          new RegistryConflictError({
-            message:
-              'The CV content must have an approved revision before publication.',
-          })
+  const resolveStoredLink = Effect.fn('CvPublicationsService.resolveStored')(
+    (link: CvLink) =>
+      Effect.gen(function* () {
+        const entry = yield* requireAssociatedEntry(
+          content,
+          link.applicationId,
+          link.contentEntryId
         )
+        yield* requireCvEntry(entry)
+        const revision = yield* requireAssociatedRevision(
+          content,
+          entry.id,
+          link.currentRevisionId
+        )
+        const bytes = yield* readOpaquePayload(store, revision.sha256)
+        return { bytes, entry, link, revision }
+      })
+  )
 
   return {
     disableForApplication: Effect.fn(
@@ -193,18 +199,13 @@ const make = Effect.gen(function* () {
         )
       })
     ),
-    publish: Effect.fn('CvPublicationsService.publish')(
-      (applicationIdentifier: string, entryId: string, input: PublishCvInput) =>
+    stage: Effect.fn('CvPublicationsService.stage')(
+      (applicationIdentifier: string, entryId: string, input: StageCvInput) =>
         Effect.gen(function* () {
           const application = yield* findApplicationForContent(
             applications,
             applicationIdentifier
           )
-          if (application.applicationStatus === 'rejected') {
-            return yield* new RegistryConflictError({
-              message: 'A rejected application cannot publish a CV link.',
-            })
-          }
           const entry = yield* requireAssociatedEntry(
             content,
             application.id,
@@ -216,9 +217,10 @@ const make = Effect.gen(function* () {
               message: `Content entry version ${entry.version} does not match expected version ${input.expectedContentVersion}.`,
             })
           }
-          const revision = yield* requirePublishableRevision(
-            entry,
-            entry.approvedRevisionId
+          const revision = yield* requireAssociatedRevision(
+            content,
+            entry.id,
+            input.revisionId
           )
           const existing = yield* links.findByEntry(entry.id)
           if (existing && existing.applicationId !== application.id) {
@@ -228,34 +230,42 @@ const make = Effect.gen(function* () {
           }
 
           const token = existing?.token ?? newRegistryId().replaceAll('-', '')
+          const resolvedPublicUrl = yield* publicUrl(input.publicBaseUrl, token)
+          if (
+            existing?.currentRevisionId === revision.id &&
+            existing.publicUrl === resolvedPublicUrl
+          ) {
+            return existing
+          }
           const now = yield* registryNow
-          yield* links.publish({
+          yield* links.stage({
             applicationId: application.id,
             contentEntryId: entry.id,
             createdAt: existing?.createdAt ?? now,
+            currentRevisionId: revision.id,
             id: existing?.id ?? newRegistryId(),
-            publishedRevisionId: revision.id,
-            publicUrl: yield* publicUrl(input.publicBaseUrl, token),
+            previewToken: newRegistryId().replaceAll('-', ''),
+            publicUrl: resolvedPublicUrl,
             token,
             updatedAt: now,
           })
-          const published = yield* links.findByEntry(entry.id)
-          if (!published) {
+          const staged = yield* links.findByEntry(entry.id)
+          if (!staged) {
             return yield* missingRegistryData(
-              `Public CV link was not persisted for content entry ${entry.id}.`
+              `CV page was not staged for content entry ${entry.id}.`
             )
           }
           if (
-            published.applicationId !== application.id ||
-            published.publishedRevisionId !== revision.id ||
-            published.token !== token
+            staged.applicationId !== application.id ||
+            staged.currentRevisionId !== revision.id ||
+            staged.token !== token
           ) {
             return yield* new RegistryConflictError({
               message:
-                'The public CV link changed while publication was being recorded.',
+                'The CV page changed while its draft revision was being staged.',
             })
           }
-          return published
+          return staged
         })
     ),
     resolve: Effect.fn('CvPublicationsService.resolve')((token: string) =>
@@ -288,20 +298,21 @@ const make = Effect.gen(function* () {
             message: `Public CV link not found: ${token}`,
           })
         }
-        const entry = yield* requireAssociatedEntry(
-          content,
-          link.applicationId,
-          link.contentEntryId
-        )
-        yield* requireCvEntry(entry)
-        const revision = yield* requireAssociatedRevision(
-          content,
-          entry.id,
-          link.publishedRevisionId
-        )
-        const bytes = yield* readOpaquePayload(store, revision.sha256)
-        return { bytes, entry, link, revision }
+        return yield* resolveStoredLink(link)
       })
+    ),
+    resolvePreview: Effect.fn('CvPublicationsService.resolvePreview')(
+      (token: string, previewToken: string) =>
+        Effect.gen(function* () {
+          const link = yield* links.findByToken(token)
+          if (!link || link.previewToken !== previewToken) {
+            return yield* new RegistryNotFoundError({
+              identifier: token,
+              message: `CV preview not found: ${token}`,
+            })
+          }
+          return yield* resolveStoredLink(link)
+        })
     ),
     setAvailability: Effect.fn('CvPublicationsService.setAvailability')(
       (
@@ -335,10 +346,16 @@ const make = Effect.gen(function* () {
           if (link.enabled === input.enabled) return link
 
           if (input.enabled) {
+            if (entry.approvedRevisionId !== link.currentRevisionId) {
+              return yield* new RegistryConflictError({
+                message:
+                  'The staged CV revision must be approved before the page can be made public.',
+              })
+            }
             yield* requireAssociatedRevision(
               content,
               entry.id,
-              link.publishedRevisionId
+              link.currentRevisionId
             )
           }
           const reason = input.enabled

@@ -13,7 +13,6 @@ import {
   applicationIdentifierArgument,
   inputFlag,
   jsonFlag,
-  optionalFlag,
   optionalStringFlag,
 } from '../flags'
 import { ApplicationRegistryCliInputError, decodeJsonInput } from '../input'
@@ -45,11 +44,7 @@ const noteSource = Flag.string('source').pipe(
   Flag.withSchema(AddApplicationNoteRequestSchema.fields.source),
   Flag.withDefault('application-registry-cli')
 )
-const operationId = optionalFlag(
-  Flag.string('operation-id').pipe(
-    Flag.withSchema(AddApplicationNoteRequestSchema.fields.operationId)
-  )
-)
+const idempotencyKey = optionalStringFlag('idempotency-key')
 
 export const noteAddCommand = Command.make(
   'add',
@@ -59,14 +54,14 @@ export const noteAddCommand = Command.make(
     input,
     json: jsonFlag,
     kind: noteKind,
-    operationId,
+    idempotencyKey,
     source: noteSource,
   },
   (options) =>
     Effect.gen(function* () {
       const body = Option.getOrUndefined(options.body)
       const crypto = yield* Crypto.Crypto
-      const generatedOperationId = yield* crypto.randomUUIDv7
+      const generatedIdempotencyKey = yield* crypto.randomUUIDv7
       let request: AddApplicationNoteRequest
       if (options.input !== undefined) {
         request = yield* decodeJsonInput(
@@ -77,7 +72,6 @@ export const noteAddCommand = Command.make(
         request = {
           body,
           kind: options.kind,
-          operationId: options.operationId ?? generatedOperationId,
           source: options.source,
         }
       } else {
@@ -86,7 +80,11 @@ export const noteAddCommand = Command.make(
         })
       }
       const client = yield* ApplicationRegistryClient
-      const result = yield* client.addNote(options.identifier, request)
+      const result = yield* client.addNote(
+        options.identifier,
+        options.idempotencyKey ?? generatedIdempotencyKey,
+        request
+      )
       yield* printWriteResult(result, options.json)
     })
 ).pipe(Command.withDescription('Add a typed application note.'))
@@ -101,7 +99,8 @@ export const labelListCommand = Command.make(
   { identifier, json: jsonFlag },
   (options) =>
     ApplicationRegistryClient.pipe(
-      Effect.flatMap((client) => client.labels(options.identifier)),
+      Effect.flatMap((client) => client.annotations(options.identifier)),
+      Effect.map(({ labels }) => labels),
       Effect.flatMap(printJson)
     )
 )
@@ -116,8 +115,14 @@ export const labelSetCommand = Command.make(
         ReplaceApplicationLabelsRequestSchema
       )
       const client = yield* ApplicationRegistryClient
-      const labels = yield* client.replaceLabels(options.identifier, request)
-      yield* printJson(labels)
+      const application = yield* client.show(options.identifier)
+      const crypto = yield* Crypto.Crypto
+      const key = yield* crypto.randomUUIDv7
+      const result = yield* client.update(options.identifier, key, {
+        expectedVersion: request.expectedVersion ?? application.version,
+        labels: request.labels,
+      })
+      yield* printJson(result.labels)
     })
 )
 
@@ -133,14 +138,22 @@ const changeLabels = (
 ) =>
   Effect.gen(function* () {
     const client = yield* ApplicationRegistryClient
-    const current = yield* client.labels(options.identifier)
-    const existing = current.items.map(({ label }) => label)
+    const [application, current] = yield* Effect.all([
+      client.show(options.identifier),
+      client.annotations(options.identifier),
+    ])
+    const existing = current.labels.map(({ label }) => label)
     const labels =
       mode === 'add'
         ? uniq([...existing, ...options.labels])
         : existing.filter((label) => !options.labels.includes(label))
-    const updated = yield* client.replaceLabels(options.identifier, { labels })
-    yield* printJson(updated)
+    const crypto = yield* Crypto.Crypto
+    const key = yield* crypto.randomUUIDv7
+    const updated = yield* client.update(options.identifier, key, {
+      expectedVersion: application.version,
+      labels,
+    })
+    yield* printJson(updated.labels)
   })
 
 export const labelAddCommand = Command.make(

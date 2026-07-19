@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import type { Message } from '@cloudflare/workers-types'
-import type { PdfGenerationRequested } from '@cv/application-registry-api-contract'
+import {
+  cvPreviewUrl,
+  type PdfGenerationRequested,
+} from '@cv/application-registry-api-contract'
 import type {
   ContentEntry,
   ContentRevision,
@@ -9,15 +12,14 @@ import type {
 } from '@cv/application-registry-entity'
 import type { PdfArtifactJob } from '@cv/application-registry-service'
 import { Effect, Layer } from 'effect'
-
-import { PdfJobPermanentError, PdfJobTransientError } from './model'
 import { consumePdfMessageEffect, retryDelaySeconds } from './consumer'
+import { PdfJobPermanentError, PdfJobTransientError } from './model'
 import { processPdfJobEffect, recordPdfJobFailureEffect } from './processor'
 import {
-  type PdfArtifactPersistenceShape,
   PdfArtifactPersistence,
-  type PdfRendererShape,
+  type PdfArtifactPersistenceShape,
   PdfRenderer,
+  type PdfRendererShape,
 } from './services'
 
 const recordedAt = '2026-07-19T00:00:00.000Z'
@@ -61,8 +63,9 @@ const link: CvLink = {
   disabledReason: null,
   enabled: true,
   id: 'link-1',
+  previewToken: 'preview-token',
   publicationVersion: 2,
-  publishedRevisionId: revision.id,
+  currentRevisionId: revision.id,
   publicUrl: 'https://cv.example.test/c/public-token',
   token: 'public-token',
   updatedAt: recordedAt,
@@ -116,7 +119,6 @@ const persistence = (
   overrides: Partial<PdfArtifactPersistenceShape> = {}
 ): PdfArtifactPersistenceShape => ({
   complete: () => unused('complete'),
-  disable: () => unused('disable'),
   fail: () => unused('fail'),
   load: () => Effect.succeed(job()),
   ...overrides,
@@ -171,7 +173,7 @@ const queueMessage = (body: unknown, attempts = 1) => {
 }
 
 describe('PDF Queue job processor', () => {
-  test('renders the pinned public URL and completes the pending artifact', async () => {
+  test('renders the protected preview and completes the pending artifact', async () => {
     const renderedUrls: string[] = []
     const completions: Uint8Array[] = []
     const bytes = new Uint8Array([1, 2, 3])
@@ -179,7 +181,12 @@ describe('PDF Queue job processor', () => {
     await run(
       processPdfJobEffect(request),
       persistence({
-        complete: (_applicationId, _artifactId, completedBytes) => {
+        complete: (
+          _applicationId,
+          _artifactId,
+          rendererVersion,
+          completedBytes
+        ) => {
           completions.push(completedBytes)
           return Effect.succeed({
             ...artifact,
@@ -187,6 +194,7 @@ describe('PDF Queue job processor', () => {
             generatedAt: recordedAt,
             mediaType: 'application/pdf',
             objectKey: 'artifacts/artifact-1.pdf',
+            rendererVersion,
             sha256: 'pdf-sha',
             status: 'ready',
           })
@@ -195,12 +203,15 @@ describe('PDF Queue job processor', () => {
       renderer({
         render: (publicUrl) => {
           renderedUrls.push(publicUrl)
-          return Effect.succeed(bytes)
+          return Effect.succeed({
+            bytes,
+            rendererVersion: 'cv-render.v1:deployment-1',
+          })
         },
       })
     )
 
-    expect(renderedUrls).toEqual([link.publicUrl])
+    expect(renderedUrls).toEqual([cvPreviewUrl(link)])
     expect(completions).toEqual([bytes])
   })
 
@@ -213,7 +224,10 @@ describe('PDF Queue job processor', () => {
       renderer({
         render: () => {
           renderCalls += 1
-          return Effect.succeed(new Uint8Array())
+          return Effect.succeed({
+            bytes: new Uint8Array(),
+            rendererVersion: 'cv-render.v1:deployment-1',
+          })
         },
       })
     )
@@ -257,23 +271,17 @@ describe('PDF Queue job processor', () => {
     expect(error).toBe(transient)
   })
 
-  test('records a permanent failure and disables only its pinned publication', async () => {
+  test('records a permanent failure without changing page visibility', async () => {
     const failures: string[][] = []
-    const disabled: [number, string][] = []
     const permanent = new PdfJobPermanentError({
       cause: new Error('The CV exceeds one page.'),
       code: 'cv_page_overflow',
       message: 'The CV exceeds one page.',
-      publicationReason: 'CV content exceeds one A4 page.',
     })
 
     await run(
       recordPdfJobFailureEffect(request, permanent),
       persistence({
-        disable: (_request, version, reason) => {
-          disabled.push([version, reason])
-          return Effect.void
-        },
         fail: (_applicationId, artifactId, code, message) => {
           failures.push([artifactId, code, message])
           return Effect.succeed({
@@ -288,9 +296,6 @@ describe('PDF Queue job processor', () => {
     )
 
     expect(failures).toEqual([[artifact.id, permanent.code, permanent.message]])
-    expect(disabled).toEqual([
-      [artifact.publicationVersion, permanent.publicationReason],
-    ])
   })
 })
 
@@ -335,7 +340,6 @@ describe('PDF Queue message consumer', () => {
     await run(
       consumePdfMessageEffect(queued.message, true),
       persistence({
-        disable: () => Effect.void,
         fail: (_applicationId, _artifactId, errorCode, errorMessage) => {
           recordedCodes.push(errorCode)
           return Effect.succeed({

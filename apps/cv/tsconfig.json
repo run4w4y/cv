@@ -1,12 +1,32 @@
 {
-  "extends": "astro/tsconfigs/strict",
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "allowJs": true,
     "baseUrl": ".",
+    "esModuleInterop": true,
+    "incremental": true,
+    "isolatedModules": true,
     "jsx": "react-jsx",
     "jsxImportSource": "react",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "plugins": [{ "name": "next" }],
     "paths": {
       "@/*": ["src/*"]
     },
-    "types": ["astro/client", "@cloudflare/workers-types", "bun-types"]
-  }
+    "types": ["bun-types"]
+  },
+  "include": [
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "worker.ts",
+    "next.config.ts",
+    "open-next.config.ts",
+    "worker-configuration.d.ts"
+  ],
+  "exclude": ["node_modules", ".open-next"]
 }

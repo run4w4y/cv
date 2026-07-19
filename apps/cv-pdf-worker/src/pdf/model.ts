@@ -22,7 +22,6 @@ export class PdfJobPermanentError extends Schema.TaggedErrorClass<PdfJobPermanen
     cause: Schema.Defect(),
     code: PdfPermanentFailureCodeSchema,
     message: Schema.String,
-    publicationReason: Schema.String,
   }
 ) {}
 

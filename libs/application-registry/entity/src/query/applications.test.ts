@@ -140,9 +140,9 @@ describe('application list query definition', () => {
     })
 
     expect(rendered.params).toEqual(
-      Array.from({ length: 7 }, () => '%Effect engineer%')
+      Array.from({ length: 4 }, () => '%Effect engineer%')
     )
-    expect(rendered.sql.match(/escape '\\'/gu)).toHaveLength(7)
+    expect(rendered.sql.match(/escape '\\'/gu)).toHaveLength(4)
   })
 
   test('binds timestamp ranges from the published date tuple metadata', () => {

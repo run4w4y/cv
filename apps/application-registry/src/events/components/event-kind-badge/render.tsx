@@ -4,20 +4,16 @@ import { formatLabel } from '../../../lib/format'
 
 const variantForKind = (kind: string): NonNullable<BadgeProps['variant']> => {
   switch (kind) {
-    case 'submitted':
-    case 'interview_scheduled':
-    case 'offer_received':
+    case 'application_created':
+    case 'content_approved':
       return 'success'
-    case 'rejected':
-    case 'withdrawn':
-    case 'listing_closed':
+    case 'listing_availability_changed':
       return 'danger'
-    case 'follow_up_scheduled':
-    case 'stage_changed':
+    case 'follow_up_changed':
+    case 'status_changed':
       return 'warning'
-    case 'contact_logged':
     case 'note_added':
-    case 'research_updated':
+    case 'details_changed':
       return 'secondary'
     default:
       return 'outline'

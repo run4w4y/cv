@@ -1,16 +1,15 @@
-import type { ContentRevisionSource } from '@cv/application-registry-entity'
-import type { CvDocumentV1 } from '@cv/contracts/document'
-import type { CvPageLayoutAssessment } from '@cv/renderer'
-import type { ValidationResult } from '@cv/schema-editor/core'
-import type { Option } from 'effect'
-
-import type { CoverLetterDocument } from '../cover-letter-contract'
-import type { SavedContentRevision } from '../data'
+import type { CoverLetterDocument } from '@cv/application-preparation-workflow/cover-letter'
 import type {
   DocumentKind,
   PreparationRunStatus,
   SavedCandidate,
-} from '../workflow/domain'
+} from '@cv/application-preparation-workflow/domain'
+import type { ContentRevisionSource } from '@cv/application-registry-entity'
+import type { CvDocumentV1 } from '@cv/contracts/document'
+import type { ValidationResult } from '@cv/schema-editor/core'
+import type { Option } from 'effect'
+
+import type { SavedContentRevision } from '../data'
 
 export type PreparationEditorIdentity = {
   readonly applicationId: string
@@ -45,8 +44,6 @@ export type PreparationWorkflowCandidate =
 export type PreparationEditorLocalState = {
   readonly humanDraft: Option.Option<unknown>
   readonly lastMutationResult: SavedContentRevision | null
-  readonly layoutAssessment: CvPageLayoutAssessment | null
-  readonly layoutDocumentFingerprint: string | null
   readonly releasedDetachedCandidateRevisionId: string | null
 }
 
@@ -98,11 +95,5 @@ export type RecordPreparationSaveInput = {
 
 export type ReleaseDetachedPreparationWorkflowInput = {
   readonly candidateRevisionId: string
-  readonly identity: PreparationEditorIdentity
-}
-
-export type SetPreparationLayoutAssessmentInput = {
-  readonly assessment: CvPageLayoutAssessment | null
-  readonly document: unknown
   readonly identity: PreparationEditorIdentity
 }

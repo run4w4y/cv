@@ -21,7 +21,7 @@ export const createApplicationFilterFieldPresentation = (
     label: 'Application status',
   },
   appliedAt: timestamp('Applied time', 'When the application was submitted'),
-  canonicalUrl: { label: 'Canonical URL' },
+  postingUrl: { label: 'Posting URL' },
   company: {
     label: 'Company',
     options: options(facets?.companies ?? []),
@@ -31,20 +31,15 @@ export const createApplicationFilterFieldPresentation = (
     'Follow-up time',
     'Scheduled application follow-up timestamp'
   ),
-  identityAliases: { label: 'Identity aliases' },
   labels: {
     label: 'Labels',
     options: options(facets?.labels ?? []),
   },
-  lastContactAt: timestamp(
-    'Last contact time',
-    'Most recent candidate or company contact'
+  latestActivityAt: timestamp(
+    'Latest activity time',
+    'Timestamp of the latest backend-issued activity'
   ),
-  latestEventAt: timestamp(
-    'Latest event time',
-    'Timestamp of the latest registry event'
-  ),
-  latestEventKind: { label: 'Latest event kind' },
+  latestActivityKind: { label: 'Latest activity kind' },
   listingAvailability: { label: 'Listing availability' },
   listingCheckedAt: timestamp(
     'Listing checked time',
@@ -58,7 +53,6 @@ export const createApplicationFilterFieldPresentation = (
   personalPriority: {
     label: 'Personal priority',
   },
-  sourceJobId: { label: 'Source job ID' },
   targetStage: {
     label: 'Target stage',
   },

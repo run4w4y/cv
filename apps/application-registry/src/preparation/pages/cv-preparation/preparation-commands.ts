@@ -1,15 +1,15 @@
 import { useAtom, useAtomSet, useAtomValue } from '@effect/atom-react'
+import type { PreparationRun } from '@cv/application-preparation-workflow/domain'
+import { Cause } from 'effect'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import * as Atom from 'effect/unstable/reactivity/Atom'
 
-import { asyncResultFailureMessage } from '../../async-result'
-import { chatGptAuthenticatedAtom } from '../../auth/atoms'
-import { preparationCommandGateKey } from '../../command-gate'
-import { selectedPreparationModelAtom } from '../../forms/atoms'
-import { keyedCommandFamily } from '../../keyed-command'
-import { makeStartPreparationAtom } from '../../workflow/atoms'
-import type { PreparationRun } from '../../workflow/domain'
-import type { PreparationWorkspace } from '../../workspace/atoms'
+import { chatGptAuthenticatedAtom } from '@/preparation/auth/atoms'
+import { preparationCommandGateKey } from '@/preparation/command-gate'
+import { selectedPreparationModelAtom } from '@/preparation/forms/atoms'
+import { keyedCommandFamily } from '@/preparation/keyed-command'
+import { makeStartPreparationAtom } from '@/preparation/workflow/atoms'
+import type { PreparationWorkspace } from '@/preparation/workspace/atoms'
 
 const startPreparationFamily = keyedCommandFamily(
   'preparation/cv/command/start',
@@ -78,10 +78,10 @@ export const useCvPreparationCommands = ({
 
   return {
     authenticated,
-    error: asyncResultFailureMessage(
-      startResult,
-      'The CV preparation Workflow could not start.'
-    ),
+    error: AsyncResult.isFailure(startResult)
+      ? (Cause.prettyErrors(startResult.cause)[0]?.message ??
+        'The CV preparation Workflow could not start.')
+      : null,
     generate,
     mutationPending: startPending,
     reset: () => resetStartResult(Atom.Reset),

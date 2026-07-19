@@ -10,9 +10,9 @@ import {
 import { RefreshCw, Sparkles } from 'lucide-react'
 import { Link } from 'react-router'
 
-import { ModelSelector } from '../../components/model-selector'
-import { cvDocumentV1GuidanceItems } from '../../document-contract'
-import type { PreparationWorkspace } from '../../workspace/atoms'
+import { ModelSelector } from '@/preparation/components/model-selector'
+import { cvDocumentV1GuidanceItems } from '@cv/application-preparation-workflow/cv'
+import type { PreparationWorkspace } from '@/preparation/workspace/atoms'
 import type { CvPreparationActions } from './actions'
 
 export const CvGenerationCard = ({

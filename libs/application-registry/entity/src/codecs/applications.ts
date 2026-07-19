@@ -18,7 +18,6 @@ const applicationSelectRefinements = {
   version: () => ApplicationVersionSchema,
   followUpAt: () => UtcIsoTimestampSchema,
   appliedAt: () => UtcIsoTimestampSchema,
-  lastContactAt: () => UtcIsoTimestampSchema,
   listingCheckedAt: () => UtcIsoTimestampSchema,
   listingClosedCandidateAt: () => UtcIsoTimestampSchema,
   createdAt: () => UtcIsoTimestampSchema,
@@ -28,7 +27,6 @@ const applicationSelectRefinements = {
 const applicationInsertRefinements = {
   followUpAt: optionalNullableInsertField(UtcIsoTimestampSchema),
   appliedAt: optionalNullableInsertField(UtcIsoTimestampSchema),
-  lastContactAt: optionalNullableInsertField(UtcIsoTimestampSchema),
   createdAt: UtcIsoTimestampSchema,
   updatedAt: UtcIsoTimestampSchema,
 }
@@ -36,7 +34,6 @@ const applicationInsertRefinements = {
 const applicationUpdateRefinements = {
   followUpAt: () => UtcIsoTimestampSchema,
   appliedAt: () => UtcIsoTimestampSchema,
-  lastContactAt: () => UtcIsoTimestampSchema,
   createdAt: () => UtcIsoTimestampSchema,
   updatedAt: () => UtcIsoTimestampSchema,
 }
@@ -57,10 +54,7 @@ export const ApplicationRowUpdateSchema = createUpdateSchema(
 )
 
 export const applicationWritableKeys = [
-  'jobKey',
-  'source',
-  'sourceJobId',
-  'canonicalUrl',
+  'postingUrl',
   'company',
   'role',
   'location',
@@ -69,7 +63,6 @@ export const applicationWritableKeys = [
   'personalPriority',
   'followUpAt',
   'appliedAt',
-  'lastContactAt',
 ] as const satisfies readonly (keyof typeof ApplicationRowInsertSchema.fields)[]
 
 export const ApplicationWritableSchema = Schema.Struct(
@@ -81,9 +74,7 @@ export type ApplicationWritable = Schema.Schema.Type<
 >
 
 export const applicationMutableKeys = [
-  'source',
-  'sourceJobId',
-  'canonicalUrl',
+  'postingUrl',
   'company',
   'role',
   'location',
@@ -92,7 +83,6 @@ export const applicationMutableKeys = [
   'personalPriority',
   'followUpAt',
   'appliedAt',
-  'lastContactAt',
 ] as const satisfies readonly (keyof typeof ApplicationRowUpdateSchema.fields)[]
 
 export const ApplicationMutableSchema = Schema.Struct(
@@ -105,13 +95,17 @@ export type ApplicationMutable = Schema.Schema.Type<
 
 export type Application = Omit<
   typeof applications.$inferSelect,
-  'companyNormalized'
+  'postingFingerprint' | 'postingUrlNormalized'
 >
 
 export const ApplicationSchema = Schema.Struct(
-  omit(ApplicationRowSelectSchema.fields, ['companyNormalized'])
+  omit(ApplicationRowSelectSchema.fields, [
+    'postingFingerprint',
+    'postingUrlNormalized',
+  ])
 )
 
 export const applicationPublicColumns = omit(getColumns(applications), [
-  'companyNormalized',
+  'postingFingerprint',
+  'postingUrlNormalized',
 ])

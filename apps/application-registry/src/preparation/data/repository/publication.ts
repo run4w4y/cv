@@ -1,15 +1,15 @@
 import type { CvLink, GeneratedArtifact } from '@cv/application-registry-entity'
 import { Effect } from 'effect'
 
-import type { RegistryClient } from '../../../lib/registry-client'
+import type { RegistryClient } from '@/lib/registry-client'
 import type { PublicationIdentity } from '../keys'
 import type {
-  PublishCvInput,
-  PublishedCvState,
+  CvPageState,
   ReadCurrentPdfInput,
   ReadPdfJobInput,
   SetPublicationAvailabilityInput,
   StartPdfGenerationInput,
+  StageCvInput,
 } from '../types'
 import { dataError } from './shared'
 
@@ -20,7 +20,7 @@ export const makePreparationPublicationRepository = (
     'PreparationRepository.currentPdfArtifact'
   )((identity: PublicationIdentity) => {
     const read = (rendererVersion?: string) =>
-      registry.registry.getCurrentPdfArtifact({
+      registry.publications.getCurrentPdfArtifact({
         params: {
           entryId: identity.entryId,
           id: identity.applicationId,
@@ -34,49 +34,47 @@ export const makePreparationPublicationRepository = (
         )
   })
 
-  const loadPublishedCvState = Effect.fn(
-    'PreparationRepository.loadPublishedCvState'
+  const loadCvPageState = Effect.fn(
+    'PreparationRepository.loadCvPageState'
   )(
     function* (identity: PublicationIdentity) {
-      type LoadedPublication = {
-        readonly artifact: GeneratedArtifact
-        readonly link: CvLink
-      }
-      const loaded = yield* Effect.all(
-        {
-          artifact: currentPdfArtifact(identity),
-          link: registry.registry.getCvLink({
+      const link = yield* registry.publications
+        .getCvLink({
             params: {
               entryId: identity.entryId,
               id: identity.applicationId,
             },
-          }),
-        },
-        { concurrency: 2 }
-      ).pipe(
-        Effect.map((value): LoadedPublication | null => value),
+          })
+        .pipe(
+          Effect.map((value): CvLink | null => value),
+          Effect.catchTag('NotFoundError', () => Effect.succeed<CvLink | null>(null))
+        )
+      if (link === null) return null
+      const artifact = yield* currentPdfArtifact(identity).pipe(
+        Effect.map((value): GeneratedArtifact | null => value),
         Effect.catchTag('NotFoundError', () =>
-          Effect.succeed<LoadedPublication | null>(null)
+          Effect.succeed<GeneratedArtifact | null>(null)
         )
       )
-      if (loaded === null) return null
-      return loaded.artifact.status === 'ready' &&
-        loaded.artifact.cvLinkId === loaded.link.id &&
-        loaded.artifact.publicationVersion === loaded.link.publicationVersion &&
-        loaded.artifact.qrTarget === loaded.link.publicUrl
-        ? ({
-            artifact: loaded.artifact,
-            link: loaded.link,
-          } satisfies PublishedCvState)
-        : null
+      return {
+        artifact:
+          artifact !== null &&
+          artifact.cvLinkId === link.id &&
+          artifact.contentRevisionId === link.currentRevisionId &&
+          artifact.publicationVersion === link.publicationVersion &&
+          artifact.qrTarget === link.publicUrl
+            ? artifact
+            : null,
+        link,
+      } satisfies CvPageState
     },
-    (effect) => effect.pipe(dataError('load-published-cv'))
+    (effect) => effect.pipe(dataError('load-cv-page'))
   )
 
-  const publishCv = Effect.fn('PreparationRepository.publishCv')(
-    (input: PublishCvInput) =>
-      registry.registry
-        .publishCv({
+  const stageCv = Effect.fn('PreparationRepository.stageCv')(
+    (input: StageCvInput) =>
+      registry.publications
+        .stageCv({
           params: {
             entryId: input.entry.id,
             id: input.applicationId,
@@ -84,15 +82,16 @@ export const makePreparationPublicationRepository = (
           payload: {
             expectedContentVersion: input.entry.version,
             publicBaseUrl: input.publicBaseUrl,
+            revisionId: input.revisionId,
           },
         })
-        .pipe(dataError('publish-cv'))
+        .pipe(dataError('stage-cv'))
   )
 
   const setPublicationAvailability = Effect.fn(
     'PreparationRepository.setPublicationAvailability'
   )((input: SetPublicationAvailabilityInput) =>
-    registry.registry
+    registry.publications
       .setCvLinkAvailability({
         params: {
           entryId: input.entryId,
@@ -106,7 +105,7 @@ export const makePreparationPublicationRepository = (
   const startPdfGeneration = Effect.fn(
     'PreparationRepository.startPdfGeneration'
   )((input: StartPdfGenerationInput) =>
-    registry.registry
+    registry.publications
       .startPdfJob({
         params: {
           entryId: input.entryId,
@@ -119,7 +118,7 @@ export const makePreparationPublicationRepository = (
 
   const readPdfJob = Effect.fn('PreparationRepository.readPdfJob')(
     (input: ReadPdfJobInput) =>
-      registry.registry
+      registry.publications
         .getPdfJob({
           params: {
             entryId: input.entryId,
@@ -132,14 +131,23 @@ export const makePreparationPublicationRepository = (
 
   const readCurrentPdf = Effect.fn('PreparationRepository.readCurrentPdf')(
     function* (input: ReadCurrentPdfInput) {
-      const read = (rendererVersion?: string) =>
-        registry.registry.readCurrentPdfArtifact({
-          params: {
-            entryId: input.entryId,
-            id: input.applicationId,
-          },
-          query: rendererVersion === undefined ? {} : { rendererVersion },
+      const read = (rendererVersion?: string) => {
+        const params = {
+          entryId: input.entryId,
+          id: input.applicationId,
+        }
+        const query = rendererVersion === undefined ? {} : { rendererVersion }
+        return Effect.all({
+          artifact: registry.publications.getCurrentPdfArtifact({
+            params,
+            query,
+          }),
+          bytes: registry.publications.readCurrentPdfArtifact({
+            params,
+            query,
+          }),
         })
+      }
       return yield* input.rendererVersion === undefined
         ? read()
         : read(input.rendererVersion).pipe(
@@ -150,11 +158,11 @@ export const makePreparationPublicationRepository = (
   )
 
   return {
-    loadPublishedCvState,
-    publishCv,
+    loadCvPageState,
     readCurrentPdf,
     readPdfJob,
     setPublicationAvailability,
     startPdfGeneration,
+    stageCv,
   }
 }

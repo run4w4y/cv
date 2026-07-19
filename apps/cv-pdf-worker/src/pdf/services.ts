@@ -1,17 +1,10 @@
-import { PuppeteerWorkers, type BrowserWorker } from '@cloudflare/puppeteer'
+import { type BrowserWorker, PuppeteerWorkers } from '@cloudflare/puppeteer'
 import type { PdfGenerationRequested } from '@cv/application-registry-api-contract'
 import {
   type ApplicationRegistryError,
-  CvPublicationsService,
   type PdfArtifactJob,
   PdfArtifactsService,
 } from '@cv/application-registry-service'
-import {
-  assessCvPageLayout,
-  type CvPageLayoutMeasurement,
-  cvPageLayoutToleranceCssPixels,
-  measureCvPageLayoutInDocument,
-} from '@cv/renderer'
 import { Context, Effect, Layer, Match } from 'effect'
 
 import { RegistryServiceLayer } from '../layers/registry'
@@ -22,6 +15,12 @@ import {
   PdfJobTransientError,
   type PdfPermanentFailureCode,
 } from './model'
+import {
+  assessCvPageLayout,
+  type CvPageLayoutMeasurement,
+  cvPageLayoutToleranceCssPixels,
+  measureCvPageLayoutInDocument,
+} from './page-layout'
 
 type CvPageLayoutErrorCode = Extract<
   PdfPermanentFailureCode,
@@ -38,12 +37,12 @@ export class CvPageLayoutError extends Error {
   }
 }
 
-class PublicCvHttpError extends Error {
+class CvRenderPageHttpError extends Error {
   readonly status: number
 
   constructor(status: number) {
-    super(`Public CV returned HTTP ${status}.`)
-    this.name = 'PublicCvHttpError'
+    super(`CV render page returned HTTP ${status}.`)
+    this.name = 'CvRenderPageHttpError'
     this.status = status
   }
 }
@@ -88,7 +87,6 @@ const permanentPersistenceError = (
     cause,
     code: 'pdf_job_invalid',
     message: `PDF job operation "${operation}" was rejected: ${cause.message}`,
-    publicationReason: 'PDF generation request is no longer valid.',
   })
 
 const transientPersistenceError = (
@@ -104,10 +102,6 @@ const transientPersistenceError = (
 const persistenceError = (operation: string) =>
   Match.type<ApplicationRegistryError>().pipe(
     Match.tags({
-      FactsReleaseObjectMetadataError: (cause) =>
-        permanentPersistenceError(operation, cause),
-      FactsReleaseObjectNotFoundError: (cause) =>
-        permanentPersistenceError(operation, cause),
       RegistryAnalyticsError: (cause) =>
         transientPersistenceError(operation, cause),
       RegistryArtifactError: (cause) =>
@@ -130,16 +124,12 @@ export interface PdfArtifactPersistenceShape {
   readonly complete: (
     applicationId: string,
     artifactId: string,
+    rendererVersion: string,
     bytes: Uint8Array
   ) => Effect.Effect<
     PdfArtifactJob['artifact'],
     PdfJobPermanentError | PdfJobTransientError
   >
-  readonly disable: (
-    request: PdfGenerationRequested,
-    expectedPublicationVersion: number,
-    reason: string
-  ) => Effect.Effect<void, PdfJobPermanentError | PdfJobTransientError>
   readonly fail: (
     applicationId: string,
     artifactId: string,
@@ -164,7 +154,7 @@ export class PdfArtifactPersistence extends Context.Service<
 
 const runRegistry = <A, E>(
   environment: PdfWorkerEnv,
-  effect: Effect.Effect<A, E, CvPublicationsService | PdfArtifactsService>
+  effect: Effect.Effect<A, E, PdfArtifactsService>
 ) =>
   effect.pipe(
     Effect.provide(RegistryServiceLayer),
@@ -176,37 +166,24 @@ export const makePdfArtifactPersistenceLive = (environment: PdfWorkerEnv) =>
     PdfArtifactPersistence,
     Effect.gen(function* () {
       const complete = Effect.fn('PdfArtifactPersistence.complete')(
-        (applicationId: string, artifactId: string, bytes: Uint8Array) =>
-          runRegistry(
-            environment,
-            Effect.gen(function* () {
-              const artifacts = yield* PdfArtifactsService
-              return yield* artifacts.complete(applicationId, artifactId, bytes)
-            })
-          ).pipe(Effect.mapError(persistenceError('complete')))
-      )
-
-      const disable = Effect.fn('PdfArtifactPersistence.disable')(
         (
-          request: PdfGenerationRequested,
-          expectedPublicationVersion: number,
-          reason: string
+          applicationId: string,
+          artifactId: string,
+          rendererVersion: string,
+          bytes: Uint8Array
         ) =>
           runRegistry(
             environment,
             Effect.gen(function* () {
-              const publications = yield* CvPublicationsService
-              yield* publications.setAvailability(
-                request.applicationId,
-                request.entryId,
-                {
-                  enabled: false,
-                  expectedPublicationVersion,
-                  reason,
-                }
+              const artifacts = yield* PdfArtifactsService
+              return yield* artifacts.complete(
+                applicationId,
+                artifactId,
+                rendererVersion,
+                bytes
               )
             })
-          ).pipe(Effect.mapError(persistenceError('disable')))
+          ).pipe(Effect.mapError(persistenceError('complete')))
       )
 
       const fail = Effect.fn('PdfArtifactPersistence.fail')(
@@ -245,14 +222,17 @@ export const makePdfArtifactPersistenceLive = (environment: PdfWorkerEnv) =>
           ).pipe(Effect.mapError(persistenceError('load')))
       )
 
-      return PdfArtifactPersistence.of({ complete, disable, fail, load })
+      return PdfArtifactPersistence.of({ complete, fail, load })
     })
   )
 
 export interface PdfRendererShape {
   readonly render: (
-    publicUrl: string
-  ) => Effect.Effect<Uint8Array, PdfJobPermanentError | PdfJobTransientError>
+    renderUrl: string
+  ) => Effect.Effect<
+    { readonly bytes: Uint8Array; readonly rendererVersion: string },
+    PdfJobPermanentError | PdfJobTransientError
+  >
 }
 
 export class PdfRenderer extends Context.Service<
@@ -268,15 +248,11 @@ const renderError = (
       cause,
       code: cause.code,
       message: cause.message,
-      publicationReason:
-        cause.code === 'cv_page_overflow'
-          ? 'CV content exceeds one A4 page.'
-          : 'CV print layout could not be validated.',
     })
   }
 
   if (
-    cause instanceof PublicCvHttpError &&
+    cause instanceof CvRenderPageHttpError &&
     cause.status >= 400 &&
     cause.status < 500 &&
     cause.status !== 408 &&
@@ -286,7 +262,6 @@ const renderError = (
       cause,
       code: 'pdf_public_page_unavailable',
       message: cause.message,
-      publicationReason: 'The public CV page could not be rendered.',
     })
   }
 
@@ -294,7 +269,7 @@ const renderError = (
     cause,
     code: 'pdf_render_failed',
     message: messageOf(cause),
-    ...(cause instanceof PublicCvHttpError && cause.status === 429
+    ...(cause instanceof CvRenderPageHttpError && cause.status === 429
       ? { retryAfterSeconds: 20 }
       : {}),
   })
@@ -306,18 +281,18 @@ export const makePdfRendererLive = (browserBinding: BrowserWorker) =>
     Effect.gen(function* () {
       const puppeteer = new PuppeteerWorkers()
 
-      const render = Effect.fn('PdfRenderer.render')((publicUrl: string) =>
+      const render = Effect.fn('PdfRenderer.render')((renderUrl: string) =>
         Effect.tryPromise({
           try: async () => {
             const browser = await puppeteer.launch(browserBinding)
             try {
               const page = await browser.newPage()
-              const response = await page.goto(publicUrl, {
+              const response = await page.goto(renderUrl, {
                 timeout: 45_000,
                 waitUntil: 'networkidle0',
               })
               if (!response?.ok()) {
-                throw new PublicCvHttpError(response?.status() ?? 503)
+                throw new CvRenderPageHttpError(response?.status() ?? 503)
               }
 
               await page.emulateMediaType('print')
@@ -333,11 +308,26 @@ export const makePdfRendererLive = (browserBinding: BrowserWorker) =>
                 await page.evaluate(measureCvPageLayoutInDocument)
               )
 
-              return await page.pdf({
-                format: 'A4',
-                preferCSSPageSize: true,
-                printBackground: true,
-              })
+              const rendererVersion = await page.evaluate(() =>
+                document
+                  .querySelector<HTMLElement>('[data-cv-document]')
+                  ?.dataset.cvRenderVersion?.trim()
+              )
+              if (!rendererVersion) {
+                throw new CvPageLayoutError(
+                  'cv_page_layout_invalid',
+                  'The CV render page did not identify its render version.'
+                )
+              }
+
+              return {
+                bytes: await page.pdf({
+                  format: 'A4',
+                  preferCSSPageSize: true,
+                  printBackground: true,
+                }),
+                rendererVersion,
+              }
             } finally {
               await browser.close()
             }

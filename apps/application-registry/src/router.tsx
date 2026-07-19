@@ -13,8 +13,11 @@ export const registryRoutes: RouteObject[] = [
         path: 'applications',
         lazy: () => import('./applications/pages/applications'),
       },
-      { path: 'events', lazy: () => import('./events/pages/events') },
-      { path: 'analytics', lazy: () => import('./analytics/pages/cv-analytics') },
+      { path: 'activities', lazy: () => import('./events/pages/events') },
+      {
+        path: 'analytics',
+        lazy: () => import('./analytics/pages/cv-analytics'),
+      },
       {
         path: 'preparation/batch',
         lazy: () => import('./preparation/pages/batch-preparation'),

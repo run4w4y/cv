@@ -44,7 +44,7 @@ export const CvAnalyticsItemSchema = Schema.Struct({
   application: Schema.Struct({
     appliedAt: ApplicationSchema.fields.appliedAt,
     applicationStatus: ApplicationSchema.fields.applicationStatus,
-    canonicalUrl: ApplicationSchema.fields.canonicalUrl,
+    postingUrl: ApplicationSchema.fields.postingUrl,
     company: ApplicationSchema.fields.company,
     createdAt: ApplicationSchema.fields.createdAt,
     id: ApplicationSchema.fields.id,
