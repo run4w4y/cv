@@ -13,20 +13,21 @@
   "observability": {
     "enabled": true
   },
-  "browser": {
-    "binding": "BROWSER"
+  "queues": {
+    "producers": [
+      {
+        "binding": "CV_PDF_QUEUE",
+        "queue": "cv-pdf-generation"
+      }
+    ]
   },
-  "workflows": [
-    {
-      "binding": "CV_PDF_WORKFLOW",
-      "name": "cv-pdf",
-      "class_name": "CvPdfWorkflow"
-    }
-  ],
   "triggers": {
-    "crons": ["17 * * * *"]
+    "crons": ["*/5 * * * *", "17 * * * *"]
   },
   "vars": {
+    "CLOUDFLARE_GRAPHQL_ENDPOINT": "https://api.cloudflare.com/client/v4/graphql",
+    "CLOUDFLARE_ZONE_ID": "local-zone-id",
+    "CV_WEB_HOST": "cv.example.test",
     "LISTING_CHECKS_ENABLED": "true",
     "LISTING_CHECK_ARCHIVE_ENABLED": "false",
     "LISTING_CHECK_BATCH_SIZE": "5"

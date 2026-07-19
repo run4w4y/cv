@@ -57,10 +57,9 @@ const application: ApplicationListItem = {
   createdAt: '2026-07-01T09:30:00.000Z',
   updatedAt: '2026-07-16T09:30:00.000Z',
   annualCompensation: null,
-  counts: { captures: 0, notes: 0 },
+  counts: { notes: 0 },
   identityAliases: [],
   labels: [],
-  latestCapture: null,
   latestEvent: null,
 }
 

@@ -24,6 +24,77 @@ adds `REGISTRY_API_TOKEN` server-side. The token is never included in the
 browser bundle. A production host must provide the same authenticated reverse
 proxy path, or rewrite it to an equivalent same-origin backend-for-frontend.
 
+## Application preparation workflows
+
+URL-driven CV and cover-letter preparation is orchestrated in the browser by
+Effect's unstable Workflow module. The application root owns session-scoped
+`WorkflowEngine.layerMemory` runtimes for document preparation and CV
+publication. The `/preparation/batch`
+screen can start several URLs at once; three workflow activities may execute
+concurrently and the shared AI provider admits at most two model calls at a
+time. Admission is capped at 25 unique URLs per batch. A batch reserves all of
+its runs atomically before starting any of them, and bounded activity timeouts
+keep one stalled dependency from retaining a permit forever.
+
+Each run has schema-checked input, output, activities, and tagged errors. The
+workflow captures the canonical posting through the registry API, extracts a
+structured job analysis, maps requirements to reviewed fact IDs, builds section
+briefs in parallel, composes and validates the document, and stores an
+unapproved revision pinned to the exact facts release and job snapshot. It then
+suspends on a `DurableDeferred` until the user approves or rejects that revision
+from the existing preparation editor. Progress and AI usage metadata are exposed
+through an Effect `SubscriptionRef` and React atoms; cancellation interrupts the
+local engine fiber. One open run is admitted for each URL/application, document
+kind, and locale, while review submission and cancellation use atomic,
+monotonic state transitions so workflow replay cannot reopen a decided review.
+Requirement IDs and evidence coverage are checked exactly, section briefs can
+use only evidence-plan fact IDs, and CV structural data is checked against the
+reviewed catalogue. Private contacts, employers, projects, and links are
+removed before any model or evidence-planning call. Generated prose still
+requires the explicit human-review gate; the code does not claim semantic proof
+of prose. The final save re-reads the content-entry version and retries bounded
+optimistic conflicts with the same idempotent operation ID.
+
+Approval of a workflow candidate is owned by a durable activity rather than the
+page. Before the registry is mutated, it proves that the selected revision is
+the current head and is either the generated candidate or a bounded chain of
+human edits descended from it, with the same entry, contract, facts release,
+and job snapshot. Approval then uses the freshly read entry version and checks
+the registry response.
+
+Preparation pages consume one derived workspace atom keyed by application,
+document kind, locale, and optional run ID. Registry context, heads, model
+discovery, publication state, and every remote mutation are Effect query or
+command atoms backed by typed `RegistryClient` services. The editor atom owns
+only genuine browser-local state: a human override, the last mutation result,
+the CV layout assessment bound to its document fingerprint, and the explicit
+decision to adopt a candidate whose in-memory review token was lost. Registry
+heads and Workflow candidates stay in their authoritative atoms and are joined
+by a pure projection; React pages do not mirror them through effects or loaded
+key refs.
+
+CV publication is a separate typed Workflow. It publishes the approved link,
+starts PDF generation, polls on an Effect `Schedule`, verifies that the ready
+artifact matches the exact revision/link/renderer tuple, and invalidates the
+publication query on completion. If PDF generation cannot start, a compensating
+activity disables the newly published link. Publication progress and
+cancellation are exposed through keyed atoms just like preparation runs.
+
+Only orchestration and transient progress are local to the browser. URL capture
+remains a server boundary because arbitrary job sites are not generally
+browser-readable through CORS; the capture service applies schema-based URL,
+redirect, size, and timeout boundaries. PDF rendering remains a private
+Cloudflare RPC service and durable Workflow because it requires Browser
+Rendering, exact-publication verification, and compensation around R2 writes.
+
+The memory engines are intentional first backends. Runs, pending review tokens,
+and publication polling do not survive refresh, HMR, tab closure/eviction,
+runtime disposal, or a second tab. Saved candidate revisions, links, and ready
+artifacts do survive because they are already in the registry. The Workflow
+definitions and service gateways are independent of the engine, so an
+IndexedDB engine can replace `WorkflowEngine.layerMemory` later without moving
+orchestration to the API.
+
 Useful checks:
 
 ```bash

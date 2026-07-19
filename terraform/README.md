@@ -20,7 +20,7 @@ generates a Terraform Cloud backend from `TF_CLOUD_ORGANIZATION`,
   Terraform, overlays `cv-public` only on `CV_WEB_HOST/c/*`, exposes managed
   Workers through their Cloudflare-provided `workers.dev` URLs, and creates D1,
   R2, Workers KV, and Cloudflare Access resources. Wrangler deploys Worker code,
-  service and storage bindings, Workflows, migrations, and runtime secrets
+  service, storage, and Queue bindings, migrations, and runtime secrets
   separately.
 - `live/prod/grafana`: creates separate analytics and applications folders,
   Infinity datasources, and dashboards backed by the analytics connector and
@@ -44,7 +44,8 @@ Forks can keep those names or change the `name` values in the live
   Pages project or DNS record for a clean account.
 - A Cloudflare Zero Trust organization/team domain initialized for the account
   before Terraform creates the single-owner Access applications.
-- R2, Workers KV, Workflows, and Browser Run enabled on that Cloudflare account.
+- R2, Workers KV, Cloudflare Queues, and Browser Rendering enabled on that
+  Cloudflare account.
 - A Grafana instance. This repository provisions Grafana resources, not the
   Grafana server itself.
 - The `yesoreyeram-infinity-datasource` plugin installed in Grafana before
@@ -294,7 +295,8 @@ Terraform owns D1, R2, KV, Access, route overlays, dedicated `workers.dev`
 exposure resources, derived URLs, and Infisical writes. Wrangler owns Worker
 creation and deployed versions, observability configuration, the public
 Worker's one-way service binding, registry storage and Browser Run bindings,
-the PDF Workflow, migrations, and runtime secrets.
+PDF Queue bindings, migrations, and runtime secrets. The deployment workflow
+creates the main PDF queue and dead-letter queue when they do not yet exist.
 
 Apply Grafana after the analytics connector URL, application registry URL and
 token, and Grafana token are available:
@@ -395,8 +397,9 @@ account settings: `APPLICATION_REGISTRY_DB_ID`,
 `CHATGPT_SESSIONS_KV_ID`, `CHATGPT_SESSION_SECRET`, `CV_OBJECTS_BUCKET_NAME`,
 `CV_WEB_HOST`, and `REGISTRY_API_TOKEN`. After the full Cloudflare apply it also
 reads Terraform-synced `APPLICATION_REGISTRY_WORKERS_DEV_ENABLED=true`; before
-that point the default is `false`. Optional
-`CV_PDF_WORKFLOW_NAME` selects the Workflow name and defaults to `cv-pdf`.
+that point the default is `false`. `CV_PDF_QUEUE_NAME` and `CV_PDF_DLQ_NAME`
+optionally select the PDF job and dead-letter queues; they default to
+`cv-pdf-generation` and `cv-pdf-generation-dead-letter`.
 
 The CV deploy workflow contains no content-repository checkout. Tailored facts
 and document revisions reach the registry through their own publish and

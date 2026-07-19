@@ -30,6 +30,25 @@ export const defaultCvRendererLabels: CvRendererLabels = {
   publicVersionInstructions: 'Scan to open the exact public version',
 }
 
+export const russianCvRendererLabels: CvRendererLabels = {
+  profile: 'О себе',
+  contactInformation: 'Контактная информация',
+  experience: 'Опыт',
+  projects: 'Проекты',
+  skills: 'Навыки',
+  education: 'Образование',
+  technologies: 'Технологии',
+  highlights: 'Основные результаты',
+  projectLinks: 'Ссылки проекта',
+  publicVersion: 'Актуальное резюме в интернете',
+  publicVersionInstructions: 'Откройте точную публичную версию по QR-коду',
+}
+
+export const cvRendererLabelsForLocale = (locale: string): CvRendererLabels =>
+  locale.toLowerCase().split('-')[0] === 'ru'
+    ? russianCvRendererLabels
+    : defaultCvRendererLabels
+
 export interface CvDocumentRendererProps {
   /** Parsed `cv.document.v1` data. */
   readonly document: CvDocumentV1

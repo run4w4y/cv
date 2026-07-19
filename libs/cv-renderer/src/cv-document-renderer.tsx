@@ -14,7 +14,7 @@ import { CvRendererStyleSheet } from './styles'
 import {
   type CvDocumentRendererProps,
   type CvRendererLabels,
-  defaultCvRendererLabels,
+  cvRendererLabelsForLocale,
 } from './types'
 
 type KeyedText = {
@@ -35,8 +35,9 @@ const keyedTexts = (
 }
 
 const rendererLabels = (
+  locale: string,
   labels: Partial<CvRendererLabels> | undefined
-): CvRendererLabels => ({ ...defaultCvRendererLabels, ...labels })
+): CvRendererLabels => ({ ...cvRendererLabelsForLocale(locale), ...labels })
 
 const idFragment = (value: string) => {
   const encoded = value.replaceAll(/[^A-Za-z0-9-]/gu, (character) =>
@@ -423,7 +424,7 @@ export const CvDocumentRenderer = ({
   mode = 'responsive',
   publicUrl,
 }: CvDocumentRendererProps) => {
-  const labels = rendererLabels(labelOverrides)
+  const labels = rendererLabels(document.locale, labelOverrides)
   const prefix = idFragment(idPrefix)
   const titleId = `${prefix}-title`
 

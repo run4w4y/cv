@@ -1,15 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import * as Effect from 'effect/Effect'
 
-import {
-  chunkCloudflareAnalyticsRange,
-  resolveCloudflareAnalyticsRange,
-} from './range'
+import { chunkRange, resolveRange } from './range'
 
 describe('cloudflare analytics range chunking', () => {
   test('splits wider ranges into one-day chunks', async () => {
     const chunks = await Effect.runPromise(
-      chunkCloudflareAnalyticsRange(
+      chunkRange(
         {
           from: '2026-06-01T00:00:00.000Z',
           to: '2026-06-03T00:00:00.000Z',
@@ -34,7 +31,7 @@ describe('cloudflare analytics range chunking', () => {
 
   test('clamps broad dashboard ranges to the free-plan lookback window', async () => {
     const resolved = await Effect.runPromise(
-      resolveCloudflareAnalyticsRange(
+      resolveRange(
         {
           from: '2026-05-24T00:00:00.000Z',
           to: '2026-06-23T00:00:00.000Z',
@@ -62,7 +59,7 @@ describe('cloudflare analytics range chunking', () => {
 
   test('accepts Grafana Infinity time macros as epoch milliseconds', async () => {
     const resolved = await Effect.runPromise(
-      resolveCloudflareAnalyticsRange(
+      resolveRange(
         {
           from: String(Date.parse('2026-06-21T00:00:00.000Z')),
           to: String(Date.parse('2026-06-22T00:00:00.000Z')),
@@ -89,7 +86,7 @@ describe('cloudflare analytics range chunking', () => {
 
   test('returns no chunks when the whole range is outside available analytics', async () => {
     const resolved = await Effect.runPromise(
-      resolveCloudflareAnalyticsRange(
+      resolveRange(
         {
           from: '2026-05-01T00:00:00.000Z',
           to: '2026-05-02T00:00:00.000Z',

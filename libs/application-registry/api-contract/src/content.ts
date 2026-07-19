@@ -8,6 +8,7 @@ import {
   type CvLink,
   CvLinkSchema,
   ExpectedApplicationVersionSchema,
+  type FactsChannel,
   FactsChannelSchema,
   type FactsRelease,
   type FactsReleaseAsset,
@@ -21,9 +22,10 @@ import {
   JobPostingSnapshotSchema,
   NonEmptyTrimmedStringSchema as NonEmptyString,
 } from '@cv/application-registry-entity'
+import { type CvLocale, CvLocaleSchema } from '@cv/contracts/facts'
 import { Schema } from 'effect'
 
-export const RegistryContentLocaleSchema = Schema.Literal('en')
+export const RegistryContentLocaleSchema = CvLocaleSchema
 
 const Base64Schema = Schema.String.pipe(
   Schema.check(
@@ -195,20 +197,6 @@ export const DisableApplicationCvLinksResponseSchema = Schema.Struct({
   count: Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0))),
 })
 
-export const BeginPdfArtifactRequestSchema = Schema.Struct({
-  expectedPublicationVersion: ExpectedApplicationVersionSchema,
-  rendererVersion: NonEmptyString,
-  workflowId: NonEmptyString,
-})
-export type BeginPdfArtifactRequest = Schema.Schema.Type<
-  typeof BeginPdfArtifactRequestSchema
->
-
-export const PdfArtifactParamsSchema = Schema.Struct({
-  artifactId: NonEmptyString,
-  id: NonEmptyString,
-})
-
 export const CurrentPdfArtifactParamsSchema = Schema.Struct({
   entryId: NonEmptyString,
   id: NonEmptyString,
@@ -216,15 +204,6 @@ export const CurrentPdfArtifactParamsSchema = Schema.Struct({
 
 export const CurrentPdfArtifactQuerySchema = Schema.Struct({
   rendererVersion: Schema.optional(NonEmptyString),
-})
-
-export const CompletePdfArtifactRequestSchema = Schema.Struct({
-  data: Base64Schema,
-})
-
-export const FailPdfArtifactRequestSchema = Schema.Struct({
-  errorCode: NonEmptyString,
-  errorMessage: NonEmptyString,
 })
 
 export const GeneratedArtifactResponseSchema: Schema.Codec<GeneratedArtifact> =
@@ -242,42 +221,6 @@ export const ReadyPdfArtifactResponseSchema: Schema.Codec<ReadyPdfArtifactRespon
       payload: OpaquePayloadResponseSchema,
     })
   )
-
-export const PdfWorkflowStatusSchema = Schema.Literals([
-  'queued',
-  'running',
-  'paused',
-  'errored',
-  'terminated',
-  'complete',
-  'waiting',
-  'waitingForPause',
-  'unknown',
-])
-
-export const StartPdfWorkflowRequestSchema = Schema.Struct({
-  expectedPublicationVersion: ExpectedApplicationVersionSchema,
-  rendererVersion: NonEmptyString,
-})
-export type StartPdfWorkflowRequest = Schema.Schema.Type<
-  typeof StartPdfWorkflowRequestSchema
->
-
-export const PdfWorkflowParamsSchema = Schema.Struct({
-  entryId: NonEmptyString,
-  id: NonEmptyString,
-  workflowId: NonEmptyString,
-})
-
-export const PdfWorkflowResponseSchema = Schema.Struct({
-  artifactId: Schema.NullOr(NonEmptyString),
-  errorMessage: Schema.NullOr(NonEmptyString),
-  status: PdfWorkflowStatusSchema,
-  workflowId: NonEmptyString,
-})
-export type PdfWorkflowResponse = Schema.Schema.Type<
-  typeof PdfWorkflowResponseSchema
->
 
 export const PutOpaqueObjectRequestSchema = Schema.Struct({
   data: Base64Schema,
@@ -327,22 +270,47 @@ export const ActiveFactsReleaseQuerySchema = Schema.Struct({
   locale: RegistryContentLocaleSchema,
 })
 
-export const ActiveFactsReleaseResponseSchema = Schema.Struct({
-  assets: Schema.Array(
+export type ActiveFactsReleaseResponse = {
+  readonly assets: readonly {
+    readonly assetId: string
+    readonly data: string
+    readonly fileName: string
+    readonly mediaType: string
+    readonly sha256: string
+  }[]
+  readonly catalogue: {
+    readonly data: string
+    readonly locale: CvLocale
+    readonly mediaType: string
+    readonly sha256: string
+  }
+  readonly locales: readonly CvLocale[]
+  readonly channel: FactsChannel
+  readonly release: FactsRelease
+}
+
+export const ActiveFactsReleaseResponseSchema: Schema.Codec<ActiveFactsReleaseResponse> =
+  Schema.revealCodec(
     Schema.Struct({
-      assetId: NonEmptyString,
-      data: Base64Schema,
-      fileName: NonEmptyString,
-      mediaType: NonEmptyString,
-      sha256: NonEmptyString,
+      assets: Schema.Array(
+        Schema.Struct({
+          assetId: NonEmptyString,
+          data: Base64Schema,
+          fileName: NonEmptyString,
+          mediaType: NonEmptyString,
+          sha256: NonEmptyString,
+        })
+      ),
+      catalogue: Schema.Struct({
+        data: Base64Schema,
+        locale: RegistryContentLocaleSchema,
+        mediaType: NonEmptyString,
+        sha256: NonEmptyString,
+      }),
+      locales: Schema.Array(RegistryContentLocaleSchema).pipe(
+        Schema.check(Schema.isMinLength(1))
+      ),
+      channel: FactsChannelSchema,
+      release: FactsReleaseSchema,
     })
-  ),
-  catalogue: Schema.Struct({
-    data: Base64Schema,
-    locale: RegistryContentLocaleSchema,
-    mediaType: NonEmptyString,
-    sha256: NonEmptyString,
-  }),
-  channel: FactsChannelSchema,
-  release: FactsReleaseSchema,
-})
+  )

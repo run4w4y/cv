@@ -1,40 +1,56 @@
 # @cv/cloudflare-analytics-client
 
-Effect-based client for Cloudflare GraphQL Analytics.
+Layered Effect client for Cloudflare GraphQL Analytics.
 
-The client executes one bounded Cloudflare Analytics query, normalizes the
-response, and returns sanitized `@cv/analytics-core` dashboard data. It never
-returns raw GraphQL rows to application code.
+The package owns Cloudflare request construction, bounded range handling,
+provider error classification, and response normalization. It returns sanitized
+dashboard data or aggregates exact paths behind caller-owned opaque aliases; it
+never returns raw GraphQL rows or aliased paths to application code.
 
-## Environment
+## Services
 
-- `CLOUDFLARE_API_TOKEN`: Cloudflare token with GraphQL Analytics access.
-- `CLOUDFLARE_ZONE_ID`: Cloudflare zone tag.
-- `CV_WEB_HOST`: optional hostname filter, for example `cv.example.com`.
-- `CLOUDFLARE_GRAPHQL_ENDPOINT`: optional override for tests or local proxies.
+The package exports one `CloudflareAnalytics` module namespace:
 
-The API token is stored as an Effect `Redacted` value and only unwrapped at the
-HTTP boundary.
+- `Configuration` is the required configuration service.
+- `Service` exposes `readDashboard` and `readAliasedPaths`.
+- `layer` builds the client from `Configuration` and Effect's `HttpClient`.
 
-## Flow
+Applications own configuration sources and runtime wiring. Environment variable
+names, `ConfigProvider` construction, and runtime execution do not belong in
+this package.
 
-1. Parse config with `readCloudflareAnalyticsConfigFromEnv`.
-2. Build a bounded `CloudflareAnalyticsRange` from explicit `from`/`to` values
-   or the default last 30 days.
-3. Execute the Cloudflare GraphQL request.
-4. Prefer daily path rows, falling back to top paths when no daily rows exist.
-5. Aggregate country-grouped rows into one point per path and date.
-6. Pass rows through `sanitizeAnalyticsInput`.
+```ts
+import { CloudflareAnalytics } from '@cv/cloudflare-analytics-client'
+import { Effect, Layer, Redacted } from 'effect'
+import * as FetchHttpClient from 'effect/unstable/http/FetchHttpClient'
 
-The dashboard schema exposes request counts as page views and Cloudflare's
-`sum.visits` as visits. It does not invent a unique-visitor metric because the
-selected GraphQL dataset does not provide one.
+const ConfigurationLive = Layer.succeed(
+  CloudflareAnalytics.Configuration,
+  CloudflareAnalytics.Configuration.of({
+    apiToken: Redacted.make('secret-token'),
+    endpoint: new URL(CloudflareAnalytics.defaultEndpoint),
+    host: 'cv.example.com',
+    zoneId: 'zone-id',
+  })
+)
 
-## Boundary
+const ClientLive = CloudflareAnalytics.layer.pipe(
+  Layer.provide(Layer.merge(ConfigurationLive, FetchHttpClient.layer))
+)
 
-Keep this package framework-neutral. Cloudflare request construction, typed
-Effect errors, and analytics normalization live here. Grafana-specific table
-shaping lives in `@cv/analytics-grafana`.
+const data = CloudflareAnalytics.Service.use((client) =>
+  client.readAliasedPaths({
+    aliases: [{ key: 'publication-1', path: '/c/opaque-token' }],
+    pathLike: '/c/%',
+    range: {
+      from: '2026-07-18T00:00:00.000Z',
+      to: '2026-07-19T00:00:00.000Z',
+    },
+  })
+).pipe(Effect.provide(ClientLive))
+```
+
+The token remains `Redacted` until the HTTP request is constructed.
 
 ## Verification
 

@@ -5,7 +5,6 @@ import type {
   ApplicationEvent,
   ApplicationLabel,
   ApplicationNote,
-  CampaignCapture,
   CommandReceipt,
   FxRate,
 } from '@cv/application-registry-entity'
@@ -74,37 +73,6 @@ export const registryEventListItem = {
   role: application.role,
 }
 
-export const capture: CampaignCapture = {
-  applicationId: application.id,
-  artifacts: [],
-  audience: null,
-  applicationUrl: application.canonicalUrl,
-  campaignRunId: 'run-1',
-  capturedAt: recordedAt,
-  confidence: 0.8,
-  fitAssessment: null,
-  id: 'capture-1',
-  jobContentHash: null,
-  operationId: 'capture-operation-1',
-  profile: 'default',
-  submissionDetails: {
-    additionalInstructions: null,
-    applicationMethod: 'web',
-    applicationQuestions: [],
-    contactEmail: null,
-    coverLetterInstructions: null,
-    deadline: null,
-    employmentType: null,
-    languageRequirements: [],
-    locationRestrictions: null,
-    relocation: null,
-    requiredDocuments: [],
-    salary: null,
-    visaRequirements: null,
-    workMode: null,
-  },
-}
-
 export const compensation: ApplicationCompensation = {
   applicationId: application.id,
   createdAt: recordedAt,
@@ -122,10 +90,9 @@ export const compensation: ApplicationCompensation = {
 export const applicationListRecord: ApplicationListRecord = {
   ...application,
   compensations: [],
-  counts: { captures: 0, notes: 0 },
+  counts: { notes: 0 },
   identityAliases: [],
   labels: [],
-  latestCapture: null,
   latestEvent: null,
 }
 
@@ -142,7 +109,6 @@ export const receipt = (
   input: Partial<CommandReceipt> = {}
 ): CommandReceipt => ({
   applicationId: application.id,
-  captureId: null,
   eventId: null,
   kind: 'application_note',
   noteId: note.id,

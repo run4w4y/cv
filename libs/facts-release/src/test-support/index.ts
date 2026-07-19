@@ -22,12 +22,17 @@ export const fixtureProvenance: FactsReleaseProvenance = {
   },
 }
 
-export const factsCatalogueFixture = (assetSha256: string) =>
+export const factsCatalogueFixture = (
+  assetSha256: string,
+  locale = 'en',
+  statement = locale === 'ru'
+    ? 'Работает инженером-программистом в Analytical Engines с 2023 года по настоящее время.'
+    : 'Worked as a software engineer at Analytical Engines from 2023 to the present.'
+) =>
   ({
     $schema: 'cv.facts.v1',
     assets: [
       {
-        claimIds: ['employment.analytical-engine.role'],
         description: 'Reviewed supporting material for the employment claim.',
         id: 'asset.employment-review',
         label: 'Employment review',
@@ -35,33 +40,28 @@ export const factsCatalogueFixture = (assetSha256: string) =>
         sha256: assetSha256,
       },
     ],
-    claims: [
+    evidence: [
       {
-        evidence: [
+        id: 'evidence.employment-history-review',
+        kind: 'personal-review',
+        title: 'Reviewed employment history',
+      },
+    ],
+    sections: [
+      {
+        kind: 'identity',
+        name: 'Ada Lovelace',
+        facts: [
           {
-            kind: 'personal-review',
-            label: 'Reviewed employment history',
+            evidenceIds: ['evidence.employment-history-review'],
+            id: 'identity.employment-summary',
+            text: statement,
           },
         ],
-        id: 'employment.analytical-engine.role',
-        statement:
-          'Worked as a software engineer at Analytical Engines from 2023 to the present.',
-        status: 'approved',
-        tags: ['role.software-engineering'],
-        topic: 'employment',
+        languages: [],
       },
     ],
-    locale: 'en',
-    presets: [
-      {
-        claimIds: ['employment.analytical-engine.role'],
-        id: 'preset.experience.analytical-engine',
-        purpose: 'experience-summary',
-        status: 'approved',
-        tags: ['role.software-engineering'],
-        text: 'Software engineer at Analytical Engines since 2023.',
-      },
-    ],
+    locale,
   }) satisfies FactsCatalogueV1
 
 export type InMemoryFactsReleasePublication = {

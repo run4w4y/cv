@@ -125,13 +125,17 @@ test('publishes exact immutable facts bytes through a versioned channel', async 
   const catalogueBytes = new TextEncoder().encode(
     JSON.stringify({ facts: [{ id: 'fact-1', value: 'Reviewed truth' }] })
   )
+  const russianCatalogueBytes = new TextEncoder().encode(
+    JSON.stringify({ facts: [{ id: 'fact-1', value: 'Проверенный факт' }] })
+  )
   const assetBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47])
   const catalogueObject = await putObject(catalogueBytes)
+  const russianCatalogueObject = await putObject(russianCatalogueBytes)
   const assetObject = await putObject(assetBytes)
   const manifestBytes = new TextEncoder().encode(
     JSON.stringify({
       assets: [assetObject.sha256],
-      catalogues: [catalogueObject.sha256],
+      catalogues: [catalogueObject.sha256, russianCatalogueObject.sha256],
       releaseId: 'facts-release-integration-1',
     })
   )
@@ -157,6 +161,14 @@ test('publishes exact immutable facts bytes through a versioned channel', async 
         objectKey: catalogueObject.key,
         releaseId: 'facts-release-integration-1',
         sha256: catalogueObject.sha256,
+      },
+      {
+        byteLength: russianCatalogueObject.byteLength,
+        locale: 'ru',
+        mediaType: 'application/json',
+        objectKey: russianCatalogueObject.key,
+        releaseId: 'facts-release-integration-1',
+        sha256: russianCatalogueObject.sha256,
       },
     ],
     release: {
@@ -209,9 +221,11 @@ test('publishes exact immutable facts bytes through a versioned channel', async 
   const activeBody = (await active.json()) as {
     readonly assets: readonly { readonly data: string }[]
     readonly catalogue: { readonly data: string }
+    readonly locales: readonly string[]
     readonly release: { readonly id: string }
   }
   assert.equal(activeBody.release.id, registration.release.id)
+  assert.deepEqual(activeBody.locales, ['en', 'ru'])
   assert.deepEqual(
     Buffer.from(activeBody.catalogue.data, 'base64'),
     Buffer.from(catalogueBytes)
@@ -219,6 +233,20 @@ test('publishes exact immutable facts bytes through a versioned channel', async 
   assert.deepEqual(
     Buffer.from(activeBody.assets[0]?.data ?? '', 'base64'),
     Buffer.from(assetBytes)
+  )
+
+  const russianActive = await harness.fetchRegistry(
+    '/v1/facts-releases/active?locale=ru'
+  )
+  assert.equal(russianActive.status, 200)
+  const russianActiveBody = (await russianActive.json()) as {
+    readonly catalogue: { readonly data: string }
+    readonly locales: readonly string[]
+  }
+  assert.deepEqual(russianActiveBody.locales, ['en', 'ru'])
+  assert.deepEqual(
+    Buffer.from(russianActiveBody.catalogue.data, 'base64'),
+    Buffer.from(russianCatalogueBytes)
   )
 
   const staleActivation = await harness.fetchRegistry(
@@ -308,7 +336,7 @@ test('exposes create-only CRUD, cross-field search, metadata patches, and optimi
   assert.equal(removed.status, 204)
 })
 
-test('persists opaque tailored content from job snapshot through publication and PDF delivery', async () => {
+test('persists opaque tailored content from job snapshot through publication and PDF job dispatch', async () => {
   const encode = (value: string | Uint8Array) =>
     Buffer.from(value).toString('base64')
   const jsonRequest = (body: unknown, method = 'POST') => ({
@@ -449,51 +477,31 @@ test('persists opaque tailored content from job snapshot through publication and
   assert.equal(publication.version, 1)
   assert.equal(publication.publicationVersion, 1)
 
-  const beginPdfResponse = await harness.fetchRegistry(
-    `/v1/applications/${application.id}/content-entries/${cvEntry.id}/pdf-artifacts`,
+  const startPdfResponse = await harness.fetchRegistry(
+    `/v1/applications/${application.id}/content-entries/${cvEntry.id}/pdf-jobs`,
     jsonRequest({
       expectedPublicationVersion: publication.publicationVersion,
       rendererVersion: 'renderer-integration-v1',
-      workflowId: 'integration-workflow-1',
+      requestId: 'integration-pdf-request-1',
     })
   )
-  assert.equal(beginPdfResponse.status, 200)
-  const pendingArtifact = (await beginPdfResponse.json()) as {
-    readonly id: string
-    readonly qrTarget: string
+  assert.equal(startPdfResponse.status, 200)
+  const pendingJob = (await startPdfResponse.json()) as {
+    readonly jobId: string
     readonly status: string
   }
-  assert.equal(pendingArtifact.qrTarget, publication.publicUrl)
-  assert.equal(pendingArtifact.status, 'pending')
+  assert.equal(pendingJob.status, 'pending')
 
-  const pdfBytes = new TextEncoder().encode('%PDF-1.7\nopaque integration pdf')
-  const completePdfResponse = await harness.fetchRegistry(
-    `/v1/applications/${application.id}/pdf-artifacts/${pendingArtifact.id}/complete`,
-    jsonRequest({ data: encode(pdfBytes) })
+  const readJobResponse = await harness.fetchRegistry(
+    `/v1/applications/${application.id}/content-entries/${cvEntry.id}/pdf-jobs/${pendingJob.jobId}`
   )
-  assert.equal(completePdfResponse.status, 200)
-  const readyArtifact = (await completePdfResponse.json()) as {
-    readonly qrTarget: string
+  assert.equal(readJobResponse.status, 200)
+  const storedJob = (await readJobResponse.json()) as {
+    readonly jobId: string
     readonly status: string
   }
-  assert.equal(readyArtifact.qrTarget, publication.publicUrl)
-  assert.equal(readyArtifact.status, 'ready')
-
-  const readPdfResponse = await harness.fetchRegistry(
-    `/v1/applications/${application.id}/content-entries/${cvEntry.id}/pdf-artifacts/current/content?rendererVersion=renderer-integration-v1`
-  )
-  assert.equal(readPdfResponse.status, 200)
-  const storedPdf = (await readPdfResponse.json()) as {
-    readonly artifact: { readonly qrTarget: string; readonly status: string }
-    readonly payload: { readonly data: string; readonly mediaType: string }
-  }
-  assert.equal(storedPdf.artifact.qrTarget, publication.publicUrl)
-  assert.equal(storedPdf.artifact.status, 'ready')
-  assert.equal(storedPdf.payload.mediaType, 'application/pdf')
-  assert.deepEqual(
-    Buffer.from(storedPdf.payload.data, 'base64'),
-    Buffer.from(pdfBytes)
-  )
+  assert.equal(storedJob.jobId, pendingJob.jobId)
+  assert.equal(storedJob.status, 'pending')
 
   const coverLetterEntryResponse = await harness.fetchRegistry(
     `/v1/applications/${application.id}/content-entries`,
@@ -568,7 +576,9 @@ test('persists opaque tailored content from job snapshot through publication and
     readonly enabled: boolean
     readonly token: string
   }
-  assert.equal(reenabled.enabled, true)
+  // Reopening cannot expose a publication until the queued worker has produced
+  // a ready PDF for the pinned publication version.
+  assert.equal(reenabled.enabled, false)
   assert.equal(reenabled.token, publication.token)
 })
 

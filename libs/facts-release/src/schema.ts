@@ -86,10 +86,7 @@ const FactsReleaseManifestV1StructureSchema = Schema.Struct({
       locale: NonEmptyTrimmedTextSchema,
       object: FactsReleaseObjectDescriptorV1Schema,
     })
-  ).pipe(
-    Schema.check(Schema.isMinLength(1)),
-    Schema.check(Schema.isMaxLength(1))
-  ),
+  ).pipe(Schema.check(Schema.isMinLength(1))),
   factsContract: Schema.Literal(cvFactsV1ContractId),
   provenance: FactsReleaseProvenanceSchema,
 })
@@ -116,9 +113,32 @@ const duplicateManifestAssetIssues = (
   })
 }
 
+const duplicateManifestLocaleIssues = (
+  manifest: FactsReleaseManifestV1Structure
+): ReadonlyArray<Schema.FilterIssue> => {
+  const seen = new Set<string>()
+  return manifest.catalogues.flatMap((catalogue, index) => {
+    if (seen.has(catalogue.locale)) {
+      return [
+        {
+          path: ['catalogues', index, 'locale'],
+          issue: `Duplicate manifest catalogue locale: ${catalogue.locale}`,
+        },
+      ]
+    }
+    seen.add(catalogue.locale)
+    return []
+  })
+}
+
 export const FactsReleaseManifestV1Schema =
   FactsReleaseManifestV1StructureSchema.pipe(
-    Schema.check(Schema.makeFilter(duplicateManifestAssetIssues))
+    Schema.check(
+      Schema.makeFilter((manifest) => [
+        ...duplicateManifestAssetIssues(manifest),
+        ...duplicateManifestLocaleIssues(manifest),
+      ])
+    )
   ).annotate({
     identifier: 'FactsReleaseManifestV1',
     parseOptions: { errors: 'all', onExcessProperty: 'error' },

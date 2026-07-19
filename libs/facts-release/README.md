@@ -2,11 +2,13 @@
 
 Deterministic compiler and publication boundary for reviewed CV facts.
 
-The compiler accepts one unknown `cv.facts.v1` catalogue, exact asset bytes,
-and immutable source/compiler provenance. It validates the catalogue through
-`@cv/contracts/facts`, verifies every declared asset digest, canonicalizes
-unordered facts collections, and emits content-addressed opaque objects under
-`sha256/<digest>`.
+The compiler accepts the complete set of configured single-locale
+`cv.facts.v1` catalogues, exact asset bytes, and immutable source/compiler
+provenance. It validates every catalogue through `@cv/contracts/facts`, rejects
+duplicate locales, verifies every declared asset digest, canonicalizes unordered
+release metadata, and emits content-addressed opaque objects under
+`sha256/<digest>`. All configured locales are published and activated as one
+atomic release.
 
 The release manifest contains only facts-contract metadata, provenance, and
 object descriptors. The release ID is `fr_<manifest-sha256>`, so no manifest

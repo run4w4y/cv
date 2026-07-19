@@ -4,9 +4,9 @@ TS-first Drizzle tables and Drizzle-derived Effect codecs for the application
 registry. This package is the sole physical-schema source of truth and owns the
 D1 migrations generated from it.
 
-The tables cover applications, labels, notes, events, campaign captures,
-compensation entries, FX-rate observations, idempotency receipts, and the
-monotonic revision sequence. Table row types are inferred directly from those
+The tables cover applications, labels, notes, events, content revisions,
+published CV links, compensation entries, FX-rate observations, idempotency
+receipts, and the monotonic revision sequence. Table row types are inferred directly from those
 definitions; there is no hand-maintained duplicate entity interface.
 
 The package separates the three concerns involved in the entity model:
@@ -26,11 +26,8 @@ The package separates the three concerns involved in the entity model:
   definitions shared by persistence and transport schema derivation.
 
 JSON columns are reserved for structured values that are always consumed as a
-whole, such as capture artifacts, fit assessments, submission instructions,
-listing-check evidence, and event-specific payloads. Values used independently
+whole, such as listing-check evidence and event-specific payloads. Values used independently
 for filtering, ordering, joining, or projection remain ordinary typed columns.
-In particular, the captured application URL is stored as
-`campaign_captures.applicationUrl`, not hidden inside submission JSON.
 
 The model also owns the appendable, status-changing, and informational event
 kind subsets. The service types and HTTP union derive from those same values,

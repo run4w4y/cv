@@ -5,7 +5,6 @@ import {
 import type {
   AddApplicationNoteRequest,
   AppendApplicationEventRequest,
-  CreateCampaignCaptureRequest,
   SubmitListingCheckFindingsRequest,
 } from '@cv/application-registry-api-contract'
 import { Effect, Layer } from 'effect'
@@ -57,9 +56,6 @@ const makeApplicationRegistryClient = Effect.gen(function* () {
       payload: request,
     })
 
-  const capture = (request: CreateCampaignCaptureRequest) =>
-    api.registry.createCapture({ payload: request })
-
   const submitListingCheckFindings = (
     request: SubmitListingCheckFindingsRequest
   ) => api.registry.submitListingCheckFindings({ payload: request })
@@ -72,8 +68,6 @@ const makeApplicationRegistryClient = Effect.gen(function* () {
         return appendEvent(command.identifier, command.request).pipe(
           Effect.asVoid
         )
-      case 'CaptureCampaign':
-        return capture(command.request).pipe(Effect.asVoid)
       case 'SubmitListingCheckFindings':
         return submitListingCheckFindings(command.request).pipe(Effect.asVoid)
     }
@@ -175,21 +169,9 @@ const makeApplicationRegistryClient = Effect.gen(function* () {
         send: normalizeHttpFailure(appendEvent(identifier, request)),
       })
     },
-    capture: (request) => {
-      const command = { _tag: 'CaptureCampaign' as const, request }
-      return write({
-        command,
-        operationId: request.operationId,
-        send: normalizeHttpFailure(capture(request)),
-      })
-    },
     create: (request) =>
       normalizeHttpFailure(
         api.registry.createApplication({ payload: request })
-      ),
-    captures: (identifier) =>
-      normalizeHttpFailure(
-        api.registry.listApplicationCaptures({ params: { id: identifier } })
       ),
     compensations: (identifier, query = {}) =>
       normalizeHttpFailure(

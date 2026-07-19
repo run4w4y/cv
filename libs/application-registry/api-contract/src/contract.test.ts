@@ -1,12 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import { Option, Schema } from 'effect'
+import { RegistryApi } from './api'
+import { CvAnalyticsQuerySchema, CvAnalyticsResponseSchema } from './analytics'
 import {
   AddApplicationNoteCommandSchema,
   AppendApplicationEventCommandSchema,
   DeleteApplicationQuerySchema as CommandDeleteApplicationQuerySchema,
   ListApplicationsQuerySchema as CommandListApplicationsQuerySchema,
   ListEventsQuerySchema as CommandListEventsQuerySchema,
-  CreateCampaignCaptureCommandSchema,
   decodeListApplicationsSearchParams,
   decodeListEventsSearchParams,
   encodeListApplicationsSearchParams,
@@ -15,12 +16,12 @@ import {
   RegistryApplicationInputSchema,
   UpdateManagedApplicationCommandSchema,
 } from './commands'
+import { assertUniqueHttpApiEndpoints } from './endpoint-integrity'
 import { applicationRegistryOpenApi } from './openapi'
 import {
   AddApplicationNoteRequestSchema,
   AppendApplicationEventRequestSchema,
   CreateApplicationRequestSchema,
-  CreateCampaignCaptureRequestSchema,
   DeleteApplicationQuerySchema,
   ListApplicationsQuerySchema,
   ListApplicationsResponseSchema,
@@ -45,9 +46,6 @@ describe('application registry HTTP contract', () => {
     )
     expect(AppendApplicationEventRequestSchema).toBe(
       AppendApplicationEventCommandSchema
-    )
-    expect(CreateCampaignCaptureRequestSchema).toBe(
-      CreateCampaignCaptureCommandSchema
     )
     expect(ListApplicationsQuerySchema).toBe(CommandListApplicationsQuerySchema)
     expect(ListEventsQuerySchema).toBe(CommandListEventsQuerySchema)
@@ -386,6 +384,40 @@ describe('application registry HTTP contract', () => {
     ).toBe(true)
   })
 
+  test('limits CV analytics to the supported lookback windows', () => {
+    expect(
+      Schema.decodeUnknownSync(CvAnalyticsQuerySchema)({ days: '7' })
+    ).toEqual({
+      days: 7,
+    })
+    expect(
+      Option.isNone(
+        Schema.decodeUnknownOption(CvAnalyticsQuerySchema)({ days: '30' })
+      )
+    ).toBe(true)
+    expect(
+      Schema.decodeUnknownSync(CvAnalyticsResponseSchema)({
+        countries: [],
+        generatedAt: '2026-07-19T12:00:00.000Z',
+        items: [],
+        range: {
+          from: '2026-07-12T12:00:00.000Z',
+          granularity: 'day',
+          to: '2026-07-19T12:00:00.000Z',
+        },
+        series: [],
+        summary: {
+          enabledLinks: 0,
+          pageViews: 0,
+          publishedLinks: 0,
+          unviewedLinks: 0,
+          viewedLinks: 0,
+          visits: 0,
+        },
+      }).summary
+    ).toEqual(expect.objectContaining({ publishedLinks: 0 }))
+  })
+
   test('exports OpenAPI from the same HttpApi declaration', () => {
     expect(applicationRegistryOpenApi.openapi).toBe('3.1.0')
     expect(applicationRegistryOpenApi.paths['/v1/applications']).toBeDefined()
@@ -400,6 +432,74 @@ describe('application registry HTTP contract', () => {
         '/v1/applications/{id}/job-snapshots/capture'
       ]
     ).toBeDefined()
-    expect(applicationRegistryOpenApi.paths['/v1/captures']).toBeDefined()
+    expect(
+      applicationRegistryOpenApi.paths['/v1/analytics/cv-links']
+    ).toBeDefined()
+    expect(applicationRegistryOpenApi.paths['/v1/captures']).toBeUndefined()
+  })
+
+  test('fails fast on duplicate endpoint identifiers and operations', () => {
+    expect(() =>
+      assertUniqueHttpApiEndpoints('registry', [
+        { identifier: 'duplicate', method: 'GET', path: '/first' },
+        { identifier: 'duplicate', method: 'POST', path: '/second' },
+      ])
+    ).toThrow('Duplicate HttpApiEndpoint identifier "duplicate"')
+
+    expect(() =>
+      assertUniqueHttpApiEndpoints('registry', [
+        { identifier: 'first', method: 'GET', path: '/same' },
+        { identifier: 'second', method: 'GET', path: '/same' },
+      ])
+    ).toThrow('Duplicate HttpApi operation "GET /same"')
+  })
+
+  test('keeps OpenAPI operation IDs unique and registry operations authenticated', () => {
+    const sharedErrorResponses = {
+      400: 'BadRequestError',
+      401: 'UnauthorizedError',
+      404: 'NotFoundError',
+      409: 'ConflictError',
+      500: 'InternalServerError',
+    } as const
+    const documentedOperations = Object.entries(
+      applicationRegistryOpenApi.paths
+    ).flatMap(([path, pathItem]) =>
+      Object.values(pathItem).flatMap((operation) =>
+        typeof operation === 'object' &&
+        operation !== null &&
+        'operationId' in operation &&
+        typeof operation.operationId === 'string'
+          ? [{ operation, path }]
+          : []
+      )
+    )
+    const operationIds = documentedOperations.map(
+      ({ operation }) => operation.operationId
+    )
+
+    expect(documentedOperations).toHaveLength(
+      Object.keys(RegistryApi.endpoints).length + 1
+    )
+    expect(new Set(operationIds).size).toBe(operationIds.length)
+
+    for (const { operation, path } of documentedOperations) {
+      if (path.startsWith('/v1/')) {
+        expect(operation).toHaveProperty('security', [{ bearer: [] }])
+        for (const [status, schema] of Object.entries(sharedErrorResponses)) {
+          expect(operation).toHaveProperty(
+            `responses.${status}.content.application/json.schema.$ref`,
+            `#/components/schemas/${schema}`
+          )
+        }
+      }
+    }
+
+    expect(
+      applicationRegistryOpenApi.paths['/v1/analytics/cv-links']?.get
+    ).toHaveProperty(
+      'responses.503.content.application/json.schema.$ref',
+      '#/components/schemas/ServiceUnavailableError'
+    )
   })
 })

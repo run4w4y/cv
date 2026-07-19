@@ -45,10 +45,6 @@ const DeferredRegistryClientLayer = Layer.succeed(ApplicationRegistryClient, {
     ),
   create: (request) =>
     withConfiguredRegistryClient((client) => client.create(request)),
-  capture: (request) =>
-    withConfiguredRegistryClient((client) => client.capture(request)),
-  captures: (identifier) =>
-    withConfiguredRegistryClient((client) => client.captures(identifier)),
   compensations: (identifier, query) =>
     withConfiguredRegistryClient((client) =>
       client.compensations(identifier, query)
@@ -93,7 +89,7 @@ const DeferredRegistryClientLayer = Layer.succeed(ApplicationRegistryClient, {
 const ApplicationRegistryRuntimeLayer = Layer.mergeAll(
   PlatformLayer,
   DeferredRegistryClientLayer,
-  ListingAvailabilityCheckerLive
+  ListingAvailabilityCheckerLive.pipe(Layer.provide(PlatformLayer))
 )
 
 const setFailedExitCode = Effect.sync(() => {

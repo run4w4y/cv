@@ -278,12 +278,13 @@ const makeMemoryCrudLayer = () => {
 
   const artifactsCrud: ArtifactsCrud = {
     find: (id) => Effect.succeed(state.artifacts.get(id)),
-    findByWorkflowId: (workflowId) =>
+    findByRequestId: (requestId) =>
       Effect.succeed(
         [...state.artifacts.values()].find(
-          (artifact) => artifact.workflowId === workflowId
+          (artifact) => artifact.requestId === requestId
         )
       ),
+    findPendingDispatch: () => Effect.succeed(undefined),
     findReadyForPublication: (
       cvLinkId,
       revisionId,
@@ -316,6 +317,8 @@ const makeMemoryCrudLayer = () => {
         })
         return true
       }),
+    markDispatchFailed: () => Effect.succeed(true),
+    markDispatched: () => Effect.succeed(true),
     markReady: (artifact: PersistedGeneratedArtifact) =>
       Effect.sync(() => {
         const existing = state.artifacts.get(artifact.id)
@@ -335,10 +338,11 @@ const makeMemoryCrudLayer = () => {
     persistPending: (artifact: PersistedGeneratedArtifact) =>
       Effect.sync(() => {
         const existing = [...state.artifacts.values()].find(
-          (candidate) => candidate.workflowId === artifact.workflowId
+          (candidate) => candidate.requestId === artifact.requestId
         )
         if (!existing) state.artifacts.set(artifact.id, artifact)
       }),
+    pendingDispatches: () => Effect.succeed([]),
   }
 
   const layer = Layer.mergeAll(
@@ -400,15 +404,19 @@ const appendInput = (
 })
 
 describe('v2 content domain services', () => {
-  test('rejects content entries outside the single supported locale', async () => {
+  test('keeps independently authored locale entries for one application', async () => {
     const { run } = makeHarness()
-    const error = await run(
+    const entries = await run(
       ContentEntriesService.use((service) =>
-        service.ensure(application.id, { kind: 'cv', locale: 'en-GB' })
-      ).pipe(Effect.flip)
+        Effect.all([
+          service.ensure(application.id, { kind: 'cv', locale: 'en' }),
+          service.ensure(application.id, { kind: 'cv', locale: 'ru' }),
+        ])
+      )
     )
 
-    expect(error._tag).toBe('RegistryBadRequestError')
+    expect(entries.map(({ locale }) => locale)).toEqual(['en', 'ru'])
+    expect(entries[0]?.id).not.toBe(entries[1]?.id)
   })
 
   test('keeps opaque revisions linear and approves only the current head', async () => {
@@ -718,10 +726,10 @@ describe('v2 content domain services', () => {
           expectedContentVersion: approval.entry.version,
           publicBaseUrl: 'https://cv.example.test/cv/',
         })
-        const pending = yield* pdfs.begin(application.id, entry.id, {
+        const pending = yield* pdfs.startJob(application.id, entry.id, {
           expectedPublicationVersion: link.publicationVersion,
           rendererVersion: 'renderer-v1',
-          workflowId: 'workflow-1',
+          requestId: 'request-1',
         })
         const ready = yield* pdfs.complete(application.id, pending.id, pdf)
         const replay = yield* pdfs.complete(application.id, pending.id, pdf)
@@ -883,10 +891,10 @@ describe('v2 content domain services', () => {
             publicBaseUrl: 'https://cv.example.test/c/',
           }
         )
-        const failedAttempt = yield* pdfs.begin(application.id, entry.id, {
+        const failedAttempt = yield* pdfs.startJob(application.id, entry.id, {
           expectedPublicationVersion: firstLink.publicationVersion,
           rendererVersion: 'renderer-v1',
-          workflowId: 'workflow-failed',
+          requestId: 'request-failed',
         })
         const failed = yield* pdfs.fail(
           application.id,
@@ -894,25 +902,25 @@ describe('v2 content domain services', () => {
           'browser_failed',
           'Browser failed.'
         )
-        const failedReplay = yield* pdfs.begin(application.id, entry.id, {
+        const failedReplay = yield* pdfs.startJob(application.id, entry.id, {
           expectedPublicationVersion: firstLink.publicationVersion,
           rendererVersion: 'renderer-v1',
-          workflowId: 'workflow-failed',
+          requestId: 'request-failed',
         })
-        const retryAttempt = yield* pdfs.begin(application.id, entry.id, {
+        const retryAttempt = yield* pdfs.startJob(application.id, entry.id, {
           expectedPublicationVersion: firstLink.publicationVersion,
           rendererVersion: 'renderer-v1',
-          workflowId: 'workflow-retry',
+          requestId: 'request-retry',
         })
         const firstReady = yield* pdfs.complete(
           application.id,
           retryAttempt.id,
           firstPdf
         )
-        const staleAttempt = yield* pdfs.begin(application.id, entry.id, {
+        const staleAttempt = yield* pdfs.startJob(application.id, entry.id, {
           expectedPublicationVersion: firstLink.publicationVersion,
           rendererVersion: 'renderer-v1',
-          workflowId: 'workflow-stale',
+          requestId: 'request-stale',
         })
 
         const secondLink = yield* publications.publish(
@@ -929,11 +937,15 @@ describe('v2 content domain services', () => {
         const staleRead = yield* Effect.flip(
           pdfs.readCurrent(application.id, entry.id, 'renderer-v1')
         )
-        const changedUrlAttempt = yield* pdfs.begin(application.id, entry.id, {
-          expectedPublicationVersion: secondLink.publicationVersion,
-          rendererVersion: 'renderer-v1',
-          workflowId: 'workflow-changed-url',
-        })
+        const changedUrlAttempt = yield* pdfs.startJob(
+          application.id,
+          entry.id,
+          {
+            expectedPublicationVersion: secondLink.publicationVersion,
+            rendererVersion: 'renderer-v1',
+            requestId: 'request-changed-url',
+          }
+        )
         const secondReady = yield* pdfs.complete(
           application.id,
           changedUrlAttempt.id,

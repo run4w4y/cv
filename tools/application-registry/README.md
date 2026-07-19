@@ -35,18 +35,17 @@ application-registry annotation list
 application-registry label list|set|add|remove
 application-registry notes add
 application-registry event list|append
-application-registry capture list|create
 application-registry compensation list
 application-registry listing scan|history|run
 application-registry outbox list|sync
 application-registry health
 ```
 
-Create, upsert, update, event append, note add, capture create, and label set
-accept contract-shaped JSON through `--input <path>`. `--input -` reads standard
-input and is the preferred machine interface. Mutation input is decoded with
-the same Effect Schema used by the Worker API. Commands with `--json` keep
-stdout machine-readable; errors and diagnostics remain separate.
+Create, upsert, update, event append, note add, and label set accept
+contract-shaped JSON through `--input <path>`. `--input -` reads standard input
+and is the preferred machine interface. Mutation input is decoded with the
+same Effect Schema used by the Worker API. Commands with `--json` keep stdout
+machine-readable; errors and diagnostics remain separate.
 
 Application listing maps operator-friendly flags onto the shared filtering DSL,
 and `--all` follows every continuation cursor. `--follow-up-state` remains a CLI

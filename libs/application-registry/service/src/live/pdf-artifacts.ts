@@ -6,7 +6,7 @@ import {
   CvLinksCrud,
 } from '@cv/application-registry-crud'
 import type { GeneratedArtifact } from '@cv/application-registry-entity'
-import { Effect, Layer } from 'effect'
+import { Effect, Layer, Result } from 'effect'
 
 import {
   RegistryBadRequestError,
@@ -30,7 +30,7 @@ import {
   PdfArtifactsService,
   type PdfArtifactsService as PdfArtifactsServiceShape,
 } from '../services/pdf-artifacts'
-import type { BeginPdfArtifactInput } from '../types'
+import type { StartPdfJobInput } from '../types'
 
 const make = Effect.gen(function* () {
   const applications = yield* ApplicationsCrud
@@ -75,6 +75,33 @@ const make = Effect.gen(function* () {
       return { artifact, entry, link, revision }
     })
   )
+
+  const validateJobIdentity = Effect.fn(
+    'PdfArtifactsService.validateJobIdentity'
+  )(function* (
+    existing: GeneratedArtifact,
+    expected: {
+      readonly contentRevisionId: string
+      readonly cvLinkId: string
+      readonly publicationVersion: number
+      readonly qrTarget: string
+      readonly rendererVersion: string
+    }
+  ) {
+    if (
+      existing.cvLinkId !== expected.cvLinkId ||
+      existing.contentRevisionId !== expected.contentRevisionId ||
+      existing.kind !== 'pdf' ||
+      existing.rendererVersion !== expected.rendererVersion ||
+      existing.publicationVersion !== expected.publicationVersion ||
+      existing.qrTarget !== expected.qrTarget
+    ) {
+      return yield* new RegistryConflictError({
+        message: 'The PDF request ID already belongs to a different job.',
+      })
+    }
+    return existing
+  })
 
   const findCurrent = Effect.fn('PdfArtifactsService.findCurrent')(
     (
@@ -131,20 +158,20 @@ const make = Effect.gen(function* () {
         )
 
   return {
-    begin: Effect.fn('PdfArtifactsService.begin')(
+    startJob: Effect.fn('PdfArtifactsService.startJob')(
       (
         applicationIdentifier: string,
         entryId: string,
-        input: BeginPdfArtifactInput
+        input: StartPdfJobInput
       ) =>
         Effect.gen(function* () {
           const rendererVersion = yield* requireNonEmpty(
             input.rendererVersion,
             'Renderer version'
           )
-          const workflowId = yield* requireNonEmpty(
-            input.workflowId,
-            'Workflow ID'
+          const requestId = yield* requireNonEmpty(
+            input.requestId,
+            'PDF request ID'
           )
           const application = yield* findApplicationForContent(
             applications,
@@ -190,22 +217,16 @@ const make = Effect.gen(function* () {
             link.publishedRevisionId
           )
 
-          const existing = yield* artifacts.findByWorkflowId(workflowId)
+          const identity = {
+            contentRevisionId: link.publishedRevisionId,
+            cvLinkId: link.id,
+            publicationVersion: link.publicationVersion,
+            qrTarget: link.publicUrl,
+            rendererVersion,
+          }
+          const existing = yield* artifacts.findByRequestId(requestId)
           if (existing) {
-            if (
-              existing.cvLinkId !== link.id ||
-              existing.contentRevisionId !== link.publishedRevisionId ||
-              existing.kind !== 'pdf' ||
-              existing.rendererVersion !== rendererVersion ||
-              existing.publicationVersion !== link.publicationVersion ||
-              existing.qrTarget !== link.publicUrl
-            ) {
-              return yield* new RegistryConflictError({
-                message:
-                  'The Workflow ID already belongs to a different PDF attempt.',
-              })
-            }
-            return existing
+            return yield* validateJobIdentity(existing, identity)
           }
 
           const now = yield* registryNow
@@ -227,28 +248,30 @@ const make = Effect.gen(function* () {
             sha256: null,
             status: 'pending',
             updatedAt: now,
-            workflowId,
+            requestId,
           }
-          yield* artifacts.persistPending(pending)
-          const stored = yield* artifacts.findByWorkflowId(workflowId)
+          const persisted = yield* Effect.result(
+            artifacts.persistPending(pending, {
+              applicationId: application.id,
+              artifactId: pending.id,
+              attempts: 0,
+              contentEntryId: entry.id,
+              createdAt: now,
+              dispatchedAt: null,
+              lastAttemptAt: null,
+              lastError: null,
+              messageVersion: 1,
+              updatedAt: now,
+            })
+          )
+          const stored = yield* artifacts.findByRequestId(requestId)
           if (!stored) {
+            if (Result.isFailure(persisted)) return yield* persisted.failure
             return yield* missingRegistryData(
               `Pending PDF artifact was not persisted: ${pending.id}`
             )
           }
-          if (
-            stored.cvLinkId !== link.id ||
-            stored.contentRevisionId !== link.publishedRevisionId ||
-            stored.rendererVersion !== rendererVersion ||
-            stored.publicationVersion !== link.publicationVersion ||
-            stored.qrTarget !== link.publicUrl
-          ) {
-            return yield* new RegistryConflictError({
-              message:
-                'The PDF artifact changed while the render was being started.',
-            })
-          }
-          return stored
+          return yield* validateJobIdentity(stored, identity)
         })
     ),
     complete: Effect.fn('PdfArtifactsService.complete')(
@@ -370,6 +393,25 @@ const make = Effect.gen(function* () {
             )
         })
     ),
+    findJob: Effect.fn('PdfArtifactsService.findJob')(
+      (applicationIdentifier: string, entryId: string, artifactId: string) =>
+        Effect.gen(function* () {
+          const job = yield* findArtifactForApplication(
+            applicationIdentifier,
+            artifactId
+          )
+          if (job.entry.id !== entryId) {
+            return yield* new RegistryNotFoundError({
+              identifier: artifactId,
+              message: `PDF job not found: ${artifactId}`,
+            })
+          }
+          return job
+        })
+    ),
+    findPendingDispatch: Effect.fn('PdfArtifactsService.findPendingDispatch')(
+      (artifactId: string) => artifacts.findPendingDispatch(artifactId)
+    ),
     findCurrent,
     readCurrent: Effect.fn('PdfArtifactsService.readCurrent')(
       (
@@ -391,6 +433,25 @@ const make = Effect.gen(function* () {
           const bytes = yield* readOpaquePayload(store, artifact.sha256)
           return { artifact, bytes }
         })
+    ),
+    markDispatchFailed: Effect.fn('PdfArtifactsService.markDispatchFailed')(
+      (artifactId: string, message: string) =>
+        Effect.gen(function* () {
+          yield* artifacts.markDispatchFailed(
+            artifactId,
+            message.slice(0, 2_000),
+            yield* registryNow
+          )
+        })
+    ),
+    markDispatched: Effect.fn('PdfArtifactsService.markDispatched')(
+      (artifactId: string) =>
+        Effect.gen(function* () {
+          yield* artifacts.markDispatched(artifactId, yield* registryNow)
+        })
+    ),
+    pendingDispatches: Effect.fn('PdfArtifactsService.pendingDispatches')(
+      (limit: number) => artifacts.pendingDispatches(limit)
     ),
   } satisfies PdfArtifactsServiceShape
 })

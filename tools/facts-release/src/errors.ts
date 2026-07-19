@@ -11,11 +11,7 @@ export class FactsPublisherSourceError extends Data.TaggedError(
 )<{
   readonly cause: unknown
   readonly message: string
-  readonly operation:
-    | 'parse-catalogue'
-    | 'read-assets'
-    | 'read-catalogue'
-    | 'resolve-assets'
+  readonly operation: 'load-source' | 'read-assets' | 'resolve-assets'
 }> {}
 
 export class FactsPublisherHttpError extends Data.TaggedError(

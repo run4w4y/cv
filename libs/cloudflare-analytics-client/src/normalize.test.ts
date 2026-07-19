@@ -1,18 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import * as Effect from 'effect/Effect'
-import {
-  extractGraphqlErrorMessages,
-  normalizeCloudflareAnalyticsResponse,
-} from './normalize'
-import { createCloudflareAnalyticsRange } from './range'
+import { extractGraphqlErrors, normalizeResponse } from './normalize'
+import { makeRange } from './range'
 import { cloudflarePayload } from './test-fixtures'
 
 describe('cloudflare analytics normalization', () => {
   test('normalizes daily rows without double counting top path rows', async () => {
     const data = await Effect.runPromise(
-      normalizeCloudflareAnalyticsResponse(
+      normalizeResponse(
         cloudflarePayload,
-        createCloudflareAnalyticsRange({
+        makeRange({
           from: '2026-06-17',
           to: '2026-06-18',
         })
@@ -26,7 +23,7 @@ describe('cloudflare analytics normalization', () => {
 
   test('sums country groups into one daily path point', async () => {
     const data = await Effect.runPromise(
-      normalizeCloudflareAnalyticsResponse(
+      normalizeResponse(
         {
           data: {
             viewer: {
@@ -58,7 +55,7 @@ describe('cloudflare analytics normalization', () => {
             },
           },
         },
-        createCloudflareAnalyticsRange({
+        makeRange({
           from: '2026-06-18',
           to: '2026-06-19',
         })
@@ -76,7 +73,7 @@ describe('cloudflare analytics normalization', () => {
 
   test('extracts GraphQL error messages without returning raw payloads', () => {
     expect(
-      extractGraphqlErrorMessages({
+      extractGraphqlErrors({
         errors: [{ message: 'bad zone' }, { detail: 'ignored' }],
       })
     ).toEqual(['bad zone'])

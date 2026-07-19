@@ -3,7 +3,6 @@ import { defineRelations } from 'drizzle-orm'
 import { applicationLabels, applicationNotes } from './tables/annotations'
 import { applications } from './tables/applications'
 import { generatedArtifacts } from './tables/artifacts'
-import { campaignCaptures } from './tables/captures'
 import { applicationCompensations } from './tables/compensations'
 import { contentEntries, contentRevisions } from './tables/content'
 import { cvLinks } from './tables/cv-links'
@@ -16,6 +15,7 @@ import {
 } from './tables/facts-releases'
 import { applicationIdentityAliases } from './tables/identity-aliases'
 import { jobPostingSnapshots } from './tables/job-posting-snapshots'
+import { pdfGenerationOutbox } from './tables/pdf-generation-outbox'
 
 const relationalTables = {
   applicationCompensations,
@@ -24,7 +24,6 @@ const relationalTables = {
   applicationLabels,
   applicationNotes,
   applications,
-  campaignCaptures,
   contentEntries,
   contentRevisions,
   cvLinks,
@@ -34,6 +33,7 @@ const relationalTables = {
   factsReleases,
   generatedArtifacts,
   jobPostingSnapshots,
+  pdfGenerationOutbox,
 }
 
 /** Drizzle relation graph used by application-registry relational queries. */
@@ -61,10 +61,6 @@ export const applicationRegistryRelations = defineRelations(
         from: relation.applications.id,
         to: relation.applicationNotes.applicationId,
       }),
-      captures: relation.many.campaignCaptures({
-        from: relation.applications.id,
-        to: relation.campaignCaptures.applicationId,
-      }),
       contentEntries: relation.many.contentEntries({
         from: relation.applications.id,
         to: relation.contentEntries.applicationId,
@@ -76,6 +72,10 @@ export const applicationRegistryRelations = defineRelations(
       jobPostingSnapshots: relation.many.jobPostingSnapshots({
         from: relation.applications.id,
         to: relation.jobPostingSnapshots.applicationId,
+      }),
+      pdfGenerationOutbox: relation.many.pdfGenerationOutbox({
+        from: relation.applications.id,
+        to: relation.pdfGenerationOutbox.applicationId,
       }),
     },
     applicationCompensations: {
@@ -113,13 +113,6 @@ export const applicationRegistryRelations = defineRelations(
         optional: false,
       }),
     },
-    campaignCaptures: {
-      application: relation.one.applications({
-        from: relation.campaignCaptures.applicationId,
-        to: relation.applications.id,
-        optional: false,
-      }),
-    },
     contentEntries: {
       application: relation.one.applications({
         from: relation.contentEntries.applicationId,
@@ -134,6 +127,10 @@ export const applicationRegistryRelations = defineRelations(
         from: relation.contentEntries.id,
         to: relation.cvLinks.contentEntryId,
         optional: true,
+      }),
+      pdfGenerationOutbox: relation.many.pdfGenerationOutbox({
+        from: relation.contentEntries.id,
+        to: relation.pdfGenerationOutbox.contentEntryId,
       }),
     },
     contentRevisions: {
@@ -222,6 +219,28 @@ export const applicationRegistryRelations = defineRelations(
       contentRevision: relation.one.contentRevisions({
         from: relation.generatedArtifacts.contentRevisionId,
         to: relation.contentRevisions.id,
+        optional: false,
+      }),
+      outbox: relation.one.pdfGenerationOutbox({
+        from: relation.generatedArtifacts.id,
+        to: relation.pdfGenerationOutbox.artifactId,
+        optional: true,
+      }),
+    },
+    pdfGenerationOutbox: {
+      application: relation.one.applications({
+        from: relation.pdfGenerationOutbox.applicationId,
+        to: relation.applications.id,
+        optional: false,
+      }),
+      artifact: relation.one.generatedArtifacts({
+        from: relation.pdfGenerationOutbox.artifactId,
+        to: relation.generatedArtifacts.id,
+        optional: false,
+      }),
+      contentEntry: relation.one.contentEntries({
+        from: relation.pdfGenerationOutbox.contentEntryId,
+        to: relation.contentEntries.id,
         optional: false,
       }),
     },

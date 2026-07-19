@@ -1,0 +1,27 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "effect-web-crypto",
+  "projectType": "library",
+  "sourceRoot": "libs/effect-web-crypto/src",
+  "tags": ["scope:shared", "type:platform", "visibility:private"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/effect-web-crypto/src/index.ts",
+        "outputPath": "libs/effect-web-crypto/dist",
+        "rootDir": "libs/effect-web-crypto/src",
+        "tsConfig": "libs/effect-web-crypto/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
+    "format": {},
+    "format:check": {}
+  }
+}

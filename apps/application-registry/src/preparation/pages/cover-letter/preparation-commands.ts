@@ -1,0 +1,142 @@
+import { useAtom, useAtomSet, useAtomValue } from '@effect/atom-react'
+import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
+import * as Atom from 'effect/unstable/reactivity/Atom'
+
+import {
+  anyAsyncResultWaiting,
+  asyncResultFailureMessage,
+} from '../../async-result'
+import { chatGptAuthenticatedAtom } from '../../auth/atoms'
+import { preparationCommandGateKey } from '../../command-gate'
+import type { PreparationEditorIdentity } from '../../editor'
+import {
+  coverLetterPromptAtom,
+  selectedPreparationModelAtom,
+} from '../../forms/atoms'
+import { keyedCommandFamily } from '../../keyed-command'
+import { refreshJobSnapshotCommandAtom } from '../../snapshot-command'
+import { makeStartPreparationAtom } from '../../workflow/atoms'
+import type { PreparationRun } from '../../workflow/domain'
+import type { PreparationWorkspace } from '../../workspace/atoms'
+
+const startPreparationFamily = keyedCommandFamily(
+  'preparation/cover-letter/command/start',
+  makeStartPreparationAtom
+)
+
+export const workflowIsExecuting = (run: PreparationRun | null): boolean =>
+  run?.status === 'queued' ||
+  run?.status === 'running' ||
+  run?.status === 'review_submitted' ||
+  run?.status === 'cancelling'
+
+export const workflowIsOpen = (run: PreparationRun | null): boolean =>
+  workflowIsExecuting(run) || run?.status === 'awaiting_review'
+
+export const useCoverLetterPreparationCommands = ({
+  identity,
+  onRunStarted,
+  workspace,
+}: {
+  readonly identity: PreparationEditorIdentity
+  readonly onRunStarted: (runId: string) => void
+  readonly workspace: PreparationWorkspace | null
+}) => {
+  const commandKey = preparationCommandGateKey(identity)
+  const startCommandAtom = startPreparationFamily(commandKey)
+  const refreshCommandAtom = refreshJobSnapshotCommandAtom(identity)
+  const authenticated = useAtomValue(chatGptAuthenticatedAtom)
+  const [selectedModel, selectModel] = useAtom(selectedPreparationModelAtom)
+  const [prompt, setPrompt] = useAtom(coverLetterPromptAtom(commandKey))
+  const [startResult, startPreparation] = useAtom(startCommandAtom, {
+    mode: 'promise',
+  })
+  const [refreshResult, requestJobSnapshotRefresh] = useAtom(
+    refreshCommandAtom,
+    { mode: 'promise' }
+  )
+  const resetStartResult = useAtomSet(startCommandAtom)
+  const resetRefreshResult = useAtomSet(refreshCommandAtom)
+  const run = workspace?.run ?? null
+  const workflowExecuting = workflowIsExecuting(run)
+  const workflowOpen = workflowIsOpen(run)
+  const startPending = AsyncResult.isWaiting(startResult)
+  const refreshPending = AsyncResult.isWaiting(refreshResult)
+  const mutationPending = anyAsyncResultWaiting(startResult, refreshResult)
+
+  const generate = async () => {
+    if (
+      workspace === null ||
+      !authenticated ||
+      selectedModel === null ||
+      prompt.trim().length === 0 ||
+      workflowOpen ||
+      mutationPending
+    ) {
+      return
+    }
+    try {
+      const result = await startPreparation({
+        coverLetterPrompt: prompt,
+        kind: 'cover_letter',
+        locale: identity.locale,
+        modelId: selectedModel,
+        source: {
+          _tag: 'ReviewedContext',
+          applicationId: identity.applicationId,
+          factsReleaseId: workspace.bootstrap.context.factsReleaseId,
+          jobSnapshotId: workspace.bootstrap.context.jobSnapshot.id,
+          url: workspace.bootstrap.context.jobSnapshot.requestedUrl,
+        },
+      })
+      onRunStarted(result.runId)
+    } catch {
+      // The keyed command atom retains the typed failure rendered by the page.
+    }
+  }
+
+  const refreshJobSnapshot = async () => {
+    if (
+      identity.applicationId.length === 0 ||
+      mutationPending ||
+      workflowExecuting
+    ) {
+      return
+    }
+    try {
+      await requestJobSnapshotRefresh(identity.applicationId)
+    } catch {
+      // The keyed command atom retains the typed failure rendered by the page.
+    }
+  }
+
+  const reset = () => {
+    resetStartResult(Atom.Reset)
+    resetRefreshResult(Atom.Reset)
+  }
+
+  return {
+    authenticated,
+    error:
+      asyncResultFailureMessage(
+        startResult,
+        'The cover-letter preparation Workflow could not start.'
+      ) ??
+      asyncResultFailureMessage(
+        refreshResult,
+        'The job posting could not be refreshed.'
+      ),
+    generate,
+    mutationPending,
+    prompt,
+    refreshJobSnapshot,
+    refreshPending,
+    reset,
+    selectModel,
+    selectedModel,
+    setPrompt,
+    startPending,
+    workflowExecuting,
+    workflowOpen,
+  } as const
+}

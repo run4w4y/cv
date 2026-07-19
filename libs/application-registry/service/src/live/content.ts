@@ -8,11 +8,7 @@ import {
 import type { ContentRevision } from '@cv/application-registry-entity'
 import { Effect, Layer } from 'effect'
 
-import {
-  RegistryBadRequestError,
-  RegistryConflictError,
-  RegistryNotFoundError,
-} from '../errors'
+import { RegistryConflictError, RegistryNotFoundError } from '../errors'
 import {
   findApplicationForContent,
   putOpaquePayload,
@@ -246,11 +242,6 @@ const make = Effect.gen(function* () {
             applicationIdentifier
           )
           const locale = yield* requireNonEmpty(input.locale, 'Locale')
-          if (locale !== 'en') {
-            return yield* new RegistryBadRequestError({
-              message: `Unsupported content locale: ${locale}. Only en is supported.`,
-            })
-          }
           const existing = yield* content.findEntryByApplication(
             application.id,
             input.kind,

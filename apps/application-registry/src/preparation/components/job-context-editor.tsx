@@ -14,11 +14,30 @@ import {
   FieldLabel,
   Textarea,
 } from '@cv/internal-ui'
+import { useAtom } from '@effect/atom-react'
+import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
+import * as Atom from 'effect/unstable/reactivity/Atom'
 import { CircleAlert, Save } from 'lucide-react'
 import * as React from 'react'
 
-import { manualJobContextMaxBytes, persistManualJobContext } from '../api'
-import { messageFromCause } from '../hooks'
+import {
+  makePersistManualJobContextAtom,
+  manualJobContextMaxBytes,
+} from '../data'
+import { messageFromCause } from '../errors'
+import { jobContextOverrideAtom } from '../forms/atoms'
+import { keyedCommandFamily } from '../keyed-command'
+
+const persistJobContextFamily = keyedCommandFamily(
+  'preparation/job-context/persist',
+  makePersistManualJobContextAtom
+)
+
+const persistJobContextGateFamily = Atom.family((applicationId: string) =>
+  Atom.make(false).pipe(
+    Atom.withLabel(`preparation/job-context/gate/${applicationId}`)
+  )
+)
 
 export const editableJobContext = (value: unknown): string => {
   if (typeof value === 'string') return value
@@ -29,39 +48,52 @@ export const editableJobContext = (value: unknown): string => {
 export const JobContextEditor = ({
   applicationId,
   initialContext,
-  onSaved,
 }: {
   readonly applicationId: string
   readonly initialContext?: unknown
-  readonly onSaved: () => void
 }) => {
   const initialText = React.useMemo(
     () => editableJobContext(initialContext),
     [initialContext]
   )
-  const [value, setValue] = React.useState(initialText)
-  const [pending, setPending] = React.useState(false)
-  const [error, setError] = React.useState<string | null>(null)
+  const [override, setOverride] = useAtom(jobContextOverrideAtom(applicationId))
+  const value = override ?? initialText
+  const [saveResult, saveContext] = useAtom(
+    persistJobContextFamily(applicationId),
+    { mode: 'promise' }
+  )
+  const [saveExecuting, setSaveExecuting] = useAtom(
+    persistJobContextGateFamily(applicationId)
+  )
+  const pending = saveExecuting || AsyncResult.isWaiting(saveResult)
+  const error = AsyncResult.matchWithError(saveResult, {
+    onInitial: () => null,
+    onError: (failure) => failure.message,
+    onDefect: (defect) =>
+      messageFromCause(defect, 'The corrected job context could not be saved.'),
+    onSuccess: () => null,
+  })
   const byteLength = React.useMemo(
     () => new TextEncoder().encode(value.trim()).byteLength,
     [value]
   )
   const tooLarge = byteLength > manualJobContextMaxBytes
 
-  React.useEffect(() => setValue(initialText), [initialText])
-
   const save = async () => {
-    setPending(true)
-    setError(null)
+    let claimed = false
+    setSaveExecuting((current) => {
+      if (current) return current
+      claimed = true
+      return true
+    })
+    if (!claimed) return
     try {
-      await persistManualJobContext(applicationId, value)
-      onSaved()
-    } catch (cause) {
-      setError(
-        messageFromCause(cause, 'The corrected job context could not be saved.')
-      )
+      await saveContext({ applicationId, value })
+      setOverride(null)
+    } catch {
+      // The mutation atom retains the typed failure rendered above.
     } finally {
-      setPending(false)
+      setSaveExecuting(false)
     }
   }
 
@@ -99,7 +131,7 @@ export const JobContextEditor = ({
             value={value}
             placeholder={`Role: …\n\nResponsibilities:\n- …\n\nRequirements:\n- …`}
             disabled={pending}
-            onChange={(event) => setValue(event.currentTarget.value)}
+            onChange={(event) => setOverride(event.currentTarget.value)}
           />
         </Field>
         {error ? (

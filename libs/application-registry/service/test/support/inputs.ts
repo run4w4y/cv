@@ -1,7 +1,4 @@
-import type {
-  CreateCampaignCaptureInput,
-  UpsertApplicationInput,
-} from '../../src'
+import type { UpsertApplicationInput } from '../../src'
 
 export const recordedAt = '2026-07-12T12:00:00.000Z'
 
@@ -17,39 +14,4 @@ export const makeApplicationInput = (
   source: 'service-integration',
   sourceJobId: null,
   targetStage: 'apply_next',
-})
-
-const submissionDetails = {
-  additionalInstructions: null,
-  applicationMethod: 'web form',
-  applicationQuestions: [],
-  contactEmail: null,
-  coverLetterInstructions: null,
-  deadline: null,
-  employmentType: 'full-time',
-  languageRequirements: ['English'],
-  locationRestrictions: null,
-  relocation: null,
-  requiredDocuments: ['CV'],
-  salary: null,
-  visaRequirements: null,
-  workMode: 'remote',
-} as const
-
-export const makeCaptureInput = (
-  suffix: string,
-  operationId: string
-): CreateCampaignCaptureInput => ({
-  ...makeApplicationInput(suffix),
-  artifacts: [],
-  applicationUrl: 'https://example.test/apply',
-  audience: null,
-  campaignRunId: `service-run-${suffix}`,
-  capturedAt: recordedAt,
-  confidence: 0.9,
-  deviceId: 'miniflare',
-  jobContentHash: null,
-  operationId,
-  profile: 'default',
-  submissionDetails,
 })

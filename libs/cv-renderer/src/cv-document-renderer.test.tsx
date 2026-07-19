@@ -137,17 +137,17 @@ describe('CvDocumentRenderer', () => {
     expect(markup).not.toContain('id="cv-document-education"')
   })
 
-  test('renders locale-specific presentation labels without legacy i18n', () => {
+  test('selects presentation labels from the document locale', () => {
     const markup = renderToStaticMarkup(
       <CvDocumentRenderer
-        document={document}
+        document={{ ...document, locale: 'ru' }}
         includeStyles={false}
-        labels={{ experience: 'Опыт', profile: 'Профиль' }}
       />
     )
 
     expect(markup).toContain('>Опыт</h2>')
-    expect(markup).toContain('>Профиль</h2>')
+    expect(markup).toContain('>О себе</h2>')
+    expect(markup).toContain('aria-label="Контактная информация"')
   })
 
   test('integrates the exact publication URL into the A4 preview', () => {

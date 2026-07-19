@@ -6,22 +6,23 @@ import type {
   RegistryConnections,
   RegistryQueryDatabase,
 } from '../internal/connection'
-import type { ApplicationPatch, PersistApplicationOptions } from '../types'
+import type {
+  ApplicationPatch,
+  PersistApplicationOptions,
+  PersistedApplication,
+} from '../types'
 import { findApplication } from './application-queries'
-import {
-  opportunityStatements,
-  type PersistedOpportunity,
-} from './application-values'
+import { applicationStatements } from './application-values'
 import { allocateRevision, currentRevision, runBatch } from './shared'
 
 export const persistApplication = (
   { batch }: RegistryConnections,
-  input: PersistedOpportunity,
+  input: PersistedApplication,
   options: PersistApplicationOptions
 ) =>
   runBatch(batch, options.operation, [
     allocateRevision(batch),
-    ...opportunityStatements(batch, input, options.mode),
+    ...applicationStatements(batch, input),
   ]).pipe(
     Effect.flatMap((results) =>
       (results[1]?.meta.changes ?? 0) > 0

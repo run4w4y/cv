@@ -8,7 +8,6 @@ import type {
   ApplicationMutable,
   ApplicationNote,
   ApplicationWritable,
-  CampaignCapture,
   ContentEntry,
   ContentRevision,
   CvLink,
@@ -17,6 +16,7 @@ import type {
   FactsReleaseCatalog,
   GeneratedArtifact,
   JobPostingSnapshot,
+  PdfGenerationOutbox,
   ListingAvailability,
   ListingCheckConfidence,
   ListingCheckMode,
@@ -44,7 +44,6 @@ export type ApplicationListResolution = QueryResolutionOf<
 export type EventListResolution = QueryResolutionOf<typeof eventListQuery>
 
 export type ApplicationListCounts = {
-  readonly captures: number
   readonly notes: number
 }
 
@@ -53,17 +52,11 @@ export type ApplicationListLatestEvent = Pick<
   'kind' | 'occurredAt'
 >
 
-export type ApplicationListLatestCapture = Pick<
-  CampaignCapture,
-  'applicationUrl'
->
-
 export type ApplicationListRecord = Application & {
   readonly compensations: readonly ApplicationCompensation[]
   readonly counts: ApplicationListCounts
   readonly identityAliases: readonly string[]
   readonly labels: readonly string[]
-  readonly latestCapture: ApplicationListLatestCapture | null
   readonly latestEvent: ApplicationListLatestEvent | null
 }
 
@@ -102,10 +95,7 @@ export type ManagedApplicationUpdateResult = {
   readonly labels: readonly string[]
 }
 
-export type ApplicationWriteMode = 'capture' | 'replace'
-
 export interface PersistApplicationOptions {
-  readonly mode: ApplicationWriteMode
   readonly operation: string
 }
 
@@ -130,31 +120,6 @@ export type PersistedApplication = ApplicationWritable & {
   readonly labels?: readonly string[]
   readonly recordedAt: UtcIsoTimestamp
 }
-
-type PersistedCaptureFields = Pick<
-  CampaignCapture,
-  | 'artifacts'
-  | 'audience'
-  | 'campaignRunId'
-  | 'capturedAt'
-  | 'confidence'
-  | 'applicationUrl'
-  | 'fitAssessment'
-  | 'jobContentHash'
-  | 'operationId'
-  | 'profile'
-  | 'submissionDetails'
->
-
-export type PersistedCapture = PersistedApplication &
-  PersistedCaptureFields & {
-    readonly captureId: string
-    readonly deviceId: string | null
-    readonly eventId: string
-    readonly identityAlias?: string
-    readonly operationRequestSignature: string
-    readonly writeMode: ApplicationWriteMode
-  }
 
 export type PersistedEvent = Pick<
   ApplicationEvent,
@@ -237,6 +202,34 @@ export type PersistedCvLink = Omit<
   'disabledAt' | 'disabledReason' | 'enabled' | 'publicationVersion' | 'version'
 >
 
+export type CvAnalyticsLinkRecord = {
+  readonly application: Pick<
+    Application,
+    | 'appliedAt'
+    | 'applicationStatus'
+    | 'canonicalUrl'
+    | 'company'
+    | 'createdAt'
+    | 'id'
+    | 'listingAvailability'
+    | 'role'
+  >
+  readonly labels: readonly string[]
+  readonly link: Pick<
+    CvLink,
+    | 'contentEntryId'
+    | 'createdAt'
+    | 'enabled'
+    | 'id'
+    | 'publishedRevisionId'
+    | 'token'
+    | 'updatedAt'
+  >
+  readonly locale: string
+}
+
 export type PersistedGeneratedArtifact = GeneratedArtifact
+
+export type PersistedPdfGenerationOutbox = PdfGenerationOutbox
 
 export type PersistedJobPostingSnapshot = JobPostingSnapshot

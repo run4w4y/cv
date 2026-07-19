@@ -1,15 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 
-import {
-  buildCloudflareAnalyticsQuery,
-  buildCloudflareAnalyticsVariables,
-} from './query'
-import { createCloudflareAnalyticsRange } from './range'
-import { testConfig } from './test-fixtures'
+import { buildQuery, buildVariables } from './query'
+import { makeRange } from './range'
+import { testConfiguration } from './test-fixtures'
 
 describe('cloudflare analytics query', () => {
   test('keeps the CLI query shape needed for audience analytics', () => {
-    const query = buildCloudflareAnalyticsQuery()
+    const query = buildQuery()
 
     expect(query).toContain('query AudienceAnalytics')
     expect(query).toContain('topPaths: httpRequestsAdaptiveGroups')
@@ -22,11 +19,11 @@ describe('cloudflare analytics query', () => {
   })
 
   test('builds variables with host and range filters', () => {
-    const range = createCloudflareAnalyticsRange({
+    const range = makeRange({
       from: '2026-06-01T00:00:00.000Z',
       to: '2026-06-20T00:00:00.000Z',
     })
-    const variables = buildCloudflareAnalyticsVariables(testConfig, range)
+    const variables = buildVariables(testConfiguration, range)
 
     expect(variables.zoneTag).toBe('zone-123')
     expect(variables.filter.AND).toContainEqual({
@@ -35,6 +32,18 @@ describe('cloudflare analytics query', () => {
     })
     expect(variables.filter.AND).toContainEqual({
       clientRequestHTTPHost: 'cv.example.test',
+    })
+  })
+
+  test('adds an optional provider-side path filter', () => {
+    const range = makeRange({
+      from: '2026-06-18T00:00:00.000Z',
+      to: '2026-06-19T00:00:00.000Z',
+    })
+    const variables = buildVariables(testConfiguration, range, '/c/%')
+
+    expect(variables.filter.AND).toContainEqual({
+      clientRequestPath_like: '/c/%',
     })
   })
 })

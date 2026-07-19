@@ -13,7 +13,7 @@
     "migrations:apply:remote": "nx run application-registry-api:migrations:apply:remote"
   },
   "dependencies": {
-    "@cloudflare/puppeteer": "^1.1.0",
+    "@cv/ai-provider": "workspace:*",
     "@cv/application-registry-api-contract": "workspace:*",
     "@cv/application-registry-artifact-store": "workspace:*",
     "@cv/application-registry-crud": "workspace:*",
@@ -21,16 +21,14 @@
     "@cv/application-registry-fx": "workspace:*",
     "@cv/application-registry-listing-check": "workspace:*",
     "@cv/application-registry-service": "workspace:*",
+    "@cv/cloudflare-analytics-client": "workspace:*",
     "@cv/effect-http-auth": "workspace:*",
-    "@cv/renderer": "workspace:*",
-    "@opencoredev/loginwithchatgpt-server": "0.2.0",
-    "effect": "4.0.0-beta.91",
-    "htmlparser2": "^12.0.0"
+    "@cv/effect-web-crypto": "workspace:*",
+    "effect": "4.0.0-beta.99"
   },
   "devDependencies": {
     "@cv/application-registry-api-client": "workspace:*",
     "@cloudflare/workers-types": "4.20260511.1",
-    "drizzle-orm": "1.0.0-rc.4",
-    "miniflare": "4.20260708.1"
+    "@cv/worker-test-kit": "workspace:*"
   }
 }

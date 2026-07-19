@@ -5,6 +5,15 @@
   "sourceRoot": "tools/facts-release/src",
   "tags": ["scope:cv", "type:tool", "visibility:private"],
   "targets": {
+    "check": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "options": {
+        "command": "bun run tools/facts-release/src/check.ts --content-root ${CONTENT_ROOT:-../cv-content}",
+        "color": true
+      }
+    },
     "publish": {
       "executor": "nx:run-commands",
       "dependsOn": ["^build"],

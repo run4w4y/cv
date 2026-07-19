@@ -126,7 +126,6 @@ const receiptInsert = (
         eventId: sql<string | null>`${input.event?.eventId ?? null}`.as(
           'event_id'
         ),
-        captureId: sql<null>`null`.as('capture_id'),
         noteId: sql<null>`null`.as('note_id'),
         recordedAt: sql<string>`${input.recordedAt}`.as('recorded_at'),
       })

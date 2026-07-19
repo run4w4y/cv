@@ -95,9 +95,7 @@ jobs:
             exit 1
           fi
 
-      - name: Reject a superseded main-branch release request
-        id: source_head
-        if: ${{ github.event_name == 'repository_dispatch' }}
+      - name: Require the authoritative reviewed source
         run: |
           export GH_TOKEN="$CONTENT_REPO_TOKEN"
           authoritative_sha="$(gh api repos/run4w4y/cv-content/git/ref/heads/main --jq .object.sha)"
@@ -108,15 +106,11 @@ jobs:
           fi
 
           if [[ "$authoritative_sha" != "$FACTS_SOURCE_COMMIT" ]]; then
-            echo "::notice title=Superseded facts release::Skipping ${FACTS_SOURCE_COMMIT}; cv-content main is now ${authoritative_sha}."
-            echo 'superseded=true' >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error title=Non-authoritative facts source::Requested ${FACTS_SOURCE_COMMIT}; reviewed cv-content main is ${authoritative_sha}."
+            exit 1
           fi
 
-          echo 'superseded=false' >> "$GITHUB_OUTPUT"
-
       - name: Publish and activate reviewed facts
-        if: ${{ github.event_name == 'workflow_dispatch' || steps.source_head.outputs.superseded != 'true' }}
         env:
           FACTS_CHANNEL: production
           FACTS_COMPILER_REPOSITORY: run4w4y/cv

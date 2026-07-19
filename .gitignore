@@ -9,7 +9,6 @@
 .env
 .env.local
 .privacy-denylist.local
-.private-campaigns.json
 .cv-work/
 storybook-static/
 .DS_Store

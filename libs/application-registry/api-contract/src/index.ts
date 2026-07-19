@@ -1,5 +1,6 @@
 export { ApplicationRegistryApi, PublicApi, RegistryApi } from './api'
 export { RegistryAuthorization } from './auth'
+export * from './analytics'
 export * from './commands'
 export * from './content'
 export {
@@ -18,4 +19,5 @@ export {
   UnauthorizedErrorSchema,
 } from './errors'
 export { applicationRegistryOpenApi } from './openapi'
+export * from './pdf-jobs'
 export * from './schemas'

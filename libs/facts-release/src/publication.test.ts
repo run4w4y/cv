@@ -33,7 +33,7 @@ const compiledFixture = async () => {
           id: 'asset.employment-review',
         },
       ],
-      catalogue: factsCatalogueFixture(assetSha256),
+      catalogues: [factsCatalogueFixture(assetSha256)],
       provenance: fixtureProvenance,
     })
   )

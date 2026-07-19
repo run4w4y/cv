@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { FactsReleaseRegistration } from '@cv/facts-release'
 import {
-  factsCatalogueFixture,
   fixtureAssetBytes,
   fixtureProvenance,
 } from '@cv/facts-release/test-support'
@@ -23,12 +22,45 @@ const withCheckout = async <A>(action: (root: string) => Promise<A>) => {
   const root = await mkdtemp(join(tmpdir(), 'cv-facts-publication-'))
   try {
     await mkdir(join(root, 'facts/assets'), { recursive: true })
+    await mkdir(join(root, 'facts/en'), { recursive: true })
+    await mkdir(join(root, 'facts/ru'), { recursive: true })
     await writeFile(
-      join(root, 'facts/catalogue.json'),
-      JSON.stringify(factsCatalogueFixture(await digest(fixtureAssetBytes)))
+      join(root, 'facts.config.ts'),
+      `export default {
+        defaultLocale: 'en',
+        factsDir: 'facts',
+        locales: ['en', 'ru'],
+      }`
     )
     await writeFile(
-      join(root, 'facts/assets/asset.employment-review.pdf'),
+      join(root, 'facts/assets.ts'),
+      `export default {
+        'asset.employment-review': {
+          description: 'Reviewed supporting material.',
+          fileName: 'employment-review.pdf',
+          label: 'Employment review',
+          mediaType: 'application/pdf',
+        },
+      }`
+    )
+    const section = (name: string, statement: string) => `export default {
+      kind: 'identity',
+      name: '${name}',
+      facts: [{
+        text: '${statement}',
+      }],
+      languages: [],
+    }`
+    await writeFile(
+      join(root, 'facts/en/identity.ts'),
+      section('Ada Lovelace', 'Works as a software engineer.')
+    )
+    await writeFile(
+      join(root, 'facts/ru/identity.ts'),
+      section('Ада Лавлейс', 'Работает инженером-программистом.')
+    )
+    await writeFile(
+      join(root, 'facts/assets/employment-review.pdf'),
       fixtureAssetBytes
     )
     return await action(root)

@@ -36,6 +36,13 @@ export class RegistryArtifactError extends Data.TaggedError(
   readonly operation: 'read' | 'verify' | 'write'
 }> {}
 
+export class RegistryAnalyticsError extends Data.TaggedError(
+  'RegistryAnalyticsError'
+)<{
+  readonly cause: unknown
+  readonly message: string
+}> {}
+
 export type FactsReleaseObjectKind = 'asset' | 'catalog' | 'manifest'
 
 export class FactsReleaseObjectNotFoundError extends Data.TaggedError(
@@ -63,6 +70,7 @@ export class FactsReleaseObjectMetadataError extends Data.TaggedError(
 export type ApplicationRegistryError =
   | FactsReleaseObjectMetadataError
   | FactsReleaseObjectNotFoundError
+  | RegistryAnalyticsError
   | RegistryArtifactError
   | RegistryBadRequestError
   | RegistryConflictError

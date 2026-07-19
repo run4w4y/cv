@@ -1,3 +1,4 @@
+import { CloudflareAnalytics } from '@cv/cloudflare-analytics-client'
 import { Config, Effect } from 'effect'
 
 import { applicationRegistryWorkersDevEnabled } from './deployment-config'
@@ -17,7 +18,6 @@ type WranglerConfig = {
   }
   readonly compatibility_date: string
   readonly compatibility_flags: readonly ['nodejs_compat']
-  readonly browser: { readonly binding: 'BROWSER' }
   readonly d1_databases: readonly {
     readonly binding: 'APPLICATION_REGISTRY_DB'
     readonly database_id: string
@@ -33,25 +33,35 @@ type WranglerConfig = {
   readonly name: string
   readonly observability: { readonly enabled: true }
   readonly preview_urls: false
+  readonly queues: {
+    readonly producers: readonly {
+      readonly binding: 'CV_PDF_QUEUE'
+      readonly queue: string
+    }[]
+  }
   readonly r2_buckets: readonly {
     readonly binding: 'CV_OBJECTS'
     readonly bucket_name: string
   }[]
   readonly secrets: {
-    readonly required: readonly ['CHATGPT_SESSION_SECRET', 'REGISTRY_API_TOKEN']
+    readonly required: readonly [
+      'CHATGPT_SESSION_SECRET',
+      'CLOUDFLARE_ANALYTICS_API_TOKEN',
+      'REGISTRY_API_TOKEN',
+    ]
   }
-  readonly triggers: { readonly crons: readonly ['17 * * * *'] }
+  readonly triggers: {
+    readonly crons: readonly ['*/5 * * * *', '17 * * * *']
+  }
   readonly vars: {
+    readonly CLOUDFLARE_GRAPHQL_ENDPOINT: string
+    readonly CLOUDFLARE_ZONE_ID: string
+    readonly CV_WEB_HOST: string
     readonly LISTING_CHECKS_ENABLED: 'true'
     readonly LISTING_CHECK_ARCHIVE_ENABLED: 'false'
     readonly LISTING_CHECK_BATCH_SIZE: '5'
   }
   readonly workers_dev: boolean
-  readonly workflows: readonly {
-    readonly binding: 'CV_PDF_WORKFLOW'
-    readonly class_name: 'CvPdfWorkflow'
-    readonly name: string
-  }[]
 }
 
 const defaultOutputPath = 'apps/application-registry-api/wrangler.deploy.jsonc'
@@ -72,13 +82,19 @@ const readConfig = Effect.all({
     'APPLICATION_REGISTRY_COMPATIBILITY_DATE',
     '2026-06-22'
   ),
+  cloudflareGraphqlEndpoint: optionalString(
+    'CLOUDFLARE_GRAPHQL_ENDPOINT',
+    CloudflareAnalytics.defaultEndpoint
+  ),
+  cloudflareZoneId: Config.nonEmptyString('CLOUDFLARE_ZONE_ID'),
   databaseId: Config.nonEmptyString('APPLICATION_REGISTRY_DB_ID'),
   databaseName: optionalString(
     'APPLICATION_REGISTRY_DB_NAME',
     'cv-application-registry'
   ),
   cvObjectsBucketName: optionalString('CV_OBJECTS_BUCKET_NAME', 'cv-objects'),
-  pdfWorkflowName: optionalString('CV_PDF_WORKFLOW_NAME', 'cv-pdf'),
+  cvWebHost: Config.nonEmptyString('CV_WEB_HOST'),
+  pdfQueueName: optionalString('CV_PDF_QUEUE_NAME', 'cv-pdf-generation'),
   workersDev: applicationRegistryWorkersDevEnabled,
   workerName: optionalString(
     'APPLICATION_REGISTRY_WORKER_NAME',
@@ -88,11 +104,14 @@ const readConfig = Effect.all({
   Effect.map(
     ({
       chatgptSessionsKvId,
+      cloudflareGraphqlEndpoint,
+      cloudflareZoneId,
       compatibilityDate,
       cvObjectsBucketName,
+      cvWebHost,
       databaseId,
       databaseName,
-      pdfWorkflowName,
+      pdfQueueName,
       workersDev,
       workerName,
     }) =>
@@ -106,7 +125,6 @@ const readConfig = Effect.all({
         },
         compatibility_date: compatibilityDate,
         compatibility_flags: ['nodejs_compat'],
-        browser: { binding: 'BROWSER' },
         d1_databases: [
           {
             binding: 'APPLICATION_REGISTRY_DB',
@@ -127,6 +145,14 @@ const readConfig = Effect.all({
         name: workerName,
         observability: { enabled: true },
         preview_urls: false,
+        queues: {
+          producers: [
+            {
+              binding: 'CV_PDF_QUEUE',
+              queue: pdfQueueName,
+            },
+          ],
+        },
         r2_buckets: [
           {
             binding: 'CV_OBJECTS',
@@ -134,22 +160,22 @@ const readConfig = Effect.all({
           },
         ],
         secrets: {
-          required: ['CHATGPT_SESSION_SECRET', 'REGISTRY_API_TOKEN'],
+          required: [
+            'CHATGPT_SESSION_SECRET',
+            'CLOUDFLARE_ANALYTICS_API_TOKEN',
+            'REGISTRY_API_TOKEN',
+          ],
         },
-        triggers: { crons: ['17 * * * *'] },
+        triggers: { crons: ['*/5 * * * *', '17 * * * *'] },
         vars: {
+          CLOUDFLARE_GRAPHQL_ENDPOINT: cloudflareGraphqlEndpoint,
+          CLOUDFLARE_ZONE_ID: cloudflareZoneId,
+          CV_WEB_HOST: cvWebHost,
           LISTING_CHECKS_ENABLED: 'true',
           LISTING_CHECK_ARCHIVE_ENABLED: 'false',
           LISTING_CHECK_BATCH_SIZE: '5',
         },
         workers_dev: workersDev,
-        workflows: [
-          {
-            binding: 'CV_PDF_WORKFLOW',
-            class_name: 'CvPdfWorkflow',
-            name: pdfWorkflowName,
-          },
-        ],
       }) satisfies WranglerConfig
   )
 )

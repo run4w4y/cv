@@ -10,21 +10,21 @@ import {
   CardHeader,
   CardTitle,
 } from '@cv/internal-ui'
+import { useAtomSet } from '@effect/atom-react'
 import { useLoginWithChatGPT } from '@opencoredev/loginwithchatgpt-react'
 import { CircleAlert, Copy, ExternalLink, LogOut, Sparkles } from 'lucide-react'
 import * as React from 'react'
 
-export const ChatGptAccess = ({
-  onAuthenticationChange,
-}: {
-  readonly onAuthenticationChange: (authenticated: boolean) => void
-}) => {
+import { chatGptAuthenticatedAtom } from '../auth/atoms'
+
+export const ChatGptAccess = () => {
   const auth = useLoginWithChatGPT({ basePath: '/api/chatgpt' })
+  const setAuthenticated = useAtomSet(chatGptAuthenticatedAtom)
   const [showConsent, setShowConsent] = React.useState(false)
 
   React.useEffect(() => {
-    onAuthenticationChange(auth.isAuthenticated)
-  }, [auth.isAuthenticated, onAuthenticationChange])
+    setAuthenticated(auth.isAuthenticated)
+  }, [auth.isAuthenticated, setAuthenticated])
 
   return (
     <Card>

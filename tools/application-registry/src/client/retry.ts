@@ -36,7 +36,7 @@ export const registryFailureDisposition = (
 
 const transientRetrySchedule = Schedule.exponential('100 millis').pipe(
   Schedule.jittered,
-  Schedule.take(2)
+  Schedule.upTo({ times: 2 })
 )
 
 export const normalizeHttpFailure = <A, E, R>(

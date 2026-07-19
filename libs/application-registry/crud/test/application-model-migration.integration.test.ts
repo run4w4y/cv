@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
-
-import { RegistryMiniflareHarness } from '../src/test-support'
+import { RegistryMiniflareHarness } from '@cv/worker-test-kit/application-registry'
 
 const priorMigration = '20260717162534_useful_gressill'
 
@@ -18,7 +17,7 @@ after(async () => {
   await harness.dispose()
 })
 
-test('rebuilds applications without analysis columns while preserving rows and relations', async () => {
+test('rebuilds the current model, removes legacy captures, and preserves current rows', async () => {
   await harness.database
     .prepare(
       `insert into applications (
@@ -349,6 +348,44 @@ test('rebuilds applications without analysis columns while preserving rows and r
       ),
   ])
 
+  await harness.database.batch([
+    harness.database
+      .prepare(
+        `insert into application_events
+          (id, application_id, kind, revision, occurred_at, recorded_at,
+           device_id, payload, operation_id)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .bind(
+        'legacy-campaign-event',
+        'migration-application',
+        'campaign_prepared',
+        44,
+        '2026-07-17T09:01:00.000Z',
+        '2026-07-17T09:01:00.000Z',
+        null,
+        '{}',
+        'legacy-campaign-event-operation'
+      ),
+    harness.database
+      .prepare(
+        `insert into command_receipts
+          (operation_id, operation_request_signature, kind, application_id,
+           event_id, capture_id, note_id, recorded_at)
+         values (?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .bind(
+        'legacy-campaign-receipt',
+        'legacy-campaign-signature',
+        'campaign_capture',
+        'migration-application',
+        null,
+        'migration-capture',
+        null,
+        '2026-07-17T09:01:00.000Z'
+      ),
+  ])
+
   await harness.migrateAfter(priorMigration)
 
   const rows = await harness.query<{
@@ -394,7 +431,6 @@ test('rebuilds applications without analysis columns while preserving rows and r
     'application_notes',
     'application_compensations',
     'application_identity_aliases',
-    'campaign_captures',
     'application_events',
     'command_receipts',
     'application_listing_check_schedules',
@@ -412,7 +448,71 @@ test('rebuilds applications without analysis columns while preserving rows and r
       [{ count: 1 }]
     )
   }
+  const tables = await harness.query<{ readonly name: string }>(
+    "select name from sqlite_master where type = 'table'"
+  )
+  assert.equal(
+    tables.some(({ name }) => name === 'campaign_captures'),
+    false
+  )
+  const receiptColumns = await harness.query<{ readonly name: string }>(
+    'pragma table_info(command_receipts)'
+  )
+  assert.equal(
+    receiptColumns.some(({ name }) => name === 'capture_id'),
+    false
+  )
+  assert.deepEqual(
+    await harness.query(
+      'select kind from application_events order by revision'
+    ),
+    [{ kind: 'research_updated' }]
+  )
+  assert.deepEqual(
+    await harness.query(
+      'select kind from command_receipts order by operation_id'
+    ),
+    [{ kind: 'application_note' }]
+  )
   assert.deepEqual(await harness.query('pragma foreign_key_check'), [])
+
+  await assert.rejects(
+    harness.database
+      .prepare(
+        `insert into application_events
+          (id, application_id, kind, revision, occurred_at, recorded_at,
+           payload, operation_id)
+         values (?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .bind(
+        'rejected-legacy-event',
+        'migration-application',
+        'campaign_prepared',
+        100,
+        '2026-07-20T00:00:00.000Z',
+        '2026-07-20T00:00:00.000Z',
+        '{}',
+        'rejected-legacy-event-operation'
+      )
+      .run()
+  )
+  await assert.rejects(
+    harness.database
+      .prepare(
+        `insert into command_receipts
+          (operation_id, operation_request_signature, kind, application_id,
+           recorded_at)
+         values (?, ?, ?, ?, ?)`
+      )
+      .bind(
+        'rejected-legacy-receipt',
+        'rejected-legacy-signature',
+        'campaign_capture',
+        'migration-application',
+        '2026-07-20T00:00:00.000Z'
+      )
+      .run()
+  )
 
   const indexes = await harness.query<{ readonly name: string }>(
     'pragma index_list(applications)'

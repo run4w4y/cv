@@ -1,8 +1,4 @@
-import {
-  applicationEvents,
-  applications,
-  campaignCaptures,
-} from '@cv/application-registry-entity'
+import { applicationEvents, applications } from '@cv/application-registry-entity'
 import { finalizeQuery } from '@cv/drizzle-query-effect'
 import { asc, eq, getColumns } from 'drizzle-orm'
 import { Effect } from 'effect'
@@ -72,28 +68,3 @@ export const listEvents = (
 
     return yield* finalizeQuery(resolved, rows).pipe(Effect.orDie)
   })
-
-export const findCaptureByOperation = (
-  database: RegistryQueryDatabase,
-  operationId: string
-) =>
-  database
-    .select()
-    .from(campaignCaptures)
-    .where(eq(campaignCaptures.operationId, operationId))
-    .limit(1)
-    .pipe(
-      Effect.map((rows) => rows.at(0)),
-      Effect.mapError(databaseFailure('Failed to load campaign capture'))
-    )
-
-export const listApplicationCaptures = (
-  database: RegistryQueryDatabase,
-  applicationId: string
-) =>
-  database
-    .select()
-    .from(campaignCaptures)
-    .where(eq(campaignCaptures.applicationId, applicationId))
-    .orderBy(asc(campaignCaptures.capturedAt), asc(campaignCaptures.id))
-    .pipe(Effect.mapError(databaseFailure('Failed to list campaign captures')))

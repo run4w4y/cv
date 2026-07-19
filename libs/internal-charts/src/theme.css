@@ -1,0 +1,49 @@
+@theme inline {
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-axis: var(--chart-axis);
+  --color-chart-focus: var(--chart-focus);
+}
+
+:root {
+  --chart-1: var(--color-indigo-600);
+  --chart-2: var(--color-cyan-600);
+  --chart-3: var(--color-emerald-600);
+  --chart-4: var(--color-amber-500);
+  --chart-5: var(--color-rose-500);
+  --chart-grid: color-mix(in oklab, var(--border) 72%, transparent);
+  --chart-axis: var(--muted-foreground);
+  --chart-track: color-mix(in oklab, var(--muted) 86%, transparent);
+  --chart-focus: var(--ring);
+}
+
+.dark {
+  --chart-1: var(--color-indigo-400);
+  --chart-2: var(--color-cyan-400);
+  --chart-3: var(--color-emerald-400);
+  --chart-4: var(--color-amber-400);
+  --chart-5: var(--color-rose-400);
+  --chart-grid: color-mix(in oklab, var(--border) 64%, transparent);
+  --chart-axis: var(--muted-foreground);
+  --chart-track: color-mix(in oklab, var(--muted) 72%, transparent);
+  --chart-focus: var(--ring);
+}
+
+@media (forced-colors: active) {
+  :root,
+  .dark {
+    --chart-1: CanvasText;
+    --chart-2: LinkText;
+    --chart-3: Highlight;
+    --chart-4: Mark;
+    --chart-5: GrayText;
+    --chart-grid: GrayText;
+    --chart-axis: CanvasText;
+    --chart-track: GrayText;
+    --chart-focus: Highlight;
+  }
+}

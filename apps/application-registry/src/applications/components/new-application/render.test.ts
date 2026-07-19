@@ -61,4 +61,13 @@ describe('newApplicationRequest', () => {
       })
     ).toThrow('three-letter currency code')
   })
+
+  test('accepts only HTTP(S) canonical job URLs', () => {
+    expect(() =>
+      newApplicationRequest({
+        ...values,
+        canonicalUrl: 'file:///tmp/job.html',
+      })
+    ).toThrow('HTTP or HTTPS')
+  })
 })

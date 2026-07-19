@@ -155,7 +155,6 @@ export type ListingCheckRunState = Schema.Schema.Type<
 
 export const systemApplicationEventKindValues = [
   'discovered',
-  'campaign_prepared',
   'listing_closed',
 ] as const
 
@@ -234,7 +233,6 @@ export type ApplicationNoteKind = Schema.Schema.Type<
 >
 
 export const CommandKindSchema = Schema.Literals([
-  'campaign_capture',
   'application_event',
   'application_note',
   'listing_check',

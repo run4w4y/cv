@@ -3,7 +3,8 @@ import { RegistryProvider } from '@effect/atom-react'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { RouterProvider } from 'react-router'
-import { TransientAiSessionProvider } from './preparation/session'
+import { CvPublicationWorkflowProvider } from './preparation/publication'
+import { PreparationWorkflowProvider } from './preparation/workflow/provider'
 import { router } from './router'
 import './styles.css'
 
@@ -17,9 +18,11 @@ ReactDOM.createRoot(root).render(
   <React.StrictMode>
     <RegistryProvider>
       <TooltipProvider delay={400}>
-        <TransientAiSessionProvider>
-          <RouterProvider router={router} />
-        </TransientAiSessionProvider>
+        <PreparationWorkflowProvider>
+          <CvPublicationWorkflowProvider>
+            <RouterProvider router={router} />
+          </CvPublicationWorkflowProvider>
+        </PreparationWorkflowProvider>
       </TooltipProvider>
     </RegistryProvider>
   </React.StrictMode>

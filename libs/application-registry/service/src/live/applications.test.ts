@@ -218,7 +218,7 @@ describe('ApplicationsService', () => {
                     {
                       ...applicationListRecord,
                       compensations: [compensation],
-                      counts: { captures: 1, notes: 2 },
+                      counts: { notes: 2 },
                       followUpAt: '2026-07-12T11:00:00.000Z',
                       labels: ['priority'],
                       latestEvent: {
@@ -249,7 +249,7 @@ describe('ApplicationsService', () => {
       },
       labels: ['priority'],
       latestEvent: { kind: 'stage_changed', occurredAt: recordedAt },
-      counts: { captures: 1, notes: 2 },
+      counts: { notes: 2 },
     })
   })
 

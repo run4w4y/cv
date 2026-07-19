@@ -4,15 +4,10 @@ import {
   AnnotationsService,
   type AppendApplicationEventInput,
   ApplicationsService,
-  CapturesService,
   CompensationsService,
   EventsService,
 } from '../../src'
-import {
-  makeApplicationInput,
-  makeCaptureInput,
-  recordedAt,
-} from '../support/inputs'
+import { makeApplicationInput, recordedAt } from '../support/inputs'
 
 export const applicationWorkflow = Effect.gen(function* () {
   const applications = yield* ApplicationsService
@@ -94,11 +89,10 @@ export const eventWorkflow = Effect.gen(function* () {
   }
 })
 
-export const noteAndCaptureWorkflow = Effect.gen(function* () {
+export const noteWorkflow = Effect.gen(function* () {
   const annotations = yield* AnnotationsService
   const applications = yield* ApplicationsService
-  const captures = yield* CapturesService
-  const input = makeApplicationInput('note-and-capture')
+  const input = makeApplicationInput('note')
   const created = yield* applications.upsert(input)
   const noteRequest = {
     body: 'Follow up after the technical screen.',
@@ -114,26 +108,15 @@ export const noteAndCaptureWorkflow = Effect.gen(function* () {
       body: 'This is another command using the same operation ID.',
     })
   )
-  const captureRequest = makeCaptureInput(
-    'note-and-capture',
-    'service:capture:1'
-  )
-  const capture = yield* captures.capture(captureRequest)
-  const replayedCapture = yield* captures.capture(captureRequest)
   const storedNotes = yield* annotations.list(created.id)
-  const storedCaptures = yield* captures.listByApplication(created.id)
 
   return {
-    captureIdsMatch: capture.capture.id === replayedCapture.capture.id,
-    captureReplayed: capture.replayed,
     noteConflictTag: Result.isFailure(noteConflict)
       ? noteConflict.failure._tag
       : null,
     noteIdsMatch: note.note.id === replayedNote.note.id,
     noteReplayed: note.replayed,
-    replayedCapture: replayedCapture.replayed,
     replayedNote: replayedNote.replayed,
-    storedCaptureCount: storedCaptures.items.length,
     storedNoteCount: storedNotes.notes.length,
   }
 })
@@ -166,7 +149,6 @@ export const compensationWorkflow = Effect.gen(function* () {
 
 export const defaultsWorkflow = Effect.gen(function* () {
   const applications = yield* ApplicationsService
-  const captures = yield* CapturesService
   const created = yield* applications.upsert({
     canonicalUrl: 'https://example.test/jobs/database-defaults',
     company: 'Database Defaults Company',
@@ -176,12 +158,8 @@ export const defaultsWorkflow = Effect.gen(function* () {
     source: 'service-integration',
     sourceJobId: null,
   })
-  const captured = yield* captures.capture(
-    makeCaptureInput('capture-defaults', 'service:capture-defaults')
-  )
 
   return {
-    captureStatus: captured.application.applicationStatus,
     created: {
       applicationStatus: created.applicationStatus,
       followUpAt: created.followUpAt,
@@ -221,57 +199,6 @@ export const patchNullabilityWorkflow = Effect.gen(function* () {
       lastContactAt: partiallyUpdated.lastContactAt,
       location: partiallyUpdated.location,
       personalPriority: partiallyUpdated.personalPriority,
-    },
-  }
-})
-
-export const captureMergeWorkflow = Effect.gen(function* () {
-  const applications = yield* ApplicationsService
-  const captures = yield* CapturesService
-  const existing = yield* applications.upsert({
-    ...makeApplicationInput('capture-merge'),
-    location: 'Existing enriched location',
-    sourceJobId: 'existing-source-job-id',
-    targetStage: 'verify_first',
-  })
-  const captured = yield* captures.capture({
-    ...makeCaptureInput('capture-merge', 'service:capture-merge'),
-    location: null,
-    sourceJobId: null,
-    targetStage: 'apply_next',
-  })
-  const backlog = yield* applications.upsert({
-    ...makeApplicationInput('capture-backlog'),
-    targetStage: 'backlog',
-  })
-  const promoted = yield* captures.capture({
-    ...makeCaptureInput('capture-backlog', 'service:capture-backlog'),
-    targetStage: 'apply_next',
-  })
-  const explicitlyReplaced = yield* applications.upsert({
-    ...makeApplicationInput('capture-merge'),
-    location: null,
-    sourceJobId: null,
-    targetStage: 'secondary',
-  })
-
-  return {
-    backlogId: backlog.id,
-    captured: {
-      id: captured.application.id,
-      location: captured.application.location,
-      sourceJobId: captured.application.sourceJobId,
-      targetStage: captured.application.targetStage,
-    },
-    existingId: existing.id,
-    explicitlyReplaced: {
-      location: explicitlyReplaced.location,
-      sourceJobId: explicitlyReplaced.sourceJobId,
-      targetStage: explicitlyReplaced.targetStage,
-    },
-    promoted: {
-      id: promoted.application.id,
-      targetStage: promoted.application.targetStage,
     },
   }
 })

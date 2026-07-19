@@ -82,12 +82,10 @@ describe('JobContextEditor', () => {
         ? Response.json(capturedSnapshot)
         : Response.json(application)
     }) as unknown as typeof fetch
-    const onSaved = mock(() => undefined)
     const view = render(
       <JobContextEditor
         applicationId={application.id}
         initialContext="Captured role context"
-        onSaved={onSaved}
       />
     )
 
@@ -104,7 +102,9 @@ Requirements:
       view.getByRole('button', { name: 'Save corrected context' })
     )
 
-    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
+    await waitFor(() =>
+      expect(requests.some((request) => request.method === 'POST')).toBe(true)
+    )
     const persisted = requests.find((request) => request.method === 'POST')
     if (persisted === undefined) {
       throw new Error('Expected a snapshot persistence request.')

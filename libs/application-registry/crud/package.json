@@ -17,23 +17,19 @@
     "./live": {
       "types": "./dist/live/index.d.ts",
       "default": "./dist/live/index.js"
-    },
-    "./test-support": {
-      "types": "./dist/test-support/index.d.ts",
-      "default": "./dist/test-support/index.js"
     }
   },
   "dependencies": {
     "@cv/application-registry-entity": "workspace:*",
     "@cv/drizzle-query": "workspace:*",
     "@cv/drizzle-query-effect": "workspace:*",
-    "@effect/sql-d1": "4.0.0-beta.91",
+    "@effect/sql-d1": "4.0.0-beta.99",
     "drizzle-orm": "1.0.0-rc.4",
-    "effect": "4.0.0-beta.91",
+    "effect": "4.0.0-beta.99",
     "es-toolkit": "^1.43.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "4.20260511.1",
-    "miniflare": "4.20260708.1"
+    "@cv/worker-test-kit": "workspace:*"
   }
 }

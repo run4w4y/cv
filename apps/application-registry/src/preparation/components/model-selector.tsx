@@ -6,9 +6,11 @@ import {
   FieldLabel,
   Select,
 } from '@cv/internal-ui'
+import { useAtomValue } from '@effect/atom-react'
+import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import { CircleAlert } from 'lucide-react'
 
-import { useChatGptModels } from '../hooks'
+import { preparationModelsAtom } from '../data'
 
 export const ModelSelector = ({
   authenticated,
@@ -19,7 +21,7 @@ export const ModelSelector = ({
   readonly value: string | null
   readonly onChange: (modelId: string) => void
 }) => {
-  const models = useChatGptModels(authenticated)
+  const models = useAtomValue(preparationModelsAtom(authenticated))
 
   if (!authenticated) {
     return (
@@ -28,15 +30,21 @@ export const ModelSelector = ({
       </p>
     )
   }
-  if (models.status === 'loading') {
+  if (models._tag === 'Initial' || AsyncResult.isWaiting(models)) {
     return <p className="text-sm text-muted-foreground">Loading models…</p>
   }
-  if (models.status === 'error') {
+  if (models._tag === 'Failure') {
+    const message = AsyncResult.matchWithError(models, {
+      onInitial: () => 'ChatGPT models could not be loaded.',
+      onError: (error) => error.message,
+      onDefect: () => 'ChatGPT models could not be loaded.',
+      onSuccess: () => 'ChatGPT models could not be loaded.',
+    })
     return (
       <Alert variant="destructive">
         <CircleAlert />
         <AlertTitle>Could not load models</AlertTitle>
-        <AlertDescription>{models.message}</AlertDescription>
+        <AlertDescription>{message}</AlertDescription>
       </Alert>
     )
   }

@@ -6,10 +6,7 @@ import type {
   ApplicationAnnotationsResponse,
   ApplicationFacetsResponse,
   CreateApplicationRequest,
-  CreateCampaignCaptureRequest,
-  CreateCampaignCaptureResponse,
   HealthResponse,
-  ListApplicationCapturesResponse,
   ListApplicationCompensationsQuery,
   ListApplicationCompensationsResponse,
   ListApplicationEventsResponse,
@@ -93,15 +90,6 @@ export type ApplicationRegistryClientService = {
   readonly create: (
     request: CreateApplicationRequest
   ) => Effect.Effect<Application, RegistryReadError>
-  readonly capture: (
-    request: CreateCampaignCaptureRequest
-  ) => Effect.Effect<
-    RegistryWriteResult<CreateCampaignCaptureResponse>,
-    RegistryDurableWriteError
-  >
-  readonly captures: (
-    identifier: string
-  ) => Effect.Effect<ListApplicationCapturesResponse, RegistryReadError>
   readonly compensations: (
     identifier: string,
     query?: ListApplicationCompensationsQuery

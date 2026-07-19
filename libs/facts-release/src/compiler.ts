@@ -38,23 +38,10 @@ const byId = <Value extends { readonly id: string }>(
   right: Value
 ) => compareText(left.id, right.id)
 
-const sorted = (values: ReadonlyArray<string>) => [...values].sort(compareText)
-
 const normalizeCatalogue = (catalogue: FactsCatalogueV1): FactsCatalogueV1 => ({
   ...catalogue,
-  assets: catalogue.assets
-    .map((asset) => ({ ...asset, claimIds: sorted(asset.claimIds) }))
-    .sort(byId),
-  claims: catalogue.claims
-    .map((claim) => ({ ...claim, tags: sorted(claim.tags) }))
-    .sort(byId),
-  presets: catalogue.presets
-    .map((preset) => ({
-      ...preset,
-      claimIds: sorted(preset.claimIds),
-      tags: sorted(preset.tags),
-    }))
-    .sort(byId),
+  assets: [...catalogue.assets].sort(byId),
+  evidence: [...catalogue.evidence].sort(byId),
 })
 
 const decodeCatalogue = (input: unknown) =>
@@ -82,6 +69,51 @@ const decodeProvenance = (input: unknown) =>
         })
     )
   )
+
+const catalogueSetError = (message: string) =>
+  new FactsReleaseValidationError({
+    cause: new Error(message),
+    context: 'catalogue',
+    message,
+  })
+
+const decodeCatalogues = (inputs: ReadonlyArray<unknown>) =>
+  Effect.gen(function* () {
+    const catalogues = yield* Effect.forEach(inputs, decodeCatalogue)
+    if (catalogues.length === 0) {
+      return yield* catalogueSetError(
+        'A facts release must contain at least one configured locale catalogue.'
+      )
+    }
+    catalogues.sort((left, right) => compareText(left.locale, right.locale))
+    const duplicate = catalogues.find(
+      (catalogue, index) =>
+        catalogues.findIndex(
+          (candidate) => candidate.locale === catalogue.locale
+        ) !== index
+    )
+    if (duplicate) {
+      return yield* catalogueSetError(
+        `Facts catalogue locale ${duplicate.locale} was supplied more than once.`
+      )
+    }
+    const baseline = catalogues[0]
+    if (!baseline) {
+      return yield* catalogueSetError(
+        'A facts release must contain at least one configured locale catalogue.'
+      )
+    }
+    const mismatchedAssets = catalogues.find(
+      (catalogue) =>
+        JSON.stringify(catalogue.assets) !== JSON.stringify(baseline.assets)
+    )
+    if (mismatchedAssets) {
+      return yield* catalogueSetError(
+        `Facts assets for locale ${mismatchedAssets.locale} do not match ${baseline.locale}.`
+      )
+    }
+    return catalogues
+  })
 
 const objectFromBytes = (
   bytes: Uint8Array,
@@ -225,16 +257,30 @@ export const compileFactsRelease = Effect.fn('FactsRelease.compile')(
     FactsReleaseAssetError | FactsReleaseHashError | FactsReleaseValidationError
   > =>
     Effect.gen(function* () {
-      const catalogue = yield* decodeCatalogue(input.catalogue)
+      const catalogues = yield* decodeCatalogues(input.catalogues)
       const provenance = yield* decodeProvenance(input.provenance)
-      const catalogueBytes = yield* encodeCanonicalJson(catalogue, 'catalogue')
-      const catalogueObject = yield* objectFromBytes(
-        catalogueBytes,
-        'catalogue',
-        catalogue.locale,
-        factsCatalogueMediaType
+      const compiledCatalogues = yield* Effect.forEach(
+        catalogues,
+        (catalogue) =>
+          encodeCanonicalJson(catalogue, 'catalogue').pipe(
+            Effect.flatMap((bytes) =>
+              objectFromBytes(
+                bytes,
+                'catalogue',
+                catalogue.locale,
+                factsCatalogueMediaType
+              )
+            ),
+            Effect.map((object) => ({ catalogue, object }))
+          )
       )
-      const assets = yield* compileAssets(catalogue.assets, input.assets)
+      const baseline = catalogues[0]
+      if (!baseline) {
+        return yield* catalogueSetError(
+          'A facts release must contain at least one configured locale catalogue.'
+        )
+      }
+      const assets = yield* compileAssets(baseline.assets, input.assets)
 
       const manifestInput: FactsReleaseManifestV1 = {
         $schema: factsReleaseManifestV1ContractId,
@@ -243,13 +289,11 @@ export const compileFactsRelease = Effect.fn('FactsRelease.compile')(
           id: source.id,
           object: descriptor(object),
         })),
-        catalogues: [
-          {
-            locale: catalogue.locale,
-            object: descriptor(catalogueObject),
-          },
-        ],
-        factsContract: catalogue.$schema,
+        catalogues: compiledCatalogues.map(({ catalogue, object }) => ({
+          locale: catalogue.locale,
+          object: descriptor(object),
+        })),
+        factsContract: baseline.$schema,
         provenance,
       }
       const manifest = yield* Schema.decodeUnknownEffect(
@@ -273,11 +317,11 @@ export const compileFactsRelease = Effect.fn('FactsRelease.compile')(
       )
 
       return {
-        catalogue,
+        catalogues,
         manifest,
         manifestObject,
         objects: uniqueObjects([
-          catalogueObject,
+          ...compiledCatalogues.map(({ object }) => object),
           ...assets.map((asset) => asset.object),
           manifestObject,
         ]),

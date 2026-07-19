@@ -2,7 +2,6 @@ import type { ApplicationCompensationResponseItem } from '@cv/application-regist
 import type {
   Application,
   ApplicationEvent,
-  CampaignCapture,
   CurrencyCode,
 } from '@cv/application-registry-entity'
 import { Console, Effect } from 'effect'
@@ -57,24 +56,6 @@ export const printEvents = (
     : events.length === 0
       ? Console.log('No events found.')
       : Console.log(events.map(formatEvent).join('\n'))
-
-const formatCapture = (capture: CampaignCapture) =>
-  [
-    `${capture.capturedAt}  ${capture.profile}  run ${capture.campaignRunId}`,
-    `Apply: ${capture.submissionDetails.applicationMethod ?? '—'} ${capture.applicationUrl ?? ''}`.trimEnd(),
-    `Deadline: ${capture.submissionDetails.deadline ?? '—'}`,
-    `Artifacts: ${capture.artifacts.length}`,
-  ].join('\n')
-
-export const printCaptures = (
-  captures: readonly CampaignCapture[],
-  json: boolean
-) =>
-  json
-    ? printJson(captures)
-    : captures.length === 0
-      ? Console.log('No campaign captures found.')
-      : Console.log(captures.map(formatCapture).join('\n\n'))
 
 const currencyFractionDigits = (currencyCode: CurrencyCode) =>
   new Intl.NumberFormat('en-US', {

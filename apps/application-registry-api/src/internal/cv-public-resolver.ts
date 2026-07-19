@@ -4,7 +4,7 @@ import {
 } from '@cv/application-registry-service'
 import { Effect } from 'effect'
 
-import { RegistryServiceLayer } from '../layers/registry'
+import { makeRegistryServiceLayer } from '../layers/registry'
 import { WorkerEnv } from '../worker/bindings'
 import type { ApplicationRegistryEnv } from '../worker/types'
 
@@ -127,7 +127,7 @@ const resolvePublicCv =
         sha256: revision.sha256,
       }
     }).pipe(
-      Effect.provide(RegistryServiceLayer),
+      Effect.provide(makeRegistryServiceLayer(env)),
       Effect.provide(WorkerEnv.context(env))
     )
 

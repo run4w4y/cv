@@ -21,6 +21,18 @@ bun x nx run cv:dev
 The public Worker never calls a registry URL and never receives a management
 bearer token.
 
+## Testing
+
+`@cv/worker-test-kit/cv-public` runs the built Astro Worker in Miniflare and
+supplies a configurable in-process `CV_PUBLIC_RESOLVER` service. The CV test
+keeps its document examples and rendering assertions locally while the shared
+package owns module loading, Worker composition, resolver responses, and
+cleanup.
+
+```sh
+bun x nx run cv:test:worker
+```
+
 ## Production deployment
 
 The existing Cloudflare Pages deployment is deliberately frozen and no longer

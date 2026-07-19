@@ -34,10 +34,9 @@ const application: ApplicationListItem = {
     minimumMinor: 15_000_000,
     maximumMinor: 18_000_000,
   },
-  counts: { captures: 1, notes: 2 },
+  counts: { notes: 2 },
   identityAliases: [],
   labels: ['TypeScript', 'Remote'],
-  latestCapture: null,
   latestEvent: {
     kind: 'stage_changed',
     occurredAt: '2026-07-15T09:30:00.000Z',

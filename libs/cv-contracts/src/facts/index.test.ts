@@ -3,42 +3,38 @@ import { Option, Schema } from 'effect'
 import {
   cvFactsV1ContractId,
   cvFactsV1Version,
-  FactClaimV1Schema,
   FactsCatalogueV1Schema,
   FactsCatalogueV1StructureSchema,
   factsSchemaRegistry,
   getFactsContract,
   getGenerationGuidance,
   inspectFactsCatalogueV1Integrity,
+  ReviewedFactV1Schema,
 } from './index'
+
+const validFact = {
+  id: 'identity.employment-summary',
+  text: 'Worked as a software engineer at Analytical Engines from 2023 to the present.',
+  evidenceIds: ['evidence.employment-history-review'],
+  assetIds: ['asset.bachelor-thesis'],
+}
 
 const validCatalogue = {
   $schema: 'cv.facts.v1',
   locale: 'en',
-  claims: [
+  evidence: [
     {
-      id: 'employment.analytical-engine.role',
-      status: 'approved',
-      topic: 'employment',
-      statement:
-        'Worked as a software engineer at Analytical Engines from 2023 to the present.',
-      tags: ['role.software-engineering'],
-      evidence: [
-        {
-          kind: 'personal-review',
-          label: 'Reviewed employment history',
-        },
-      ],
+      id: 'evidence.employment-history-review',
+      kind: 'personal-review',
+      title: 'Reviewed employment history',
     },
   ],
-  presets: [
+  sections: [
     {
-      id: 'preset.experience.analytical-engine',
-      status: 'approved',
-      purpose: 'experience-summary',
-      text: 'Software engineer at Analytical Engines since 2023.',
-      claimIds: ['employment.analytical-engine.role'],
-      tags: ['role.software-engineering'],
+      kind: 'identity',
+      name: 'Ada Lovelace',
+      facts: [validFact],
+      languages: [],
     },
   ],
   assets: [
@@ -48,29 +44,40 @@ const validCatalogue = {
       description: 'Reviewed bachelor thesis supporting the education claim.',
       mediaType: 'application/pdf',
       sha256: 'a'.repeat(64),
-      claimIds: ['employment.analytical-engine.role'],
     },
   ],
 }
 
 describe('cv.facts.v1', () => {
-  test('decodes an approved, single-locale facts catalogue', () => {
+  test('decodes a reviewed, single-locale facts catalogue', () => {
     const catalogue = Schema.decodeUnknownSync(FactsCatalogueV1Schema)(
       validCatalogue
     )
 
     expect(catalogue.$schema).toBe(cvFactsV1ContractId)
-    expect(catalogue.claims[0]?.status).toBe('approved')
-    expect(catalogue.presets[0]?.claimIds).toEqual([
-      'employment.analytical-engine.role',
-    ])
+    const identity = catalogue.sections.find(
+      (section) => section.kind === 'identity'
+    )
+    expect(
+      identity?.kind === 'identity' ? identity.facts[0]?.evidenceIds : []
+    ).toEqual(['evidence.employment-history-review'])
   })
 
-  test('rejects unapproved content and malformed asset hashes', () => {
+  test('rejects authoring-only status fields and malformed values', () => {
     expect(() =>
       Schema.decodeUnknownSync(FactsCatalogueV1Schema)({
         ...validCatalogue,
-        claims: [{ ...validCatalogue.claims[0], status: 'draft' }],
+        sections: [
+          {
+            ...validCatalogue.sections[0],
+            facts: [
+              {
+                ...validCatalogue.sections[0].facts[0],
+                status: 'draft',
+              },
+            ],
+          },
+        ],
       })
     ).toThrow()
 
@@ -84,19 +91,25 @@ describe('cv.facts.v1', () => {
     expect(() =>
       Schema.decodeUnknownSync(FactsCatalogueV1Schema)({
         ...validCatalogue,
-        locale: 'en-GB',
+        locale: 'not_a_locale',
       })
     ).toThrow()
   })
 
-  test('reports duplicate IDs and dangling claim references together', () => {
+  test('reports duplicate fact IDs and dangling review references together', () => {
     const invalidCatalogue = {
       ...validCatalogue,
-      claims: [validCatalogue.claims[0], validCatalogue.claims[0]],
-      presets: [
+      sections: [
         {
-          ...validCatalogue.presets[0],
-          claimIds: ['claim.does-not-exist'],
+          ...validCatalogue.sections[0],
+          facts: [
+            validFact,
+            {
+              ...validFact,
+              evidenceIds: ['evidence.does-not-exist'],
+              assetIds: ['asset.does-not-exist'],
+            },
+          ],
         },
       ],
     }
@@ -106,22 +119,22 @@ describe('cv.facts.v1', () => {
       )
     )
 
-    expect(issues).toHaveLength(2)
+    expect(issues).toHaveLength(3)
     expect(() =>
       Schema.decodeUnknownSync(FactsCatalogueV1Schema)(invalidCatalogue)
-    ).toThrow('Duplicate claims identifier')
+    ).toThrow('Duplicate fact ID')
     expect(() =>
       Schema.decodeUnknownSync(FactsCatalogueV1Schema)(invalidCatalogue)
-    ).toThrow('Unknown claim reference')
+    ).toThrow('Unknown evidence reference')
   })
 
   test('exposes authoring guidance on factual statements', () => {
-    const guidance = getGenerationGuidance(FactClaimV1Schema.fields.statement)
+    const guidance = getGenerationGuidance(ReviewedFactV1Schema.fields.text)
 
     expect(Option.isSome(guidance)).toBe(true)
     if (Option.isSome(guidance)) {
       expect(guidance.value.sources).toEqual(['human-reviewed'])
-      expect(guidance.value.instruction).toContain('verified')
+      expect(guidance.value.instruction).toContain('reviewed')
     }
   })
 
@@ -138,7 +151,8 @@ describe('cv.facts.v1', () => {
 
     expect(serialized).toContain('"cv.facts.v1"')
     expect(serialized).toContain('"additionalProperties":false')
-    expect(serialized).toContain('"claimIds"')
+    expect(serialized).toContain('"sections"')
+    expect(serialized).toContain('"workstreams"')
     expect(serialized).toContain('"sha256"')
   })
 })

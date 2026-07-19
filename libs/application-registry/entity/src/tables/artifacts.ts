@@ -26,7 +26,7 @@ export const generatedArtifacts = sqliteTable(
       .references(() => contentRevisions.id, { onDelete: 'cascade' }),
     kind: text('kind', { enum: artifactKindValues }).notNull(),
     status: text('status', { enum: artifactStatusValues }).notNull(),
-    workflowId: text('workflow_id').notNull(),
+    requestId: text('request_id').notNull(),
     rendererVersion: text('renderer_version').notNull(),
     publicationVersion: integer('publication_version').notNull(),
     qrTarget: text('qr_target').notNull(),
@@ -42,7 +42,7 @@ export const generatedArtifacts = sqliteTable(
   },
   (table) => [
     primaryKey({ columns: [table.id] }),
-    uniqueIndex('generated_artifacts_workflow_unique').on(table.workflowId),
+    uniqueIndex('generated_artifacts_request_unique').on(table.requestId),
     index('generated_artifacts_publication_status_idx').on(
       table.cvLinkId,
       table.contentRevisionId,

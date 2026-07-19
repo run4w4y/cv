@@ -60,41 +60,46 @@ const requiredSecret = (name: string) =>
 
 const program = Effect.all({
   chatgptSessionSecret: requiredSecret('CHATGPT_SESSION_SECRET'),
+  cloudflareAnalyticsApiToken: requiredSecret('CLOUDFLARE_ANALYTICS_API_TOKEN'),
   registryApiToken: requiredSecret('REGISTRY_API_TOKEN'),
 }).pipe(
-  Effect.flatMap(({ chatgptSessionSecret, registryApiToken }) =>
-    Effect.acquireUseRelease(
-      Effect.tryPromise({
-        try: () => mkdtemp(join(tmpdir(), 'cv-registry-deploy-')),
-        catch: (cause) =>
-          new RegistryDeployError({
-            cause,
-            message: 'Could not create a temporary secrets directory.',
-          }),
-      }),
-      (directory) => {
-        const secretsPath = join(directory, 'registry.secrets.json')
-
-        return Effect.tryPromise({
-          try: () =>
-            writeFile(
-              secretsPath,
-              `${JSON.stringify({
-                CHATGPT_SESSION_SECRET: Redacted.value(chatgptSessionSecret),
-                REGISTRY_API_TOKEN: Redacted.value(registryApiToken),
-              })}\n`,
-              { mode: 0o600 }
-            ),
+  Effect.flatMap(
+    ({ chatgptSessionSecret, cloudflareAnalyticsApiToken, registryApiToken }) =>
+      Effect.acquireUseRelease(
+        Effect.tryPromise({
+          try: () => mkdtemp(join(tmpdir(), 'cv-registry-deploy-')),
           catch: (cause) =>
             new RegistryDeployError({
               cause,
-              message: 'Could not prepare the registry deployment secret.',
+              message: 'Could not create a temporary secrets directory.',
             }),
-        }).pipe(Effect.andThen(runWranglerDeploy(secretsPath)))
-      },
-      (directory) =>
-        Effect.promise(() => rm(directory, { force: true, recursive: true }))
-    )
+        }),
+        (directory) => {
+          const secretsPath = join(directory, 'registry.secrets.json')
+
+          return Effect.tryPromise({
+            try: () =>
+              writeFile(
+                secretsPath,
+                `${JSON.stringify({
+                  CHATGPT_SESSION_SECRET: Redacted.value(chatgptSessionSecret),
+                  CLOUDFLARE_ANALYTICS_API_TOKEN: Redacted.value(
+                    cloudflareAnalyticsApiToken
+                  ),
+                  REGISTRY_API_TOKEN: Redacted.value(registryApiToken),
+                })}\n`,
+                { mode: 0o600 }
+              ),
+            catch: (cause) =>
+              new RegistryDeployError({
+                cause,
+                message: 'Could not prepare the registry deployment secret.',
+              }),
+          }).pipe(Effect.andThen(runWranglerDeploy(secretsPath)))
+        },
+        (directory) =>
+          Effect.promise(() => rm(directory, { force: true, recursive: true }))
+      )
   )
 )
 

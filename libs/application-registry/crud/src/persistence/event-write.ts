@@ -89,7 +89,6 @@ const eventReceiptInsert = (
         kind: sql<'application_event'>`'application_event'`.as('kind'),
         applicationId: applicationEvents.applicationId,
         eventId: applicationEvents.id,
-        captureId: sql<null>`null`.as('capture_id'),
         noteId: sql<null>`null`.as('note_id'),
         recordedAt: sql<string>`${input.recordedAt}`.as('recorded_at'),
       })

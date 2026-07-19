@@ -147,7 +147,6 @@ const make = Effect.gen(function* () {
           const input = yield* persistedApplication(request, applicationId)
           yield* applications
             .persist(input, {
-              mode: 'replace',
               operation: 'application create',
             })
             .pipe(
@@ -441,7 +440,6 @@ const make = Effect.gen(function* () {
 
           yield* applications
             .persist(input, {
-              mode: 'replace',
               operation: 'application upsert',
             })
             .pipe(
@@ -452,7 +450,6 @@ const make = Effect.gen(function* () {
                       ? applications.persist(
                           { ...input, applicationId: winner.id },
                           {
-                            mode: 'replace',
                             operation: 'application upsert retry',
                           }
                         )

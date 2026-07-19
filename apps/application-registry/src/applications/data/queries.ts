@@ -8,7 +8,7 @@ import * as Atom from 'effect/unstable/reactivity/Atom'
 import * as Reactivity from 'effect/unstable/reactivity/Reactivity'
 import { uniqBy } from 'es-toolkit'
 
-import { RegistryClient } from '../../lib/registry-client'
+import { RegistryClient, registryQuery } from '../../lib/registry-client'
 import { applicationReactivity } from './keys'
 
 export type ApplicationsListRequest = Omit<
@@ -23,7 +23,7 @@ const applicationPageAtom = (
   after: string | null
 ) => {
   const { size, ...query } = request
-  return RegistryClient.query('registry', 'listApplications', {
+  return registryQuery('listApplications', {
     query: {
       ...query,
       pagination: { size, ...(after === null ? {} : { after }) },
@@ -110,14 +110,10 @@ export const applicationsAtom = (input: ApplicationsFamilyInput) => {
   }
 }
 
-export const applicationFacetsAtom = RegistryClient.query(
-  'registry',
-  'listApplicationFacets',
-  {
-    reactivityKeys: [applicationReactivity.facets],
-    timeToLive: '30 minutes',
-  }
-).pipe(
+export const applicationFacetsAtom = registryQuery('listApplicationFacets', {
+  reactivityKeys: [applicationReactivity.facets],
+  timeToLive: '30 minutes',
+}).pipe(
   Atom.swr({
     staleTime: '1 minute',
     revalidateOnMount: true,
@@ -126,7 +122,7 @@ export const applicationFacetsAtom = RegistryClient.query(
 )
 
 export const applicationAtom = Atom.family((applicationId: string) =>
-  RegistryClient.query('registry', 'getApplication', {
+  registryQuery('getApplication', {
     params: { id: applicationId },
     reactivityKeys: [applicationReactivity.application(applicationId)],
     timeToLive: '5 minutes',
@@ -141,7 +137,7 @@ export const applicationAtom = Atom.family((applicationId: string) =>
 
 export const applicationCompensationsAtom = Atom.family(
   ({ applicationId, currency }: { applicationId: string; currency: string }) =>
-    RegistryClient.query('registry', 'listApplicationCompensations', {
+    registryQuery('listApplicationCompensations', {
       params: { id: applicationId },
       query: currency === 'original' ? {} : { currency },
       reactivityKeys: [applicationReactivity.compensations(applicationId)],
@@ -150,7 +146,7 @@ export const applicationCompensationsAtom = Atom.family(
 )
 
 export const applicationEventsAtom = Atom.family((applicationId: string) =>
-  RegistryClient.query('registry', 'listApplicationEvents', {
+  registryQuery('listApplicationEvents', {
     params: { id: applicationId },
     reactivityKeys: [applicationReactivity.events(applicationId)],
     timeToLive: '2 minutes',

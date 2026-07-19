@@ -8,7 +8,7 @@ import * as Atom from 'effect/unstable/reactivity/Atom'
 import * as Reactivity from 'effect/unstable/reactivity/Reactivity'
 import { uniqBy } from 'es-toolkit'
 
-import { RegistryClient } from '../../lib/registry-client'
+import { RegistryClient, registryQuery } from '../../lib/registry-client'
 import { eventListsReactivityKey } from './keys'
 
 export type EventsListRequest = Omit<ListEventsQuery, 'pagination'> & {
@@ -17,7 +17,7 @@ export type EventsListRequest = Omit<ListEventsQuery, 'pagination'> & {
 
 const eventPageAtom = (request: EventsListRequest, after: string | null) => {
   const { size, ...query } = request
-  return RegistryClient.query('registry', 'listEvents', {
+  return registryQuery('listEvents', {
     query: {
       ...query,
       pagination: { size, ...(after === null ? {} : { after }) },

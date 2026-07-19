@@ -1,7 +1,7 @@
 import { Badge, Button } from '@cv/internal-ui'
 import { Download, ExternalLink, EyeOff, RefreshCw } from 'lucide-react'
 
-import type { PublishedCvState } from '../api'
+import type { PublishedCvState } from '../data'
 
 export type CvPublicationPanelPendingAction = 'availability' | 'download' | null
 

@@ -9,7 +9,6 @@ import type {
   ApplicationCompensationInput,
   ApplicationEvent,
   ApplicationNote,
-  CampaignCapture,
   CommandKind,
   CommandReceipt,
   UtcIsoTimestamp,
@@ -62,19 +61,6 @@ export const requireEvent = (
         new RegistryDatabaseError({
           cause: new Error('An operation receipt has no application event.'),
           message: `Application event is missing for ${operationId}`,
-        })
-      )
-
-export const requireCapture = (
-  value: CampaignCapture | undefined,
-  operationId: string
-) =>
-  value
-    ? Effect.succeed(value)
-    : Effect.fail(
-        new RegistryDatabaseError({
-          cause: new Error('An operation receipt has no campaign capture.'),
-          message: `Campaign capture is missing for ${operationId}`,
         })
       )
 

@@ -3,8 +3,8 @@
 Cloudflare Worker for the personal application registry and CV preparation
 product. It serves the management SPA, its same-origin BFF, the Login with
 ChatGPT subscription proxy, the authenticated registry API, the internal public
-CV resolver, and the PDF Workflow entrypoint. D1 is the relational system of
-record while private opaque bytes live in R2.
+CV resolver, and the producer boundary for asynchronous PDF jobs. D1 is the
+relational system of record while private opaque bytes live in R2.
 
 `@cv/application-registry-entity` owns the TS-first Drizzle schema, inferred
 models, and generated migrations;
@@ -18,7 +18,10 @@ connect to D1 directly.
 ## Architecture
 
 - One Effect `HttpApi` declaration defines the authenticated routes and OpenAPI
-  3.1 document and is also the source of the generated Effect client.
+  3.1 document and is also the source of the generated Effect client. Effect
+  4.0.0-beta.99 supplies immutable composition and handler hardening; the
+  registry uses an exhaustive `handleAll` object plus a declaration-time guard
+  for duplicate endpoint identifiers and method/path operations.
 - Static Assets serves the management SPA. `/api/registry/*` is a same-origin
   BFF that injects `REGISTRY_API_TOKEN` inside the Worker; Cloudflare Access must
   protect this browser surface in production.
@@ -28,9 +31,12 @@ connect to D1 directly.
 - The exported `CvPublicResolver` named entrypoint is the only public-renderer
   read boundary. `cv-public` calls it through a one-way service binding, so the
   public Worker never receives a registry bearer token.
-- The exported `CvPdfWorkflow` uses Browser Run to load the exact final public
-  URL, verifies that the document fits one A4 page, generates its PDF with that
-  URL as the QR target, and stores the immutable result in R2.
+- Starting a PDF job atomically creates the pending artifact and a D1 outbox
+  row. The API immediately attempts to publish its versioned message through
+  `CV_PDF_QUEUE`; a five-minute cron redispatches undispatched outbox rows after
+  crashes or transient Queue failures. `cv-pdf-worker` owns Browser Rendering,
+  exact-public-URL rendering, retries, and the dead-letter consumer. No
+  Puppeteer or filesystem compatibility shim is bundled into this Worker.
 - The entity package owns the split Drizzle table definitions, inferred types,
   Drizzle-derived Effect codecs, and generated migration history.
 - CRUD contracts are imported from `@cv/application-registry-crud`; only this
@@ -79,12 +85,13 @@ application row.
 Facts catalogues/assets, raw and normalized job snapshots, CV and cover-letter
 revision payloads, and PDFs are opaque R2 objects. D1 records only object keys,
 hashes, byte lengths, media types, contract identifiers/versions, ownership,
-and lifecycle relations. This backend does not import or inspect the document
-or facts schemas. The management frontend, facts compiler, and public renderer
+and lifecycle relations. This backend does not inspect document or facts
+payload fields. The management frontend, facts compiler, and public renderer
 own those code-defined contracts and validate payload shape at their respective
-boundaries. The only supported content locale is `en`.
+boundaries. Content locales use normalized locale identifiers, and the active
+facts release reports its complete locale list from the authored facts config.
 
-Clients supply one stable `operationId` for capture, event, note, managed
+Clients supply one stable `operationId` for event, note, managed
 update, and content-revision replay where the contract requires it. The server
 owns ordinary UUID generation for entity IDs; monotonic database revisions,
 rather than UUID ordering, provide stable list ordering and an ordinary
@@ -109,12 +116,10 @@ exposing it to browser JavaScript.
 - `POST /v1/applications`: create a registry projection and return conflict when
   its job key already exists.
 - `PUT /v1/applications`: explicitly upsert a registry projection by job key.
-- `POST /v1/captures`: atomically create/update an application, append its
-  `campaign_prepared` event, and store the generated campaign capture.
 - `GET /v1/applications`: cursor-paginated application table data. Each row
   includes labels, a compensation summary, follow-up time, latest event
-  metadata, and note/capture counts. Related values are nested as `latestEvent`,
-  `latestCapture`, and `counts` rather than exposed as SQL-projection aliases.
+  metadata, and a note count. Related values are nested as `latestEvent` and
+  `counts` rather than exposed as SQL-projection aliases.
   `currency=USD` (or another ISO code) converts the displayed summary;
   `currency=original` leaves it unchanged.
   The definition exposes scalar columns, relations, counts, latest-value
@@ -131,10 +136,9 @@ exposing it to browser JavaScript.
   transition.
 - `DELETE /v1/applications/:id`: remove an application aggregate, optionally
   guarded by `expectedVersion`.
-- `GET /v1/applications/:id/captures`: recover campaign submission details and
-  artifact metadata stored for the application. The captured application URL
-  is a first-class capture field; JSON is limited to cohesive structured
-  details and artifacts.
+- `GET /v1/analytics/cv-links`: aggregate Cloudflare traffic for the registry's
+  published CV links over a 1, 3, or 7 day window and join it to application,
+  content-entry, label, and link metadata.
 - `GET /v1/applications/:id/compensations`: return original compensation and,
   when `currency=USD` (or another ISO code) is supplied, converted minor-unit
   bounds with the exact rate observation used.
@@ -169,7 +173,11 @@ exposing it to browser JavaScript.
   persist a success or failure snapshot. Responses are streamed with a 4 MiB
   limit and a 20-second capture timeout. Successful ordinary HTML captures keep
   the exact raw response and also derive bounded, deterministic plain text from
-  the page title, metadata, JSON-LD, and visible body text.
+  the page title, metadata, JSON-LD, and visible body text. Effect Schema
+  accepts only credential-free HTTP(S) URLs; redirects are checked by the same
+  schema and bounded to five hops. The capture also enforces redirect-loop,
+  response-size, and timeout limits without maintaining a hand-written IP
+  parser.
 - `POST /v1/applications/:id/job-snapshots`: persist a caller-provided raw
   and/or normalized snapshot, including an explicit failure record. The
   management app uses this opaque boundary to save a corrected or pasted role
@@ -185,9 +193,10 @@ exposing it to browser JavaScript.
 - `PUT /v1/facts-releases/channels/:channel`: atomically activate a registered
   release with optimistic channel versioning.
 - `GET /v1/facts-releases/active`: return the active catalogue and assets for
-  the requested channel and the single `en` locale.
+  the requested channel and locale, together with the release's available
+  locale list.
 - `POST /v1/applications/:id/content-entries`: idempotently ensure the one
-  `cv` or `cover_letter` entry for the application, kind, and `en` locale.
+  `cv` or `cover_letter` entry for the application, kind, and requested locale.
 - `GET /v1/applications/:id/content-entries/:entryId`: read entry metadata.
 - `GET|POST /v1/applications/:id/content-entries/:entryId/revisions`: list
   revisions or append an opaque AI/human revision pinned to optional facts and
@@ -209,18 +218,17 @@ exposing it to browser JavaScript.
   reason.
 - `POST /v1/applications/:id/cv-links/disable`: explicitly disable every CV link
   for an application.
-- `POST /v1/applications/:id/content-entries/:entryId/pdf-workflow`: start the
-  Cloudflare Workflow for the current publication.
-- `GET /v1/applications/:id/content-entries/:entryId/pdf-workflow/:workflowId`:
-  poll Workflow state.
+- `POST /v1/applications/:id/content-entries/:entryId/pdf-jobs`: atomically
+  create/reuse a pending artifact by `requestId` and enqueue its versioned job.
+- `GET /v1/applications/:id/content-entries/:entryId/pdf-jobs/:jobId`: read the
+  artifact-backed job status (`pending`, `ready`, or `failed`).
 - `GET /v1/applications/:id/content-entries/:entryId/pdf-artifacts/current` and
   its `/content` child: read current artifact metadata or the ready PDF.
-- `POST /v1/applications/:id/content-entries/:entryId/pdf-artifacts` and
-  `POST /v1/applications/:id/pdf-artifacts/:artifactId/complete|fail` are the
-  authenticated workflow primitives. Failed rendering, including a one-page
-  overflow, records the failure and disables the incomplete publication. The
-  management product only presents a publication as ready after the exact-URL
-  PDF is stored.
+The queue consumer calls the registry service directly over its own D1/R2
+bindings; there are no public completion/failure endpoints. Failed rendering,
+including a one-page overflow, records the failure and disables the incomplete
+publication. The management product only presents a publication as ready after
+the exact-URL PDF is stored.
 
 The named `CvPublicResolver` accepts only internal service-binding requests at
 `/cv-publications/:token`. It returns enabled opaque CV bytes plus digest and
@@ -244,7 +252,7 @@ Archive mode is constrained twice: policy only recommends it for
 again atomically. Report mode still records evidence, updates availability,
 and schedules the next check, but never changes the application lifecycle.
 
-Idempotent capture, event, and note requests include one `operationId`.
+Idempotent event and note requests include one `operationId`.
 Event writes may include `expectedVersion` for optimistic concurrency; a stale
 version returns HTTP 409.
 The service never infers projection status from an event name. `submitted`,
@@ -253,20 +261,20 @@ The service never infers projection status from an event name. `submitted`,
 `contact_logged`, `follow_up_scheduled`, and `research_updated` preserve the
 current status and omit that field.
 Operation receipts bind that ID to the canonical request, so reuse for another
-operation or payload returns HTTP 409. `occurredAt` and `capturedAt` retain
-source history; server time owns `recordedAt` and projection timestamps.
+operation or payload returns HTTP 409. `occurredAt` retains source history;
+server time owns `recordedAt` and projection timestamps.
 Persisted timestamps use canonical UTC ISO strings. SQLite, and therefore D1,
 has no native timestamp storage class; lexicographically sortable ISO text
 keeps the representation portable while Effect schemas enforce the boundary
 format.
 
-The existing `/v1` API is also the Grafana data source contract; Grafana uses
-the same `REGISTRY_API_TOKEN` as other clients. There is no separate dashboard
-adapter or Grafana-only route family. List GETs encode generic filter and order
-arrays as JSON in `filters` and `orderBy`; pagination uses flat `after` and
-`size` query parameters, while application full-text search remains the flat
-`q` parameter. The browser management app and the Worker both use the concrete
-contract codec for this format instead of maintaining separate serializers.
+The existing `/v1` API is also the data source for the browser management app's
+analytics dashboard. There is no separate dashboard adapter or route family.
+List GETs encode generic filter and order arrays as JSON in `filters` and
+`orderBy`; pagination uses flat `after` and `size` query parameters, while
+application full-text search remains the flat `q` parameter. The browser
+management app and the Worker both use the concrete contract codec for this
+format instead of maintaining separate serializers.
 Numeric sizes remain restricted to 1–100 (default 50), and clients follow
 `pageInfo.nextCursor` until it becomes `null`. Before D1 execution, list queries
 whose final compiled statement exceeds D1's
@@ -303,14 +311,16 @@ bunx nx run application-registry-api:dev
 ```
 
 The local `wrangler.jsonc` binds D1 as `APPLICATION_REGISTRY_DB`, R2 as
-`CV_OBJECTS`, Workers KV as `CHATGPT_SESSIONS`, Browser Run as `BROWSER`, and
-the PDF Workflow as `CV_PDF_WORKFLOW`. Set both local Worker secrets before
-testing the BFF or ChatGPT flow:
+`CV_OBJECTS`, Workers KV as `CHATGPT_SESSIONS`, and the PDF producer as
+`CV_PDF_QUEUE`. Browser Rendering and both Queue consumers are owned by
+`apps/cv-pdf-worker/wrangler.jsonc`. Set both local registry Worker secrets
+before testing the BFF or ChatGPT flow:
 
 ```bash
 cd apps/application-registry-api
 printf '%s' 'local-registry-token' | node ../../node_modules/wrangler/bin/wrangler.js secret put REGISTRY_API_TOKEN --local
 printf '%s' 'local-chatgpt-session-secret' | node ../../node_modules/wrangler/bin/wrangler.js secret put CHATGPT_SESSION_SECRET --local
+printf '%s' 'local-analytics-token' | node ../../node_modules/wrangler/bin/wrangler.js secret put CLOUDFLARE_ANALYTICS_API_TOKEN --local
 ```
 
 The management Vite build reads `VITE_CV_PUBLIC_BASE_URL`; production sets it
@@ -318,10 +328,14 @@ to `https://<CV_WEB_HOST>/c`. The Login with ChatGPT flow uses the owner's
 existing subscription through `/api/chatgpt/*`; there is intentionally no
 OpenAI API key configuration.
 
-Wrangler config installs an hourly cron at minute 17. This is an internal
-fallback scanner, not an HTTP-triggered batch. The scheduled handler is
-report-only by default and uses a batch size of five. Its plain-text Worker
-variables are:
+Worker secrets and scheduled-listing settings are decoded at Effect boundaries
+with `Config` and `Schema`; handlers receive typed services rather than reading,
+trimming, or parsing `env` ad hoc. The outer Cloudflare `fetch`/`scheduled`
+methods remain Promise adapters because that is the platform interface.
+
+Wrangler config installs a five-minute PDF-outbox dispatcher and an hourly
+listing-check cron at minute 17. The listing handler is report-only by default
+and uses a batch size of five. Its plain-text Worker variables are:
 
 - `LISTING_CHECKS_ENABLED`: set to `false` to make the handler a no-op.
 - `LISTING_CHECK_ARCHIVE_ENABLED`: set to `true` to permit policy-approved
@@ -360,6 +374,11 @@ bunx nx run application-registry-api:build
 
 The integration and end-to-end suites require no Docker daemon:
 
+Their Miniflare lifecycle, bindings, migrations, reset helpers, deterministic
+factories, and bulk seeders live in
+`@cv/worker-test-kit/application-registry`. Only the API's built bundle path and
+scenario assertions remain app-owned.
+
 - `libs/application-registry/crud/test` verifies the D1 CRUD Layers directly
   against a Miniflare D1 binding.
 - `libs/application-registry/service/test` verifies live workflows over the same
@@ -379,13 +398,15 @@ Terraform creates D1, the private R2 bucket, and the ChatGPT-session KV
 namespace; provisions Cloudflare Access; manages the dedicated `workers.dev`
 exposure resource; and writes derived Infisical values. Wrangler owns Worker
 creation, deployed code and Static Assets, observability, D1/R2/KV/Browser Run
-and Workflow bindings, migrations, and runtime secrets while preserving that
+and Queue bindings, migrations, and runtime secrets while preserving that
 exposure setting.
 
 Required deployment environment:
 
 - `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_ANALYTICS_API_TOKEN`, restricted to analytics read access
 - `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ZONE_ID`
 - `CV_WEB_HOST`, used to build the management application's public link base
 - `APPLICATION_REGISTRY_DB_ID`
 - `APPLICATION_REGISTRY_DB_NAME`
@@ -396,7 +417,9 @@ Required deployment environment:
 - `REGISTRY_API_TOKEN`
 - `APPLICATION_REGISTRY_WORKERS_DEV_ENABLED`, Terraform-synced after Access is
   attached; defaults to `false` during the initial private bootstrap
-- `CV_PDF_WORKFLOW_NAME`, optional, defaults to `cv-pdf`
+- `CV_PDF_QUEUE_NAME`, optional, defaults to `cv-pdf-generation`
+- `CV_PDF_DLQ_NAME`, optional, defaults to `cv-pdf-generation-dead-letter`
+- `CV_PDF_WORKER_NAME`, optional, defaults to `cv-pdf-worker`
 - `APPLICATION_REGISTRY_COMPATIBILITY_DATE`, optional
 
 After Terraform has bootstrapped D1, R2, and KV as described in
@@ -404,14 +427,17 @@ After Terraform has bootstrapped D1, R2, and KV as described in
 
 ```bash
 VITE_CV_PUBLIC_BASE_URL="https://${CV_WEB_HOST}/c" \
-  bunx nx run application-registry-management:build
+bunx nx run application-registry-management:build
 bunx nx run application-registry-api:migrations:apply:remote
+bunx nx run cv-pdf-worker:deploy
 bunx nx run application-registry-api:deploy
 ```
 
-The deploy target requires `REGISTRY_API_TOKEN` and `CHATGPT_SESSION_SECRET`
-and publishes the Worker, management assets, both secrets, Workflow entrypoint,
-and resource bindings together through Wrangler's `--secrets-file` deployment.
+The deploy target requires `REGISTRY_API_TOKEN`, `CHATGPT_SESSION_SECRET`, and
+`CLOUDFLARE_ANALYTICS_API_TOKEN` and publishes the registry Worker, management assets, all three secrets, and
+resource bindings through Wrangler's `--secrets-file` deployment. The
+deployment creates both queues before publishing the Queue consumer and
+producer Workers.
 On the initial deployment, `APPLICATION_REGISTRY_WORKERS_DEV_ENABLED` is absent
 and the generator emits `workers_dev: false`, so the management UI and its
 bearer-injecting BFF cannot become public before Access. The full Terraform
@@ -425,8 +451,10 @@ applied migration.
 
 The two app-owned deployment scripts are deliberately thin infrastructure
 adapters. `scripts/write-wrangler-config.ts` materializes the environment's
-Worker name, Terraform-owned exposure state, D1/R2/KV/Browser Run bindings, and
-PDF Workflow. `scripts/deploy.ts`
-writes `REGISTRY_API_TOKEN` and `CHATGPT_SESSION_SECRET` to a temporary Wrangler
+Worker name, Terraform-owned exposure state, D1/R2/KV bindings, and the private
+PDF Queue producer binding. The sibling PDF app owns Browser Rendering and
+Queue consumer configuration. `scripts/deploy.ts`
+writes `REGISTRY_API_TOKEN`, `CHATGPT_SESSION_SECRET`, and
+`CLOUDFLARE_ANALYTICS_API_TOKEN` to a temporary Wrangler
 `--secrets-file`, invokes `wrangler deploy`, and removes the temporary file.
 Neither script owns registry behavior or migration generation.

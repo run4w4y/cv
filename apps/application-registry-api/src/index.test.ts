@@ -25,6 +25,9 @@ const env = {
   // These routing tests never execute a registry persistence operation.
   APPLICATION_REGISTRY_DB: undefined as unknown as D1Database,
   CHATGPT_SESSIONS: undefined as unknown as KVNamespace,
+  CLOUDFLARE_ANALYTICS_API_TOKEN: 'analytics-token',
+  CLOUDFLARE_ZONE_ID: 'zone-id',
+  CV_WEB_HOST: 'cv.example.test',
   CV_OBJECTS: undefined as unknown as R2Bucket,
   REGISTRY_API_TOKEN: 'test-token',
 } satisfies ApplicationRegistryEnv
@@ -80,6 +83,24 @@ describe('application registry worker', () => {
 
     expect(response.status).toBe(503)
     expect(response.headers.get('cache-control')).toBe('private, no-store')
+    expect(
+      Schema.decodeUnknownSync(
+        Schema.Struct({ code: Schema.String, message: Schema.String })
+      )(await response.json())
+    ).toEqual({
+      code: 'service_unavailable',
+      message: 'Registry BFF authentication is not configured.',
+    })
+  })
+
+  test('fails closed when the browser BFF token is blank', async () => {
+    const response = await worker.fetch(
+      new Request('https://registry.example.test/api/registry/health'),
+      { ...env, REGISTRY_API_TOKEN: '   ' },
+      context
+    )
+
+    expect(response.status).toBe(503)
     expect(
       Schema.decodeUnknownSync(
         Schema.Struct({ code: Schema.String, message: Schema.String })

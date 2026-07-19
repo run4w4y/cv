@@ -1,3 +1,7 @@
+import type {
+  FactsAuthoringCompositionError,
+  FactsAuthoringValidationError,
+} from '@cv/facts-authoring'
 import {
   type FactsReleaseAssetError,
   type FactsReleaseHashError,
@@ -9,9 +13,9 @@ import {
 import { Effect } from 'effect'
 
 import type { FactsPublisherConfig } from './config'
-import type {
-  FactsPublisherHttpError,
-  FactsPublisherIntegrityError,
+import {
+  type FactsPublisherHttpError,
+  type FactsPublisherIntegrityError,
   FactsPublisherSourceError,
 } from './errors'
 import { type FactsPublisherFetch, makeFactsPublisherHttpClient } from './http'
@@ -27,6 +31,8 @@ export type PublishFactsResult = {
 }
 
 export type PublishFactsError =
+  | FactsAuthoringCompositionError
+  | FactsAuthoringValidationError
   | FactsPublisherHttpError
   | FactsPublisherIntegrityError
   | FactsPublisherSourceError
@@ -52,7 +58,15 @@ export const publishFactsCheckout = Effect.fn('FactsPublisher.publishCheckout')(
       yield* publishFactsRelease(bundle, new Date().toISOString()).pipe(
         Effect.provide(client.targetLayer)
       )
-      const current = yield* client.current()
+      const firstCatalogue = bundle.catalogues[0]
+      if (!firstCatalogue) {
+        return yield* new FactsPublisherSourceError({
+          cause: new Error('The compiled release has no locale catalogues.'),
+          message: 'The compiled release has no locale catalogues.',
+          operation: 'load-source',
+        })
+      }
+      const current = yield* client.current(firstCatalogue.locale)
       if (current.activeReleaseId === bundle.releaseId) {
         return {
           channel: config.channel,

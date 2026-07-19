@@ -1,6 +1,5 @@
 import { Schema } from 'effect'
 import { type Application, ApplicationSchema } from '../codecs/applications'
-import { type CampaignCapture, CampaignCaptureSchema } from '../codecs/captures'
 import {
   type ApplicationCompensation,
   ApplicationCompensationSchema,
@@ -41,10 +40,9 @@ export const AnnualCompensationSchema: Schema.Codec<AnnualCompensation> =
 /** Application representation returned by list queries. */
 export type ApplicationListItem = Application & {
   readonly annualCompensation: AnnualCompensation | null
-  readonly counts: { readonly captures: number; readonly notes: number }
+  readonly counts: { readonly notes: number }
   readonly identityAliases: readonly string[]
   readonly labels: readonly string[]
-  readonly latestCapture: Pick<CampaignCapture, 'applicationUrl'> | null
   readonly latestEvent: Pick<ApplicationEvent, 'kind' | 'occurredAt'> | null
 }
 
@@ -55,18 +53,10 @@ export const ApplicationListItemSchema: Schema.Codec<ApplicationListItem> =
       ...ApplicationSchema.fields,
       annualCompensation: Schema.NullOr(AnnualCompensationSchema),
       counts: Schema.Struct({
-        captures: Schema.Int.pipe(
-          Schema.check(Schema.isGreaterThanOrEqualTo(0))
-        ),
         notes: Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0))),
       }),
       identityAliases: Schema.Array(NonEmptyTrimmedStringSchema),
       labels: Schema.Array(NonEmptyTrimmedStringSchema),
-      latestCapture: Schema.NullOr(
-        Schema.Struct({
-          applicationUrl: CampaignCaptureSchema.fields.applicationUrl,
-        })
-      ),
       latestEvent: Schema.NullOr(
         Schema.Struct({
           kind: ApplicationEventSchema.fields.kind,

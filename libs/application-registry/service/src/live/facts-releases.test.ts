@@ -25,9 +25,11 @@ import { FactsReleasesServiceLive } from './facts-releases'
 
 const manifestSha = 'a'.repeat(64)
 const catalogSha = 'b'.repeat(64)
+const catalogRuSha = 'd'.repeat(64)
 const assetSha = 'c'.repeat(64)
 const manifestBytes = new TextEncoder().encode('{"manifest":true}')
 const catalogBytes = new TextEncoder().encode('{"facts":[]}')
+const catalogRuBytes = new TextEncoder().encode('{"facts":["ru"]}')
 const assetBytes = new Uint8Array([10, 20, 30, 40])
 
 const metadata = (sha256: string, bytes: Uint8Array): ArtifactMetadata => ({
@@ -58,6 +60,14 @@ const catalog: FactsReleaseCatalog = {
   sha256: catalogSha,
 }
 
+const catalogRu: FactsReleaseCatalog = {
+  ...catalog,
+  byteLength: catalogRuBytes.byteLength,
+  locale: 'ru',
+  objectKey: `sha256/${catalogRuSha}`,
+  sha256: catalogRuSha,
+}
+
 const asset: FactsReleaseAsset = {
   assetId: 'portrait',
   byteLength: assetBytes.byteLength,
@@ -70,7 +80,7 @@ const asset: FactsReleaseAsset = {
 
 const registration = (): RegisterFactsReleaseInput => ({
   assets: [asset],
-  catalogs: [catalog],
+  catalogs: [catalog, catalogRu],
   release,
 })
 
@@ -96,6 +106,13 @@ const makeArtifactFixture = (options: ArtifactFixtureOptions = {}) => {
     [
       catalogSha,
       { bytes: catalogBytes, metadata: metadata(catalogSha, catalogBytes) },
+    ],
+    [
+      catalogRuSha,
+      {
+        bytes: catalogRuBytes,
+        metadata: metadata(catalogRuSha, catalogRuBytes),
+      },
     ],
     [assetSha, { bytes: assetBytes, metadata: metadata(assetSha, assetBytes) }],
   ])
@@ -215,13 +232,13 @@ const register = FactsReleasesService.use((service) =>
 )
 
 describe('FactsReleasesService registration', () => {
-  test('accepts exactly one English catalogue', async () => {
+  test('rejects a release without any configured locale catalogue', async () => {
     const harness = makeHarness()
     const error = await harness.run(
       FactsReleasesService.use((service) =>
         service.register({
           ...registration(),
-          catalogs: [catalog, { ...catalog, locale: 'fr' }],
+          catalogs: [],
         })
       ).pipe(Effect.flip)
     )
@@ -234,7 +251,12 @@ describe('FactsReleasesService registration', () => {
     const harness = makeHarness()
     const stored = await harness.run(register)
 
-    expect(harness.artifacts.heads).toEqual([manifestSha, catalogSha, assetSha])
+    expect(harness.artifacts.heads).toEqual([
+      manifestSha,
+      catalogSha,
+      catalogRuSha,
+      assetSha,
+    ])
     expect(harness.crud.state.registerCalls).toBe(1)
     expect(stored).toEqual(registration())
 
@@ -324,7 +346,7 @@ describe('FactsReleasesService registration', () => {
 })
 
 describe('FactsReleasesService active channels', () => {
-  test('optimistically activates, finds and reads one locale release', async () => {
+  test('atomically activates and reads every locale in the release', async () => {
     const harness = makeHarness()
     await harness.run(register)
 
@@ -341,6 +363,7 @@ describe('FactsReleasesService active channels', () => {
     )
     expect(active.release.id).toBe(release.id)
     expect([...active.catalogBytes]).toEqual([...catalogBytes])
+    expect(active.catalogs.map(({ locale }) => locale)).toEqual(['en', 'ru'])
     expect(active.assetContents).toHaveLength(1)
     const firstAsset = active.assetContents[0]
     if (!firstAsset) throw new Error('Expected one active facts asset.')
@@ -353,6 +376,11 @@ describe('FactsReleasesService active channels', () => {
     )
     expect(selectedAsset.asset).toEqual(asset)
     expect([...selectedAsset.bytes]).toEqual([...assetBytes])
+
+    const russian = await harness.run(
+      FactsReleasesService.use((service) => service.readActive('stable', 'ru'))
+    )
+    expect([...russian.catalogBytes]).toEqual([...catalogRuBytes])
   })
 
   test('rejects stale activation without mutating the channel', async () => {
@@ -401,7 +429,7 @@ describe('FactsReleasesService active channels', () => {
       ).pipe(Effect.flip)
     )
 
-    expect(localeError._tag).toBe('RegistryBadRequestError')
+    expect(localeError._tag).toBe('RegistryNotFoundError')
     expect(assetError._tag).toBe('RegistryNotFoundError')
   })
 

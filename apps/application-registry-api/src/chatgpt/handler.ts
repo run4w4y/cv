@@ -1,11 +1,17 @@
 import {
-  createChatGPTHandler,
+  ChatGPTServer,
+  CloudflareKvStore,
+  makeChatGPTServerLayer,
   type RateLimitBucket,
   type StoredSession,
-} from '@opencoredev/loginwithchatgpt-server'
+} from '@cv/ai-provider/chatgpt-server'
+import { Effect } from 'effect'
 
+import {
+  provideWorkerConfiguration,
+  readChatGPTSessionSecret,
+} from '../worker/config'
 import type { ApplicationRegistryEnv } from '../worker/types'
-import { CloudflareKvStore } from './kv-store'
 
 const basePath = '/api/chatgpt'
 
@@ -21,32 +27,37 @@ const configurationError = () =>
 export const isChatGPTRequest = (request: Request) =>
   new URL(request.url).pathname.startsWith(`${basePath}/`)
 
+export const handleChatGPTRequestEffect = Effect.fn('ChatGPT.handleRequest')(
+  function* (request: Request, env: ApplicationRegistryEnv) {
+    const sessionSecret = yield* readChatGPTSessionSecret
+    const server = yield* ChatGPTServer.pipe(
+      Effect.provide(
+        makeChatGPTServerLayer({
+          basePath,
+          rateLimitStore: new CloudflareKvStore<RateLimitBucket>(
+            env.CHATGPT_SESSIONS,
+            'responses-rate'
+          ),
+          sessionSecret,
+          sessionStore: new CloudflareKvStore<StoredSession>(
+            env.CHATGPT_SESSIONS,
+            'session'
+          ),
+        })
+      )
+    )
+    return yield* server.handle(request)
+  }
+)
+
 export const handleChatGPTRequest = (
   request: Request,
   env: ApplicationRegistryEnv
-): Promise<Response> => {
-  const secret = env.CHATGPT_SESSION_SECRET?.trim()
-  if (!secret) return Promise.resolve(configurationError())
-
-  const auth = createChatGPTHandler({
-    basePath,
-    secret,
-    sessionStore: new CloudflareKvStore<StoredSession>(
-      env.CHATGPT_SESSIONS,
-      'session'
+): Promise<Response> =>
+  handleChatGPTRequestEffect(request, env).pipe(
+    provideWorkerConfiguration(env),
+    Effect.catchTag('Worker.ConfigurationError', () =>
+      Effect.succeed(configurationError())
     ),
-    responsesProxy: {
-      maxRequestBytes: 8 * 1_024 * 1_024,
-      rateLimit: {
-        limit: 30,
-        store: new CloudflareKvStore<RateLimitBucket>(
-          env.CHATGPT_SESSIONS,
-          'responses-rate'
-        ),
-        windowMs: 60_000,
-      },
-    },
-  })
-
-  return auth.handler(request)
-}
+    Effect.runPromise
+  )

@@ -12,7 +12,6 @@ const variantForKind = (kind: string): NonNullable<BadgeProps['variant']> => {
     case 'withdrawn':
     case 'listing_closed':
       return 'danger'
-    case 'campaign_prepared':
     case 'follow_up_scheduled':
     case 'stage_changed':
       return 'warning'

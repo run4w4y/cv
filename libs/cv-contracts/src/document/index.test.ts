@@ -102,12 +102,12 @@ describe('cv.document.v1', () => {
       })
     ).toThrow()
 
-    expect(() =>
+    expect(
       Schema.decodeUnknownSync(CvDocumentV1Schema)({
         ...validDocument,
         locale: 'en-GB',
-      })
-    ).toThrow()
+      }).locale
+    ).toBe('en-GB')
   })
 
   test('rejects duplicate stable IDs with a field-local issue', () => {

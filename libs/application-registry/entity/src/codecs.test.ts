@@ -8,7 +8,6 @@ import {
   ApplicationWritableSchema,
   ContentRevisionSchema,
   CvLinkSchema,
-  FitAssessmentSchema,
   FxRateInputSchema,
   normalizeApplicationCanonicalUrl,
 } from './index'
@@ -153,34 +152,6 @@ describe('application registry database schemas', () => {
         provider: 'fixture',
         observedAt: '2026-07-10T00:00:00.000Z',
         fetchedAt: '2026-07-10T12:00:00.000Z',
-      })
-    ).toThrow()
-  })
-
-  test('requires fit assessment dimensions to sum to the total score', () => {
-    const assessment = {
-      dimensions: {
-        coreExperience: 20,
-        hardRequirements: 30,
-        practicalEligibility: 8,
-        preferredSignals: 7,
-        seniorityAndScope: 12,
-      },
-      gaps: [],
-      hardBlockers: [],
-      rationale: 'Evidence-based fit assessment.',
-      rubricVersion: 'application-fit-v1',
-      score: 77,
-      strengths: [],
-    }
-
-    expect(
-      Schema.decodeUnknownSync(FitAssessmentSchema)(assessment).score
-    ).toBe(77)
-    expect(() =>
-      Schema.decodeUnknownSync(FitAssessmentSchema)({
-        ...assessment,
-        score: 78,
       })
     ).toThrow()
   })

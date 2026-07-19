@@ -15,7 +15,6 @@ export const commandReceipts = sqliteTable(
       .notNull()
       .references(() => applications.id, { onDelete: 'cascade' }),
     eventId: text('event_id'),
-    captureId: text('capture_id'),
     noteId: text('note_id'),
     recordedAt: text('recorded_at').notNull(),
   },

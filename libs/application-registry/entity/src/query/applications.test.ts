@@ -68,10 +68,6 @@ describe('application list query definition', () => {
           ]),
         }),
         expect.objectContaining({
-          name: 'captureCount',
-          sortable: true,
-        }),
-        expect.objectContaining({
           name: 'q',
           filterOperatorInfo: [
             expect.objectContaining({
@@ -169,10 +165,10 @@ describe('application list query definition', () => {
     expect(rendered.params).toContain(to)
   })
 
-  test('supports generic ordering over computed relation fields', () => {
+  test('supports generic ordering over computed fields', () => {
     const resolved = applicationListQuery.resolve({
       orderBy: [
-        { field: 'captureCount', direction: 'desc' },
+        { field: 'noteCount', direction: 'desc' },
         { field: 'updatedRevision', direction: 'asc' },
       ],
       pagination: { size: 10 },

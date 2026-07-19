@@ -2,12 +2,13 @@ import { Layer } from 'effect'
 
 import { AnnotationsServiceLive } from './annotations'
 import { ApplicationsServiceLive } from './applications'
-import { CapturesServiceLive } from './captures'
 import { CompensationsServiceLive } from './compensations'
 import { ContentEntriesServiceLive } from './content'
 import { CvPublicationsServiceLive } from './cv-publications'
+import { CvAnalyticsServiceLive } from './cv-analytics'
 import { EventsServiceLive } from './events'
 import { FactsReleasesServiceLive } from './facts-releases'
+import { JobPostingCaptureServiceLive } from './job-posting-capture'
 import { JobPostingSnapshotsServiceLive } from './job-posting-snapshots'
 import { ListingChecksServiceLive } from './listing-checks'
 import { OpaqueObjectsServiceLive } from './opaque-objects'
@@ -22,12 +23,17 @@ export const RegistryContentServicesLive = Layer.mergeAll(
   PdfArtifactsServiceLive
 )
 
-export const RegistryServicesLive = Layer.mergeAll(
+const RegistryCoreServicesLive = Layer.mergeAll(
   AnnotationsServiceLive,
   ApplicationsServiceLive,
-  CapturesServiceLive,
   CompensationsServiceLive,
+  CvAnalyticsServiceLive,
   EventsServiceLive,
   ListingChecksServiceLive,
   RegistryContentServicesLive
+)
+
+export const RegistryServicesLive = Layer.merge(
+  RegistryCoreServicesLive,
+  JobPostingCaptureServiceLive.pipe(Layer.provide(RegistryCoreServicesLive))
 )

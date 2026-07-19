@@ -3,7 +3,8 @@ import { Layer } from 'effect'
 import { HttpRouter, HttpServer } from 'effect/unstable/http'
 import { HttpApiBuilder } from 'effect/unstable/httpapi'
 
-import { RegistryServiceLayer } from '../layers/registry'
+import { makeRegistryServiceLayer } from '../layers/registry'
+import type { ApplicationRegistryEnv } from '../worker/types'
 import { HealthHandlersLayer } from './handlers/health'
 import { RegistryHandlersLayer } from './handlers/registry'
 import { RegistryAuthorizationLayer } from './middleware/auth'
@@ -15,12 +16,26 @@ const ApiHandlersLayer = Layer.provide(
   [HealthHandlersLayer, RegistryHandlersLayer]
 )
 
-const ApiLayer = Layer.provide(ApiHandlersLayer, [
-  RegistryServiceLayer,
-  RegistryAuthorizationLayer,
-])
+const handlerLayer = (environment: ApplicationRegistryEnv) => {
+  const ApiLayer = Layer.provide(ApiHandlersLayer, [
+    makeRegistryServiceLayer(environment),
+    RegistryAuthorizationLayer,
+  ])
 
-const HandlerLayer = Layer.provide(ApiLayer, HttpServer.layerServices)
+  return Layer.provide(ApiLayer, HttpServer.layerServices)
+}
 
-export const applicationRegistryWebHandler =
-  HttpRouter.toWebHandler(HandlerLayer).handler
+type WebHandler = ReturnType<typeof HttpRouter.toWebHandler>
+
+const handlers = new WeakMap<ApplicationRegistryEnv, WebHandler>()
+
+export const applicationRegistryWebHandler = (
+  environment: ApplicationRegistryEnv
+) => {
+  const cached = handlers.get(environment)
+  if (cached) return cached.handler
+
+  const handler = HttpRouter.toWebHandler(handlerLayer(environment))
+  handlers.set(environment, handler)
+  return handler.handler
+}

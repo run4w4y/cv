@@ -1,0 +1,3 @@
+dist/
+.wrangler/
+wrangler.deploy.jsonc

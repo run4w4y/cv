@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import type { AiJsonSchema } from '@cv/ai-provider'
-import { buildAppendRevisionRequest, type ContentEntry } from './api'
-import { decodeJsonBase64 } from './base64'
+import type { FactsCatalogueV1 } from '@cv/contracts/facts'
 import {
   buildCoverLetterGenerationRequest,
   buildCvDraftGenerationRequest,
+  factsForGeneration,
 } from './prompts'
 
 const arbitrarySchema = {
@@ -14,22 +14,147 @@ const arbitrarySchema = {
   required: ['completelyDynamic'],
 } satisfies AiJsonSchema
 
-const entry: ContentEntry = {
-  id: 'entry-1',
-  applicationId: 'application-1',
-  kind: 'cv',
+const facts = {
+  $schema: 'cv.facts.v1',
+  assets: [],
+  sections: [
+    {
+      kind: 'identity',
+      name: 'Ada Lovelace',
+      guidance: {
+        wording: 'summarize',
+        instructions: ['Preserve every metric.'],
+      },
+      facts: [
+        {
+          evidenceIds: ['evidence.private-review'],
+          id: 'fact-x',
+          text: 'Verified fact.',
+        },
+      ],
+      languages: [],
+    },
+  ],
+  evidence: [
+    {
+      id: 'evidence.private-review',
+      kind: 'private-source',
+      note: 'Private audit locator',
+      title: 'Private review',
+    },
+  ],
   locale: 'en',
-  state: 'draft',
-  headRevisionId: null,
-  approvedRevisionId: null,
-  version: 7,
-  createdAt: '2026-07-17T00:00:00.000Z',
-  updatedAt: '2026-07-17T00:00:00.000Z',
-}
+} satisfies FactsCatalogueV1
+
+const visibilityFacts = {
+  $schema: 'cv.facts.v1',
+  assets: [],
+  evidence: [],
+  locale: 'en',
+  sections: [
+    {
+      items: [
+        {
+          id: 'contact.public',
+          kind: 'email',
+          value: 'public@example.test',
+          visibility: 'public',
+        },
+        {
+          id: 'contact.private',
+          kind: 'phone',
+          value: 'private-phone-value',
+          visibility: 'private',
+        },
+      ],
+      kind: 'contact',
+    },
+    {
+      entries: [
+        {
+          company: 'Public Employer',
+          companyVisibility: 'public',
+          highlights: [],
+          id: 'experience.public',
+          period: '2025-present',
+          roles: ['Engineer'],
+          technologies: [],
+          workstreams: [],
+        },
+        {
+          company: 'Private Employer',
+          companyVisibility: 'private',
+          highlights: [
+            { id: 'fact.private-employer', text: 'Private employer fact.' },
+          ],
+          id: 'experience.private',
+          period: '2024-2025',
+          roles: ['Engineer'],
+          technologies: [],
+          workstreams: [],
+        },
+      ],
+      kind: 'experience',
+    },
+    {
+      entries: [
+        {
+          contributions: [],
+          id: 'project.public',
+          links: [
+            {
+              id: 'link.public',
+              label: 'Public link',
+              url: 'https://public.example.test',
+              visibility: 'public',
+            },
+            {
+              id: 'link.private',
+              label: 'Private link',
+              url: 'https://private-link.example.test',
+              visibility: 'private',
+            },
+          ],
+          name: 'Public Project',
+          summary: { id: 'fact.public-project', text: 'Public project fact.' },
+          technologies: [],
+          visibility: 'public',
+        },
+        {
+          contributions: [],
+          id: 'project.private',
+          links: [],
+          name: 'Private Project',
+          summary: {
+            id: 'fact.private-project',
+            text: 'Private project fact.',
+          },
+          technologies: [],
+          visibility: 'private',
+        },
+      ],
+      kind: 'projects',
+    },
+  ],
+} satisfies FactsCatalogueV1
 
 describe('preparation request construction', () => {
+  test('excludes private contacts, employers, projects, and links from every model stage', () => {
+    const projected = JSON.stringify(factsForGeneration(visibilityFacts))
+
+    expect(projected).toContain('public@example.test')
+    expect(projected).toContain('Public Employer')
+    expect(projected).toContain('Public Project')
+    expect(projected).toContain('https://public.example.test')
+    expect(projected).not.toContain('private-phone-value')
+    expect(projected).not.toContain('Private Employer')
+    expect(projected).not.toContain('Private employer fact.')
+    expect(projected).not.toContain('Private Project')
+    expect(projected).not.toContain('Private project fact.')
+    expect(projected).not.toContain('https://private-link.example.test')
+  })
+
   test('passes arbitrary schema, complete context, and generic guidance to CV generation', () => {
-    const facts = { claims: [{ id: 'fact-x', arbitrary: 'truth' }] }
     const job = { requirements: ['something unusual'] }
     const guidance = { paths: [{ pointer: '/completelyDynamic' }] }
     const request = buildCvDraftGenerationRequest({
@@ -42,14 +167,16 @@ describe('preparation request construction', () => {
     })
 
     expect(request.schema).toBe(arbitrarySchema)
-    expect(request.prompt).toContain(JSON.stringify(facts, null, 2))
+    expect(request.prompt).toContain('Verified fact.')
+    expect(request.prompt).toContain('Preserve every metric.')
+    expect(request.prompt).not.toContain('Private audit locator')
     expect(request.prompt).toContain(JSON.stringify(job, null, 2))
     expect(request.prompt).toContain(JSON.stringify(guidance, null, 2))
   })
 
   test('keeps the user-authored cover-letter prompt separate and complete', () => {
     const request = buildCoverLetterGenerationRequest({
-      factsCatalogue: { anyFactsShape: true },
+      factsCatalogue: facts,
       jobContext: 'posting text',
       locale: 'en',
       modelId: 'model-2',
@@ -58,27 +185,8 @@ describe('preparation request construction', () => {
     })
 
     expect(request.prompt).toContain('Prefer a direct opening.')
-    expect(request.prompt).toContain('anyFactsShape')
+    expect(request.prompt).toContain('Verified fact.')
+    expect(request.prompt).not.toContain('Private audit locator')
     expect(request.schema).toBe(arbitrarySchema)
-  })
-
-  test('serializes an opaque revision and pins all provenance IDs', () => {
-    const value = { noKnownFieldsRequired: ['a', 2, false] }
-    const request = buildAppendRevisionRequest({
-      contractId: 'dynamic.contract',
-      contractVersion: '99',
-      entry,
-      factsReleaseId: 'facts-release-1',
-      jobSnapshotId: 'job-snapshot-1',
-      operationId: 'operation-1',
-      source: 'human',
-      value,
-    })
-
-    expect(request.expectedVersion).toBe(7)
-    expect(request.factsReleaseId).toBe('facts-release-1')
-    expect(request.jobSnapshotId).toBe('job-snapshot-1')
-    expect(request.payload.mediaType).toBe('application/json')
-    expect(decodeJsonBase64(request.payload.data)).toEqual(value)
   })
 })

@@ -1,10 +1,22 @@
-import { readdir, readFile } from 'node:fs/promises'
-import { basename, resolve } from 'node:path'
+import { access, mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import {
+  composeFactsRepository,
+  decodeFactsRepositoryConfig,
+  FactAssetRegistrySourceSchema,
+  type FactsAuthoringCompositionError,
+  type FactsAuthoringValidationError,
+  type FactsRepositoryConfigSource,
+  type FactsSectionModuleSource,
+} from '@cv/facts-authoring'
 import {
   type CompiledFactsRelease,
   compileFactsRelease,
+  type FactsAssetSource,
 } from '@cv/facts-release'
-import { Effect } from 'effect'
+import { Effect, Schema } from 'effect'
+import { createServer, type ViteDevServer } from 'vite'
 
 import { FactsPublisherSourceError } from './errors'
 
@@ -15,156 +27,247 @@ type SourceProvenance = {
   readonly sourceRepository: string
 }
 
-type AssetDescriptor = {
-  readonly id: string
+type LoadedFactsSource = {
+  readonly assetDigests: Readonly<Record<string, string>>
+  readonly assetSources: ReadonlyArray<FactsAssetSource>
+  readonly assets: unknown
+  readonly config: unknown
+  readonly evidence: unknown
+  readonly sections: ReadonlyArray<FactsSectionModuleSource>
 }
 
-const record = (
-  value: unknown
-): Readonly<Record<string, unknown>> | undefined =>
-  value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Readonly<Record<string, unknown>>)
-    : undefined
+const sourceError = (
+  operation: FactsPublisherSourceError['operation'],
+  message: string,
+  cause: unknown
+) => new FactsPublisherSourceError({ cause, message, operation })
 
-const assetDescriptors = (
-  catalogue: unknown
-): Effect.Effect<readonly AssetDescriptor[], FactsPublisherSourceError> => {
-  const assets = record(catalogue)?.assets
-  if (!Array.isArray(assets)) {
-    return Effect.fail(
-      new FactsPublisherSourceError({
-        cause: new Error('The catalogue has no asset array.'),
-        message: 'The facts catalogue asset list is invalid.',
-        operation: 'resolve-assets',
-      })
-    )
+const exists = async (path: string) => {
+  try {
+    await access(path)
+    return true
+  } catch {
+    return false
   }
-
-  const descriptors: AssetDescriptor[] = []
-  for (const value of assets) {
-    const id = record(value)?.id
-    if (typeof id !== 'string' || id.length === 0) {
-      return Effect.fail(
-        new FactsPublisherSourceError({
-          cause: new Error('A facts asset has no identifier.'),
-          message: 'The facts catalogue contains an invalid asset descriptor.',
-          operation: 'resolve-assets',
-        })
-      )
-    }
-    descriptors.push({ id })
-  }
-  return Effect.succeed(descriptors)
 }
 
-const readCatalogue = (contentRoot: string) =>
-  Effect.tryPromise({
-    try: () => readFile(resolve(contentRoot, 'facts/catalogue.json'), 'utf8'),
-    catch: (cause) =>
-      new FactsPublisherSourceError({
-        cause,
-        message:
-          'Could not read facts/catalogue.json from the source checkout.',
-        operation: 'read-catalogue',
-      }),
-  }).pipe(
-    Effect.flatMap((source) =>
-      Effect.try({
-        try: () => JSON.parse(source) as unknown,
-        catch: (cause) =>
-          new FactsPublisherSourceError({
-            cause,
-            message: 'facts/catalogue.json is not valid JSON.',
-            operation: 'parse-catalogue',
-          }),
-      })
-    )
-  )
+const assertWithinCheckout = (contentRoot: string, candidate: string) => {
+  const child = relative(contentRoot, candidate)
+  if (child === '..' || child.startsWith(`..${sep}`) || isAbsolute(child)) {
+    throw new Error(`Authored path escapes the content checkout: ${candidate}`)
+  }
+}
 
-const readAssetFiles = (contentRoot: string) =>
-  Effect.tryPromise({
-    try: () =>
-      readdir(resolve(contentRoot, 'facts/assets'), { withFileTypes: true }),
-    catch: (cause) =>
-      new FactsPublisherSourceError({
-        cause,
-        message: 'Could not read the reviewed facts asset directory.',
-        operation: 'read-assets',
-      }),
-  }).pipe(
-    Effect.flatMap((entries) => {
-      const invalid = entries.find((entry) => !entry.isFile())
-      return invalid
-        ? Effect.fail(
-            new FactsPublisherSourceError({
-              cause: new Error(`Unexpected asset entry: ${invalid.name}`),
-              message: 'The facts asset directory may contain files only.',
-              operation: 'resolve-assets',
-            })
-          )
-        : Effect.succeed(entries.map(({ name }) => name).sort())
-    })
-  )
+const viteModuleId = (absolutePath: string) =>
+  `/@fs/${absolutePath.replaceAll('\\', '/')}`
 
-const resolveAssetSources = (
-  contentRoot: string,
-  descriptors: readonly AssetDescriptor[],
-  files: readonly string[]
+const loadDefaultExport = async (
+  server: ViteDevServer,
+  absolutePath: string
+) => {
+  const loaded: unknown = await server.ssrLoadModule(viteModuleId(absolutePath))
+  if (loaded === null || typeof loaded !== 'object') {
+    throw new Error(`${absolutePath} did not evaluate to a module.`)
+  }
+  const value = Reflect.get(loaded, 'default')
+  if (value === undefined) {
+    throw new Error(`${absolutePath} must have a default export.`)
+  }
+  return value as unknown
+}
+
+const loadOptionalDefaultExport = async (
+  server: ViteDevServer,
+  absolutePath: string
 ) =>
-  Effect.gen(function* () {
-    const expected = new Set<string>()
-    const sources = yield* Effect.forEach(descriptors, (descriptor) => {
-      const matches = files.filter((file) =>
-        file.startsWith(`${descriptor.id}.`)
-      )
-      if (matches.length !== 1) {
-        return Effect.fail(
-          new FactsPublisherSourceError({
-            cause: new Error(
-              `Expected one file prefixed with ${descriptor.id}, found ${matches.length}.`
-            ),
-            message: `Could not uniquely resolve reviewed asset ${descriptor.id}.`,
-            operation: 'resolve-assets',
-          })
-        )
-      }
-      const fileName = matches[0]
-      if (!fileName) {
-        return Effect.fail(
-          new FactsPublisherSourceError({
-            cause: new Error('Resolved facts asset disappeared.'),
-            message: `Could not resolve reviewed asset ${descriptor.id}.`,
-            operation: 'resolve-assets',
-          })
-        )
-      }
-      expected.add(fileName)
-      return Effect.tryPromise({
-        try: () => readFile(resolve(contentRoot, 'facts/assets', fileName)),
-        catch: (cause) =>
-          new FactsPublisherSourceError({
-            cause,
-            message: `Could not read reviewed asset ${descriptor.id}.`,
-            operation: 'read-assets',
-          }),
-      }).pipe(
-        Effect.map((bytes) => ({
-          bytes: new Uint8Array(bytes),
-          fileName: basename(fileName),
-          id: descriptor.id,
-        }))
-      )
-    })
+  (await exists(absolutePath))
+    ? loadDefaultExport(server, absolutePath)
+    : ({} as const)
 
-    const unexpected = files.find((file) => !expected.has(file))
-    if (unexpected) {
-      return yield* new FactsPublisherSourceError({
-        cause: new Error(`Unexpected facts asset: ${unexpected}`),
-        message: 'The facts asset directory contains an undeclared file.',
-        operation: 'resolve-assets',
+const collectSectionFiles = async (
+  localeRoot: string
+): Promise<ReadonlyArray<string>> => {
+  const entries = await readdir(localeRoot, { withFileTypes: true })
+  const files: string[] = []
+  for (const entry of entries.sort((left, right) =>
+    left.name.localeCompare(right.name)
+  )) {
+    const absolutePath = join(localeRoot, entry.name)
+    if (entry.isDirectory()) {
+      const indexPath = join(absolutePath, 'index.ts')
+      if (!(await exists(indexPath))) {
+        throw new Error(
+          `Facts section directory must expose index.ts: ${absolutePath}`
+        )
+      }
+      files.push(indexPath)
+      continue
+    }
+    if (
+      !entry.isFile() ||
+      !entry.name.endsWith('.ts') ||
+      entry.name.endsWith('.d.ts')
+    ) {
+      throw new Error(
+        `Locale facts may contain section.ts files or section/index.ts directories only: ${absolutePath}`
+      )
+    }
+    files.push(absolutePath)
+  }
+  return files
+}
+
+const loadSections = async (
+  server: ViteDevServer,
+  contentRoot: string,
+  factsRoot: string,
+  config: FactsRepositoryConfigSource
+) => {
+  const sections: FactsSectionModuleSource[] = []
+  for (const locale of config.locales) {
+    const localeRoot = resolve(factsRoot, locale)
+    assertWithinCheckout(contentRoot, localeRoot)
+    for (const absolutePath of await collectSectionFiles(localeRoot)) {
+      sections.push({
+        locale,
+        relativePath: relative(contentRoot, absolutePath).replaceAll('\\', '/'),
+        value: await loadDefaultExport(server, absolutePath),
       })
     }
-    return sources
+  }
+  return sections
+}
+
+const sha256 = async (bytes: Uint8Array) => {
+  const digest = await crypto.subtle.digest('SHA-256', bytes.slice())
+  return Buffer.from(digest).toString('hex')
+}
+
+const loadAssets = async (
+  factsRoot: string,
+  authoredAssets: unknown
+): Promise<{
+  readonly digests: Readonly<Record<string, string>>
+  readonly sources: ReadonlyArray<FactsAssetSource>
+}> => {
+  const assets = await Effect.runPromise(
+    Schema.decodeUnknownEffect(FactAssetRegistrySourceSchema)(authoredAssets)
+  )
+  const assetRoot = resolve(factsRoot, 'assets')
+  const entries = (await exists(assetRoot))
+    ? await readdir(assetRoot, { withFileTypes: true })
+    : []
+  const files = entries.map((entry) => {
+    if (!entry.isFile()) {
+      throw new Error(`Unexpected entry in facts/assets: ${entry.name}`)
+    }
+    return entry.name
+  })
+  const expectedFiles = new Set<string>()
+  const digests: Record<string, string> = {}
+  const sources: FactsAssetSource[] = []
+  for (const [id, asset] of Object.entries(assets).sort(([left], [right]) =>
+    left.localeCompare(right)
+  )) {
+    if (basename(asset.fileName) !== asset.fileName) {
+      throw new Error(`Asset ${id} must use a flat, safe file name.`)
+    }
+    if (expectedFiles.has(asset.fileName)) {
+      throw new Error(
+        `Asset file ${asset.fileName} is declared more than once.`
+      )
+    }
+    expectedFiles.add(asset.fileName)
+    const bytes = new Uint8Array(
+      await readFile(resolve(assetRoot, asset.fileName))
+    )
+    digests[id] = await sha256(bytes)
+    sources.push({ bytes, fileName: asset.fileName, id })
+  }
+  const unexpected = files.find((file) => !expectedFiles.has(file))
+  if (unexpected) {
+    throw new Error(`Undeclared facts asset: ${unexpected}`)
+  }
+  return { digests, sources }
+}
+
+const assertFactsRootShape = async (
+  factsRoot: string,
+  config: FactsRepositoryConfigSource
+) => {
+  const allowed = new Set([
+    'assets',
+    'assets.ts',
+    'evidence.ts',
+    ...config.locales,
+  ])
+  const entries = await readdir(factsRoot, { withFileTypes: true })
+  const unexpected = entries.find((entry) => !allowed.has(entry.name))
+  if (unexpected) {
+    throw new Error(
+      `Unexpected facts source entry not declared by facts.config.ts: ${unexpected.name}`
+    )
+  }
+}
+
+const loadFactsSource = async (
+  contentRoot: string
+): Promise<LoadedFactsSource> => {
+  const checkoutRoot = resolve(contentRoot)
+  const cacheRoot = await mkdtemp(join(tmpdir(), 'cv-facts-vite-'))
+  const server = await createServer({
+    appType: 'custom',
+    cacheDir: cacheRoot,
+    configFile: false,
+    logLevel: 'silent',
+    root: checkoutRoot,
+    server: {
+      fs: { allow: [checkoutRoot] },
+      middlewareMode: true,
+    },
+  })
+  try {
+    const configPath = resolve(checkoutRoot, 'facts.config.ts')
+    const configSource = await loadDefaultExport(server, configPath)
+    const config = await Effect.runPromise(
+      decodeFactsRepositoryConfig(configSource)
+    )
+    const factsRoot = resolve(checkoutRoot, config.factsDir)
+    assertWithinCheckout(checkoutRoot, factsRoot)
+    await assertFactsRootShape(factsRoot, config)
+    const evidence = await loadOptionalDefaultExport(
+      server,
+      resolve(factsRoot, 'evidence.ts')
+    )
+    const assets = await loadOptionalDefaultExport(
+      server,
+      resolve(factsRoot, 'assets.ts')
+    )
+    const sections = await loadSections(server, checkoutRoot, factsRoot, config)
+    const loadedAssets = await loadAssets(factsRoot, assets)
+    return {
+      assetDigests: loadedAssets.digests,
+      assetSources: loadedAssets.sources,
+      assets,
+      config: configSource,
+      evidence,
+      sections,
+    }
+  } finally {
+    await server.close()
+    await rm(cacheRoot, { force: true, recursive: true })
+  }
+}
+
+const loadFactsSourceEffect = (contentRoot: string) =>
+  Effect.tryPromise({
+    try: () => loadFactsSource(contentRoot),
+    catch: (cause) =>
+      sourceError(
+        'load-source',
+        'Could not load the TypeScript facts repository.',
+        cause
+      ),
   })
 
 export const compileFactsCheckout = Effect.fn('FactsPublisher.compileCheckout')(
@@ -173,20 +276,25 @@ export const compileFactsCheckout = Effect.fn('FactsPublisher.compileCheckout')(
     provenance: SourceProvenance
   ): Effect.Effect<
     CompiledFactsRelease,
+    | FactsAuthoringCompositionError
+    | FactsAuthoringValidationError
     | FactsPublisherSourceError
     | import('@cv/facts-release').FactsReleaseAssetError
     | import('@cv/facts-release').FactsReleaseHashError
     | import('@cv/facts-release').FactsReleaseValidationError
   > =>
     Effect.gen(function* () {
-      const catalogue = yield* readCatalogue(contentRoot)
-      const descriptors = yield* assetDescriptors(catalogue)
-      const files =
-        descriptors.length === 0 ? [] : yield* readAssetFiles(contentRoot)
-      const assets = yield* resolveAssetSources(contentRoot, descriptors, files)
+      const loaded = yield* loadFactsSourceEffect(contentRoot)
+      const compilation = yield* composeFactsRepository({
+        assetDigests: loaded.assetDigests,
+        assets: loaded.assets,
+        config: loaded.config,
+        evidence: loaded.evidence,
+        sections: loaded.sections,
+      })
       return yield* compileFactsRelease({
-        assets,
-        catalogue,
+        assets: loaded.assetSources,
+        catalogues: compilation.catalogues,
         provenance: {
           compiler: {
             commit: provenance.compilerCommit,

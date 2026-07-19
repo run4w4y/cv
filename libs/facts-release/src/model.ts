@@ -22,7 +22,7 @@ export type FactsAssetSource = {
 
 export type CompileFactsReleaseInput = {
   readonly assets: ReadonlyArray<FactsAssetSource>
-  readonly catalogue: unknown
+  readonly catalogues: ReadonlyArray<unknown>
   readonly provenance: FactsReleaseProvenance
 }
 
@@ -39,7 +39,7 @@ export type FactsReleaseObject = {
 }
 
 export type CompiledFactsRelease = {
-  readonly catalogue: FactsCatalogueV1
+  readonly catalogues: ReadonlyArray<FactsCatalogueV1>
   readonly manifest: FactsReleaseManifestV1
   readonly manifestObject: FactsReleaseObject
   readonly objects: ReadonlyArray<FactsReleaseObject>

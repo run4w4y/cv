@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict'
-import { afterEach, beforeEach, test } from 'node:test'
+import { after, afterEach, before, test } from 'node:test'
 import type { FxRate } from '@cv/application-registry-entity'
 import {
   applicationListQuery,
   eventListQuery,
 } from '@cv/application-registry-entity/query'
+import {
+  makeRegistryFactory,
+  RegistryMiniflareHarness,
+  seedRegistryDatabase,
+} from '@cv/worker-test-kit/application-registry'
 import { Effect } from 'effect'
 
 import {
@@ -19,7 +24,6 @@ import {
   type PersistedNote,
 } from '../src'
 import { makeRegistryCrudLive } from '../src/live'
-import { RegistryMiniflareHarness } from '../src/test-support'
 
 let harness: RegistryMiniflareHarness
 
@@ -97,19 +101,22 @@ const runCrud = <A, E>(
 const seedApplication = Effect.gen(function* () {
   const applications = yield* ApplicationsCrud
   yield* applications.persist(application, {
-    mode: 'replace',
     operation: 'CRUD integration application seed',
   })
   return yield* applications.findByIdentifier(application.applicationId)
 })
 
-beforeEach(async () => {
+before(async () => {
   harness = await RegistryMiniflareHarness.make({
     databaseBinding: 'APPLICATION_REGISTRY_DB',
   })
 })
 
 afterEach(async () => {
+  await harness.reset()
+})
+
+after(async () => {
   await harness.dispose()
 })
 
@@ -168,7 +175,6 @@ test('atomically replaces annual compensation and rejects a stale version', asyn
           ],
         },
         {
-          mode: 'replace',
           operation: 'annual compensation seed',
         }
       )
@@ -255,7 +261,7 @@ test('clears every annual compensation variant without removing bonuses', async 
             },
           ],
         },
-        { mode: 'replace', operation: 'annual compensation clear seed' }
+        { operation: 'annual compensation clear seed' }
       )
       const cleared = yield* compensations.replaceAnnual(
         application.applicationId,
@@ -285,7 +291,6 @@ test('atomically replaces labels and preserves them after a stale write', async 
       const annotations = yield* AnnotationsCrud
       const applications = yield* ApplicationsCrud
       yield* applications.persist(application, {
-        mode: 'replace',
         operation: 'label replacement seed',
       })
       const replaced = yield* annotations.replaceLabels(
@@ -347,7 +352,7 @@ test('updates a managed application aggregate in one version transition', async 
           ],
           labels: ['original'],
         },
-        { mode: 'replace', operation: 'managed update seed' }
+        { operation: 'managed update seed' }
       )
 
       const updated = yield* applications.updateManaged(
@@ -505,11 +510,9 @@ test('filters before pagination and returns dashboard details and facets', async
       const annotations = yield* AnnotationsCrud
       const applications = yield* ApplicationsCrud
       yield* applications.persist(pastFollowUp, {
-        mode: 'replace',
         operation: 'dashboard past seed',
       })
       yield* applications.persist(futureFollowUp, {
-        mode: 'replace',
         operation: 'dashboard future seed',
       })
       yield* annotations.persistNote(
@@ -544,56 +547,6 @@ test('filters before pagination and returns dashboard details and facets', async
               'test:dashboard-past:a-alias',
               pastFollowUp.applicationId,
               recordedAt
-            ),
-          harness.database
-            .prepare(
-              `insert into campaign_captures (
-                id,
-                application_id,
-                campaign_run_id,
-                profile,
-                application_url,
-                submission_details,
-                artifacts,
-                captured_at,
-                operation_id
-              ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`
-            )
-            .bind(
-              'crud-dashboard-capture-old',
-              pastFollowUp.applicationId,
-              'crud-dashboard-run',
-              'default',
-              'https://example.test/jobs/dashboard-past/apply-old',
-              JSON.stringify({}),
-              JSON.stringify([]),
-              '2026-07-12T10:00:00.000Z',
-              'crud-dashboard-capture-operation-old'
-            ),
-          harness.database
-            .prepare(
-              `insert into campaign_captures (
-                id,
-                application_id,
-                campaign_run_id,
-                profile,
-                application_url,
-                submission_details,
-                artifacts,
-                captured_at,
-                operation_id
-              ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`
-            )
-            .bind(
-              'crud-dashboard-capture-new',
-              pastFollowUp.applicationId,
-              'crud-dashboard-run',
-              'default',
-              'https://example.test/jobs/dashboard-past/apply-new',
-              JSON.stringify({}),
-              JSON.stringify([]),
-              '2026-07-12T11:00:00.000Z',
-              'crud-dashboard-capture-operation-new'
             ),
         ])
       )
@@ -695,15 +648,11 @@ test('filters before pagination and returns dashboard details and facets', async
       updatedAt: recordedAt,
     },
   ])
-  assert.deepEqual(result.page.items[0]?.counts, { captures: 2, notes: 1 })
+  assert.deepEqual(result.page.items[0]?.counts, { notes: 1 })
   assert.deepEqual(result.page.items[0]?.latestEvent, {
     kind: 'note_added',
     occurredAt: recordedAt,
   })
-  assert.equal(
-    result.page.items[0]?.latestCapture?.applicationUrl,
-    'https://example.test/jobs/dashboard-past/apply-new'
-  )
   assert.deepEqual(
     result.upcoming.items.map(({ id }) => id),
     [futureFollowUp.applicationId]
@@ -716,70 +665,14 @@ test('filters before pagination and returns dashboard details and facets', async
 
 test('paginates every application and event with numeric page sizes', async () => {
   const itemCount = 101
-  const applicationStatements = Array.from(
-    { length: itemCount },
-    (_, index) => {
-      const sequence = index + 1
-      return harness.database
-        .prepare(
-          `insert into applications (
-          id,
-          job_key,
-          source,
-          canonical_url,
-          company,
-          company_normalized,
-          role,
-          updated_revision,
-          created_at,
-          updated_at
-        ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`
-        )
-        .bind(
-          `pagination-application-${sequence}`,
-          `pagination:${sequence}`,
-          'pagination-test',
-          `https://example.test/jobs/pagination-${sequence}`,
-          'Pagination Test',
-          'pagination test',
-          `Engineer ${sequence}`,
-          sequence,
-          recordedAt,
-          recordedAt
-        )
-    }
+  await seedRegistryDatabase(
+    harness.database,
+    makeRegistryFactory({ now: recordedAt, seed: 7_171 }).graph({
+      applicationCount: itemCount,
+      applicationStatus: 'not_started',
+      eventsPerApplication: 1,
+    })
   )
-  await harness.database.batch(applicationStatements.slice(0, 100))
-  await harness.database.batch(applicationStatements.slice(100))
-
-  const eventStatements = Array.from({ length: itemCount }, (_, index) => {
-    const sequence = index + 1
-    return harness.database
-      .prepare(
-        `insert into application_events (
-          id,
-          application_id,
-          kind,
-          revision,
-          occurred_at,
-          recorded_at,
-          payload,
-          operation_id
-        ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`
-      )
-      .bind(
-        `pagination-event-${sequence}`,
-        `pagination-application-${sequence}`,
-        'research_updated',
-        sequence,
-        recordedAt,
-        recordedAt,
-        JSON.stringify({ sequence }),
-        `pagination-operation-${sequence}`
-      )
-  })
-  await harness.database.batch(eventStatements.slice(0, 100))
-  await harness.database.batch(eventStatements.slice(100))
 
   const result = await runCrud(
     Effect.gen(function* () {

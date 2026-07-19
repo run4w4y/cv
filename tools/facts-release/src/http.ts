@@ -24,7 +24,9 @@ export type FactsPublisherHttpClient = {
     PublishedChannel,
     FactsPublisherHttpError | FactsPublisherIntegrityError
   >
-  readonly current: () => Effect.Effect<CurrentChannel, FactsPublisherHttpError>
+  readonly current: (
+    locale: string
+  ) => Effect.Effect<CurrentChannel, FactsPublisherHttpError>
   readonly targetLayer: Layer.Layer<FactsReleasePublicationTarget>
 }
 
@@ -325,9 +327,9 @@ export const makeFactsPublisherHttpClient = (
   config: FactsPublisherConfig,
   fetchImplementation: FactsPublisherFetch = globalThis.fetch
 ): FactsPublisherHttpClient => {
-  const current = Effect.fn('FactsPublisherHttp.current')(() =>
+  const current = Effect.fn('FactsPublisherHttp.current')((locale: string) =>
     Effect.gen(function* () {
-      const path = `/facts-releases/active?locale=en&channel=${encodeURIComponent(config.channel)}`
+      const path = `/facts-releases/active?locale=${encodeURIComponent(locale)}&channel=${encodeURIComponent(config.channel)}`
       const response = yield* makeRequest(
         config,
         fetchImplementation,

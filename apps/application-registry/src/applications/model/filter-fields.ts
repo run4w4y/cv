@@ -26,7 +26,6 @@ export const createApplicationFilterFieldPresentation = (
     label: 'Company',
     options: options(facets?.companies ?? []),
   },
-  captureCount: { label: 'Capture count' },
   createdAt: timestamp('Created time', 'When the registry record was created'),
   followUpAt: timestamp(
     'Follow-up time',

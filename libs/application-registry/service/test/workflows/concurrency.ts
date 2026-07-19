@@ -4,15 +4,10 @@ import {
   AnnotationsService,
   type AppendApplicationEventInput,
   ApplicationsService,
-  CapturesService,
   CompensationsService,
   EventsService,
 } from '../../src'
-import {
-  makeApplicationInput,
-  makeCaptureInput,
-  recordedAt,
-} from '../support/inputs'
+import { makeApplicationInput, recordedAt } from '../support/inputs'
 
 export const concurrentNoteWorkflow = Effect.gen(function* () {
   const annotations = yield* AnnotationsService
@@ -45,39 +40,6 @@ export const concurrentNoteWorkflow = Effect.gen(function* () {
     storedNoteEventCount: storedEvents.items.filter(
       ({ kind }) => kind === 'note_added'
     ).length,
-  }
-})
-
-export const concurrentCapturesWorkflow = Effect.gen(function* () {
-  const captures = yield* CapturesService
-  const common = makeCaptureInput(
-    'concurrent-capture',
-    'service:capture-race:a'
-  )
-  const firstRequest = {
-    ...common,
-    campaignRunId: 'service-capture-race-a',
-  }
-  const secondRequest = {
-    ...common,
-    campaignRunId: 'service-capture-race-b',
-    operationId: 'service:capture-race:b',
-  }
-  const [first, second] = yield* Effect.all(
-    [captures.capture(firstRequest), captures.capture(secondRequest)],
-    { concurrency: 'unbounded' }
-  )
-  const replayed = yield* captures.capture(firstRequest)
-  const stored = yield* captures.listByApplication(first.application.id)
-
-  return {
-    applicationIds: [first.application.id, second.application.id],
-    captureIds: [first.capture.id, second.capture.id],
-    firstReplayed: first.replayed,
-    replayCaptureId: replayed.capture.id,
-    replayed: replayed.replayed,
-    secondReplayed: second.replayed,
-    storedCaptureCount: stored.items.length,
   }
 })
 

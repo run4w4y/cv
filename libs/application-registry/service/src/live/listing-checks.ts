@@ -1,6 +1,5 @@
 import {
   ApplicationsCrud,
-  CapturesCrud,
   EventsCrud,
   type ListingCheckRunCounts,
   ListingChecksCrud,
@@ -43,20 +42,8 @@ const addMinutes = (value: string, minutes: number) =>
 const retryDelayMinutes = (attemptCount: number) =>
   Math.min(24 * 60, 30 * 2 ** Math.min(attemptCount, 5))
 
-const mergeUnknownEvidence = (
-  authoritative: ListingObservation,
-  canonical: ListingObservation
-): ListingObservation =>
-  canonical.outcome === 'open'
-    ? canonical
-    : {
-        ...authoritative,
-        evidence: [...authoritative.evidence, ...canonical.evidence],
-      }
-
 const make = Effect.gen(function* () {
   const applications = yield* ApplicationsCrud
-  const captures = yield* CapturesCrud
   const checks = yield* ListingChecksCrud
   const checker = yield* ListingAvailabilityChecker
   const events = yield* EventsCrud
@@ -88,31 +75,10 @@ const make = Effect.gen(function* () {
     })
 
   const observe = (application: Application) =>
-    Effect.gen(function* () {
-      const captureItems = yield* captures.listByApplication(application.id)
-      const authoritativeUrl = captureItems.at(-1)?.applicationUrl ?? null
-      if (
-        authoritativeUrl !== null &&
-        authoritativeUrl !== application.canonicalUrl
-      ) {
-        const authoritative = yield* checker.check({
-          company: application.company,
-          role: application.role,
-          url: authoritativeUrl,
-        })
-        if (authoritative.outcome !== 'unknown') return authoritative
-        const canonical = yield* checker.check({
-          company: application.company,
-          role: application.role,
-          url: application.canonicalUrl,
-        })
-        return mergeUnknownEvidence(authoritative, canonical)
-      }
-      return yield* checker.check({
-        company: application.company,
-        role: application.role,
-        url: application.canonicalUrl,
-      })
+    checker.check({
+      company: application.company,
+      role: application.role,
+      url: application.canonicalUrl,
     })
 
   const recordObservation = (
@@ -441,18 +407,11 @@ const make = Effect.gen(function* () {
                   applications,
                   finding.applicationId
                 )
-                const captureItems = yield* captures.listByApplication(
-                  application.id
-                )
-                const expectedUrl =
-                  captureItems.at(-1)?.applicationUrl ??
-                  application.canonicalUrl
                 if (
                   application.canonicalUrl !== finding.canonicalUrl ||
                   application.company !== finding.target.company ||
                   application.role !== finding.target.role ||
-                  (expectedUrl !== finding.target.url &&
-                    application.canonicalUrl !== finding.target.url) ||
+                  application.canonicalUrl !== finding.target.url ||
                   finding.observation.requestedUrl !== finding.target.url
                 ) {
                   return yield* new RegistryConflictError({

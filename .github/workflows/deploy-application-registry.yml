@@ -55,7 +55,9 @@ jobs:
             CHATGPT_SESSIONS_KV_ID \
             CHATGPT_SESSION_SECRET \
             CLOUDFLARE_ACCOUNT_ID \
+            CLOUDFLARE_ANALYTICS_API_TOKEN \
             CLOUDFLARE_API_TOKEN \
+            CLOUDFLARE_ZONE_ID \
             CV_WEB_HOST \
             CV_OBJECTS_BUCKET_NAME \
             REGISTRY_API_TOKEN
@@ -79,17 +81,32 @@ jobs:
           export VITE_CV_PUBLIC_BASE_URL="https://${CV_WEB_HOST}/c"
           ./node_modules/.bin/nx run application-registry-management:build --skip-nx-cache
 
-      - name: Build registry Worker
-        run: ./node_modules/.bin/nx run application-registry-api:build --skip-nx-cache
+      - name: Build registry and PDF Workers
+        run: |
+          ./node_modules/.bin/nx run cv-pdf-worker:build --skip-nx-cache
+          ./node_modules/.bin/nx run application-registry-api:build --skip-nx-cache
 
-      - name: Generate production Wrangler config
+      - name: Generate production Wrangler configs
         env:
           APPLICATION_REGISTRY_COMPATIBILITY_DATE: ${{ vars.APPLICATION_REGISTRY_COMPATIBILITY_DATE }}
-        run: bun apps/application-registry-api/scripts/write-wrangler-config.ts apps/application-registry-api/wrangler.deploy.jsonc
+        run: |
+          bun apps/cv-pdf-worker/scripts/write-wrangler-config.ts apps/cv-pdf-worker/wrangler.deploy.jsonc
+          bun apps/application-registry-api/scripts/write-wrangler-config.ts apps/application-registry-api/wrangler.deploy.jsonc
+
+      - name: Ensure PDF queues exist
+        run: |
+          PDF_QUEUE="${CV_PDF_QUEUE_NAME:-cv-pdf-generation}"
+          PDF_DLQ="${CV_PDF_DLQ_NAME:-cv-pdf-generation-dead-letter}"
+          node node_modules/wrangler/bin/wrangler.js queues info "$PDF_QUEUE" >/dev/null 2>&1 || node node_modules/wrangler/bin/wrangler.js queues create "$PDF_QUEUE"
+          node node_modules/wrangler/bin/wrangler.js queues info "$PDF_DLQ" >/dev/null 2>&1 || node node_modules/wrangler/bin/wrangler.js queues create "$PDF_DLQ"
 
       - name: Apply D1 migrations
         run: node ../../node_modules/wrangler/bin/wrangler.js d1 migrations apply APPLICATION_REGISTRY_DB --remote --config wrangler.deploy.jsonc
         working-directory: apps/application-registry-api
+
+      - name: Deploy PDF Queue Worker
+        run: node ../../node_modules/wrangler/bin/wrangler.js deploy --config wrangler.deploy.jsonc
+        working-directory: apps/cv-pdf-worker
 
       - name: Deploy registry Worker with bearer secret
         run: bun scripts/deploy.ts wrangler.deploy.jsonc

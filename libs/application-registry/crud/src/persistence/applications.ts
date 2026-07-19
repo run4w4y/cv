@@ -7,7 +7,7 @@ export {
   listApplications,
 } from './application-queries'
 export {
-  opportunityStatements,
+  applicationStatements,
   replacementStatements,
 } from './application-values'
 export {

@@ -1,10 +1,6 @@
-import type {
-  CloudflareAnalyticsConfig,
-  CloudflareAnalyticsRange,
-  GraphqlVariables,
-} from './types'
+import type { Configuration, GraphqlVariables, Range } from './types'
 
-export const buildCloudflareAnalyticsQuery = () => `
+export const buildQuery = () => `
 query AudienceAnalytics($zoneTag: string, $filter: filter) {
   viewer {
     zones(filter: { zoneTag: $zoneTag }) {
@@ -41,11 +37,13 @@ query AudienceAnalytics($zoneTag: string, $filter: filter) {
 }
 `
 
-export const buildCloudflareAnalyticsVariables = (
-  config: CloudflareAnalyticsConfig,
-  range: CloudflareAnalyticsRange
+export const buildVariables = (
+  configuration: Configuration,
+  range: Range,
+  pathLike?: string
 ): GraphqlVariables => {
-  const host = range.host ?? config.host
+  const host = range.host ?? configuration.host
+  const normalizedPathLike = pathLike?.trim()
 
   return {
     filter: {
@@ -58,8 +56,11 @@ export const buildCloudflareAnalyticsVariables = (
           requestSource: 'eyeball',
         },
         ...(host ? [{ clientRequestHTTPHost: host }] : []),
+        ...(normalizedPathLike
+          ? [{ clientRequestPath_like: normalizedPathLike }]
+          : []),
       ],
     },
-    zoneTag: config.zoneId,
+    zoneTag: configuration.zoneId,
   }
 }

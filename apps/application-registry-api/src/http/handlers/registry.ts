@@ -11,12 +11,13 @@ import {
   type ApplicationRegistryError,
   ApplicationsService,
   applicationRejectedDisableReason,
-  CapturesService,
   CompensationsService,
   ContentEntriesService,
   CvPublicationsService,
+  CvAnalyticsService,
   EventsService,
   FactsReleasesService,
+  JobPostingCaptureService,
   JobPostingSnapshotsService,
   ListingChecksService,
   OpaqueObjectsService,
@@ -24,14 +25,7 @@ import {
 } from '@cv/application-registry-service'
 import { Effect, Match } from 'effect'
 import { HttpApiBuilder } from 'effect/unstable/httpapi'
-import { prepareJobPostingCapture } from '../../job-posting/capture'
-import {
-  getPdfWorkflow,
-  PdfWorkflowConfigurationError,
-  PdfWorkflowStartError,
-  startPdfWorkflow,
-} from '../../pdf/trigger'
-import { WorkerEnv } from '../../worker/bindings'
+import { dispatchPdfJob, pdfJobResponse } from '../../worker/pdf-queue'
 import {
   decodeBase64,
   decodeOpaquePayload,
@@ -57,6 +51,9 @@ const toApiError = Match.type<ApplicationRegistryError>().pipe(
   Match.tag('RegistryArtifactError', (error) =>
     InternalServerError.make({ message: error.message })
   ),
+  Match.tag('RegistryAnalyticsError', (error) =>
+    ServiceUnavailableError.make({ message: error.message })
+  ),
   Match.tag('FactsReleaseObjectNotFoundError', (error) =>
     BadRequestError.make({ message: error.message })
   ),
@@ -68,23 +65,6 @@ const toApiError = Match.type<ApplicationRegistryError>().pipe(
 
 const expose = <A>(effect: Effect.Effect<A, ApplicationRegistryError>) =>
   effect.pipe(Effect.mapError(toApiError))
-
-const exposePdfWorkflow = <A>(operation: () => Promise<A>) =>
-  Effect.tryPromise({
-    try: operation,
-    catch: (error) => {
-      if (error instanceof PdfWorkflowConfigurationError) {
-        return ServiceUnavailableError.make({ message: error.message })
-      }
-      if (error instanceof PdfWorkflowStartError) {
-        return ConflictError.make({ message: error.message })
-      }
-      return InternalServerError.make({
-        message:
-          error instanceof Error ? error.message : 'PDF Workflow failed.',
-      })
-    },
-  })
 
 const syncCvLinksForStatus = (
   cvPublications: CvPublicationsService,
@@ -113,35 +93,28 @@ export const RegistryHandlersLayer = HttpApiBuilder.group(
     Effect.gen(function* () {
       const annotations = yield* AnnotationsService
       const applications = yield* ApplicationsService
-      const captures = yield* CapturesService
       const compensations = yield* CompensationsService
       const contentEntries = yield* ContentEntriesService
       const cvPublications = yield* CvPublicationsService
+      const cvAnalytics = yield* CvAnalyticsService
       const events = yield* EventsService
       const factsReleases = yield* FactsReleasesService
+      const jobCapture = yield* JobPostingCaptureService
       const jobSnapshots = yield* JobPostingSnapshotsService
       const listingChecks = yield* ListingChecksService
       const opaqueObjects = yield* OpaqueObjectsService
       const pdfArtifacts = yield* PdfArtifactsService
 
-      return handlers
-        .handle('createApplication', ({ payload }) =>
-          expose(applications.create(payload))
-        )
-        .handle('upsertApplication', ({ payload }) =>
-          expose(applications.upsert(payload))
-        )
-        .handle('createCapture', ({ payload }) =>
-          expose(captures.capture(payload))
-        )
-        .handle('listApplications', ({ query }) =>
-          expose(applications.list(query))
-        )
-        .handle('listApplicationFacets', () => expose(applications.facets()))
-        .handle('getApplication', ({ params }) =>
-          expose(applications.find(params.id))
-        )
-        .handle('patchApplication', ({ params, payload }) =>
+      return handlers.handleAll({
+        createApplication: ({ payload }) =>
+          expose(applications.create(payload)),
+        upsertApplication: ({ payload }) =>
+          expose(applications.upsert(payload)),
+        getCvAnalytics: ({ query }) => expose(cvAnalytics.read(query)),
+        listApplications: ({ query }) => expose(applications.list(query)),
+        listApplicationFacets: () => expose(applications.facets()),
+        getApplication: ({ params }) => expose(applications.find(params.id)),
+        patchApplication: ({ params, payload }) =>
           expose(
             Effect.gen(function* () {
               const updated = yield* applications.patch(params.id, payload)
@@ -152,9 +125,8 @@ export const RegistryHandlersLayer = HttpApiBuilder.group(
               )
               return updated
             })
-          )
-        )
-        .handle('updateManagedApplication', ({ params, payload }) =>
+          ),
+        updateManagedApplication: ({ params, payload }) =>
           expose(
             Effect.gen(function* () {
               const updated = yield* applications.updateManaged(
@@ -168,24 +140,16 @@ export const RegistryHandlersLayer = HttpApiBuilder.group(
               )
               return updated
             })
-          )
-        )
-        .handle('deleteApplication', ({ params, query }) =>
-          expose(applications.remove(params.id, query.expectedVersion))
-        )
-        .handle('listApplicationCaptures', ({ params }) =>
-          expose(captures.listByApplication(params.id))
-        )
-        .handle('listApplicationCompensations', ({ params, query }) =>
-          expose(compensations.listByApplication(params.id, query.currency))
-        )
-        .handle('replaceAnnualCompensation', ({ params, payload }) =>
-          expose(compensations.replaceAnnual(params.id, payload))
-        )
-        .handle('listApplicationEvents', ({ params }) =>
-          expose(events.listByApplication(params.id))
-        )
-        .handle('appendApplicationEvent', ({ params, payload }) =>
+          ),
+        deleteApplication: ({ params, query }) =>
+          expose(applications.remove(params.id, query.expectedVersion)),
+        listApplicationCompensations: ({ params, query }) =>
+          expose(compensations.listByApplication(params.id, query.currency)),
+        replaceAnnualCompensation: ({ params, payload }) =>
+          expose(compensations.replaceAnnual(params.id, payload)),
+        listApplicationEvents: ({ params }) =>
+          expose(events.listByApplication(params.id)),
+        appendApplicationEvent: ({ params, payload }) =>
           expose(
             Effect.gen(function* () {
               const result = yield* events.append(params.id, payload)
@@ -196,66 +160,51 @@ export const RegistryHandlersLayer = HttpApiBuilder.group(
               )
               return result
             })
-          )
-        )
-        .handle('listApplicationAnnotations', ({ params }) =>
-          expose(annotations.list(params.id))
-        )
-        .handle('listApplicationLabels', ({ params }) =>
+          ),
+        listApplicationAnnotations: ({ params }) =>
+          expose(annotations.list(params.id)),
+        listApplicationLabels: ({ params }) =>
           expose(annotations.list(params.id)).pipe(
             Effect.map(({ labels }) => ({ items: labels }))
-          )
-        )
-        .handle('replaceApplicationLabels', ({ params, payload }) =>
+          ),
+        replaceApplicationLabels: ({ params, payload }) =>
           expose(
             applications.replaceLabels(
               params.id,
               payload.labels,
               payload.expectedVersion
             )
-          )
-        )
-        .handle('addApplicationNote', ({ params, payload }) =>
-          expose(annotations.addNote(params.id, payload))
-        )
-        .handle('listEvents', ({ query }) => expose(events.list(query)))
-        .handle('listApplicationListingChecks', ({ params }) =>
-          expose(listingChecks.listByApplication(params.id))
-        )
-        .handle(
-          'resolveApplicationListingAvailability',
-          ({ params, payload }) =>
-            expose(listingChecks.resolveAvailability(params.id, payload))
-        )
-        .handle('submitListingCheckFindings', ({ payload }) =>
-          expose(listingChecks.submitFindings(payload))
-        )
-        .handle('getListingCheckRun', ({ params }) =>
-          expose(listingChecks.findRun(params.id))
-        )
-        .handle('putOpaqueObject', ({ payload }) =>
+          ),
+        addApplicationNote: ({ params, payload }) =>
+          expose(annotations.addNote(params.id, payload)),
+        listEvents: ({ query }) => expose(events.list(query)),
+        listApplicationListingChecks: ({ params }) =>
+          expose(listingChecks.listByApplication(params.id)),
+        resolveApplicationListingAvailability: ({ params, payload }) =>
+          expose(listingChecks.resolveAvailability(params.id, payload)),
+        submitListingCheckFindings: ({ payload }) =>
+          expose(listingChecks.submitFindings(payload)),
+        getListingCheckRun: ({ params }) =>
+          expose(listingChecks.findRun(params.id)),
+        putOpaqueObject: ({ payload }) =>
           expose(
             decodeBase64(payload.data).pipe(
               Effect.flatMap((bytes) => opaqueObjects.put(bytes))
             )
-          )
-        )
-        .handle('registerFactsRelease', ({ payload }) =>
-          expose(factsReleases.register(payload))
-        )
-        .handle('getFactsRelease', ({ params }) =>
-          expose(factsReleases.find(params.releaseId))
-        )
-        .handle('activateFactsRelease', ({ params, payload }) =>
+          ),
+        registerFactsRelease: ({ payload }) =>
+          expose(factsReleases.register(payload)),
+        getFactsRelease: ({ params }) =>
+          expose(factsReleases.find(params.releaseId)),
+        activateFactsRelease: ({ params, payload }) =>
           expose(
             factsReleases.activate(
               params.channel,
               payload.releaseId,
               payload.expectedVersion
             )
-          )
-        )
-        .handle('getActiveFactsRelease', ({ query }) =>
+          ),
+        getActiveFactsRelease: ({ query }) =>
           expose(
             factsReleases.readActive(
               query.channel ?? 'production',
@@ -272,16 +221,16 @@ export const RegistryHandlersLayer = HttpApiBuilder.group(
               })),
               catalogue: {
                 data: encodeBase64(active.catalogBytes),
-                locale: 'en' as const,
+                locale: active.catalog.locale,
                 mediaType: active.catalog.mediaType,
                 sha256: active.catalog.sha256,
               },
+              locales: active.catalogs.map(({ locale }) => locale),
               channel: active.channel,
               release: active.release,
             }))
-          )
-        )
-        .handle('persistJobPostingSnapshot', ({ params, payload }) =>
+          ),
+        persistJobPostingSnapshot: ({ params, payload }) =>
           expose(
             Effect.gen(function* () {
               const [raw, normalized] = yield* Effect.all([
@@ -293,41 +242,20 @@ export const RegistryHandlersLayer = HttpApiBuilder.group(
                   : Effect.succeed(payload.normalized),
               ])
 
-              return yield* jobSnapshots.persist(
-                params.id,
-                payload.status === 'failed'
-                  ? {
-                      ...payload,
-                      normalized,
-                      raw,
-                    }
-                  : {
-                      ...payload,
-                      normalized,
-                      raw,
-                    }
-              )
+              return yield* jobSnapshots.persist(params.id, {
+                ...payload,
+                normalized,
+                raw,
+              })
             })
-          )
-        )
-        .handle('captureJobPostingSnapshot', ({ params }) =>
-          expose(
-            Effect.gen(function* () {
-              const application = yield* applications.find(params.id)
-              const capture = yield* prepareJobPostingCapture(
-                application.canonicalUrl
-              )
-              return yield* jobSnapshots.persist(application.id, capture)
-            })
-          )
-        )
-        .handle('getLatestJobPostingSnapshot', ({ params }) =>
-          expose(jobSnapshots.latest(params.id))
-        )
-        .handle('getJobPostingSnapshot', ({ params }) =>
-          expose(jobSnapshots.find(params.id, params.snapshotId))
-        )
-        .handle('getJobPostingSnapshotPayload', ({ params }) =>
+          ),
+        captureJobPostingSnapshot: ({ params }) =>
+          expose(jobCapture.capture(params.id)),
+        getLatestJobPostingSnapshot: ({ params }) =>
+          expose(jobSnapshots.latest(params.id)),
+        getJobPostingSnapshot: ({ params }) =>
+          expose(jobSnapshots.find(params.id, params.snapshotId)),
+        getJobPostingSnapshotPayload: ({ params }) =>
           expose(
             Effect.gen(function* () {
               const snapshot = yield* jobSnapshots.find(
@@ -348,20 +276,16 @@ export const RegistryHandlersLayer = HttpApiBuilder.group(
                 mediaType: mediaType ?? 'application/octet-stream',
               }
             })
-          )
-        )
-        .handle('ensureContentEntry', ({ params, payload }) =>
-          expose(contentEntries.ensure(params.id, payload))
-        )
-        .handle('getContentEntry', ({ params }) =>
-          expose(contentEntries.find(params.id, params.entryId))
-        )
-        .handle('listContentRevisions', ({ params }) =>
+          ),
+        ensureContentEntry: ({ params, payload }) =>
+          expose(contentEntries.ensure(params.id, payload)),
+        getContentEntry: ({ params }) =>
+          expose(contentEntries.find(params.id, params.entryId)),
+        listContentRevisions: ({ params }) =>
           expose(contentEntries.listRevisions(params.id, params.entryId)).pipe(
             Effect.map((items) => ({ items }))
-          )
-        )
-        .handle('appendContentRevision', ({ params, payload }) =>
+          ),
+        appendContentRevision: ({ params, payload }) =>
           expose(
             decodeOpaquePayload(payload.payload).pipe(
               Effect.flatMap((decoded) =>
@@ -371,9 +295,8 @@ export const RegistryHandlersLayer = HttpApiBuilder.group(
                 })
               )
             )
-          )
-        )
-        .handle('readContentRevision', ({ params }) =>
+          ),
+        readContentRevision: ({ params }) =>
           expose(
             contentEntries
               .readRevision(params.id, params.entryId, params.revisionId)
@@ -387,61 +310,32 @@ export const RegistryHandlersLayer = HttpApiBuilder.group(
                   revision,
                 }))
               )
-          )
-        )
-        .handle('approveContentRevision', ({ params, payload }) =>
+          ),
+        approveContentRevision: ({ params, payload }) =>
           expose(
             contentEntries.approveRevision(params.id, params.entryId, payload)
-          )
-        )
-        .handle('publishCv', ({ params, payload }) =>
-          expose(cvPublications.publish(params.id, params.entryId, payload))
-        )
-        .handle('getCvLink', ({ params }) =>
-          expose(cvPublications.findByEntry(params.id, params.entryId))
-        )
-        .handle('setCvLinkAvailability', ({ params, payload }) =>
+          ),
+        publishCv: ({ params, payload }) =>
+          expose(cvPublications.publish(params.id, params.entryId, payload)),
+        getCvLink: ({ params }) =>
+          expose(cvPublications.findByEntry(params.id, params.entryId)),
+        setCvLinkAvailability: ({ params, payload }) =>
           expose(
             cvPublications.setAvailability(params.id, params.entryId, payload)
-          )
-        )
-        .handle('disableApplicationCvLinks', ({ params, payload }) =>
+          ),
+        disableApplicationCvLinks: ({ params, payload }) =>
           expose(
             cvPublications.disableForApplication(params.id, payload.reason)
-          ).pipe(Effect.map((count) => ({ count })))
-        )
-        .handle('beginPdfArtifact', ({ params, payload }) =>
-          expose(pdfArtifacts.begin(params.id, params.entryId, payload))
-        )
-        .handle('completePdfArtifact', ({ params, payload }) =>
-          expose(
-            decodeBase64(payload.data).pipe(
-              Effect.flatMap((bytes) =>
-                pdfArtifacts.complete(params.id, params.artifactId, bytes)
-              )
-            )
-          )
-        )
-        .handle('failPdfArtifact', ({ params, payload }) =>
-          expose(
-            pdfArtifacts.fail(
-              params.id,
-              params.artifactId,
-              payload.errorCode,
-              payload.errorMessage
-            )
-          )
-        )
-        .handle('getCurrentPdfArtifact', ({ params, query }) =>
+          ).pipe(Effect.map((count) => ({ count }))),
+        getCurrentPdfArtifact: ({ params, query }) =>
           expose(
             pdfArtifacts.findCurrent(
               params.id,
               params.entryId,
               query.rendererVersion
             )
-          )
-        )
-        .handle('readCurrentPdfArtifact', ({ params, query }) =>
+          ),
+        readCurrentPdfArtifact: ({ params, query }) =>
           expose(
             pdfArtifacts
               .readCurrent(params.id, params.entryId, query.rendererVersion)
@@ -454,40 +348,33 @@ export const RegistryHandlersLayer = HttpApiBuilder.group(
                   },
                 }))
               )
-          )
-        )
-        .handle('startPdfWorkflow', ({ params, payload }) =>
-          expose(cvPublications.findByEntry(params.id, params.entryId)).pipe(
-            Effect.flatMap((publication) =>
-              WorkerEnv.pipe(
-                Effect.flatMap((workerEnv) =>
-                  exposePdfWorkflow(() =>
-                    startPdfWorkflow(workerEnv, {
-                      applicationId: publication.applicationId,
-                      entryId: publication.contentEntryId,
-                      expectedPublicationVersion:
-                        payload.expectedPublicationVersion,
-                      publication,
-                      rendererVersion: payload.rendererVersion,
-                    })
-                  )
+          ),
+        startPdfJob: ({ params, payload }) =>
+          expose(
+            Effect.gen(function* () {
+              const artifact = yield* pdfArtifacts.startJob(
+                params.id,
+                params.entryId,
+                payload
+              )
+              yield* dispatchPdfJob(artifact.id).pipe(
+                Effect.provideService(PdfArtifactsService, pdfArtifacts),
+                Effect.catch((error) =>
+                  Effect.logWarning('PdfQueue.immediate_dispatch_failed', {
+                    artifactId: artifact.id,
+                    message: error.message,
+                  })
                 )
               )
-            )
-          )
-        )
-        .handle('getPdfWorkflow', ({ params }) =>
-          expose(contentEntries.find(params.id, params.entryId)).pipe(
-            Effect.flatMap(() =>
-              WorkerEnv.pipe(
-                Effect.flatMap((workerEnv) =>
-                  exposePdfWorkflow(() =>
-                    getPdfWorkflow(workerEnv, params.workflowId)
-                  )
-                )
-              )
-            )
-          )
-        )
+              return pdfJobResponse(artifact)
+            })
+          ),
+        getPdfJob: ({ params }) =>
+          expose(
+            pdfArtifacts
+              .findJob(params.id, params.entryId, params.jobId)
+              .pipe(Effect.map(({ artifact }) => pdfJobResponse(artifact)))
+          ),
+      })
     })
 )

@@ -2,7 +2,6 @@ import {
   AnnotationsCrud,
   type ApplicationsCrud,
   ApplicationsCrud as ApplicationsCrudTag,
-  CapturesCrud,
   CompensationsCrud,
   EventsCrud,
   OperationsCrud,
@@ -54,14 +53,6 @@ export const annotationsCrudLayer = (
     listNotes: () => Effect.succeed([]),
     persistNote: () => Effect.void,
     replaceLabels: () => Effect.succeed([]),
-    ...overrides,
-  })
-
-export const capturesCrudLayer = (overrides: Partial<CapturesCrud> = {}) =>
-  Layer.succeed(CapturesCrud, {
-    findByOperation: () => Effect.succeed(undefined),
-    listByApplication: () => Effect.succeed([]),
-    persist: () => Effect.void,
     ...overrides,
   })
 

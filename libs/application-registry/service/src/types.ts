@@ -5,14 +5,12 @@ import type {
   ApplicationCompensation,
   ApplicationCompensationInput,
   ApplicationEvent,
-  ApplicationIdentityResolution,
   ApplicationLabel,
   ApplicationListingCheck,
   ApplicationMutable,
   ApplicationNote,
   ApplicationStatus,
   ApplicationWritable,
-  CampaignCapture,
   ContentEntry,
   ContentEntryKind,
   ContentRevision,
@@ -26,6 +24,7 @@ import type {
   GeneratedArtifact,
   InformationalApplicationEventKind,
   JobSnapshotStatus,
+  PdfGenerationOutbox,
   JsonValue,
   ListingCheckAction,
   ListingCheckMode,
@@ -45,6 +44,84 @@ import type { CursorPageInfo, QueryPage } from '@cv/drizzle-query'
 
 export type RegistryItems<A> = { readonly items: readonly A[] }
 
+export type CvAnalyticsDays = 1 | 3 | 7
+
+export type CvAnalyticsTotals = {
+  readonly pageViews: number
+  readonly visits: number
+}
+
+export type CvAnalyticsSeriesPoint = CvAnalyticsTotals & {
+  readonly at: string
+}
+
+export type CvAnalyticsCountry = {
+  readonly name: string
+  readonly visits: number
+}
+
+export type CvAnalyticsTrafficAlias = {
+  readonly key: string
+  readonly path: string
+}
+
+export type CvAnalyticsTrafficRecord = {
+  readonly countries: Readonly<Record<string, number>>
+  readonly key: string
+  readonly series: readonly CvAnalyticsSeriesPoint[]
+  readonly totals: CvAnalyticsTotals
+}
+
+export type CvAnalyticsTrafficData = {
+  readonly generatedAt: string
+  readonly range: {
+    readonly from: string
+    readonly granularity: 'day'
+    readonly to: string
+  }
+  readonly records: readonly CvAnalyticsTrafficRecord[]
+}
+
+export type CvAnalyticsItem = {
+  readonly application: Pick<
+    Application,
+    | 'appliedAt'
+    | 'applicationStatus'
+    | 'canonicalUrl'
+    | 'company'
+    | 'createdAt'
+    | 'id'
+    | 'listingAvailability'
+    | 'role'
+  >
+  readonly countries: readonly CvAnalyticsCountry[]
+  readonly firstSeenOn: string | null
+  readonly labels: readonly string[]
+  readonly lastSeenOn: string | null
+  readonly link: Pick<
+    CvLink,
+    'contentEntryId' | 'createdAt' | 'enabled' | 'id' | 'updatedAt'
+  > & { readonly locale: string }
+  readonly series: readonly CvAnalyticsSeriesPoint[]
+  readonly totals: CvAnalyticsTotals
+}
+
+export type CvAnalyticsResult = {
+  readonly countries: readonly CvAnalyticsCountry[]
+  readonly generatedAt: string
+  readonly items: readonly CvAnalyticsItem[]
+  readonly range: CvAnalyticsTrafficData['range']
+  readonly series: readonly CvAnalyticsSeriesPoint[]
+  readonly summary: {
+    readonly enabledLinks: number
+    readonly pageViews: number
+    readonly publishedLinks: number
+    readonly unviewedLinks: number
+    readonly viewedLinks: number
+    readonly visits: number
+  }
+}
+
 export type ApplicationAnnotations = {
   readonly labels: readonly ApplicationLabel[]
   readonly notes: readonly ApplicationNote[]
@@ -58,12 +135,6 @@ export type AddApplicationNoteResult = {
 export type AppendApplicationEventResult = {
   readonly application: Application
   readonly event: ApplicationEvent
-  readonly replayed: boolean
-}
-
-export type CreateCampaignCaptureResult = {
-  readonly application: Application
-  readonly capture: CampaignCapture
   readonly replayed: boolean
 }
 
@@ -110,27 +181,6 @@ export type AddApplicationNoteInput = Pick<
 > & {
   readonly operationId: string
 }
-
-type CampaignCaptureInputFields = Pick<
-  CampaignCapture,
-  | 'artifacts'
-  | 'audience'
-  | 'campaignRunId'
-  | 'capturedAt'
-  | 'confidence'
-  | 'applicationUrl'
-  | 'jobContentHash'
-  | 'profile'
-  | 'submissionDetails'
->
-
-export type CreateCampaignCaptureInput = UpsertApplicationInput &
-  CampaignCaptureInputFields & {
-    readonly deviceId: string | null
-    readonly operationId: string
-    readonly identityResolution?: ApplicationIdentityResolution
-    readonly fitAssessment?: CampaignCapture['fitAssessment']
-  }
 
 export type {
   AppendableApplicationEventKind,
@@ -280,6 +330,7 @@ export type FactsReleaseRecord = RegisterFactsReleaseInput
 export type ActiveFactsRelease = {
   readonly assets: readonly FactsReleaseAsset[]
   readonly catalog: FactsReleaseCatalog
+  readonly catalogs: readonly FactsReleaseCatalog[]
   readonly channel: FactsChannel
   readonly release: FactsRelease
 }
@@ -370,11 +421,20 @@ export type SetCvLinkAvailabilityInput = {
   readonly reason?: string
 }
 
-export type BeginPdfArtifactInput = {
+export type StartPdfJobInput = {
   readonly expectedPublicationVersion: number
+  readonly requestId: string
   readonly rendererVersion: string
-  readonly workflowId: string
 }
+
+export type PdfArtifactJob = {
+  readonly artifact: GeneratedArtifact
+  readonly entry: ContentEntry
+  readonly link: CvLink
+  readonly revision: ContentRevision
+}
+
+export type PdfGenerationDispatch = PdfGenerationOutbox
 
 export type ReadyPdfArtifact = {
   readonly artifact: GeneratedArtifact

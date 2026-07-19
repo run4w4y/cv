@@ -1,0 +1,52 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cv-pdf-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": {
+    "enabled": true
+  },
+  "browser": {
+    "binding": "BROWSER"
+  },
+  "queues": {
+    "consumers": [
+      {
+        "queue": "cv-pdf-generation",
+        "max_batch_size": 1,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "dead_letter_queue": "cv-pdf-generation-dead-letter",
+        "max_concurrency": 1
+      },
+      {
+        "queue": "cv-pdf-generation-dead-letter",
+        "max_batch_size": 1,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "max_concurrency": 1
+      }
+    ]
+  },
+  "vars": {
+    "CV_PDF_DLQ_NAME": "cv-pdf-generation-dead-letter"
+  },
+  "d1_databases": [
+    {
+      "binding": "APPLICATION_REGISTRY_DB",
+      "database_name": "cv-application-registry",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "../../libs/application-registry/entity/drizzle",
+      "migrations_pattern": "../../libs/application-registry/entity/drizzle/*/migration.sql"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "CV_OBJECTS",
+      "bucket_name": "cv-objects"
+    }
+  ]
+}

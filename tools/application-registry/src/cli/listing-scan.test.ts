@@ -50,14 +50,11 @@ const applications: readonly ApplicationListItem[] = Array.from(
     ...application,
     annualCompensation: null,
     canonicalUrl: `https://host${index % 4}.example/jobs/${index}`,
-    counts: { captures: 0, notes: 0 },
+    counts: { notes: 0 },
     identityAliases: [],
     id: `application-${index}`,
     jobKey: `web:${index}`,
     labels: [],
-    latestCapture: {
-      applicationUrl: `https://preferred${index}.example/apply/${index}`,
-    },
     latestEvent: null,
     updatedRevision: index + 1,
   })
@@ -121,20 +118,14 @@ describe('local listing scan', () => {
     const checker = Layer.succeed(ListingAvailabilityChecker, {
       check: (target) => {
         const host = new URL(target.url).hostname
-        const isPreferred = host.startsWith('preferred')
         const observation = observationFor(target.url, {
-          confidence: isPreferred ? 'low' : 'high',
           evidence: [
             {
               code: 'test',
-              detail: isPreferred
-                ? 'The preferred URL was inconclusive.'
-                : 'The canonical posting is open.',
+              detail: 'The canonical posting is open.',
               sourceUrl: target.url,
             },
           ],
-          outcome: isPreferred ? 'unknown' : 'open',
-          reasonCode: isPreferred ? 'identity_mismatch' : 'provider_open',
         })
         return Effect.sync(() => {
           active += 1

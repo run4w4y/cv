@@ -20,5 +20,7 @@ export {
   type CvDocumentRendererProps,
   type CvRendererLabels,
   type CvRendererMode,
+  cvRendererLabelsForLocale,
   defaultCvRendererLabels,
+  russianCvRendererLabels,
 } from './types'

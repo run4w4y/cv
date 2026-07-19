@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict'
-import { afterEach, beforeEach, test } from 'node:test'
+import { after, afterEach, before, test } from 'node:test'
+import { RegistryMiniflareHarness } from '@cv/worker-test-kit/application-registry'
 import { Effect } from 'effect'
 
 import {
   ApplicationsCrud,
   ArtifactsCrud,
   ContentCrud,
+  CvAnalyticsCrud,
   CvLinksCrud,
   FactsReleasesCrud,
   JobPostingSnapshotsCrud,
@@ -13,9 +15,9 @@ import {
   type PersistedContentRevision,
   type PersistedFactsRelease,
   type PersistedGeneratedArtifact,
+  type PersistedPdfGenerationOutbox,
 } from '../src'
 import { makeRegistryCrudLive } from '../src/live'
-import { RegistryMiniflareHarness } from '../src/test-support'
 
 let harness: RegistryMiniflareHarness
 
@@ -27,6 +29,7 @@ const application: PersistedApplication = {
   company: 'Content Test',
   jobKey: 'test:content-1',
   location: 'Remote',
+  labels: ['analytics'],
   recordedAt,
   role: 'Platform Engineer',
   source: 'test',
@@ -114,8 +117,23 @@ const artifact = (
   sha256: null,
   status: 'pending',
   updatedAt: recordedAt,
-  workflowId: 'workflow-1',
+  requestId: 'request-1',
   ...overrides,
+})
+
+const outbox = (
+  value: PersistedGeneratedArtifact
+): PersistedPdfGenerationOutbox => ({
+  applicationId: application.applicationId,
+  artifactId: value.id,
+  attempts: 0,
+  contentEntryId: 'content-entry-1',
+  createdAt: value.createdAt,
+  dispatchedAt: null,
+  lastAttemptAt: null,
+  lastError: null,
+  messageVersion: 1,
+  updatedAt: value.updatedAt,
 })
 
 const runCrud = <A, E>(
@@ -125,6 +143,7 @@ const runCrud = <A, E>(
     | ApplicationsCrud
     | ArtifactsCrud
     | ContentCrud
+    | CvAnalyticsCrud
     | CvLinksCrud
     | FactsReleasesCrud
     | JobPostingSnapshotsCrud
@@ -139,18 +158,21 @@ const runCrud = <A, E>(
 const seedApplication = Effect.gen(function* () {
   const applications = yield* ApplicationsCrud
   yield* applications.persist(application, {
-    mode: 'replace',
     operation: 'content integration application seed',
   })
 })
 
-beforeEach(async () => {
+before(async () => {
   harness = await RegistryMiniflareHarness.make({
     databaseBinding: 'APPLICATION_REGISTRY_DB',
   })
 })
 
 afterEach(async () => {
+  await harness.reset()
+})
+
+after(async () => {
   await harness.dispose()
 })
 
@@ -206,6 +228,7 @@ test('keeps content history linear and preserves the public token across publica
   const result = await runCrud(
     Effect.gen(function* () {
       const content = yield* ContentCrud
+      const analytics = yield* CvAnalyticsCrud
       const facts = yield* FactsReleasesCrud
       const links = yield* CvLinksCrud
       const snapshots = yield* JobPostingSnapshotsCrud
@@ -327,6 +350,7 @@ test('keeps content history linear and preserves the public token across publica
       return {
         approvedFirst,
         approvedSecond,
+        analyticsLinks: yield* analytics.listLinks(),
         disabled,
         disabledLink,
         enabled,
@@ -346,6 +370,31 @@ test('keeps content history linear and preserves the public token across publica
   assert.equal(result.first, true)
   assert.equal(result.stale, false)
   assert.equal(result.approvedFirst, true)
+  assert.deepEqual(result.analyticsLinks, [
+    {
+      application: {
+        appliedAt: null,
+        applicationStatus: 'not_started',
+        canonicalUrl: application.canonicalUrl,
+        company: application.company,
+        createdAt: recordedAt,
+        id: application.applicationId,
+        listingAvailability: 'unchecked',
+        role: application.role,
+      },
+      labels: ['analytics'],
+      link: {
+        contentEntryId: 'content-entry-1',
+        createdAt: recordedAt,
+        enabled: false,
+        id: 'cv-link-1',
+        publishedRevisionId: 'content-revision-2',
+        token: 'public-token-1',
+        updatedAt: '2026-07-17T14:45:00.000Z',
+      },
+      locale: 'en',
+    },
+  ])
   assert.equal(result.second, true)
   assert.equal(result.approvedSecond, true)
   assert.equal(result.entry?.headRevisionId, 'content-revision-2')
@@ -437,7 +486,8 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
         updatedAt: recordedAt,
       })
 
-      yield* artifacts.persistPending(artifact())
+      const firstArtifact = artifact()
+      yield* artifacts.persistPending(firstArtifact, outbox(firstArtifact))
       const failed = yield* artifacts.markFailed(
         'pdf-artifact-1',
         'render_failed',
@@ -446,12 +496,30 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
       )
       const retryArtifact = artifact({
         id: 'pdf-artifact-2',
-        workflowId: 'workflow-2',
+        requestId: 'request-2',
       })
-      yield* artifacts.persistPending(retryArtifact)
-      yield* artifacts.persistPending(
-        artifact({ id: 'pdf-artifact-duplicate', workflowId: 'workflow-2' })
+      yield* artifacts.persistPending(retryArtifact, outbox(retryArtifact))
+      const duplicate = artifact({
+        id: 'pdf-artifact-duplicate',
+        requestId: 'request-2',
+      })
+      yield* artifacts.persistPending(duplicate, outbox(duplicate))
+      const pendingDispatch = yield* artifacts.findPendingDispatch(
+        retryArtifact.id
       )
+      yield* artifacts.markDispatchFailed(
+        retryArtifact.id,
+        'Queue temporarily unavailable.',
+        '2026-07-17T15:30:00.000Z'
+      )
+      const failedDispatch = yield* artifacts.findPendingDispatch(
+        retryArtifact.id
+      )
+      yield* artifacts.markDispatched(
+        retryArtifact.id,
+        '2026-07-17T15:31:00.000Z'
+      )
+      const dispatched = yield* artifacts.findPendingDispatch(retryArtifact.id)
       const ready = yield* artifacts.markReady({
         ...retryArtifact,
         byteLength: 8_192,
@@ -486,6 +554,7 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
         disabledLink,
         enabled,
         failed,
+        failedDispatch,
         fallback: yield* artifacts.findReadyForPublication(
           'cv-link-1',
           'content-revision-2',
@@ -508,8 +577,10 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
           'https://cv.example.test/cv/public-token-1'
         ),
         published,
+        pendingDispatch,
         ready,
-        retryByWorkflow: yield* artifacts.findByWorkflowId('workflow-2'),
+        dispatched,
+        retryByRequest: yield* artifacts.findByRequestId('request-2'),
         restoredLink: yield* links.findByEntry('content-entry-1'),
       }
     })
@@ -519,6 +590,14 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
   assert.equal(result.failed, true)
   assert.equal(result.disabled, true)
   assert.equal(result.enabled, true)
+  assert.equal(result.pendingDispatch?.artifactId, 'pdf-artifact-2')
+  assert.equal(result.pendingDispatch?.attempts, 0)
+  assert.equal(result.failedDispatch?.attempts, 1)
+  assert.equal(
+    result.failedDispatch?.lastError,
+    'Queue temporarily unavailable.'
+  )
+  assert.equal(result.dispatched, undefined)
   assert.equal(result.missingNewRenderer, undefined)
   assert.equal(result.fallback?.id, 'pdf-artifact-2')
   assert.equal(
@@ -533,7 +612,7 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
     result.restoredLink?.version,
     (result.published?.version ?? 0) + 2
   )
-  assert.equal(result.retryByWorkflow?.id, 'pdf-artifact-2')
+  assert.equal(result.retryByRequest?.id, 'pdf-artifact-2')
   assert.equal(result.found?.status, 'ready')
   assert.equal(result.found?.mediaType, 'application/pdf')
   assert.equal(result.found?.objectKey, 'sha256/pdf-ready')
@@ -603,9 +682,10 @@ test('deleting an application cascades through its complete prepared CV graph', 
         token: 'public-token-1',
         updatedAt: recordedAt,
       })
-      yield* artifacts.persistPending(
-        artifact({ contentRevisionId: 'content-revision-1' })
-      )
+      const pendingArtifact = artifact({
+        contentRevisionId: 'content-revision-1',
+      })
+      yield* artifacts.persistPending(pendingArtifact, outbox(pendingArtifact))
 
       return yield* applications.remove(application.applicationId)
     })
@@ -641,6 +721,12 @@ test('deleting an application cascades through its complete prepared CV graph', 
       'generated_artifacts',
     ].map((relation) => ({ count: 0, relation }))
   )
+
+  const outboxRows = await harness.query<{ count: number }>(
+    `select count(*) as count
+       from pdf_generation_outbox where artifact_id = 'pdf-artifact-1'`
+  )
+  assert.deepEqual(outboxRows, [{ count: 0 }])
 
   const globalFacts = await harness.query<{ count: number }>(
     `select count(*) as count from facts_releases where id = ?1`,

@@ -19,8 +19,10 @@ const optionalText = (value: string) => {
 
 const validUrl = Schema.makeFilter((value: string) => {
   try {
-    new URL(value)
-    return true
+    const protocol = new URL(value).protocol
+    return protocol === 'http:' || protocol === 'https:'
+      ? true
+      : 'Canonical URL must use HTTP or HTTPS.'
   } catch {
     return 'Enter a valid canonical URL.'
   }

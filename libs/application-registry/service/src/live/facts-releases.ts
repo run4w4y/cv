@@ -160,9 +160,9 @@ const validateRegistration = (input: RegisterFactsReleaseInput) =>
       input.release.compilerCommit,
       'Facts compiler commit'
     )
-    if (input.catalogs.length !== 1 || input.catalogs[0]?.locale !== 'en') {
+    if (input.catalogs.length === 0) {
       return yield* new RegistryBadRequestError({
-        message: 'A facts release must contain exactly one en locale catalog.',
+        message: 'A facts release must contain at least one locale catalog.',
       })
     }
 
@@ -347,11 +347,6 @@ const make = Effect.gen(function* () {
       Effect.gen(function* () {
         const channelName = yield* requireNonEmpty(channel, 'Facts channel')
         const localeName = yield* requireNonEmpty(locale, 'Facts locale')
-        if (localeName !== 'en') {
-          return yield* new RegistryBadRequestError({
-            message: `Unsupported facts locale: ${localeName}. Only en is supported.`,
-          })
-        }
         const active = yield* crud.findActiveCatalog(channelName, localeName)
         if (!active) {
           return yield* new RegistryNotFoundError({
@@ -359,8 +354,11 @@ const make = Effect.gen(function* () {
             message: `No active facts release exists for channel ${channelName} and locale ${localeName}.`,
           })
         }
-        const assets = yield* crud.assets(active.release.id)
-        return { ...active, assets } satisfies ActiveFactsRelease
+        const [assets, catalogs] = yield* Effect.all([
+          crud.assets(active.release.id),
+          crud.catalogs(active.release.id),
+        ])
+        return { ...active, assets, catalogs } satisfies ActiveFactsRelease
       })
   )
 

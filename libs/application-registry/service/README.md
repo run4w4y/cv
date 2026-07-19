@@ -23,7 +23,6 @@ The public services are split by registry slice:
   management update spanning scalar fields, labels, annual compensation, and
   server-owned status audit events.
 - `AnnotationsService` owns annotation lookup and idempotent note creation.
-- `CapturesService` owns idempotent campaign capture ingestion.
 - `EventsService` owns idempotent event append and cursor pagination.
 - `CompensationsService` owns original and converted compensation views.
 - `ListingChecksService` owns idempotent local-finding ingestion, internal
@@ -31,8 +30,8 @@ The public services are split by registry slice:
   history.
 - `JobPostingSnapshotsService` stores and retrieves raw or normalized job
   context as opaque, content-addressed bytes associated with one application.
-  Capture and management clients may derive or correct normalized text, while
-  this backend remains unaware of job, CV, and facts document shapes.
+  Preparation and management clients may derive or correct normalized text,
+  while this backend remains unaware of job, CV, and facts document shapes.
 - `OpaqueObjectsService` is the schema-free content-addressed byte boundary used
   by publication clients and internal content workflows.
 - `FactsReleasesService` verifies every manifest, locale catalog, and asset
@@ -45,6 +44,8 @@ The public services are split by registry slice:
 - `CvPublicationsService` publishes approved CV revisions behind a stable
   revocable token. Re-publication advances the pinned revision without
   replacing the token; disabled links resolve as not found.
+- `CvAnalyticsService` joins published CV-link metadata to provider traffic and
+  returns application-aware totals, daily series, and country breakdowns.
 - `PdfArtifactsService` records the pending, ready, or failed PDF lifecycle.
   It derives both the content revision and QR target from the current public
   link, then stores completed PDF bytes in the artifact store.
@@ -82,9 +83,9 @@ time and must keep it stable while following cursors through one traversal.
 Application listing still formats stored minor-unit compensation into a concise
 original-currency summary.
 
-Application rows retain the entity's natural nested shape: `counts` groups
-capture and note totals, while `latestEvent` and `latestCapture` are nullable
-objects. The service adds the requested compensation presentation without
+Application rows retain the entity's natural nested shape: `counts` contains
+the note total, while `latestEvent` is a nullable object. The service adds the
+requested compensation presentation without
 flattening persistence relations into a set of unrelated scalar aliases.
 
 Event status changes are explicit. Status-changing kinds (`submitted`,
@@ -98,12 +99,12 @@ hidden in the service.
 Unit tests live beside the `/live` implementations and replace CRUD and FX
 dependencies with `Layer.succeed` fakes. `test/service.integration.test.ts`
 composes a managed Effect runtime from the live services, the real CRUD layer,
-and Miniflare's direct D1 proxy, without an HTTP test Worker, a browser bundle,
-or network FX requests. The integration suite owns workflow-level coverage for
-idempotency and operation conflicts, concurrent job-key
-convergence, capture merge policy, database defaults, nullable patches,
-optimistic races, explicit lifecycle transitions, atomic rollback, and
-ordinary filtered and cursor-paginated listing.
+and the shared `@cv/worker-test-kit/application-registry` D1 harness, without an
+HTTP test Worker, a browser bundle, or network FX requests. The integration
+suite owns workflow-level coverage for idempotency and operation conflicts,
+concurrent job-key convergence, database defaults, nullable patches, optimistic
+races, explicit lifecycle transitions, atomic rollback, and ordinary filtered
+and cursor-paginated listing.
 
 ```bash
 bunx nx run application-registry-service:test:unit

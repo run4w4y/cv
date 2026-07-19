@@ -89,18 +89,11 @@ export const listApplications = (
   RegistryDatabaseError | RegistryQueryTooComplexError
 > =>
   Effect.gen(function* () {
-    const relational = resolved.relational({
-      select: ['captureCount', 'noteCount'],
-    })
+    const relational = resolved.relational({ select: ['noteCount'] })
     const query = database.query.applications.findMany({
       ...relational.config,
       columns: { companyNormalized: false },
       with: {
-        captures: {
-          columns: { applicationUrl: true },
-          limit: 1,
-          orderBy: (capture) => [desc(capture.capturedAt), desc(capture.id)],
-        },
         compensations: {
           orderBy: (compensation) => [
             asc(compensation.kind),
@@ -131,8 +124,6 @@ export const listApplications = (
     const page = yield* finalizeQuery(relational, rows).pipe(Effect.orDie)
     const records = page.items.map((row) => {
       const {
-        captureCount,
-        captures,
         compensations,
         events,
         identityAliases,
@@ -144,10 +135,9 @@ export const listApplications = (
       return {
         ...application,
         compensations,
-        counts: { captures: captureCount, notes: noteCount },
+        counts: { notes: noteCount },
         identityAliases: identityAliases.map(({ jobKey }) => jobKey),
         labels: labels.map(({ label }) => label),
-        latestCapture: captures.at(0) ?? null,
         latestEvent,
       } satisfies ApplicationListRecord
     })

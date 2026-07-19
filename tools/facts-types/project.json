@@ -1,0 +1,23 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "facts-types",
+  "projectType": "application",
+  "sourceRoot": "tools/facts-types/src",
+  "tags": ["scope:cv", "type:tool", "visibility:private"],
+  "targets": {
+    "generate": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "options": {
+        "command": "bun run tools/facts-types/src/generate.ts --out ${CONTENT_ROOT:-../cv-content}/types/facts-authoring.d.ts",
+        "color": true
+      }
+    },
+    "format": {},
+    "format:check": {},
+    "lint": {},
+    "lint:fix": {},
+    "typecheck": {}
+  }
+}

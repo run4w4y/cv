@@ -15,7 +15,6 @@ on:
         options:
           - all
           - cv
-          - analytics
           - registry
           - none
         required: true
@@ -94,22 +93,6 @@ jobs:
 
       - name: Build public CV Worker
         run: ./node_modules/.bin/nx run cv:build --skip-nx-cache
-
-  analytics-build:
-    name: Build analytics Worker
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          filter: tree:0
-
-      - name: Set up workspace runtime
-        uses: ./.github/actions/setup-runtime
-
-      - name: Build analytics Worker
-        run: ./node_modules/.bin/nx run analytics-connector:build
 
   application-registry-build:
     name: Build application registry Worker
@@ -192,26 +175,6 @@ jobs:
       id-token: write
     secrets: inherit
     uses: ./.github/workflows/deploy-cv.yml
-
-  deploy-analytics:
-    name: Deploy production analytics
-    needs:
-      - quality
-      - analytics-build
-    if: >-
-      ${{
-        (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-        (github.event_name == 'workflow_dispatch' &&
-          github.ref == 'refs/heads/main' &&
-          (inputs.deploy_target == 'all' || inputs.deploy_target == 'analytics'))
-      }}
-    permissions:
-      actions: read
-      contents: read
-      deployments: write
-      id-token: write
-    secrets: inherit
-    uses: ./.github/workflows/deploy-analytics.yml
 
   deploy-application-registry:
     name: Deploy production application registry

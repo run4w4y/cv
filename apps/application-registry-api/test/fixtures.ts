@@ -1,9 +1,11 @@
-import type {
-  CreateCampaignCaptureRequest,
-  UpsertApplicationRequest,
-} from '@cv/application-registry-api-contract'
+import { makeRegistryFactory } from '@cv/worker-test-kit/application-registry'
 
-export const applicationInput: UpsertApplicationRequest = {
+const factory = makeRegistryFactory({
+  now: '2026-07-10T12:00:00.000Z',
+  seed: 7_100,
+})
+
+export const applicationInput = factory.application({
   applicationStatus: 'not_started',
   appliedAt: null,
   canonicalUrl: 'https://example.com/jobs/e2e-registry',
@@ -29,49 +31,4 @@ export const applicationInput: UpsertApplicationRequest = {
   source: 'e2e',
   sourceJobId: null,
   targetStage: 'apply_next',
-}
-
-export const captureInput: CreateCampaignCaptureRequest = {
-  ...applicationInput,
-  artifacts: [],
-  applicationUrl: 'https://example.com/jobs/e2e-registry/apply',
-  audience: null,
-  campaignRunId: 'e2e-run',
-  capturedAt: '2026-07-10T12:00:00.000Z',
-  confidence: 0.8,
-  deviceId: 'miniflare',
-  fitAssessment: {
-    dimensions: {
-      coreExperience: 22,
-      hardRequirements: 36,
-      practicalEligibility: 9,
-      preferredSignals: 8,
-      seniorityAndScope: 13,
-    },
-    gaps: ['One preferred signal is not documented.'],
-    hardBlockers: [],
-    rationale: 'The authored evidence supports the core requirements.',
-    rubricVersion: 'application-fit-v1',
-    score: 88,
-    strengths: ['Directly relevant implementation experience.'],
-  },
-  jobContentHash: null,
-  operationId: 'e2e:capture:1',
-  profile: 'default',
-  submissionDetails: {
-    additionalInstructions: null,
-    applicationMethod: 'web form',
-    applicationQuestions: [],
-    contactEmail: null,
-    coverLetterInstructions: null,
-    deadline: null,
-    employmentType: 'full-time',
-    languageRequirements: ['English'],
-    locationRestrictions: null,
-    relocation: null,
-    requiredDocuments: ['CV'],
-    salary: null,
-    visaRequirements: null,
-    workMode: 'remote',
-  },
-}
+})

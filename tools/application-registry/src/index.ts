@@ -5,7 +5,6 @@ export {
   addApplicationNote,
   createApplication,
   listApplicationAnnotations,
-  listApplicationCaptures,
   listApplicationCompensations,
   listApplicationEvents,
   listApplicationFacets,

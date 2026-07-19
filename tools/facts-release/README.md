@@ -5,9 +5,29 @@ content-addressed objects with `@cv/facts-release`, publishes the exact bytes to
 the private registry API, registers immutable release metadata, and advances a
 versioned facts channel.
 
-The source checkout must contain `facts/catalogue.json` and one file in
-`facts/assets/` for every declared asset. Asset files are named
-`<asset-id>.<extension>`.
+The source checkout is a human-authored TypeScript repository. Its
+`facts.config.ts` is the source of truth for `defaultLocale`, `factsDir`, and the
+complete locale list. For every configured locale, the publisher loads root
+`section.ts` files and `section/index.ts` entrypoints. An index may import any
+number of entry modules from its directory; those imports are not treated as
+standalone sections. Locale trees must have the same semantic section, entry,
+workstream, contribution, and fact structure. Authors do not maintain internal
+catalogue IDs; composition derives them from normalized structural paths.
+Technology arrays are locale-invariant and must match the default locale
+exactly.
+
+Optional shared registries live at `<factsDir>/evidence.ts` and
+`<factsDir>/assets.ts`. Reviewed binary assets live in `<factsDir>/assets/`; the
+publisher computes their digests from the bytes instead of asking authors to
+maintain hashes. Vite is used only to evaluate these TypeScript modules. There
+is no MDX/component runtime and no authored catalogue JSON.
+
+Portable `virtual:facts` authoring types are generated from the code-owned
+schema in this repository:
+
+```sh
+bunx nx run facts-types:generate
+```
 
 Required environment variables:
 
@@ -24,8 +44,7 @@ Both commits must be full lowercase 40- or 64-character hexadecimal IDs.
 The production repository-dispatch workflow also verifies that the requested
 source commit is still `run4w4y/cv-content`'s authoritative `main` head
 immediately before invoking the publisher. This prevents an older queued push
-from superseding a newer active release. Manual workflow dispatch remains an
-explicit operator override for publishing a historical exact commit.
+or a historical manual request from superseding the reviewed main release.
 
 The command logs release hashes, counts, and channel state only. It never logs
 the bearer token, catalogue, asset bytes, or registry response bodies.

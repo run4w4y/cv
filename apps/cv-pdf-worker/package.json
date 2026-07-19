@@ -1,0 +1,23 @@
+{
+  "name": "@cv/cv-pdf-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nx run cv-pdf-worker:build",
+    "dev": "nx run cv-pdf-worker:dev",
+    "deploy": "nx run cv-pdf-worker:deploy"
+  },
+  "dependencies": {
+    "@cloudflare/puppeteer": "^1.1.0",
+    "@cv/application-registry-api-contract": "workspace:*",
+    "@cv/application-registry-artifact-store": "workspace:*",
+    "@cv/application-registry-crud": "workspace:*",
+    "@cv/application-registry-service": "workspace:*",
+    "@cv/renderer": "workspace:*",
+    "effect": "4.0.0-beta.99"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "4.20260511.1"
+  }
+}

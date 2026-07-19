@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { Effect } from 'effect'
+import { WebCryptoLayer } from '@cv/effect-web-crypto'
+import { Crypto, Effect } from 'effect'
 
 import { type ListingFetch, makeListingAvailabilityChecker } from './checker'
 
@@ -10,7 +11,12 @@ const target = {
 }
 
 const runCheck = (fetcher: ListingFetch, input = target) =>
-  Effect.runPromise(makeListingAvailabilityChecker(fetcher).check(input))
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const crypto = yield* Crypto.Crypto
+      return yield* makeListingAvailabilityChecker(fetcher, crypto).check(input)
+    }).pipe(Effect.provide(WebCryptoLayer))
+  )
 
 describe('listing availability checker', () => {
   test('classifies HTTP 404 as strong closure evidence', async () => {

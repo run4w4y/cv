@@ -1,4 +1,5 @@
 import type { AiJsonSchema } from '@cv/ai-provider'
+import { CvLocaleSchema } from '@cv/contracts/facts'
 import { Schema } from 'effect'
 
 export const coverLetterContractId = 'cover-letter.v1' as const
@@ -8,7 +9,7 @@ export const CoverLetterDocumentSchema = Schema.Struct({
   $schema: Schema.Literal(coverLetterContractId).annotate({
     title: 'Contract ID',
   }),
-  locale: Schema.Literal('en').annotate({
+  locale: CvLocaleSchema.annotate({
     title: 'Locale',
     description: 'The single locale used by the complete letter.',
   }),
@@ -34,7 +35,7 @@ export const coverLetterJsonSchema = standardCoverLetter[
 ].jsonSchema.input({ target: 'draft-07' }) as AiJsonSchema
 
 export const initialCoverLetterDocument = (
-  locale: 'en'
+  locale: string
 ): CoverLetterDocument => ({
   $schema: coverLetterContractId,
   locale,

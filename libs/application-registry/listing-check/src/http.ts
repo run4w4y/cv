@@ -1,4 +1,4 @@
-import { Effect } from 'effect'
+import { type Crypto, Effect } from 'effect'
 
 export type ListingFetch = (
   input: RequestInfo | URL,
@@ -31,14 +31,11 @@ export const fetchListingPage = (url: string, fetcher: ListingFetch) =>
     catch: (cause) => cause,
   })
 
-export const hashListingContent = (value: string) =>
-  Effect.tryPromise({
-    try: () => crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)),
-    catch: (cause) => cause,
-  }).pipe(
-    Effect.map((digest) =>
-      [...new Uint8Array(digest)]
-        .map((byte) => byte.toString(16).padStart(2, '0'))
-        .join('')
+export const hashListingContent = (crypto: Crypto.Crypto, value: string) =>
+  crypto
+    .digest('SHA-256', new TextEncoder().encode(value))
+    .pipe(
+      Effect.map((digest) =>
+        [...digest].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+      )
     )
-  )

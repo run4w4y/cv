@@ -1,16 +1,51 @@
 import { describe, expect, test } from 'bun:test'
-import * as Effect from 'effect/Effect'
+import { Effect, Layer } from 'effect'
+import * as FetchHttpClient from 'effect/unstable/http/FetchHttpClient'
 import { isPlainObject } from 'es-toolkit/predicate'
 
-import {
-  fetchCloudflareAnalyticsDashboardData,
-  fetchCloudflareAnalyticsDashboardDataFromEnv,
-} from './client'
-import { createCloudflareAnalyticsRange } from './range'
-import { cloudflarePayload, testConfig } from './test-fixtures'
+import { Configuration, type Interface, layer, Service } from './client'
+import { makeRange } from './range'
+import { cloudflarePayload, testConfiguration } from './test-fixtures'
+
+type FetchResponse = (
+  input: RequestInfo | URL,
+  init?: RequestInit
+) => Promise<Response>
+
+const makeFetch = (respond: FetchResponse): typeof globalThis.fetch =>
+  Object.assign(respond, { preconnect: globalThis.fetch.preconnect })
+
+const withClient = <A, E>(
+  respond: FetchResponse,
+  use: (client: Interface) => Effect.Effect<A, E>
+) => {
+  const httpLayer = FetchHttpClient.layer.pipe(
+    Layer.provide(Layer.succeed(FetchHttpClient.Fetch, makeFetch(respond)))
+  )
+  const dependencies = Layer.merge(
+    Layer.succeed(Configuration, testConfiguration),
+    httpLayer
+  )
+
+  return Service.use(use).pipe(
+    Effect.provide(layer.pipe(Layer.provide(dependencies)))
+  )
+}
+
+const runWithClient = <A, E>(
+  respond: FetchResponse,
+  use: (client: Interface) => Effect.Effect<A, E>
+) => Effect.runPromise(withClient(respond, use))
+
+const requestBodyText = (body: BodyInit | null | undefined) =>
+  body instanceof Uint8Array
+    ? new TextDecoder().decode(body)
+    : typeof body === 'string'
+      ? body
+      : String(body)
 
 const readRequestRange = (init: RequestInit | undefined) => {
-  const body = JSON.parse(String(init?.body))
+  const body = JSON.parse(requestBodyText(init?.body))
 
   if (!isPlainObject(body) || !isPlainObject(body.variables)) {
     throw new Error('Missing GraphQL variables')
@@ -67,64 +102,87 @@ const payloadForRange = (range: { readonly from: string }) => ({
 const addMilliseconds = (date: Date, milliseconds: number) =>
   new Date(date.getTime() + milliseconds)
 
-const createRecentTestRange = () => {
+const recentRange = () => {
   const from = addMilliseconds(new Date(), -2 * 24 * 60 * 60 * 1000)
   const to = addMilliseconds(from, 24 * 60 * 60 * 1000)
 
-  return createCloudflareAnalyticsRange({
+  return makeRange({
     from: from.toISOString(),
     to: to.toISOString(),
   })
 }
 
-describe('cloudflare analytics client', () => {
-  test('performs the request with Authorization only at the fetch boundary', async () => {
-    const requests: RequestInit[] = []
-    const fetchImplementation = async (
-      _input: string | URL,
-      init?: RequestInit
-    ) => {
-      requests.push(init ?? {})
-
-      return new Response(JSON.stringify(cloudflarePayload), {
-        headers: {
-          'Content-Type': 'application/json',
+describe('CloudflareAnalytics', () => {
+  test('keeps exact CV paths inside the adapter boundary', async () => {
+    const token = 'secret-publication-token'
+    let requestBody: unknown
+    const payload = {
+      data: {
+        viewer: {
+          zones: [
+            {
+              dailyPaths: [
+                {
+                  count: 2,
+                  dimensions: {
+                    clientCountryName: 'Germany',
+                    clientRequestPath: `/c/${token}`,
+                    datetimeDay: new Date().toISOString().slice(0, 10),
+                  },
+                  sum: { visits: 1 },
+                },
+              ],
+              topPaths: [],
+            },
+          ],
         },
-        status: 200,
-      })
+      },
     }
 
-    const data = await Effect.runPromise(
-      fetchCloudflareAnalyticsDashboardData({
-        config: testConfig,
-        fetch: fetchImplementation,
-        range: createRecentTestRange(),
-      })
+    const data = await runWithClient(
+      async (_input, init) => {
+        requestBody = JSON.parse(requestBodyText(init?.body))
+        return new Response(JSON.stringify(payload))
+      },
+      (client) =>
+        client.readAliasedPaths({
+          aliases: [{ key: 'cv-link-1', path: `/c/${token}` }],
+          pathLike: '/c/%',
+          range: recentRange(),
+        })
+    )
+
+    expect(data.records[0]?.totals).toEqual({ pageViews: 2, visits: 1 })
+    expect(JSON.stringify(data)).not.toContain(token)
+    expect(requestBody).toMatchObject({
+      variables: {
+        filter: {
+          AND: expect.arrayContaining([{ clientRequestPath_like: '/c/%' }]),
+        },
+      },
+    })
+  })
+
+  test('uses configuration and transport supplied by layers', async () => {
+    let requestUrl: string | undefined
+    let requestHeaders: Headers | undefined
+
+    const data = await runWithClient(
+      async (input, init) => {
+        requestUrl = String(input)
+        requestHeaders = new Headers(init?.headers)
+        return new Response(JSON.stringify(cloudflarePayload), {
+          headers: { 'Content-Type': 'application/json' },
+          status: 200,
+        })
+      },
+      (client) => client.readDashboard(recentRange())
     )
 
     expect(data.audiences).toHaveLength(1)
-    expect(requests[0]?.headers).toMatchObject({
-      Authorization: 'Bearer secret-token',
-    })
+    expect(requestUrl).toBe(testConfiguration.endpoint.toString())
+    expect(requestHeaders?.get('authorization')).toBe('Bearer secret-token')
     expect(JSON.stringify(data)).not.toContain('secret-token')
-  })
-
-  test('keeps env loading and fetching composable as an Effect', async () => {
-    const data = await Effect.runPromise(
-      fetchCloudflareAnalyticsDashboardDataFromEnv({
-        env: {
-          CLOUDFLARE_API_TOKEN: 'token-value',
-          CLOUDFLARE_ZONE_ID: 'zone-value',
-        },
-        fetch: async () =>
-          new Response(JSON.stringify(cloudflarePayload), {
-            status: 200,
-          }),
-        range: createRecentTestRange(),
-      })
-    )
-
-    expect(data.schema).toBe('analytics.dashboard.v2')
   })
 
   test('chunks wider ranges into daily Cloudflare requests', async () => {
@@ -133,22 +191,22 @@ describe('cloudflare analytics client', () => {
     const firstChunkTo = addMilliseconds(rangeFrom, 24 * 60 * 60 * 1000)
     const rangeTo = addMilliseconds(rangeFrom, 2 * 24 * 60 * 60 * 1000)
 
-    const data = await Effect.runPromise(
-      fetchCloudflareAnalyticsDashboardData({
-        config: testConfig,
-        fetch: async (_input, init) => {
-          const range = readRequestRange(init)
-          requestedRanges.push(range)
+    const data = await runWithClient(
+      async (_input, init) => {
+        const range = readRequestRange(init)
+        requestedRanges.push(range)
 
-          return new Response(JSON.stringify(payloadForRange(range)), {
-            status: 200,
+        return new Response(JSON.stringify(payloadForRange(range)), {
+          status: 200,
+        })
+      },
+      (client) =>
+        client.readDashboard(
+          makeRange({
+            from: rangeFrom.toISOString(),
+            to: rangeTo.toISOString(),
           })
-        },
-        range: createCloudflareAnalyticsRange({
-          from: rangeFrom.toISOString(),
-          to: rangeTo.toISOString(),
-        }),
-      })
+        )
     )
 
     expect(requestedRanges).toEqual([
@@ -170,20 +228,16 @@ describe('cloudflare analytics client', () => {
 
   test('surfaces GraphQL response errors as typed failures', async () => {
     const result = await Effect.runPromiseExit(
-      fetchCloudflareAnalyticsDashboardData({
-        config: testConfig,
-        fetch: async () =>
-          new Response(
-            JSON.stringify({
-              errors: [{ message: 'bad zone' }],
-            }),
-            { status: 200 }
-          ),
-        range: createCloudflareAnalyticsRange(),
-      })
+      withClient(
+        async () =>
+          new Response(JSON.stringify({ errors: [{ message: 'bad zone' }] }), {
+            status: 200,
+          }),
+        (client) => client.readDashboard(makeRange())
+      )
     )
 
     expect(result._tag).toBe('Failure')
-    expect(result.toString()).toContain('CloudflareAnalyticsGraphQLError')
+    expect(result.toString()).toContain('CloudflareAnalytics.GraphQLError')
   })
 })

@@ -11,7 +11,8 @@ import {
   enableCvLinksForApplication,
   findActiveFactsCatalog,
   findArtifact,
-  findArtifactByWorkflowId,
+  findArtifactByRequestId,
+  findPendingPdfDispatch,
   findContentEntry,
   findContentEntryByApplication,
   findContentRevision,
@@ -26,6 +27,9 @@ import {
   listFactsReleaseCatalogs,
   markArtifactFailed,
   markArtifactReady,
+  markPdfDispatchFailed,
+  markPdfDispatched,
+  listPendingPdfDispatches,
   persistJobPostingSnapshot,
   persistPendingArtifact,
   publishCvLink,
@@ -180,9 +184,13 @@ export const makeContentCrudLive = (database: Effect.Effect<D1Database>) =>
         withRegistryConnections(database, ({ query }) =>
           findArtifact(query, id)
         ),
-      findByWorkflowId: (workflowId) =>
+      findByRequestId: (requestId) =>
         withRegistryConnections(database, ({ query }) =>
-          findArtifactByWorkflowId(query, workflowId)
+          findArtifactByRequestId(query, requestId)
+        ),
+      findPendingDispatch: (artifactId) =>
+        withRegistryConnections(database, ({ query }) =>
+          findPendingPdfDispatch(query, artifactId)
         ),
       findReadyForPublication: (
         cvLinkId,
@@ -205,13 +213,25 @@ export const makeContentCrudLive = (database: Effect.Effect<D1Database>) =>
         withRegistryConnections(database, ({ query }) =>
           markArtifactFailed(query, id, errorCode, errorMessage, updatedAt)
         ),
+      markDispatchFailed: (artifactId, message, attemptedAt) =>
+        withRegistryConnections(database, ({ query }) =>
+          markPdfDispatchFailed(query, artifactId, message, attemptedAt)
+        ),
+      markDispatched: (artifactId, dispatchedAt) =>
+        withRegistryConnections(database, ({ query }) =>
+          markPdfDispatched(query, artifactId, dispatchedAt)
+        ),
       markReady: (artifact) =>
         withRegistryConnections(database, ({ query }) =>
           markArtifactReady(query, artifact)
         ),
-      persistPending: (artifact) =>
+      persistPending: (artifact, outbox) =>
+        withRegistryConnections(database, (connections) =>
+          persistPendingArtifact(connections, artifact, outbox)
+        ),
+      pendingDispatches: (limit) =>
         withRegistryConnections(database, ({ query }) =>
-          persistPendingArtifact(query, artifact)
+          listPendingPdfDispatches(query, limit)
         ),
     })
   )

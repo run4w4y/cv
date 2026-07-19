@@ -2,16 +2,13 @@ import {
   AppendableApplicationEventKindSchema,
   ApplicationCompensationInputSchema,
   ApplicationEventInsertSchema,
-  ApplicationIdentityResolutionSchema,
   ApplicationMutableSchema,
   ApplicationNoteSchema,
   ApplicationStatusSchema,
   ApplicationWritableSchema,
   appendableApplicationEventKindValues,
-  CampaignCaptureSchema,
   CurrencyCodeSchema,
   ExpectedApplicationVersionSchema,
-  FitAssessmentSchema,
   InformationalApplicationEventKindSchema,
   informationalApplicationEventKindValues,
   ListingCheckModeSchema,
@@ -87,35 +84,6 @@ export const AddApplicationNoteCommandSchema = Schema.Struct({
 
 export type AddApplicationNoteCommand = Schema.Schema.Type<
   typeof AddApplicationNoteCommandSchema
->
-
-const campaignCaptureInputKeys = [
-  'campaignRunId',
-  'profile',
-  'audience',
-  'confidence',
-  'applicationUrl',
-  'submissionDetails',
-  'artifacts',
-  'jobContentHash',
-  'capturedAt',
-] as const
-
-export const CreateCampaignCaptureCommandSchema = Schema.Struct({
-  ...RegistryApplicationInputSchema.fields,
-  ...pick(CampaignCaptureSchema.fields, campaignCaptureInputKeys),
-  operationId: NonEmptyString,
-  campaignRunId: NonEmptyString,
-  profile: NonEmptyString,
-  audience: NullableNonEmptyString,
-  jobContentHash: NullableNonEmptyString,
-  deviceId: NullableNonEmptyString,
-  fitAssessment: Schema.optional(FitAssessmentSchema),
-  identityResolution: Schema.optional(ApplicationIdentityResolutionSchema),
-})
-
-export type CreateCampaignCaptureCommand = Schema.Schema.Type<
-  typeof CreateCampaignCaptureCommandSchema
 >
 
 export type { AppendableApplicationEventKind } from '@cv/application-registry-entity'

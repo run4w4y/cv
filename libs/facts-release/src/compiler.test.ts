@@ -31,7 +31,10 @@ const fixture = async () => {
         id: 'asset.employment-review',
       },
     ],
-    catalogue: factsCatalogueFixture(assetSha256),
+    catalogues: [
+      factsCatalogueFixture(assetSha256),
+      factsCatalogueFixture(assetSha256, 'ru'),
+    ],
     provenance: fixtureProvenance,
   }
 }
@@ -45,7 +48,7 @@ describe('facts release compiler', () => {
     expect(second.releaseId).toBe(first.releaseId)
     expect(second.manifestObject.bytes).toEqual(first.manifestObject.bytes)
     expect(first.releaseId).toBe(`fr_${first.manifestObject.sha256}`)
-    expect(first.objects).toHaveLength(3)
+    expect(first.objects).toHaveLength(4)
     expect(
       first.objects.every((object) => object.key === `sha256/${object.sha256}`)
     ).toBe(true)
@@ -55,45 +58,18 @@ describe('facts release compiler', () => {
     expect(first.manifest.assets[0]?.object.mediaType).toBe('application/pdf')
   })
 
-  test('canonicalizes facts collections without changing evidence order', async () => {
+  test('canonicalizes configured locale order', async () => {
     const input = await fixture()
-    const catalogue = input.catalogue
-    const reordered = {
-      ...catalogue,
-      claims: catalogue.claims.map((claim) => ({
-        ...claim,
-        tags: ['z.last', ...claim.tags, 'a.first'],
-      })),
-      presets: catalogue.presets.map((preset) => ({
-        ...preset,
-        tags: ['z.last', ...preset.tags, 'a.first'],
-      })),
-    }
-    const canonical = {
-      ...reordered,
-      claims: reordered.claims.map((claim) => ({
-        ...claim,
-        tags: [...claim.tags].sort(),
-      })),
-      presets: reordered.presets.map((preset) => ({
-        ...preset,
-        tags: [...preset.tags].sort(),
-      })),
-    }
-
     const first = await Effect.runPromise(
-      compileFactsRelease({ ...input, catalogue: reordered })
+      compileFactsRelease({
+        ...input,
+        catalogues: [...input.catalogues].reverse(),
+      })
     )
-    const second = await Effect.runPromise(
-      compileFactsRelease({ ...input, catalogue: canonical })
-    )
+    const second = await Effect.runPromise(compileFactsRelease(input))
 
     expect(first.releaseId).toBe(second.releaseId)
-    expect(first.catalogue.claims[0]?.tags).toEqual([
-      'a.first',
-      'role.software-engineering',
-      'z.last',
-    ])
+    expect(first.catalogues.map(({ locale }) => locale)).toEqual(['en', 'ru'])
   })
 
   test('emits a strict decodable release manifest with no self-address', async () => {
@@ -107,6 +83,10 @@ describe('facts release compiler', () => {
     expect(manifest).not.toHaveProperty('releaseId')
     expect(manifest).not.toHaveProperty('createdAt')
     expect(manifest.provenance).toEqual(fixtureProvenance)
+    expect(manifest.catalogues.map(({ locale }) => locale)).toEqual([
+      'en',
+      'ru',
+    ])
 
     const asset = manifest.assets[0]
     if (!asset) {
@@ -147,12 +127,16 @@ describe('facts release compiler', () => {
       compileFactsRelease({
         ...input,
         assets: [],
-        catalogue: { ...input.catalogue, assets: [] },
+        catalogues: input.catalogues.map((catalogue) => ({
+          ...catalogue,
+          assets: [],
+        })),
       })
     )
 
     expect(bundle.manifest.assets).toEqual([])
     expect(bundle.objects.map((object) => object.kind)).toEqual([
+      'catalogue',
       'catalogue',
       'manifest',
     ])
@@ -160,7 +144,7 @@ describe('facts release compiler', () => {
 
   test('uploads identical asset bytes only once while retaining both IDs', async () => {
     const input = await fixture()
-    const original = input.catalogue.assets[0]
+    const original = input.catalogues[0]?.assets[0]
     const originalSource = input.assets[0]
     if (!original || !originalSource) {
       throw new Error('Expected the facts fixture to include one asset.')
@@ -176,13 +160,13 @@ describe('facts release compiler', () => {
             id: 'asset.employment-review-copy',
           },
         ],
-        catalogue: {
-          ...input.catalogue,
+        catalogues: input.catalogues.map((catalogue) => ({
+          ...catalogue,
           assets: [
             original,
             { ...original, id: 'asset.employment-review-copy' },
           ],
-        },
+        })),
       })
     )
 
@@ -210,7 +194,10 @@ describe('facts release compiler', () => {
       sourceCommit: fixtureProvenance.source.commit,
       sourceRepository: fixtureProvenance.source.repository,
     })
-    expect(registration.catalogs).toHaveLength(1)
+    expect(registration.catalogs.map(({ locale }) => locale)).toEqual([
+      'en',
+      'ru',
+    ])
     expect(registration.assets[0]?.assetId).toBe('asset.employment-review')
   })
 
@@ -220,15 +207,20 @@ describe('facts release compiler', () => {
       Effect.flip(
         compileFactsRelease({
           ...input,
-          catalogue: {
-            ...input.catalogue,
-            claims: [
-              {
-                ...input.catalogue.claims[0],
-                status: 'draft',
-              },
-            ],
-          },
+          catalogues: input.catalogues.map((catalogue, index) =>
+            index === 0
+              ? {
+                  ...catalogue,
+                  sections: catalogue.sections.map((section) => ({
+                    ...section,
+                    facts: section.facts.map((fact) => ({
+                      ...fact,
+                      status: 'draft',
+                    })),
+                  })),
+                }
+              : catalogue
+          ),
         })
       )
     )
@@ -355,7 +347,7 @@ describe('facts release asset validation', () => {
     }
     expect(unsafe.issue).toBe('invalid-file-name')
     expect(mismatch.issue).toBe('digest-mismatch')
-    expect(mismatch.expected).toBe(input.catalogue.assets[0]?.sha256)
+    expect(mismatch.expected).toBe(input.catalogues[0]?.assets[0]?.sha256)
     expect(mismatch.actual).toHaveLength(64)
   })
 })

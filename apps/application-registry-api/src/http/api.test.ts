@@ -6,7 +6,6 @@ import type {
 } from '@cloudflare/workers-types'
 import {
   ApplicationRegistryApi,
-  type CreateCampaignCaptureRequest,
   RegistryAuthorization,
 } from '@cv/application-registry-api-contract'
 import type {
@@ -14,20 +13,19 @@ import type {
   ApplicationEvent,
   ApplicationListingCheck,
   ApplicationNote,
-  CampaignCapture,
   ListingCheckRun,
 } from '@cv/application-registry-entity'
 import {
   type AddApplicationNoteInput,
   AnnotationsService,
   ApplicationsService,
-  CapturesService,
   CompensationsService,
   ContentEntriesService,
-  type CreateCampaignCaptureInput,
+  CvAnalyticsService,
   CvPublicationsService,
   EventsService,
   FactsReleasesService,
+  JobPostingCaptureService,
   JobPostingSnapshotsService,
   type ListApplicationsInput,
   ListingChecksService,
@@ -58,6 +56,9 @@ const env = {
   // Persistence is replaced by makeRegistryLayer in these HTTP codec tests.
   APPLICATION_REGISTRY_DB: undefined as unknown as D1Database,
   CHATGPT_SESSIONS: undefined as unknown as KVNamespace,
+  CLOUDFLARE_ANALYTICS_API_TOKEN: 'analytics-token',
+  CLOUDFLARE_ZONE_ID: 'zone-id',
+  CV_WEB_HOST: 'cv.example.test',
   CV_OBJECTS: undefined as unknown as R2Bucket,
   REGISTRY_API_TOKEN: 'test-token',
 } satisfies ApplicationRegistryEnv
@@ -92,22 +93,21 @@ const application: Application = {
 const event: ApplicationEvent = {
   id: 'event-1',
   applicationId: application.id,
-  kind: 'campaign_prepared',
+  kind: 'research_updated',
   occurredAt: application.createdAt,
   recordedAt: application.createdAt,
   deviceId: null,
   payload: { run: 'run-1' },
   revision: 1,
-  operationId: 'capture:one',
+  operationId: 'event:one',
 }
 
 const applicationListItem = {
   ...application,
   annualCompensation: null,
-  counts: { captures: 1, notes: 1 },
+  counts: { notes: 1 },
   identityAliases: [],
   labels: ['priority'],
-  latestCapture: { applicationUrl: 'https://example.test/apply' },
   latestEvent: { kind: event.kind, occurredAt: event.occurredAt },
 }
 
@@ -116,37 +116,6 @@ const eventListItem = {
   canonicalUrl: application.canonicalUrl,
   company: application.company,
   role: application.role,
-}
-
-const capture: CampaignCapture = {
-  id: 'capture-1',
-  applicationId: application.id,
-  campaignRunId: 'run-1',
-  profile: 'default',
-  audience: null,
-  applicationUrl: 'https://example.test/apply',
-  confidence: 0.8,
-  fitAssessment: null,
-  submissionDetails: {
-    applicationMethod: 'web',
-    contactEmail: null,
-    deadline: null,
-    employmentType: null,
-    workMode: null,
-    locationRestrictions: null,
-    salary: null,
-    visaRequirements: null,
-    relocation: null,
-    languageRequirements: [],
-    requiredDocuments: [],
-    applicationQuestions: ['Why us?'],
-    coverLetterInstructions: null,
-    additionalInstructions: null,
-  },
-  artifacts: [],
-  jobContentHash: null,
-  capturedAt: application.createdAt,
-  operationId: 'capture:one',
 }
 
 const note: ApplicationNote = {
@@ -201,29 +170,6 @@ const listingCheckRun: ListingCheckRun = {
   trigger: 'cli',
 }
 
-const request: CreateCampaignCaptureRequest = {
-  applicationStatus: application.applicationStatus,
-  applicationUrl: capture.applicationUrl,
-  jobKey: application.jobKey,
-  source: application.source,
-  sourceJobId: null,
-  canonicalUrl: application.canonicalUrl,
-  company: application.company,
-  role: application.role,
-  location: null,
-  targetStage: application.targetStage,
-  campaignRunId: capture.campaignRunId,
-  profile: capture.profile,
-  audience: null,
-  confidence: capture.confidence,
-  submissionDetails: capture.submissionDetails,
-  artifacts: [],
-  jobContentHash: null,
-  capturedAt: capture.capturedAt,
-  deviceId: null,
-  operationId: 'operation-1',
-}
-
 const RegistryAuthorizationClientLayer = HttpApiMiddleware.layerClient(
   RegistryAuthorization,
   ({ next, request: clientRequest }) =>
@@ -234,7 +180,6 @@ const unsupportedV2ServiceMethod = (..._arguments: readonly unknown[]) =>
   Effect.die(new Error('This v2 service is not used by the legacy HTTP test.'))
 
 const makeRegistryLayer = (
-  onCapture: (payload: CreateCampaignCaptureInput) => void = () => undefined,
   onNote: (payload: AddApplicationNoteInput) => void = () => undefined,
   onListApplications: (query: ListApplicationsInput) => void = () => undefined,
   onResolveListing: (input: ResolveListingAvailabilityInput) => void = () =>
@@ -281,13 +226,6 @@ const makeRegistryLayer = (
       replaceLabels: () => Effect.succeed([]),
       upsert: () => Effect.succeed(application),
     }),
-    Layer.succeed(CapturesService, {
-      capture: (payload) => {
-        onCapture(payload)
-        return Effect.succeed({ application, capture, replayed: false })
-      },
-      listByApplication: () => Effect.succeed({ items: [capture] }),
-    }),
     Layer.succeed(CompensationsService, {
       listByApplication: () => Effect.succeed({ items: [] }),
       replaceAnnual: () =>
@@ -324,6 +262,55 @@ const makeRegistryLayer = (
             )
           : Effect.succeed(0),
       setAvailability: unsupportedV2ServiceMethod,
+    }),
+    Layer.succeed(CvAnalyticsService, {
+      read: () =>
+        Effect.succeed({
+          countries: [{ name: 'DE', visits: 2 }],
+          generatedAt: application.updatedAt,
+          items: [
+            {
+              application: {
+                appliedAt: application.appliedAt,
+                applicationStatus: application.applicationStatus,
+                canonicalUrl: application.canonicalUrl,
+                company: application.company,
+                createdAt: application.createdAt,
+                id: application.id,
+                listingAvailability: application.listingAvailability,
+                role: application.role,
+              },
+              countries: [{ name: 'DE', visits: 2 }],
+              firstSeenOn: '2026-07-10',
+              labels: ['priority'],
+              lastSeenOn: '2026-07-10',
+              link: {
+                contentEntryId: 'content-1',
+                createdAt: application.createdAt,
+                enabled: true,
+                id: 'link-1',
+                locale: 'en',
+                updatedAt: application.updatedAt,
+              },
+              series: [{ at: '2026-07-10', pageViews: 3, visits: 2 }],
+              totals: { pageViews: 3, visits: 2 },
+            },
+          ],
+          range: {
+            from: application.createdAt,
+            granularity: 'day' as const,
+            to: application.updatedAt,
+          },
+          series: [{ at: '2026-07-10', pageViews: 3, visits: 2 }],
+          summary: {
+            enabledLinks: 1,
+            pageViews: 3,
+            publishedLinks: 1,
+            unviewedLinks: 0,
+            viewedLinks: 1,
+            visits: 2,
+          },
+        }),
     }),
     Layer.succeed(EventsService, {
       append: () => Effect.succeed({ application, event, replayed: false }),
@@ -369,6 +356,9 @@ const makeRegistryLayer = (
       persist: unsupportedV2ServiceMethod,
       readPayload: unsupportedV2ServiceMethod,
     }),
+    Layer.succeed(JobPostingCaptureService, {
+      capture: unsupportedV2ServiceMethod,
+    }),
     Layer.succeed(FactsReleasesService, {
       activate: unsupportedV2ServiceMethod,
       find: unsupportedV2ServiceMethod,
@@ -383,11 +373,16 @@ const makeRegistryLayer = (
       read: unsupportedV2ServiceMethod,
     }),
     Layer.succeed(PdfArtifactsService, {
-      begin: unsupportedV2ServiceMethod,
       complete: unsupportedV2ServiceMethod,
       fail: unsupportedV2ServiceMethod,
       findCurrent: unsupportedV2ServiceMethod,
+      findJob: unsupportedV2ServiceMethod,
+      findPendingDispatch: unsupportedV2ServiceMethod,
+      markDispatchFailed: unsupportedV2ServiceMethod,
+      markDispatched: unsupportedV2ServiceMethod,
+      pendingDispatches: unsupportedV2ServiceMethod,
       readCurrent: unsupportedV2ServiceMethod,
+      startJob: unsupportedV2ServiceMethod,
     })
   )
 
@@ -440,48 +435,23 @@ describe('application registry HttpApi', () => {
     expect(response).toEqual({ ok: true })
   })
 
-  test('keeps extension data as native nested JSON through the HTTP codec', async () => {
-    let observed: CreateCampaignCaptureInput | undefined
+  test('serves CV analytics without exposing provider paths', async () => {
     const response = await runApiTest(
       Effect.gen(function* () {
         const client = yield* HttpApiTest.groups(ApplicationRegistryApi, [
           'registry',
         ])
-        return yield* client.registry.createCapture({ payload: request })
-      }).pipe((effect) =>
-        provideApiTestLayer(
-          effect,
-          makeRegistryLayer((payload) => {
-            observed = payload
-          }),
-          true
-        )
-      )
-    )
-
-    expect(response.application).toEqual(application)
-    expect(observed?.submissionDetails.applicationQuestions).toEqual([
-      'Why us?',
-    ])
-  })
-
-  test('returns persisted campaign capture details', async () => {
-    const response = await runApiTest(
-      Effect.gen(function* () {
-        const client = yield* HttpApiTest.groups(ApplicationRegistryApi, [
-          'registry',
-        ])
-        return yield* client.registry.listApplicationCaptures({
-          params: { id: application.id },
-        })
+        return yield* client.registry.getCvAnalytics({ query: { days: 7 } })
       }).pipe((effect) =>
         provideApiTestLayer(effect, makeRegistryLayer(), true)
       )
     )
 
-    expect(response.items[0]?.submissionDetails.applicationQuestions).toEqual([
-      'Why us?',
-    ])
+    expect(response.summary).toEqual(
+      expect.objectContaining({ pageViews: 3, visits: 2 })
+    )
+    expect(JSON.stringify(response)).not.toContain('/c/')
+    expect(JSON.stringify(response)).not.toContain('public-token')
   })
 
   test('decodes the annual compensation replacement command', async () => {
@@ -553,7 +523,7 @@ describe('application registry HttpApi', () => {
       }).pipe((effect) =>
         provideApiTestLayer(
           effect,
-          makeRegistryLayer(undefined, undefined, undefined, undefined, true),
+          makeRegistryLayer(undefined, undefined, undefined, true),
           true
         )
       )
@@ -616,7 +586,7 @@ describe('application registry HttpApi', () => {
       }).pipe((effect) =>
         provideApiTestLayer(
           effect,
-          makeRegistryLayer(undefined, undefined, (input) => {
+          makeRegistryLayer(undefined, (input) => {
             observed = input
           }),
           true
@@ -647,7 +617,7 @@ describe('application registry HttpApi', () => {
       }).pipe((effect) =>
         provideApiTestLayer(
           effect,
-          makeRegistryLayer(undefined, (payload) => {
+          makeRegistryLayer((payload) => {
             observed = payload
           }),
           true
@@ -726,7 +696,7 @@ describe('application registry HttpApi', () => {
       }).pipe((effect) =>
         provideApiTestLayer(
           effect,
-          makeRegistryLayer(undefined, undefined, undefined, (input) => {
+          makeRegistryLayer(undefined, undefined, (input) => {
             observed = input
           }),
           true

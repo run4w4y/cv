@@ -1,7 +1,6 @@
 import {
   AddApplicationNoteRequestSchema,
   AppendApplicationEventRequestSchema,
-  CreateCampaignCaptureRequestSchema,
   SubmitListingCheckFindingsRequestSchema,
 } from '@cv/application-registry-api-contract'
 import { Context, type Effect, Schema } from 'effect'
@@ -27,11 +26,6 @@ export const AddApplicationNoteCommandSchema = Schema.Struct({
   request: AddApplicationNoteRequestSchema,
 })
 
-export const CaptureCampaignCommandSchema = Schema.Struct({
-  _tag: Schema.Literal('CaptureCampaign'),
-  request: CreateCampaignCaptureRequestSchema,
-})
-
 export const SubmitListingCheckFindingsCommandSchema = Schema.Struct({
   _tag: Schema.Literal('SubmitListingCheckFindings'),
   batchId: NonEmptyString,
@@ -41,7 +35,6 @@ export const SubmitListingCheckFindingsCommandSchema = Schema.Struct({
 export const RegistryCommandSchema = Schema.Union([
   AddApplicationNoteCommandSchema,
   AppendApplicationEventCommandSchema,
-  CaptureCampaignCommandSchema,
   SubmitListingCheckFindingsCommandSchema,
 ])
 
@@ -106,7 +99,6 @@ export const registryCommandOperationId = (command: RegistryCommand) => {
   switch (command._tag) {
     case 'AddApplicationNote':
     case 'AppendApplicationEvent':
-    case 'CaptureCampaign':
       return command.request.operationId
     case 'SubmitListingCheckFindings':
       return command.batchId
@@ -121,11 +113,6 @@ export type AddApplicationNoteCommand = Extract<
 export type AppendApplicationEventCommand = Extract<
   RegistryCommand,
   { readonly _tag: 'AppendApplicationEvent' }
->
-
-export type CaptureCampaignCommand = Extract<
-  RegistryCommand,
-  { readonly _tag: 'CaptureCampaign' }
 >
 
 export type SubmitListingCheckFindingsCommand = Extract<

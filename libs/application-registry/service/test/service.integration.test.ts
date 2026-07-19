@@ -1,15 +1,16 @@
 import assert from 'node:assert/strict'
-import { afterEach, beforeEach, test } from 'node:test'
+import { after, afterEach, before, beforeEach, test } from 'node:test'
 import type { D1Database } from '@cloudflare/workers-types'
 import { makeInMemoryArtifactStoreLayer } from '@cv/application-registry-artifact-store/test-support'
 import { makeRegistryCrudLive } from '@cv/application-registry-crud/live'
-import { RegistryMiniflareHarness } from '@cv/application-registry-crud/test-support'
 import { FxRates } from '@cv/application-registry-fx'
 import { ListingAvailabilityChecker } from '@cv/application-registry-listing-check'
+import { RegistryMiniflareHarness } from '@cv/worker-test-kit/application-registry'
 import { Duration, Effect, Layer, ManagedRuntime, Result } from 'effect'
 
 import {
   ApplicationsService,
+  CvAnalyticsTrafficSource,
   FactsReleasesService,
   type ListApplicationsInput,
   ListingChecksService,
@@ -18,7 +19,6 @@ import {
 import { RegistryServicesLive } from '../src/live'
 import { makeApplicationInput, recordedAt } from './support/inputs'
 import {
-  concurrentCapturesWorkflow,
   concurrentNoteWorkflow,
   concurrentUpsertsWorkflow,
   lifecycleRaceWorkflow,
@@ -26,11 +26,10 @@ import {
 } from './workflows/concurrency'
 import {
   applicationWorkflow,
-  captureMergeWorkflow,
   compensationWorkflow,
   defaultsWorkflow,
   eventWorkflow,
-  noteAndCaptureWorkflow,
+  noteWorkflow,
   patchNullabilityWorkflow,
 } from './workflows/core'
 import { rollbackWorkflow } from './workflows/persistence'
@@ -73,28 +72,48 @@ const FakeListingAvailabilityCheckerLive = Layer.succeed(
   }
 )
 
+const FakeCvAnalyticsTrafficSourceLive = Layer.succeed(
+  CvAnalyticsTrafficSource,
+  {
+    read: (_aliases, range) =>
+      Effect.succeed({
+        generatedAt: recordedAt,
+        range: { ...range, granularity: 'day' },
+        records: [],
+      }),
+  }
+)
+
 const makeRegistryServiceTestRuntime = (database: D1Database) =>
   ManagedRuntime.make(
     RegistryServicesLive.pipe(
       Layer.provide(makeRegistryCrudLive(Effect.succeed(database))),
       Layer.provide(makeInMemoryArtifactStoreLayer()),
       Layer.provide(FakeFxRatesLive),
-      Layer.provide(FakeListingAvailabilityCheckerLive)
+      Layer.provide(FakeListingAvailabilityCheckerLive),
+      Layer.provide(FakeCvAnalyticsTrafficSourceLive)
     )
   )
 
 let harness: RegistryMiniflareHarness
 let runtime: ReturnType<typeof makeRegistryServiceTestRuntime>
 
-beforeEach(async () => {
+before(async () => {
   harness = await RegistryMiniflareHarness.make({
     databaseBinding: 'APPLICATION_REGISTRY_DB',
   })
+})
+
+beforeEach(() => {
   runtime = makeRegistryServiceTestRuntime(harness.database)
 })
 
 afterEach(async () => {
   await runtime.dispose()
+  await harness.reset()
+})
+
+after(async () => {
   await harness.dispose()
 })
 
@@ -662,26 +681,22 @@ test('keeps completed run counts accurate when durable batches arrive out of ord
   assert.equal(result.earlier.run.errorCount, 1)
 })
 
-test('replays note and capture commands and rejects operation conflicts', async () => {
-  const result = await runtime.runPromise(noteAndCaptureWorkflow)
+test('replays note commands and rejects operation conflicts', async () => {
+  const result = await runtime.runPromise(noteWorkflow)
 
   assert.equal(result.noteReplayed, false)
   assert.equal(result.replayedNote, true)
   assert.equal(result.noteIdsMatch, true)
   assert.equal(result.noteConflictTag, 'RegistryConflictError')
-  assert.equal(result.captureReplayed, false)
-  assert.equal(result.replayedCapture, true)
-  assert.equal(result.captureIdsMatch, true)
   assert.equal(result.storedNoteCount, 1)
-  assert.equal(result.storedCaptureCount, 1)
 
   const receipts = await harness.query<{ count: number }>(
     `select count(*) as count
        from command_receipts
-      where operation_id in (?1, ?2)`,
-    ['service:note:1', 'service:capture:1']
+      where operation_id = ?1`,
+    ['service:note:1']
   )
-  assert.deepEqual(receipts, [{ count: 2 }])
+  assert.deepEqual(receipts, [{ count: 1 }])
 })
 
 test('converts stored compensation through an injected FX service', async () => {
@@ -715,34 +730,6 @@ test('resolves concurrent identical note operations to one write and one replay'
   assert.deepEqual(receipts, [{ count: 1 }])
 })
 
-test('converges concurrent captures on one job and replays each operation', async () => {
-  const result = await runtime.runPromise(concurrentCapturesWorkflow)
-
-  assert.equal(result.firstReplayed, false)
-  assert.equal(result.secondReplayed, false)
-  assert.equal(result.applicationIds[0], result.applicationIds[1])
-  assert.notEqual(result.captureIds[0], result.captureIds[1])
-  assert.equal(result.replayed, true)
-  assert.equal(result.replayCaptureId, result.captureIds[0])
-  assert.equal(result.storedCaptureCount, 2)
-
-  const applications = await harness.query<{ count: number }>(
-    'select count(*) as count from applications where job_key = ?1',
-    ['service:concurrent-capture']
-  )
-  const receipts = await harness.query<{ operationId: string }>(
-    `select operation_id as operationId
-       from command_receipts
-      where operation_id like 'service:capture-race:%'
-      order by operation_id`
-  )
-  assert.deepEqual(applications, [{ count: 1 }])
-  assert.deepEqual(receipts, [
-    { operationId: 'service:capture-race:a' },
-    { operationId: 'service:capture-race:b' },
-  ])
-})
-
 test('keeps child replacements consistent with the concurrent job-key winner', async () => {
   const results = await runtime.runPromise(concurrentUpsertsWorkflow)
 
@@ -763,23 +750,7 @@ test('keeps child replacements consistent with the concurrent job-key winner', a
   assert.deepEqual(applications, [{ count: 6 }])
 })
 
-test('merges non-destructive captures while explicit upserts still replace fields', async () => {
-  const result = await runtime.runPromise(captureMergeWorkflow)
-
-  assert.equal(result.captured.id, result.existingId)
-  assert.equal(result.captured.location, 'Existing enriched location')
-  assert.equal(result.captured.sourceJobId, 'existing-source-job-id')
-  assert.equal(result.captured.targetStage, 'verify_first')
-  assert.equal(result.promoted.id, result.backlogId)
-  assert.equal(result.promoted.targetStage, 'apply_next')
-  assert.deepEqual(result.explicitlyReplaced, {
-    location: null,
-    sourceJobId: null,
-    targetStage: 'secondary',
-  })
-})
-
-test('uses database defaults for applications and capture-created applications', async () => {
+test('uses database defaults for applications', async () => {
   const result = await runtime.runPromise(defaultsWorkflow)
 
   assert.deepEqual(result.created, {
@@ -789,7 +760,6 @@ test('uses database defaults for applications and capture-created applications',
     targetStage: 'backlog',
     version: 1,
   })
-  assert.equal(result.captureStatus, 'preparing')
 })
 
 test('preserves omitted patch fields and clears explicit nulls', async () => {

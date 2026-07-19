@@ -53,18 +53,10 @@ export type ListingScanSummary = {
   readonly unknown: number
 }
 
-const mergeEvidence = (
-  preferred: ListingObservation,
-  canonical: ListingObservation
-): ListingObservation => ({
-  ...preferred,
-  evidence: [...preferred.evidence, ...canonical.evidence],
-})
-
 const targetFor = (application: ApplicationListItem): ListingCheckTarget => ({
   company: application.company,
   role: application.role,
-  url: application.latestCapture?.applicationUrl ?? application.canonicalUrl,
+  url: application.canonicalUrl,
 })
 
 const retryable = (observation: ListingObservation) =>
@@ -74,7 +66,7 @@ const retryable = (observation: ListingObservation) =>
 
 const transientObservationSchedule = Schedule.exponential('400 millis').pipe(
   Schedule.jittered,
-  Schedule.take(2)
+  Schedule.upTo({ times: 2 })
 )
 
 const hostnameFor = (url: string) =>
@@ -99,29 +91,12 @@ const checkApplication = (
   checker: ListingAvailabilityChecker,
   application: ApplicationListItem,
   hostSemaphores: ReadonlyMap<string, Semaphore.Semaphore>
-) =>
-  Effect.gen(function* () {
-    const target = targetFor(application)
-    const preferred = yield* checkWithRetry(checker, target, hostSemaphores)
-    if (
-      preferred.outcome !== 'unknown' ||
-      target.url === application.canonicalUrl
-    ) {
-      return { observation: preferred, target }
-    }
-    const canonicalTarget = { ...target, url: application.canonicalUrl }
-    const canonical = yield* checkWithRetry(
-      checker,
-      canonicalTarget,
-      hostSemaphores
-    )
-    return canonical.outcome === 'open'
-      ? { observation: canonical, target: canonicalTarget }
-      : {
-          observation: mergeEvidence(preferred, canonical),
-          target,
-        }
-  })
+) => {
+  const target = targetFor(application)
+  return checkWithRetry(checker, target, hostSemaphores).pipe(
+    Effect.map((observation) => ({ observation, target }))
+  )
+}
 
 const loadAllApplications = Effect.gen(function* () {
   const client = yield* ApplicationRegistryClient
@@ -163,10 +138,9 @@ export const runLocalListingScan = (input: ListingScanOptions) =>
     )
 
     const hostnames = new Set(
-      applications.flatMap((application) => [
-        hostnameFor(targetFor(application).url),
-        hostnameFor(application.canonicalUrl),
-      ])
+      applications.map((application) =>
+        hostnameFor(targetFor(application).url)
+      )
     )
     const hostSemaphores = new Map<string, Semaphore.Semaphore>()
     for (const hostname of hostnames) {

@@ -80,11 +80,6 @@ export const listApplicationEvents = (identifier: string) =>
     Effect.flatMap((client) => client.events(identifier))
   )
 
-export const listApplicationCaptures = (identifier: string) =>
-  ApplicationRegistryClient.pipe(
-    Effect.flatMap((client) => client.captures(identifier))
-  )
-
 export const listApplicationCompensations = (
   identifier: string,
   query: ListApplicationCompensationsQuery = {}

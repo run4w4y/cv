@@ -56,7 +56,6 @@ export const persistNote = (
       kind: 'application_note',
       applicationId,
       eventId: input.eventId,
-      captureId: null,
       noteId: input.noteId,
       recordedAt: input.recordedAt,
     }),

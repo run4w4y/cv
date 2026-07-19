@@ -1,0 +1,46 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "cv-pdf-worker",
+  "projectType": "application",
+  "sourceRoot": "apps/cv-pdf-worker/src",
+  "tags": ["scope:application-registry", "type:worker", "visibility:private"],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "color": true,
+        "command": "bun apps/cv-pdf-worker/scripts/build.ts"
+      }
+    },
+    "deploy": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "outputs": [],
+      "options": {
+        "color": true,
+        "commands": [
+          "bun apps/cv-pdf-worker/scripts/write-wrangler-config.ts apps/cv-pdf-worker/wrangler.deploy.jsonc",
+          "node node_modules/wrangler/bin/wrangler.js deploy --config apps/cv-pdf-worker/wrangler.deploy.jsonc"
+        ],
+        "parallel": false
+      }
+    },
+    "dev": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "node node_modules/wrangler/bin/wrangler.js dev --config apps/cv-pdf-worker/wrangler.jsonc"
+      }
+    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
+    "format": {},
+    "format:check": {}
+  }
+}

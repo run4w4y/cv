@@ -31,8 +31,15 @@ export const StableIdentifierSchema = Schema.String.pipe(
     'A stable lowercase identifier composed of alphanumeric segments.',
 })
 
-export const CvLocaleSchema = Schema.Literal('en').annotate({
-  description: 'The single locale supported by this deployment.',
+export const CvLocaleSchema = Schema.String.pipe(
+  Schema.check(
+    Schema.isMinLength(2),
+    Schema.isMaxLength(32),
+    Schema.isPattern(/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/u)
+  )
+).annotate({
+  description:
+    'A normalized locale identifier. The authored facts repository config determines which locales a release must contain.',
 })
 
 export const UriSchema = Schema.String.pipe(

@@ -113,7 +113,7 @@ describe('facts publisher registry client', () => {
             id: 'asset.employment-review',
           },
         ],
-        catalogue: factsCatalogueFixture(sha256),
+        catalogues: [factsCatalogueFixture(sha256)],
         provenance: fixtureProvenance,
       })
     )
@@ -162,7 +162,7 @@ describe('facts publisher registry client', () => {
       })
     })
 
-    const current = await Effect.runPromise(client.current())
+    const current = await Effect.runPromise(client.current('ru'))
     const active = await Effect.runPromise(
       client.activate('fr_release', current.version)
     )

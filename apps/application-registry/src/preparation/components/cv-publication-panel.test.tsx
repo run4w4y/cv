@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 
-import type { PublishedCvState } from '../api'
+import type { PublishedCvState } from '../data'
 import { CvPublicationPanel } from './cv-publication-panel'
 
 const publication = {
@@ -23,7 +23,7 @@ const publication = {
     sha256: 'a'.repeat(64),
     status: 'ready',
     updatedAt: '2026-07-17T10:01:00.000Z',
-    workflowId: 'workflow-1',
+    requestId: 'request-1',
   },
   link: {
     applicationId: 'application-1',

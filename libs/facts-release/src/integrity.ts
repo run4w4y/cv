@@ -85,46 +85,80 @@ export const verifyFactsReleaseBundle = Effect.fn('FactsRelease.verifyBundle')(
         })
       }
 
-      const catalogueReference = bundle.manifest.catalogues[0]
+      const catalogueReferences = new Map(
+        bundle.manifest.catalogues.map((catalogue) => [
+          catalogue.locale,
+          catalogue,
+        ])
+      )
       if (
-        !catalogueReference ||
-        bundle.manifest.catalogues.length !== 1 ||
-        catalogueReference.locale !== bundle.catalogue.locale ||
-        bundle.manifest.factsContract !== bundle.catalogue.$schema
+        catalogueReferences.size !== bundle.manifest.catalogues.length ||
+        catalogueReferences.size !== bundle.catalogues.length ||
+        bundle.catalogues.some(
+          (catalogue) =>
+            !catalogueReferences.has(catalogue.locale) ||
+            bundle.manifest.factsContract !== catalogue.$schema
+        )
       ) {
         return yield* integrityFailure(
           bundle.manifestObject.key,
-          'Facts release manifest does not describe its compiled catalogue.'
+          'Facts release manifest does not describe its compiled catalogues.'
         )
       }
 
-      const catalogueBytes = yield* encodeCanonicalJson(
-        bundle.catalogue,
-        'catalogue'
-      )
-      const catalogueDigest = yield* sha256Hex(catalogueBytes)
-      const catalogueObject = bundle.objects.find(
-        (object) => object.key === catalogueReference.object.key
-      )
-      if (
-        catalogueReference.object.sha256 !== catalogueDigest ||
-        catalogueReference.object.byteLength !== catalogueBytes.byteLength ||
-        !catalogueObject ||
-        !descriptorMatches(catalogueReference.object, catalogueObject) ||
-        !equalBytes(catalogueBytes, catalogueObject.bytes)
-      ) {
+      for (const catalogue of bundle.catalogues) {
+        const reference = catalogueReferences.get(catalogue.locale)
+        if (!reference) {
+          return yield* integrityFailure(
+            bundle.manifestObject.key,
+            `Facts release manifest has no ${catalogue.locale} catalogue.`
+          )
+        }
+        const catalogueBytes = yield* encodeCanonicalJson(
+          catalogue,
+          'catalogue'
+        )
+        const catalogueDigest = yield* sha256Hex(catalogueBytes)
+        const catalogueObject = bundle.objects.find(
+          (object) => object.key === reference.object.key
+        )
+        if (
+          reference.object.sha256 !== catalogueDigest ||
+          reference.object.byteLength !== catalogueBytes.byteLength ||
+          !catalogueObject ||
+          !descriptorMatches(reference.object, catalogueObject) ||
+          !equalBytes(catalogueBytes, catalogueObject.bytes)
+        ) {
+          return yield* integrityFailure(
+            reference.object.key,
+            `Facts release ${catalogue.locale} catalogue does not match its manifest descriptor.`
+          )
+        }
+      }
+
+      const baseline = bundle.catalogues[0]
+      if (!baseline) {
         return yield* integrityFailure(
-          catalogueReference.object.key,
-          'Facts release catalogue does not match its manifest descriptor.'
+          bundle.manifestObject.key,
+          'Facts release contains no compiled catalogues.'
         )
       }
-
+      const mismatchedAssetCatalogue = bundle.catalogues.find(
+        (catalogue) =>
+          JSON.stringify(catalogue.assets) !== JSON.stringify(baseline.assets)
+      )
+      if (mismatchedAssetCatalogue) {
+        return yield* integrityFailure(
+          bundle.manifestObject.key,
+          `Facts assets for locale ${mismatchedAssetCatalogue.locale} do not match ${baseline.locale}.`
+        )
+      }
       const manifestAssets = new Map(
         bundle.manifest.assets.map((asset) => [asset.id, asset])
       )
       if (
         manifestAssets.size !== bundle.manifest.assets.length ||
-        manifestAssets.size !== bundle.catalogue.assets.length
+        manifestAssets.size !== baseline.assets.length
       ) {
         return yield* integrityFailure(
           bundle.manifestObject.key,
@@ -132,7 +166,7 @@ export const verifyFactsReleaseBundle = Effect.fn('FactsRelease.verifyBundle')(
         )
       }
 
-      for (const asset of bundle.catalogue.assets) {
+      for (const asset of baseline.assets) {
         const reference = manifestAssets.get(asset.id)
         const object = reference
           ? bundle.objects.find(
@@ -155,7 +189,7 @@ export const verifyFactsReleaseBundle = Effect.fn('FactsRelease.verifyBundle')(
 
       const expectedKeys = new Set([
         bundle.manifestObject.key,
-        catalogueReference.object.key,
+        ...bundle.manifest.catalogues.map((catalogue) => catalogue.object.key),
         ...bundle.manifest.assets.map((asset) => asset.object.key),
       ])
       const unexpectedObject = bundle.objects.find(

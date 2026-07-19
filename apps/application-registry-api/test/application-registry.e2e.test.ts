@@ -4,10 +4,14 @@ import {
   type ApplicationRegistryHttpClientService,
   makeApplicationRegistryHttpClient,
 } from '@cv/application-registry-api-client'
+import {
+  makeRegistryFactory,
+  seedRegistryDatabase,
+} from '@cv/worker-test-kit/application-registry'
 import { Effect, Redacted } from 'effect'
 import * as FetchHttpClient from 'effect/unstable/http/FetchHttpClient'
 
-import { applicationInput, captureInput } from './fixtures'
+import { applicationInput } from './fixtures'
 import {
   RegistryWorkerHarness,
   registryTestToken,
@@ -146,7 +150,7 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
     maximumMinor: 15_000_000,
     minimumMinor: 10_000_000,
   })
-  assert.deepEqual(listed.items[0]?.counts, { captures: 0, notes: 0 })
+  assert.deepEqual(listed.items[0]?.counts, { notes: 0 })
 
   const patched = await Effect.runPromise(
     registry.registry.patchApplication({
@@ -354,18 +358,6 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
     [notePayload.body]
   )
 
-  const captured = await Effect.runPromise(
-    registry.registry.createCapture({ payload: captureInput })
-  )
-  const replayedCapture = await Effect.runPromise(
-    registry.registry.createCapture({ payload: captureInput })
-  )
-  assert.equal(captured.replayed, false)
-  assert.equal(replayedCapture.replayed, true)
-  assert.equal(replayedCapture.capture.id, captured.capture.id)
-  assert.equal(captured.application.id, applicationId)
-  assert.deepEqual(captured.capture.fitAssessment, captureInput.fitAssessment)
-
   const eventPayload = {
     deviceId: 'miniflare',
     expectedVersion: null,
@@ -409,7 +401,7 @@ test('runs typed CRUD, replay, cursor, and restart workflows', async () => {
   )
   assert.equal(dashboardList.items.length, 1)
   assert.deepEqual(dashboardList.items[0]?.labels, ['e2e', 'remote'])
-  assert.deepEqual(dashboardList.items[0]?.counts, { captures: 1, notes: 1 })
+  assert.deepEqual(dashboardList.items[0]?.counts, { notes: 1 })
   assert.deepEqual(dashboardList.items[0]?.latestEvent, {
     kind: 'stage_changed',
     occurredAt: eventPayload.occurredAt,
@@ -743,67 +735,14 @@ test('supports cursor-paginated application and event lists over real HTTP', asy
   const paginationHarness = await RegistryWorkerHarness.make()
   try {
     const timestamp = '2026-07-12T00:00:00.000Z'
-    const statements = Array.from({ length: 101 }, (_, index) => {
-      const sequence = index + 1
-      return paginationHarness.database
-        .prepare(
-          `insert into applications (
-            id,
-            job_key,
-            source,
-            canonical_url,
-            company,
-            company_normalized,
-            role,
-            updated_revision,
-            created_at,
-            updated_at
-          ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`
-        )
-        .bind(
-          `pagination-${sequence}`,
-          `pagination:${sequence}`,
-          'pagination-test',
-          `https://example.test/jobs/pagination-${sequence}`,
-          'Pagination Test',
-          'pagination test',
-          `Engineer ${sequence}`,
-          sequence,
-          timestamp,
-          timestamp
-        )
-    })
-    await paginationHarness.database.batch(statements.slice(0, 100))
-    await paginationHarness.database.batch(statements.slice(100))
-
-    const eventStatements = Array.from({ length: 101 }, (_, index) => {
-      const sequence = index + 1
-      return paginationHarness.database
-        .prepare(
-          `insert into application_events (
-            id,
-            application_id,
-            kind,
-            revision,
-            occurred_at,
-            recorded_at,
-            payload,
-            operation_id
-          ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`
-        )
-        .bind(
-          `pagination-event-${sequence}`,
-          `pagination-${sequence}`,
-          'research_updated',
-          sequence,
-          timestamp,
-          timestamp,
-          JSON.stringify({ sequence }),
-          `pagination-operation-${sequence}`
-        )
-    })
-    await paginationHarness.database.batch(eventStatements.slice(0, 100))
-    await paginationHarness.database.batch(eventStatements.slice(100))
+    await seedRegistryDatabase(
+      paginationHarness.database,
+      makeRegistryFactory({ now: timestamp, seed: 7_420 }).graph({
+        applicationCount: 101,
+        applicationStatus: 'not_started',
+        eventsPerApplication: 1,
+      })
+    )
 
     const paginationRegistry = await Effect.runPromise(
       makeApplicationRegistryHttpClient({

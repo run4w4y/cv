@@ -11,8 +11,6 @@ import {
   type ApplicationNote,
   ApplicationNoteSchema,
   ApplicationSchema,
-  type CampaignCapture,
-  CampaignCaptureSchema,
   CurrencyCodeSchema,
   ExpectedApplicationVersionSchema,
   type ListingCheckRun,
@@ -44,7 +42,6 @@ import { HttpApiSchema } from 'effect/unstable/httpapi'
 export type {
   AddApplicationNoteCommand as AddApplicationNoteRequest,
   AppendApplicationEventCommand as AppendApplicationEventRequest,
-  CreateCampaignCaptureCommand as CreateCampaignCaptureRequest,
   DeleteApplicationQuery,
   ListApplicationsQuery,
   ListEventsQuery,
@@ -58,7 +55,6 @@ export type {
 export {
   AddApplicationNoteCommandSchema as AddApplicationNoteRequestSchema,
   AppendApplicationEventCommandSchema as AppendApplicationEventRequestSchema,
-  CreateCampaignCaptureCommandSchema as CreateCampaignCaptureRequestSchema,
   DeleteApplicationQuerySchema,
   ListApplicationsQuerySchema,
   ListEventsQuerySchema,
@@ -187,21 +183,6 @@ export const ApplicationAnnotationsResponseSchema: Schema.Codec<ApplicationAnnot
     })
   )
 
-export type CreateCampaignCaptureResponse = {
-  readonly application: Application
-  readonly capture: CampaignCapture
-  readonly replayed: boolean
-}
-
-export const CreateCampaignCaptureResponseSchema: Schema.Codec<CreateCampaignCaptureResponse> =
-  Schema.revealCodec(
-    Schema.Struct({
-      application: ApplicationSchema,
-      capture: CampaignCaptureSchema,
-      replayed: Schema.Boolean,
-    })
-  )
-
 export type AppendApplicationEventResponse = {
   readonly application: Application
   readonly event: ApplicationEvent
@@ -215,15 +196,6 @@ export const AppendApplicationEventResponseSchema: Schema.Codec<AppendApplicatio
       event: ApplicationEventSchema,
       replayed: Schema.Boolean,
     })
-  )
-
-export type ListApplicationCapturesResponse = {
-  readonly items: readonly CampaignCapture[]
-}
-
-export const ListApplicationCapturesResponseSchema: Schema.Codec<ListApplicationCapturesResponse> =
-  Schema.revealCodec(
-    Schema.Struct({ items: Schema.Array(CampaignCaptureSchema) })
   )
 
 export type ListApplicationListingChecksResponse = {

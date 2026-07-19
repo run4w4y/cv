@@ -15,16 +15,15 @@ continue to run unchanged.
 
 - `apps/application-registry-api` is the Cloudflare Worker composition root. It
   owns the authenticated registry API, management SPA/BFF, Login with ChatGPT
-  proxy, D1 binding, private R2 binding, and PDF Workflow/Browser Rendering
-  binding.
+  proxy, D1 binding, private R2 binding, and the PDF-generation Queue producer.
+- `apps/cv-pdf-worker` consumes PDF-generation jobs, owns Browser Rendering,
+  and completes or fails the corresponding PDF artifact in D1/R2.
 - `apps/application-registry` is the browser management application. It owns
   the schema-aware drafting/editing experience while treating the imported
   Effect schema generically.
 - `apps/cv` is the Astro SSR Worker. It accepts only `/c/:token`, resolves an
   enabled publication through a named Worker service binding, validates the
   code-owned document contract, and renders the page.
-- `apps/analytics-connector` remains the analytics Worker for the frozen/public
-  surfaces.
 
 ## Important boundaries
 
@@ -36,15 +35,23 @@ continue to run unchanged.
 - `@cv/application-registry-artifact-store` stores immutable, content-addressed
   bytes in private R2. D1 stores identities, relationships, state, hashes, and
   byte lengths—not CV content fields.
-- `@cv/facts-release` deterministically compiles and verifies one-locale facts
-  releases. `tools/facts-release` uploads exact bytes, registers the immutable
-  release, and advances a versioned channel.
+- `@cv/facts-authoring` owns the config, section, evidence, and asset authoring
+  schemas. `facts.config.ts` in `cv-content` owns the locale list; generated
+  portable types keep that repository typechecked without moving the schema out
+  of this repository.
+- `@cv/facts-release` deterministically compiles and verifies every configured
+  locale as one atomic facts release. `tools/facts-release` loads the sectioned
+  TypeScript source, uploads exact bytes, registers the immutable release, and
+  advances a versioned channel.
 - `@cv/ai-provider` exposes a provider-neutral interface. Its live adapter uses
   Login with ChatGPT and the signed-in user's existing ChatGPT subscription;
   this workspace has no API-key or separately billed OpenAI API path.
 - `@cv/renderer` is shared by the management iframe preview, public SSR page,
   and PDF render. The final public URL is also the exact QR target embedded in
   the PDF.
+- `@cv/cloudflare-analytics-client` retains the framework-neutral Cloudflare
+  GraphQL analytics query and sanitization boundary without owning a deployed
+  runtime.
 
 ## Tailored application flow
 
@@ -57,8 +64,9 @@ continue to run unchanged.
 4. Validate and save the opaque draft, edit it through the generic schema
    editor, and preview it locally with the shared renderer.
 5. Approve the selected revision and create/reuse the stable public token.
-6. Run the Cloudflare PDF Workflow against that exact public URL. Persist the
-   resulting PDF in R2, then show the publication as ready in management.
+6. Atomically create a pending artifact and PDF outbox row, dispatch the job to
+   Cloudflare Queues, render the exact public URL, and persist the PDF in R2.
+   Management polls the artifact-backed job until it becomes ready or failed.
 7. A rejection disables the application's public link with the system reason
    `application_rejected`; reopening restores only links disabled for that
    reason. Manual and PDF-failure disables remain in force.
@@ -82,6 +90,7 @@ resolve the named service binding:
 
 ```sh
 bunx nx run application-registry-api:dev
+bunx nx run cv-pdf-worker:dev
 bunx nx run cv:dev
 ```
 

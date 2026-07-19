@@ -1,10 +1,13 @@
+import { Effect, Redacted } from 'effect'
 import { handleChatGPTRequest, isChatGPTRequest } from './chatgpt/handler'
 import { applicationRegistryWebHandler } from './http/runtime'
-import {
-  listingChecksAreEnabled,
-  runScheduledListingChecks,
-} from './scheduled/listing-checks'
+import { runScheduledListingChecks } from './scheduled/listing-checks'
+import { runScheduledPdfDispatches } from './worker/pdf-queue'
 import { makeWorkerRequestContext } from './worker/bindings'
+import {
+  provideWorkerConfiguration,
+  readRegistryApiToken,
+} from './worker/config'
 import type {
   ApplicationRegistryEnv,
   WorkerExecutionContext,
@@ -12,7 +15,6 @@ import type {
 } from './worker/types'
 
 export { CvPublicResolver } from './internal/cv-public-resolver-entrypoint'
-export { CvPdfWorkflow } from './pdf/entrypoint'
 
 const withPrivateCachePolicy = (request: Request, response: Response) => {
   const path = new URL(request.url).pathname
@@ -42,27 +44,37 @@ const isDirectRegistryRequest = (request: Request) => {
   )
 }
 
+const registryBffConfigurationError = () =>
+  Response.json(
+    {
+      code: 'service_unavailable',
+      message: 'Registry BFF authentication is not configured.',
+    },
+    { status: 503 }
+  )
+
+const registryBffRequestEffect = Effect.fn('RegistryBff.prepareRequest')(
+  function* (request: Request) {
+    const token = yield* readRegistryApiToken
+    const url = new URL(request.url)
+    url.pathname = url.pathname.slice('/api/registry'.length) || '/'
+    const proxied = new Request(url, request)
+    proxied.headers.set('authorization', `Bearer ${Redacted.value(token)}`)
+    return proxied
+  }
+)
+
 const registryBffRequest = (
   request: Request,
   env: ApplicationRegistryEnv
-): Request | Response => {
-  const token = env.REGISTRY_API_TOKEN?.trim()
-  if (!token) {
-    return Response.json(
-      {
-        code: 'service_unavailable',
-        message: 'Registry BFF authentication is not configured.',
-      },
-      { status: 503 }
-    )
-  }
-
-  const url = new URL(request.url)
-  url.pathname = url.pathname.slice('/api/registry'.length) || '/'
-  const proxied = new Request(url, request)
-  proxied.headers.set('authorization', `Bearer ${token}`)
-  return proxied
-}
+): Promise<Request | Response> =>
+  registryBffRequestEffect(request).pipe(
+    provideWorkerConfiguration(env),
+    Effect.catchTag('Worker.ConfigurationError', () =>
+      Effect.succeed(registryBffConfigurationError())
+    ),
+    Effect.runPromise
+  )
 
 export default {
   async fetch(
@@ -79,14 +91,14 @@ export default {
       }
 
       if (isRegistryBffRequest(request)) {
-        const proxied = registryBffRequest(request, env)
+        const proxied = await registryBffRequest(request, env)
         if (proxied instanceof Response) {
           return withPrivateCachePolicy(request, proxied)
         }
 
         return withPrivateCachePolicy(
           request,
-          await applicationRegistryWebHandler(
+          await applicationRegistryWebHandler(env)(
             proxied,
             makeWorkerRequestContext(env, context)
           )
@@ -97,7 +109,7 @@ export default {
         return env.ASSETS.fetch(request)
       }
 
-      const response = await applicationRegistryWebHandler(
+      const response = await applicationRegistryWebHandler(env)(
         request,
         makeWorkerRequestContext(env, context)
       )
@@ -114,11 +126,14 @@ export default {
     }
   },
   scheduled(
-    _controller: WorkerScheduledController,
+    controller: WorkerScheduledController,
     env: ApplicationRegistryEnv,
     context: WorkerExecutionContext
   ): void {
-    if (!listingChecksAreEnabled(env)) return
-    context.waitUntil(runScheduledListingChecks(env))
+    context.waitUntil(
+      controller.cron === '*/5 * * * *'
+        ? runScheduledPdfDispatches(env)
+        : runScheduledListingChecks(env)
+    )
   },
 }

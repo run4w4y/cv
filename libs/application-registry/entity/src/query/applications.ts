@@ -20,12 +20,11 @@ import {
 } from '../model/values'
 import { applicationLabels, applicationNotes } from '../tables/annotations'
 import { applications } from '../tables/applications'
-import { campaignCaptures } from '../tables/captures'
 import { applicationEvents } from '../tables/events'
 import { applicationIdentityAliases } from '../tables/identity-aliases'
 import { timestampFilterOperators } from './timestamp-filter-operators'
 
-const applicationListCursorRevision = 'applications-list-v7'
+const applicationListCursorRevision = 'applications-list-v8'
 
 const escapeLikeLiteral = (value: string): string =>
   value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')
@@ -78,14 +77,6 @@ export const applicationListQuery = defineQuery(
       order by ${applicationEvents.revision} desc
       limit 1
     )`
-    const latestApplicationUrl = sql<string>`(
-      select ${campaignCaptures.applicationUrl}
-      from ${campaignCaptures}
-      where ${campaignCaptures.applicationId} = ${root.id}
-      order by ${campaignCaptures.capturedAt} desc, ${campaignCaptures.id} desc
-      limit 1
-    )`
-
     return [
       col.id.filterable().sortable(),
       ...col({
@@ -181,16 +172,6 @@ export const applicationListQuery = defineQuery(
         .as('identityAliases')
         .filterable(),
       rel
-        .many(campaignCaptures, {
-          on: ({ root: columns, related }) =>
-            eq(related.applicationId, columns.id),
-          value: ({ related }) => related.id,
-        })
-        .count()
-        .as('captureCount')
-        .filterable()
-        .sortable(),
-      rel
         .many(applicationNotes, {
           on: ({ root: columns, related }) =>
             eq(related.applicationId, columns.id),
@@ -212,10 +193,6 @@ export const applicationListQuery = defineQuery(
         .as('latestEventKind')
         .filterable()
         .sortable({ values: applicationEventKindValues }),
-      expr
-        .string(latestApplicationUrl, { nullable: true })
-        .as('latestApplicationUrl')
-        .filterable(),
       expr.filter('q', [matchesQuery]),
     ]
   },

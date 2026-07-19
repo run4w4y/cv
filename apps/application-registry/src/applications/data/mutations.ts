@@ -5,27 +5,16 @@ import type {
   UpdateManagedApplicationRequest,
 } from '@cv/application-registry-api-contract'
 
-import { RegistryClient } from '../../lib/registry-client'
+import { RegistryClient, registryMutation } from '../../lib/registry-client'
 import { applicationMutationKeys, createApplicationMutationKeys } from './keys'
 
-const createApplicationRequest = RegistryClient.mutation(
-  'registry',
-  'createApplication'
-)
-const updateManagedApplicationRequest = RegistryClient.mutation(
-  'registry',
+const createApplicationRequest = registryMutation('createApplication')
+const updateManagedApplicationRequest = registryMutation(
   'updateManagedApplication'
 )
-const deleteApplicationRequest = RegistryClient.mutation(
-  'registry',
-  'deleteApplication'
-)
-const appendApplicationEventRequest = RegistryClient.mutation(
-  'registry',
-  'appendApplicationEvent'
-)
-const resolveApplicationListingAvailabilityRequest = RegistryClient.mutation(
-  'registry',
+const deleteApplicationRequest = registryMutation('deleteApplication')
+const appendApplicationEventRequest = registryMutation('appendApplicationEvent')
+const resolveApplicationListingAvailabilityRequest = registryMutation(
   'resolveApplicationListingAvailability'
 )
 

@@ -18,6 +18,6 @@
   "dependencies": {
     "@cv/application-registry-crud": "workspace:*",
     "@cv/application-registry-entity": "workspace:*",
-    "effect": "4.0.0-beta.91"
+    "effect": "4.0.0-beta.99"
   }
 }

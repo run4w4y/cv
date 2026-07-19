@@ -6,12 +6,11 @@ import {
 import * as Effect from 'effect/Effect'
 import { isPlainObject } from 'es-toolkit/predicate'
 
-import { CloudflareAnalyticsNormalizeError } from './errors'
+import { NormalizeError } from './errors'
 import { readArray, readRecord, readString } from './guards'
-import type { CloudflareAnalyticsRange } from './types'
+import type { Range } from './types'
 
-export const createEmptyCloudflareAnalyticsData = () =>
-  createEmptyAnalyticsDashboardData()
+export const createEmptyData = () => createEmptyAnalyticsDashboardData()
 
 const extractZoneRows = (payload: unknown, key: 'dailyPaths' | 'topPaths') => {
   if (!isPlainObject(payload)) {
@@ -31,7 +30,7 @@ const extractZoneRows = (payload: unknown, key: 'dailyPaths' | 'topPaths') => {
   })
 }
 
-export const extractGraphqlErrorMessages = (payload: unknown) => {
+export const extractGraphqlErrors = (payload: unknown) => {
   if (!isPlainObject(payload)) {
     return []
   }
@@ -50,9 +49,9 @@ const extractAnalyticsRows = (payload: unknown) => {
   return dailyRows.length > 0 ? dailyRows : topRows
 }
 
-export const normalizeCloudflareAnalyticsResponses = (
+export const normalizeResponses = (
   payloads: readonly unknown[],
-  range: CloudflareAnalyticsRange
+  range: Range
 ) =>
   Effect.try({
     try: () => {
@@ -64,13 +63,11 @@ export const normalizeCloudflareAnalyticsResponses = (
       }) satisfies AnalyticsDashboardData
     },
     catch: (cause) =>
-      CloudflareAnalyticsNormalizeError.fromCause({
+      NormalizeError.fromCause({
         cause,
         message: 'Cloudflare analytics response could not be sanitized',
       }),
   })
 
-export const normalizeCloudflareAnalyticsResponse = (
-  payload: unknown,
-  range: CloudflareAnalyticsRange
-) => normalizeCloudflareAnalyticsResponses([payload], range)
+export const normalizeResponse = (payload: unknown, range: Range) =>
+  normalizeResponses([payload], range)

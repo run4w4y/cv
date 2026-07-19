@@ -363,7 +363,6 @@ export const persistListingCheck = (
     database.batch
       .select({
         applicationId: applications.id,
-        captureId: sql<null>`null`.as('capture_id'),
         eventId: sql<string | null>`${eventId}`.as('event_id'),
         kind: sql<'listing_check'>`'listing_check'`.as('kind'),
         noteId: sql<null>`null`.as('note_id'),

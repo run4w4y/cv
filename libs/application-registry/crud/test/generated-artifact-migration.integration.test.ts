@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
-
-import { RegistryMiniflareHarness } from '../src/test-support'
+import { RegistryMiniflareHarness } from '@cv/worker-test-kit/application-registry'
 
 const priorMigration = '20260717184759_gorgeous_franklin_richards'
 const recordedAt = '2026-07-17T19:00:00.000Z'
@@ -139,13 +138,13 @@ test('migrates historical artifacts into publication-scoped retry attempts', asy
   const artifacts = await harness.query<{
     readonly id: string
     readonly publication_version: number
-    readonly workflow_id: string
-  }>('select id, publication_version, workflow_id from generated_artifacts')
+    readonly request_id: string
+  }>('select id, publication_version, request_id from generated_artifacts')
   assert.deepEqual(artifacts, [
     {
       id: 'artifact-migration-artifact',
       publication_version: 7,
-      workflow_id: 'legacy:artifact-migration-artifact:missing',
+      request_id: 'legacy:artifact-migration-artifact:missing',
     },
   ])
   const links = await harness.query<{
@@ -168,7 +167,7 @@ test('migrates historical artifacts into publication-scoped retry attempts', asy
   assert.equal(
     indexes.some(
       (index) =>
-        index.name === 'generated_artifacts_workflow_unique' &&
+        index.name === 'generated_artifacts_request_unique' &&
         index.unique === 1
     ),
     true
