@@ -327,7 +327,7 @@ curl --fail-with-body --silent --show-error \
   --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
   "$CV_CUTOVER_SCHEDULES_URL" \
   >"$CV_CUTOVER_BACKUP_DIR/worker-schedules.before.json"
-jq -e '.success == true and (.result | type == "array")' \
+jq -e '.success == true and (.result.schedules | type == "array")' \
   "$CV_CUTOVER_BACKUP_DIR/worker-schedules.before.json" >/dev/null
 
 curl --fail-with-body --silent --show-error \
@@ -344,7 +344,7 @@ curl --fail-with-body --silent --show-error \
   --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
   "$CV_CUTOVER_SCHEDULES_URL" \
   >"$CV_CUTOVER_BACKUP_DIR/worker-schedules.disabled.json"
-jq -e '.success == true and (.result | type == "array") and (.result | length == 0)' \
+jq -e '.success == true and (.result.schedules | type == "array") and (.result.schedules | length == 0)' \
   "$CV_CUTOVER_BACKUP_DIR/worker-schedules.disabled.json" >/dev/null
 ```
 
@@ -352,7 +352,7 @@ If the cutover is cancelled before migrations start, restore the saved cron
 values and verify that they match the snapshot before resuming v1 operations:
 
 ```sh
-jq '[.result[] | {cron: .cron}]' \
+jq '[.result.schedules[] | {cron: .cron}]' \
   "$CV_CUTOVER_BACKUP_DIR/worker-schedules.before.json" \
   >"$CV_CUTOVER_BACKUP_DIR/worker-schedules.restore-body.json"
 curl --fail-with-body --silent --show-error \
@@ -368,9 +368,9 @@ curl --fail-with-body --silent --show-error \
   --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
   "$CV_CUTOVER_SCHEDULES_URL" \
   >"$CV_CUTOVER_BACKUP_DIR/worker-schedules.restored.json"
-test "$(jq -cS '[.result[].cron] | sort' \
+test "$(jq -cS '[.result.schedules[].cron] | sort' \
   "$CV_CUTOVER_BACKUP_DIR/worker-schedules.before.json")" = \
-  "$(jq -cS '[.result[].cron] | sort' \
+  "$(jq -cS '[.result.schedules[].cron] | sort' \
   "$CV_CUTOVER_BACKUP_DIR/worker-schedules.restored.json")"
 ```
 
@@ -388,7 +388,7 @@ curl --fail-with-body --silent --show-error \
   --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
   "$CV_CUTOVER_SCHEDULES_URL" \
   >"$CV_CUTOVER_BACKUP_DIR/worker-schedules.after-wait.json"
-jq -e '.success == true and (.result | type == "array") and (.result | length == 0)' \
+jq -e '.success == true and (.result.schedules | type == "array") and (.result.schedules | length == 0)' \
   "$CV_CUTOVER_BACKUP_DIR/worker-schedules.after-wait.json" >/dev/null
 ```
 

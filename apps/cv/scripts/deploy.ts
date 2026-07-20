@@ -1,11 +1,14 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const configPath = process.argv[2]?.trim() || 'wrangler.deploy.jsonc'
+const resolvedConfigPath = resolve(configPath)
 const secret = process.env.CV_REVALIDATION_SECRET?.trim()
 if (!secret) throw new Error('CV_REVALIDATION_SECRET must not be empty.')
+
+const appRoot = fileURLToPath(new URL('../', import.meta.url))
 
 const openNextCli = fileURLToPath(
   new URL(
@@ -18,14 +21,18 @@ const wranglerCli = fileURLToPath(
 )
 
 const run = async (command: readonly string[]) => {
-  const process = Bun.spawn(command, { stderr: 'inherit', stdout: 'inherit' })
+  const process = Bun.spawn(command, {
+    cwd: appRoot,
+    stderr: 'inherit',
+    stdout: 'inherit',
+  })
   const exitCode = await process.exited
   if (exitCode !== 0) {
     throw new Error(`${command[1] ?? command[0]} exited with code ${exitCode}.`)
   }
 }
 
-await run(['node', openNextCli, 'deploy', '--config', configPath])
+await run(['node', openNextCli, 'deploy', '--config', resolvedConfigPath])
 
 const directory = await mkdtemp(join(tmpdir(), 'cv-public-deploy-'))
 try {
@@ -42,7 +49,7 @@ try {
     'bulk',
     secretsPath,
     '--config',
-    configPath,
+    resolvedConfigPath,
   ])
 } finally {
   await rm(directory, { force: true, recursive: true })
