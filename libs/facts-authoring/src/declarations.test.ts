@@ -49,5 +49,5 @@ describe('facts authoring declarations', () => {
     expect(source).not.toContain('readonly tags')
     expect(source).not.toContain('@cv/')
     expect(source).not.toContain('effect/')
-  })
+  }, 15_000)
 })

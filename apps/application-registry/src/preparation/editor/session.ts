@@ -30,7 +30,8 @@ const initialDocument = (identity: PreparationEditorIdentity): unknown =>
 const candidateRevision = (
   candidate: SavedCandidate
 ): SavedContentRevision => ({
-  ...candidate.result,
+  entry: candidate.result.entry,
+  revision: candidate.result.revision,
   value: candidate.candidate.document,
 })
 
