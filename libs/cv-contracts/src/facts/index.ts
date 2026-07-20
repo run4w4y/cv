@@ -5,6 +5,7 @@ import {
 } from '../guidance'
 import {
   CvLocaleSchema,
+  MediaTypeSchema,
   NonEmptyTextSchema,
   Sha256HexSchema,
   ShortTextSchema,
@@ -19,7 +20,11 @@ export {
   generationGuidanceSourceValues,
   getGenerationGuidance,
 } from '../guidance'
-export { CvLocaleSchema } from '../internal/primitives'
+export {
+  CvLocaleSchema,
+  MediaTypeSchema,
+  SafeFileNameSchema,
+} from '../internal/primitives'
 
 export type CvLocale = Schema.Schema.Type<typeof CvLocaleSchema>
 
@@ -119,13 +124,7 @@ export const FactAssetV1Schema = Schema.Struct({
   id: StableIdentifierSchema,
   label: ShortTextSchema,
   description: NonEmptyTextSchema.pipe(Schema.check(Schema.isMaxLength(1_000))),
-  mediaType: Schema.String.pipe(
-    Schema.check(
-      Schema.isPattern(
-        /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+(?:\s*;\s*[^\s=]+=[^;]+)*$/iu
-      )
-    )
-  ),
+  mediaType: MediaTypeSchema,
   sha256: Sha256HexSchema,
 }).annotate({ identifier: 'FactAssetV1', title: 'Facts asset' })
 

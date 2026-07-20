@@ -1,7 +1,9 @@
 import { Context, Effect } from 'effect'
 import { factsReleaseManifestMediaType } from './compiler'
-import type { FactsReleasePublicationError } from './errors'
-import { verifyFactsReleaseBundle } from './integrity'
+import type {
+  FactsReleaseHashError,
+  FactsReleasePublicationError,
+} from './errors'
 import { encodeCanonicalJson } from './internal/canonical-json'
 import { sha256Hex } from './internal/hash'
 import {
@@ -16,10 +18,7 @@ import type {
   PublishedFactsObject,
   PublishedFactsRelease,
 } from './model'
-import {
-  FactsCurrentPointerV1Schema,
-  factsCurrentPointerV1ContractId,
-} from './schema'
+import { factsCurrentPointerV1ContractId } from './schema'
 
 const immutableCacheControl = 'private, max-age=31536000, immutable'
 const currentCacheControl = 'private, no-cache'
@@ -72,11 +71,10 @@ const compilePointer = (bundle: CompiledFactsRelease) =>
       },
       releaseId: bundle.releaseId,
     }
-    const decoded = FactsCurrentPointerV1Schema.make(pointer)
-    const bytes = yield* encodeCanonicalJson(decoded, 'manifest')
+    const bytes = encodeCanonicalJson(pointer)
     const sha256 = yield* sha256Hex(bytes)
     return {
-      pointer: decoded,
+      pointer,
       object: {
         byteLength: bytes.byteLength,
         bytes,
@@ -93,14 +91,10 @@ export const publishFactsRelease = Effect.fn('FactsRelease.publish')(
     bundle: CompiledFactsRelease
   ): Effect.Effect<
     PublishedFactsRelease,
-    | import('./errors').FactsReleaseHashError
-    | import('./errors').FactsReleaseIntegrityError
-    | FactsReleasePublicationError
-    | import('./errors').FactsReleaseValidationError,
+    FactsReleaseHashError | FactsReleasePublicationError,
     FactsReleasePublicationTarget
   > =>
     Effect.gen(function* () {
-      yield* verifyFactsReleaseBundle(bundle)
       const target = yield* FactsReleasePublicationTarget
       const objects = bundle.objects.flatMap((object) => {
         if (object.kind === 'manifest') return []

@@ -2,14 +2,13 @@
 
 Deterministic compiler and publication boundary for reviewed CV facts.
 
-The compiler accepts the complete set of configured single-locale
-`cv.facts.v1` catalogues, exact asset bytes, and immutable source/compiler
-provenance. It validates every catalogue through `@cv/contracts/facts`, rejects
-duplicate locales, verifies every declared asset digest, canonicalizes unordered
-release metadata, and emits content-addressed opaque objects under
-`sha256/<digest>`. Publication maps them onto immutable static R2 keys. All
-configured locales are published and activated as one
-atomic release.
+The compiler accepts the complete set of composer-validated single-locale
+`cv.facts.v1` catalogues, exact asset bytes with their precomputed digests, and
+immutable source/compiler provenance. It canonicalizes unordered release
+metadata, enforces the asset-to-source and content-type invariants, and emits
+content-addressed objects under `sha256/<digest>`. Publication accepts only the
+compiler-branded bundle and maps it onto immutable static R2 keys. All configured
+locales are published and activated as one atomic release.
 
 The release manifest contains only facts-contract metadata, provenance, and
 object descriptors. The release ID is `fr_<manifest-sha256>`, so no manifest
@@ -21,10 +20,10 @@ release and pointer bytes.
 import { compileFactsRelease, publishFactsRelease } from "@cv/facts-release";
 ```
 
-`publishFactsRelease` uses an Effect `FactsReleasePublicationTarget`: it
-verifies the bundle again, uploads all immutable objects, and activates the
-release only after every upload succeeds by replacing `current.json` last.
-Network and R2 adapters remain outside this package.
+`publishFactsRelease` uses an Effect `FactsReleasePublicationTarget`: it uploads
+the compiler-owned immutable objects and activates the release only after every
+upload succeeds by replacing `current.json` last. Network and R2 adapters remain
+outside this package.
 
 The static layout is `current.json`,
 `releases/<release-id>/manifest.json`,

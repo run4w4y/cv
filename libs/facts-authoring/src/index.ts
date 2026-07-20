@@ -1,5 +1,8 @@
 export {
+  composeDecodedFactsRepository,
   composeFactsRepository,
+  decodeFactAssetRegistry,
+  decodeFactEvidenceRegistry,
   decodeFactsRepositoryConfig,
 } from './compose'
 export { renderFactsAuthoringDeclarations } from './declarations'

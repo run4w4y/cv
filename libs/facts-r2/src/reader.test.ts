@@ -37,6 +37,7 @@ const compiledFixture = async () => {
           bytes: fixtureAssetBytes,
           fileName: 'employment-review.pdf',
           id: 'asset.employment-review',
+          sha256: assetSha256,
         },
       ],
       catalogues: [

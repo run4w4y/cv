@@ -3,7 +3,6 @@ import { Effect, Layer } from 'effect'
 
 import {
   compileFactsRelease,
-  FactsReleaseIntegrityError,
   FactsReleasePublicationError,
   FactsReleasePublicationTarget,
   factsCurrentObjectKey,
@@ -32,6 +31,7 @@ const compiledFixture = async () => {
           bytes: fixtureAssetBytes,
           fileName: 'employment-review.pdf',
           id: 'asset.employment-review',
+          sha256: assetSha256,
         },
       ],
       catalogues: [factsCatalogueFixture(assetSha256)],
@@ -91,48 +91,5 @@ describe('facts release publication', () => {
 
     expect(error).toBe(failure)
     expect(activations).toBe(0)
-  })
-
-  test('re-verifies addressed bytes before any external write', async () => {
-    const bundle = await compiledFixture()
-    bundle.manifestObject.bytes.fill(0)
-    let writes = 0
-    const layer = Layer.succeed(FactsReleasePublicationTarget, {
-      putCurrent: () => Effect.succeed('activated' as const),
-      putImmutable: () =>
-        Effect.sync(() => {
-          writes += 1
-        }),
-    })
-
-    const error = await Effect.runPromise(
-      Effect.flip(publishFactsRelease(bundle).pipe(Effect.provide(layer)))
-    )
-
-    expect(error).toBeInstanceOf(FactsReleaseIntegrityError)
-    expect(writes).toBe(0)
-  })
-
-  test('rejects a bundle missing a manifest-referenced object', async () => {
-    const bundle = await compiledFixture()
-    const incomplete = {
-      ...bundle,
-      objects: bundle.objects.filter((object) => object.kind !== 'asset'),
-    }
-    let writes = 0
-    const layer = Layer.succeed(FactsReleasePublicationTarget, {
-      putCurrent: () => Effect.succeed('activated' as const),
-      putImmutable: () =>
-        Effect.sync(() => {
-          writes += 1
-        }),
-    })
-
-    const error = await Effect.runPromise(
-      Effect.flip(publishFactsRelease(incomplete).pipe(Effect.provide(layer)))
-    )
-
-    expect(error).toBeInstanceOf(FactsReleaseIntegrityError)
-    expect(writes).toBe(0)
   })
 })

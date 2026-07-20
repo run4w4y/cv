@@ -58,6 +58,37 @@ export const Sha256HexSchema = Schema.String.pipe(
   description: 'A lowercase hexadecimal SHA-256 digest.',
 })
 
+export const MediaTypeSchema = Schema.String.pipe(
+  Schema.check(
+    Schema.isPattern(
+      /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+(?:\s*;\s*[^\s=]+=[^;]+)*$/iu
+    )
+  )
+).annotate({
+  description: 'An Internet media type.',
+})
+
+export const SafeFileNameSchema = Schema.String.pipe(
+  Schema.check(
+    Schema.isTrimmed(),
+    Schema.isMinLength(1),
+    Schema.isMaxLength(255),
+    Schema.isPattern(/^[^/\\]+$/u),
+    Schema.makeFilter(
+      (fileName) =>
+        fileName !== '.' &&
+        fileName !== '..' &&
+        [...fileName].every((character) => {
+          const codePoint = character.codePointAt(0) ?? 0
+          return codePoint > 31 && codePoint !== 127
+        }),
+      { message: 'File name must be a safe leaf file name' }
+    )
+  )
+).annotate({
+  description: 'A safe leaf file name without path separators.',
+})
+
 export const NonNegativeIntegerSchema = Schema.Int.pipe(
   Schema.check(Schema.isGreaterThanOrEqualTo(0))
 ).annotate({

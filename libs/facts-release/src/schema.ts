@@ -1,7 +1,9 @@
-import { cvFactsV1ContractId } from '@cv/contracts/facts'
+import {
+  cvFactsV1ContractId,
+  MediaTypeSchema,
+  SafeFileNameSchema,
+} from '@cv/contracts/facts'
 import { Schema } from 'effect'
-
-import { isSafeAssetFileName } from './internal/file-name'
 
 const NonEmptyTrimmedTextSchema = Schema.Trim.pipe(
   Schema.check(Schema.isNonEmpty())
@@ -17,22 +19,6 @@ const Sha256Schema = Schema.String.pipe(
 
 const NonNegativeIntegerSchema = Schema.Int.pipe(
   Schema.check(Schema.isGreaterThanOrEqualTo(0))
-)
-
-const MediaTypeSchema = Schema.String.pipe(
-  Schema.check(
-    Schema.isPattern(
-      /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+(?:\s*;\s*[^\s=]+=[^;]+)*$/iu
-    )
-  )
-)
-
-const AssetFileNameSchema = Schema.String.pipe(
-  Schema.check(
-    Schema.makeFilter(isSafeAssetFileName, {
-      message: 'Asset file name must be a safe leaf file name',
-    })
-  )
 )
 
 export const factsReleaseManifestV1ContractId = 'cv.facts-release.v1' as const
@@ -66,7 +52,7 @@ const FactsReleaseManifestV1StructureSchema = Schema.Struct({
   $schema: Schema.Literal(factsReleaseManifestV1ContractId),
   assets: Schema.Array(
     Schema.Struct({
-      fileName: AssetFileNameSchema,
+      fileName: SafeFileNameSchema,
       id: NonEmptyTrimmedTextSchema,
       object: FactsReleaseObjectDescriptorV1Schema,
     })

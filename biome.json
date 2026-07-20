@@ -13,7 +13,6 @@
       "!**/.cache",
       "!**/.rslib",
       "!**/.terragrunt-cache",
-      "!**/*.css.hbs",
       "!apps/cv/next-env.d.ts",
       "!public/**/*.pdf"
     ]

@@ -23,11 +23,12 @@ export type FactsAssetSource = {
   readonly bytes: Uint8Array
   readonly fileName: string
   readonly id: string
+  readonly sha256: string
 }
 
 export type CompileFactsReleaseInput = {
   readonly assets: ReadonlyArray<FactsAssetSource>
-  readonly catalogues: ReadonlyArray<unknown>
+  readonly catalogues: ReadonlyArray<FactsCatalogueV1>
   readonly provenance: FactsReleaseProvenance
 }
 
@@ -43,7 +44,12 @@ export type FactsReleaseObject = {
   readonly sha256: string
 }
 
+export const CompiledFactsReleaseTypeId: unique symbol = Symbol.for(
+  '@cv/facts-release/CompiledFactsRelease'
+)
+
 export type CompiledFactsRelease = {
+  readonly [CompiledFactsReleaseTypeId]: typeof CompiledFactsReleaseTypeId
   readonly catalogues: ReadonlyArray<FactsCatalogueV1>
   readonly manifest: FactsReleaseManifestV1
   readonly manifestObject: FactsReleaseObject

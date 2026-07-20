@@ -20,6 +20,14 @@ export type FactsAuthoringCompilationInput = {
   readonly sections: ReadonlyArray<FactsSectionModuleSource>
 }
 
+export type DecodedFactsAuthoringCompilationInput = {
+  readonly assetDigests: Readonly<Record<string, string>>
+  readonly assets: FactAssetRegistrySource
+  readonly config: FactsRepositoryConfigSource
+  readonly evidence: FactEvidenceRegistrySource
+  readonly sections: ReadonlyArray<FactsSectionModuleSource>
+}
+
 export type FactsAuthoringCompilation = {
   readonly assets: FactAssetRegistrySource
   readonly catalogues: ReadonlyArray<FactsCatalogueV1>

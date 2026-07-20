@@ -1,17 +1,13 @@
-import {
-  type FactsCatalogueV1,
-  FactsCatalogueV1Schema,
-} from '@cv/contracts/facts'
-import { Effect, Schema } from 'effect'
+import type { FactsCatalogueV1 } from '@cv/contracts/facts'
+import { Effect } from 'effect'
+import { groupBy, sortBy, uniqBy } from 'es-toolkit'
 
 import {
   FactsReleaseAssetError,
   type FactsReleaseAssetIssue,
   type FactsReleaseHashError,
-  FactsReleaseValidationError,
 } from './errors'
 import { encodeCanonicalJson } from './internal/canonical-json'
-import { isSafeAssetFileName } from './internal/file-name'
 import { contentAddress, sha256Hex } from './internal/hash'
 import type {
   CompiledFactsRelease,
@@ -20,100 +16,18 @@ import type {
   FactsReleaseManifestV1,
   FactsReleaseObject,
 } from './model'
-import {
-  FactsReleaseManifestV1Schema,
-  FactsReleaseProvenanceSchema,
-  factsReleaseManifestV1ContractId,
-} from './schema'
+import { CompiledFactsReleaseTypeId } from './model'
+import { factsReleaseManifestV1ContractId } from './schema'
 
 export const factsCatalogueMediaType = 'application/vnd.cv.facts+json'
 export const factsReleaseManifestMediaType =
   'application/vnd.cv.facts-release+json'
 
-const compareText = (left: string, right: string) =>
-  left < right ? -1 : left > right ? 1 : 0
-
-const byId = <Value extends { readonly id: string }>(
-  left: Value,
-  right: Value
-) => compareText(left.id, right.id)
-
 const normalizeCatalogue = (catalogue: FactsCatalogueV1): FactsCatalogueV1 => ({
   ...catalogue,
-  assets: [...catalogue.assets].sort(byId),
-  evidence: [...catalogue.evidence].sort(byId),
+  assets: sortBy(catalogue.assets, ['id']),
+  evidence: sortBy(catalogue.evidence, ['id']),
 })
-
-const decodeCatalogue = (input: unknown) =>
-  Schema.decodeUnknownEffect(FactsCatalogueV1Schema)(input).pipe(
-    Effect.map(normalizeCatalogue),
-    Effect.mapError(
-      (cause) =>
-        new FactsReleaseValidationError({
-          cause,
-          context: 'catalogue',
-          message: 'The authored facts catalogue is invalid.',
-        })
-    )
-  )
-
-const decodeProvenance = (input: unknown) =>
-  Schema.decodeUnknownEffect(FactsReleaseProvenanceSchema)(input).pipe(
-    Effect.mapError(
-      (cause) =>
-        new FactsReleaseValidationError({
-          cause,
-          context: 'provenance',
-          message:
-            'Facts release provenance must contain repository names and full Git commit hashes.',
-        })
-    )
-  )
-
-const catalogueSetError = (message: string) =>
-  new FactsReleaseValidationError({
-    cause: new Error(message),
-    context: 'catalogue',
-    message,
-  })
-
-const decodeCatalogues = (inputs: ReadonlyArray<unknown>) =>
-  Effect.gen(function* () {
-    const catalogues = yield* Effect.forEach(inputs, decodeCatalogue)
-    if (catalogues.length === 0) {
-      return yield* catalogueSetError(
-        'A facts release must contain at least one configured locale catalogue.'
-      )
-    }
-    catalogues.sort((left, right) => compareText(left.locale, right.locale))
-    const duplicate = catalogues.find(
-      (catalogue, index) =>
-        catalogues.findIndex(
-          (candidate) => candidate.locale === catalogue.locale
-        ) !== index
-    )
-    if (duplicate) {
-      return yield* catalogueSetError(
-        `Facts catalogue locale ${duplicate.locale} was supplied more than once.`
-      )
-    }
-    const baseline = catalogues[0]
-    if (!baseline) {
-      return yield* catalogueSetError(
-        'A facts release must contain at least one configured locale catalogue.'
-      )
-    }
-    const mismatchedAssets = catalogues.find(
-      (catalogue) =>
-        JSON.stringify(catalogue.assets) !== JSON.stringify(baseline.assets)
-    )
-    if (mismatchedAssets) {
-      return yield* catalogueSetError(
-        `Facts assets for locale ${mismatchedAssets.locale} do not match ${baseline.locale}.`
-      )
-    }
-    return catalogues
-  })
 
 const objectFromBytes = (
   bytes: Uint8Array,
@@ -135,6 +49,22 @@ const objectFromBytes = (
     )
   )
 
+const objectFromKnownDigest = (
+  bytes: Uint8Array,
+  kind: FactsReleaseObject['kind'],
+  logicalId: string,
+  mediaType: string,
+  sha256: string
+): FactsReleaseObject => ({
+  byteLength: bytes.byteLength,
+  bytes: bytes.slice(),
+  key: contentAddress(sha256),
+  kind,
+  logicalId,
+  mediaType,
+  sha256,
+})
+
 const assetError = (
   assetId: string,
   issue: FactsReleaseAssetIssue,
@@ -142,20 +72,6 @@ const assetError = (
   expected: string | null = null,
   actual: string | null = null
 ) => new FactsReleaseAssetError({ actual, assetId, expected, issue, message })
-
-const validateFileName = (source: FactsAssetSource) => {
-  return isSafeAssetFileName(source.fileName)
-    ? Effect.void
-    : Effect.fail(
-        assetError(
-          source.id,
-          'invalid-file-name',
-          `Asset "${source.id}" must use a safe leaf file name.`,
-          null,
-          source.fileName
-        )
-      )
-}
 
 const indexAssetSources = (sources: ReadonlyArray<FactsAssetSource>) =>
   Effect.gen(function* () {
@@ -168,7 +84,6 @@ const indexAssetSources = (sources: ReadonlyArray<FactsAssetSource>) =>
           `Asset source "${source.id}" was supplied more than once.`
         )
       }
-      yield* validateFileName(source)
       indexed.set(source.id, {
         ...source,
         bytes: source.bytes.slice(),
@@ -211,21 +126,23 @@ const compileAssets = (
           )
         }
 
-        const object = yield* objectFromBytes(
-          source.bytes,
-          'asset',
-          asset.id,
-          asset.mediaType
-        )
-        if (object.sha256 !== asset.sha256) {
+        if (source.sha256 !== asset.sha256) {
           return yield* assetError(
             asset.id,
             'digest-mismatch',
-            `Facts asset "${asset.id}" does not match its reviewed SHA-256 digest.`,
+            `Facts asset "${asset.id}" does not match its compiled SHA-256 digest.`,
             asset.sha256,
-            object.sha256
+            source.sha256
           )
         }
+
+        const object = objectFromKnownDigest(
+          source.bytes,
+          'asset',
+          asset.id,
+          asset.mediaType,
+          source.sha256
+        )
 
         return { object, source } satisfies CompiledAsset
       })
@@ -238,14 +155,28 @@ const descriptor = (object: FactsReleaseObject) => ({
   sha256: object.sha256,
 })
 
-const uniqueObjects = (objects: ReadonlyArray<FactsReleaseObject>) => {
-  const byKey = new Map<string, FactsReleaseObject>()
-  for (const object of objects) {
-    if (!byKey.has(object.key)) {
-      byKey.set(object.key, object)
+const uniqueAssetObjects = (assets: ReadonlyArray<CompiledAsset>) => {
+  const groups = Object.values(groupBy(assets, ({ object }) => object.key))
+  for (const group of groups) {
+    const baseline = group[0]
+    const conflict = baseline
+      ? group.find(
+          ({ object }) => object.mediaType !== baseline.object.mediaType
+        )
+      : undefined
+    if (baseline && conflict) {
+      return Effect.fail(
+        assetError(
+          conflict.source.id,
+          'media-type-conflict',
+          `Assets with digest ${baseline.object.sha256} must use the same media type.`,
+          baseline.object.mediaType,
+          conflict.object.mediaType
+        )
+      )
     }
   }
-  return [...byKey.values()]
+  return Effect.succeed(uniqBy(assets, ({ object }) => object.key))
 }
 
 export const compileFactsRelease = Effect.fn('FactsRelease.compile')(
@@ -253,35 +184,32 @@ export const compileFactsRelease = Effect.fn('FactsRelease.compile')(
     input: CompileFactsReleaseInput
   ): Effect.Effect<
     CompiledFactsRelease,
-    FactsReleaseAssetError | FactsReleaseHashError | FactsReleaseValidationError
+    FactsReleaseAssetError | FactsReleaseHashError
   > =>
     Effect.gen(function* () {
-      const catalogues = yield* decodeCatalogues(input.catalogues)
-      const provenance = yield* decodeProvenance(input.provenance)
+      const catalogues = sortBy(input.catalogues.map(normalizeCatalogue), [
+        'locale',
+      ])
       const compiledCatalogues = yield* Effect.forEach(
         catalogues,
         (catalogue) =>
-          encodeCanonicalJson(catalogue, 'catalogue').pipe(
-            Effect.flatMap((bytes) =>
-              objectFromBytes(
-                bytes,
-                'catalogue',
-                catalogue.locale,
-                factsCatalogueMediaType
-              )
-            ),
-            Effect.map((object) => ({ catalogue, object }))
-          )
+          objectFromBytes(
+            encodeCanonicalJson(catalogue),
+            'catalogue',
+            catalogue.locale,
+            factsCatalogueMediaType
+          ).pipe(Effect.map((object) => ({ catalogue, object })))
       )
       const baseline = catalogues[0]
       if (!baseline) {
-        return yield* catalogueSetError(
+        return yield* Effect.die(
           'A facts release must contain at least one configured locale catalogue.'
         )
       }
       const assets = yield* compileAssets(baseline.assets, input.assets)
+      const uniqueAssets = yield* uniqueAssetObjects(assets)
 
-      const manifestInput: FactsReleaseManifestV1 = {
+      const manifest: FactsReleaseManifestV1 = {
         $schema: factsReleaseManifestV1ContractId,
         assets: assets.map(({ object, source }) => ({
           fileName: source.fileName,
@@ -293,21 +221,9 @@ export const compileFactsRelease = Effect.fn('FactsRelease.compile')(
           object: descriptor(object),
         })),
         factsContract: baseline.$schema,
-        provenance,
+        provenance: input.provenance,
       }
-      const manifest = yield* Schema.decodeUnknownEffect(
-        FactsReleaseManifestV1Schema
-      )(manifestInput).pipe(
-        Effect.mapError(
-          (cause) =>
-            new FactsReleaseValidationError({
-              cause,
-              context: 'manifest',
-              message: 'The compiled facts release manifest is invalid.',
-            })
-        )
-      )
-      const manifestBytes = yield* encodeCanonicalJson(manifest, 'manifest')
+      const manifestBytes = encodeCanonicalJson(manifest)
       const manifestObject = yield* objectFromBytes(
         manifestBytes,
         'manifest',
@@ -316,14 +232,15 @@ export const compileFactsRelease = Effect.fn('FactsRelease.compile')(
       )
 
       return {
+        [CompiledFactsReleaseTypeId]: CompiledFactsReleaseTypeId,
         catalogues,
         manifest,
         manifestObject,
-        objects: uniqueObjects([
+        objects: [
           ...compiledCatalogues.map(({ object }) => object),
-          ...assets.map((asset) => asset.object),
+          ...uniqueAssets.map(({ object }) => object),
           manifestObject,
-        ]),
+        ],
         releaseId: `fr_${manifestObject.sha256}`,
       }
     })

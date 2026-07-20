@@ -1,48 +1,39 @@
-import { Data } from 'effect'
+import { Schema } from 'effect'
 
-export type FactsReleaseAssetIssue =
-  | 'digest-mismatch'
-  | 'duplicate-source'
-  | 'invalid-file-name'
-  | 'missing-source'
-  | 'unexpected-source'
+const factsReleaseAssetIssues = [
+  'digest-mismatch',
+  'duplicate-source',
+  'media-type-conflict',
+  'missing-source',
+  'unexpected-source',
+] as const
 
-export class FactsReleaseValidationError extends Data.TaggedError(
-  'FactsReleaseValidationError'
-)<{
-  readonly cause: unknown
-  readonly context: 'catalogue' | 'manifest' | 'provenance' | 'timestamp'
-  readonly message: string
-}> {}
+export type FactsReleaseAssetIssue = (typeof factsReleaseAssetIssues)[number]
 
-export class FactsReleaseAssetError extends Data.TaggedError(
-  'FactsReleaseAssetError'
-)<{
-  readonly actual: string | null
-  readonly assetId: string
-  readonly expected: string | null
-  readonly issue: FactsReleaseAssetIssue
-  readonly message: string
-}> {}
+export class FactsReleaseAssetError extends Schema.TaggedErrorClass<FactsReleaseAssetError>()(
+  'FactsReleaseAssetError',
+  {
+    actual: Schema.NullOr(Schema.String),
+    assetId: Schema.String,
+    expected: Schema.NullOr(Schema.String),
+    issue: Schema.Literals(factsReleaseAssetIssues),
+    message: Schema.String,
+  }
+) {}
 
-export class FactsReleaseHashError extends Data.TaggedError(
-  'FactsReleaseHashError'
-)<{
-  readonly cause: unknown
-  readonly message: string
-}> {}
+export class FactsReleaseHashError extends Schema.TaggedErrorClass<FactsReleaseHashError>()(
+  'FactsReleaseHashError',
+  {
+    cause: Schema.Defect(),
+    message: Schema.String,
+  }
+) {}
 
-export class FactsReleaseIntegrityError extends Data.TaggedError(
-  'FactsReleaseIntegrityError'
-)<{
-  readonly key: string
-  readonly message: string
-}> {}
-
-export class FactsReleasePublicationError extends Data.TaggedError(
-  'FactsReleasePublicationError'
-)<{
-  readonly cause: unknown
-  readonly message: string
-  readonly operation: 'activate' | 'upload'
-}> {}
+export class FactsReleasePublicationError extends Schema.TaggedErrorClass<FactsReleasePublicationError>()(
+  'FactsReleasePublicationError',
+  {
+    cause: Schema.Defect(),
+    message: Schema.String,
+    operation: Schema.Literals(['activate', 'upload']),
+  }
+) {}

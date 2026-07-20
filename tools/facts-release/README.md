@@ -3,7 +3,7 @@
 Compiles a checked-out `cv-content` facts source into deterministic,
 content-addressed objects with `@cv/facts-release`, publishes the exact bytes to
 the private `cv-facts` R2 bucket, and replaces `current.json` only after every
-immutable release object has been verified and uploaded.
+immutable release object has been uploaded.
 
 The source checkout is a human-authored TypeScript repository. Its
 `facts.config.ts` is the source of truth for `defaultLocale`, `factsDir`, and the

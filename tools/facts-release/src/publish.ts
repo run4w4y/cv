@@ -10,13 +10,13 @@ import {
 import {
   type FactsReleaseAssetError,
   type FactsReleaseHashError,
-  type FactsReleaseIntegrityError,
   type FactsReleasePublicationError,
   type FactsReleasePublicationTarget,
-  type FactsReleaseValidationError,
   publishFactsRelease,
 } from '@cv/facts-release'
 import { Effect, Layer } from 'effect'
+import type { FileSystem } from 'effect/FileSystem'
+import type { Path } from 'effect/Path'
 
 import type { FactsPublisherConfig } from './config'
 import type { FactsPublisherSourceError } from './errors'
@@ -35,9 +35,7 @@ export type PublishFactsError =
   | FactsPublisherSourceError
   | FactsReleaseAssetError
   | FactsReleaseHashError
-  | FactsReleaseIntegrityError
   | FactsReleasePublicationError
-  | FactsReleaseValidationError
 
 const publicationLayer = (config: FactsPublisherConfig) =>
   factsR2PublicationTargetLayer.pipe(
@@ -57,7 +55,7 @@ export const publishFactsCheckout = Effect.fn('FactsPublisher.publishCheckout')(
     targetLayer: Layer.Layer<FactsReleasePublicationTarget> = publicationLayer(
       config
     )
-  ): Effect.Effect<PublishFactsResult, PublishFactsError> =>
+  ): Effect.Effect<PublishFactsResult, PublishFactsError, FileSystem | Path> =>
     Effect.gen(function* () {
       const bundle = yield* compileFactsCheckout(config.contentRoot, {
         compilerCommit: config.compilerCommit,

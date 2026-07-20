@@ -28,7 +28,6 @@
     "@tanstack/react-table": "^8.21.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "cssesc": "^3.0.0",
     "effect": "4.0.0-beta.99",
     "handlebars": "^4.7.9",
     "lucide-react": "^1.14.0",

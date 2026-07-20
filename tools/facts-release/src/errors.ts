@@ -1,18 +1,21 @@
-import { Data } from 'effect'
+import { Schema } from 'effect'
 
-export class FactsPublisherConfigError extends Data.TaggedError(
-  'FactsPublisherConfigError'
-)<{
-  readonly message: string
-}> {}
+export class FactsPublisherConfigError extends Schema.TaggedErrorClass<FactsPublisherConfigError>()(
+  'FactsPublisherConfigError',
+  {
+    cause: Schema.Defect(),
+    message: Schema.String,
+  }
+) {}
 
-export class FactsPublisherSourceError extends Data.TaggedError(
-  'FactsPublisherSourceError'
-)<{
-  readonly cause: unknown
-  readonly message: string
-  readonly operation: 'load-source' | 'read-assets' | 'resolve-assets'
-}> {}
+export class FactsPublisherSourceError extends Schema.TaggedErrorClass<FactsPublisherSourceError>()(
+  'FactsPublisherSourceError',
+  {
+    cause: Schema.Defect(),
+    message: Schema.String,
+    operation: Schema.Literal('load-source'),
+  }
+) {}
 
 export type FactsPublisherError =
   | FactsPublisherConfigError

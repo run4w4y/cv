@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { Effect, Redacted } from 'effect'
+import { BunServices } from '@effect/platform-bun'
+import { ConfigProvider, Effect, Redacted } from 'effect'
 
 import { readFactsPublisherConfig } from './config'
 
@@ -13,11 +14,15 @@ const environment = {
   FACTS_SOURCE_COMMIT: 'a'.repeat(40),
 }
 
+const readConfig = (values: Readonly<Record<string, string>>) =>
+  readFactsPublisherConfig().pipe(
+    Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(values))),
+    Effect.provide(BunServices.layer)
+  )
+
 describe('facts publisher configuration', () => {
   test('accepts full immutable commits and redacts the R2 credentials', async () => {
-    const config = await Effect.runPromise(
-      readFactsPublisherConfig(environment)
-    )
+    const config = await Effect.runPromise(readConfig(environment))
 
     expect(config.sourceCommit).toBe(environment.FACTS_SOURCE_COMMIT)
     expect(String(config.r2SecretAccessKey)).not.toContain(
@@ -29,7 +34,7 @@ describe('facts publisher configuration', () => {
   test('rejects refs and abbreviated commit IDs', async () => {
     const error = await Effect.runPromise(
       Effect.flip(
-        readFactsPublisherConfig({
+        readConfig({
           ...environment,
           FACTS_SOURCE_COMMIT: 'main',
         })

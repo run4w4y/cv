@@ -14,6 +14,7 @@ import {
   FactsAuthoringValidationError,
 } from './errors'
 import type {
+  DecodedFactsAuthoringCompilationInput,
   FactsAuthoringCompilation,
   FactsAuthoringCompilationInput,
   FactsSectionModuleSource,
@@ -76,6 +77,18 @@ export const decodeFactsRepositoryConfig = Effect.fn(
   decode(FactsRepositoryConfigSourceSchema, input, 'facts.config.ts').pipe(
     Effect.flatMap(validateConfig)
   )
+)
+
+export const decodeFactAssetRegistry = Effect.fn(
+  'FactsAuthoring.decodeAssetRegistry'
+)((input: unknown, path = 'facts/assets.ts') =>
+  decode(FactAssetRegistrySourceSchema, input, path)
+)
+
+export const decodeFactEvidenceRegistry = Effect.fn(
+  'FactsAuthoring.decodeEvidenceRegistry'
+)((input: unknown, path = 'facts/evidence.ts') =>
+  decode(FactEvidenceRegistrySourceSchema, input, path)
 )
 
 const compileEvidence = (
@@ -469,27 +482,17 @@ const decodeSection = (source: FactsSectionModuleSource) =>
     Effect.map((section) => ({ section, source }))
   )
 
-export const composeFactsRepository = Effect.fn(
-  'FactsAuthoring.composeRepository'
+export const composeDecodedFactsRepository = Effect.fn(
+  'FactsAuthoring.composeDecodedRepository'
 )(
   (
-    input: FactsAuthoringCompilationInput
+    input: DecodedFactsAuthoringCompilationInput
   ): Effect.Effect<
     FactsAuthoringCompilation,
     FactsAuthoringCompositionError | FactsAuthoringValidationError
   > =>
     Effect.gen(function* () {
-      const config = yield* decodeFactsRepositoryConfig(input.config)
-      const evidence = yield* decode(
-        FactEvidenceRegistrySourceSchema,
-        input.evidence,
-        `${config.factsDir}/evidence.ts`
-      )
-      const assets = yield* decode(
-        FactAssetRegistrySourceSchema,
-        input.assets,
-        `${config.factsDir}/assets.ts`
-      )
+      const { assets, config, evidence } = input
       const decodedSections = yield* Effect.forEach(
         input.sections,
         decodeSection
@@ -553,4 +556,26 @@ export const composeFactsRepository = Effect.fn(
 
       return { assets, catalogues, config, evidence }
     })
+)
+
+export const composeFactsRepository = Effect.fn(
+  'FactsAuthoring.composeRepository'
+)((input: FactsAuthoringCompilationInput) =>
+  Effect.gen(function* () {
+    const config = yield* decodeFactsRepositoryConfig(input.config)
+    const evidence = yield* decodeFactEvidenceRegistry(
+      input.evidence,
+      `${config.factsDir}/evidence.ts`
+    )
+    const assets = yield* decodeFactAssetRegistry(
+      input.assets,
+      `${config.factsDir}/assets.ts`
+    )
+    return yield* composeDecodedFactsRepository({
+      ...input,
+      assets,
+      config,
+      evidence,
+    })
+  })
 )

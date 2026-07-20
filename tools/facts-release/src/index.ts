@@ -1,6 +1,5 @@
 export {
   type FactsPublisherConfig,
-  type FactsPublisherEnvironment,
   readFactsPublisherConfig,
 } from './config'
 export * from './errors'

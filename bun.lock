@@ -14,7 +14,6 @@
         "@tanstack/react-table": "^8.21.3",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
-        "cssesc": "^3.0.0",
         "effect": "4.0.0-beta.99",
         "handlebars": "^4.7.9",
         "lucide-react": "^1.14.0",
@@ -397,18 +396,7 @@
       "dependencies": {
         "@cv/contracts": "workspace:*",
         "effect": "4.0.0-beta.99",
-      },
-    },
-    "libs/handlebars-css-template": {
-      "name": "@cv/handlebars-css-template",
-      "version": "0.1.0",
-      "dependencies": {
-        "cssesc": "^3.0.0",
-        "handlebars": "^4.7.9",
-        "tslib": "^2.8.1",
-      },
-      "peerDependencies": {
-        "vite": "^5.2.0 || ^6 || ^7 || ^8",
+        "es-toolkit": "^1.43.0",
       },
     },
     "libs/internal-charts": {
@@ -542,7 +530,9 @@
         "@cv/facts-authoring": "workspace:*",
         "@cv/facts-r2": "workspace:*",
         "@cv/facts-release": "workspace:*",
+        "@effect/platform-bun": "4.0.0-beta.99",
         "effect": "4.0.0-beta.99",
+        "es-toolkit": "^1.43.0",
         "vite": "^8.1.3",
       },
       "devDependencies": {
@@ -981,8 +971,6 @@
     "@cv/facts-release-publisher": ["@cv/facts-release-publisher@workspace:tools/facts-release"],
 
     "@cv/facts-types": ["@cv/facts-types@workspace:tools/facts-types"],
-
-    "@cv/handlebars-css-template": ["@cv/handlebars-css-template@workspace:libs/handlebars-css-template"],
 
     "@cv/internal-charts": ["@cv/internal-charts@workspace:libs/internal-charts"],
 

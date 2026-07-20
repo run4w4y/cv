@@ -1,10 +1,10 @@
-import { access, mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import {
-  composeFactsRepository,
+  composeDecodedFactsRepository,
+  decodeFactAssetRegistry,
+  decodeFactEvidenceRegistry,
   decodeFactsRepositoryConfig,
-  FactAssetRegistrySourceSchema,
+  type FactAssetRegistrySource,
+  type FactEvidenceRegistrySource,
   type FactsAuthoringCompositionError,
   type FactsAuthoringValidationError,
   type FactsRepositoryConfigSource,
@@ -14,8 +14,16 @@ import {
   type CompiledFactsRelease,
   compileFactsRelease,
   type FactsAssetSource,
+  type FactsReleaseAssetError,
+  type FactsReleaseHashError,
 } from '@cv/facts-release'
-import { Effect, Schema } from 'effect'
+import { Effect } from 'effect'
+import {
+  FileSystem,
+  type FileSystem as FileSystemService,
+} from 'effect/FileSystem'
+import { Path, type Path as PathService } from 'effect/Path'
+import { sortBy } from 'es-toolkit'
 import { createServer, type ViteDevServer } from 'vite'
 
 import { FactsPublisherSourceError } from './errors'
@@ -30,9 +38,9 @@ type SourceProvenance = {
 type LoadedFactsSource = {
   readonly assetDigests: Readonly<Record<string, string>>
   readonly assetSources: ReadonlyArray<FactsAssetSource>
-  readonly assets: unknown
-  readonly config: unknown
-  readonly evidence: unknown
+  readonly assets: FactAssetRegistrySource
+  readonly config: FactsRepositoryConfigSource
+  readonly evidence: FactEvidenceRegistrySource
   readonly sections: ReadonlyArray<FactsSectionModuleSource>
 }
 
@@ -42,233 +50,378 @@ const sourceError = (
   cause: unknown
 ) => new FactsPublisherSourceError({ cause, message, operation })
 
-const exists = async (path: string) => {
-  try {
-    await access(path)
-    return true
-  } catch {
-    return false
-  }
-}
+const loadSourceError = (message: string) => (cause: unknown) =>
+  sourceError('load-source', message, cause)
 
-const assertWithinCheckout = (contentRoot: string, candidate: string) => {
-  const child = relative(contentRoot, candidate)
-  if (child === '..' || child.startsWith(`..${sep}`) || isAbsolute(child)) {
-    throw new Error(`Authored path escapes the content checkout: ${candidate}`)
+const sourcePromise = <Value>(
+  message: string,
+  evaluate: () => Promise<Value>
+) =>
+  Effect.tryPromise({
+    try: evaluate,
+    catch: loadSourceError(message),
+  })
+
+const assertWithinCheckout = (
+  path: PathService,
+  contentRoot: string,
+  candidate: string
+) => {
+  const child = path.relative(contentRoot, candidate)
+  if (
+    child === '..' ||
+    child.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(child)
+  ) {
+    return Effect.fail(
+      sourceError(
+        'load-source',
+        `Authored path escapes the content checkout: ${candidate}`,
+        candidate
+      )
+    )
   }
+  return Effect.void
 }
 
 const viteModuleId = (absolutePath: string) =>
   `/@fs/${absolutePath.replaceAll('\\', '/')}`
 
-const loadDefaultExport = async (
-  server: ViteDevServer,
-  absolutePath: string
-) => {
-  const loaded: unknown = await server.ssrLoadModule(viteModuleId(absolutePath))
-  if (loaded === null || typeof loaded !== 'object') {
-    throw new Error(`${absolutePath} did not evaluate to a module.`)
-  }
-  const value = Reflect.get(loaded, 'default')
-  if (value === undefined) {
-    throw new Error(`${absolutePath} must have a default export.`)
-  }
-  return value as unknown
-}
-
-const loadOptionalDefaultExport = async (
-  server: ViteDevServer,
-  absolutePath: string
-) =>
-  (await exists(absolutePath))
-    ? loadDefaultExport(server, absolutePath)
-    : ({} as const)
-
-const collectSectionFiles = async (
-  localeRoot: string
-): Promise<ReadonlyArray<string>> => {
-  const entries = await readdir(localeRoot, { withFileTypes: true })
-  const files: string[] = []
-  for (const entry of entries.sort((left, right) =>
-    left.name.localeCompare(right.name)
-  )) {
-    const absolutePath = join(localeRoot, entry.name)
-    if (entry.isDirectory()) {
-      const indexPath = join(absolutePath, 'index.ts')
-      if (!(await exists(indexPath))) {
-        throw new Error(
-          `Facts section directory must expose index.ts: ${absolutePath}`
+const loadDefaultExport = (server: ViteDevServer, absolutePath: string) =>
+  sourcePromise(`Could not load authored facts module ${absolutePath}.`, () =>
+    server.ssrLoadModule(viteModuleId(absolutePath))
+  ).pipe(
+    Effect.flatMap((loaded) => {
+      if (loaded === null || typeof loaded !== 'object') {
+        return Effect.fail(
+          sourceError(
+            'load-source',
+            `${absolutePath} did not evaluate to a module.`,
+            loaded
+          )
         )
       }
-      files.push(indexPath)
-      continue
-    }
-    if (
-      !entry.isFile() ||
-      !entry.name.endsWith('.ts') ||
-      entry.name.endsWith('.d.ts')
-    ) {
-      throw new Error(
-        `Locale facts may contain section.ts files or section/index.ts directories only: ${absolutePath}`
-      )
-    }
-    files.push(absolutePath)
-  }
-  return files
-}
+      const value = Reflect.get(loaded, 'default')
+      return value === undefined
+        ? Effect.fail(
+            sourceError(
+              'load-source',
+              `${absolutePath} must have a default export.`,
+              loaded
+            )
+          )
+        : Effect.succeed(value as unknown)
+    })
+  )
 
-const loadSections = async (
+const canonicalPathWithinCheckout = (
+  fileSystem: FileSystemService,
+  path: PathService,
+  contentRoot: string,
+  candidate: string
+) =>
+  Effect.gen(function* () {
+    yield* assertWithinCheckout(path, contentRoot, candidate)
+    const canonical = yield* fileSystem
+      .realPath(candidate)
+      .pipe(
+        Effect.mapError(
+          loadSourceError(`Could not resolve authored facts path ${candidate}.`)
+        )
+      )
+    yield* assertWithinCheckout(path, contentRoot, canonical)
+    return canonical
+  })
+
+const loadOptionalDefaultExport = (
+  fileSystem: FileSystemService,
+  path: PathService,
+  server: ViteDevServer,
+  contentRoot: string,
+  absolutePath: string
+) =>
+  fileSystem.exists(absolutePath).pipe(
+    Effect.mapError(
+      loadSourceError(`Could not inspect authored facts path ${absolutePath}.`)
+    ),
+    Effect.flatMap((exists) =>
+      exists
+        ? canonicalPathWithinCheckout(
+            fileSystem,
+            path,
+            contentRoot,
+            absolutePath
+          ).pipe(
+            Effect.flatMap((canonical) => loadDefaultExport(server, canonical))
+          )
+        : Effect.succeed({} as const)
+    )
+  )
+
+const collectSectionFiles = (
+  fileSystem: FileSystemService,
+  path: PathService,
+  contentRoot: string,
+  localeRoot: string
+) =>
+  Effect.gen(function* () {
+    const entries = yield* fileSystem
+      .readDirectory(localeRoot)
+      .pipe(
+        Effect.mapError(
+          loadSourceError(
+            `Could not read facts locale directory ${localeRoot}.`
+          )
+        )
+      )
+    const files: string[] = []
+    for (const entry of entries.toSorted((left, right) =>
+      left.localeCompare(right)
+    )) {
+      const absolutePath = path.join(localeRoot, entry)
+      yield* canonicalPathWithinCheckout(
+        fileSystem,
+        path,
+        contentRoot,
+        absolutePath
+      )
+      const info = yield* fileSystem
+        .stat(absolutePath)
+        .pipe(
+          Effect.mapError(
+            loadSourceError(`Could not inspect facts section ${absolutePath}.`)
+          )
+        )
+      if (info.type === 'Directory') {
+        const indexPath = path.join(absolutePath, 'index.ts')
+        const hasIndex = yield* fileSystem
+          .exists(indexPath)
+          .pipe(
+            Effect.mapError(
+              loadSourceError(`Could not inspect facts section ${indexPath}.`)
+            )
+          )
+        if (hasIndex) {
+          yield* canonicalPathWithinCheckout(
+            fileSystem,
+            path,
+            contentRoot,
+            indexPath
+          )
+          files.push(indexPath)
+        }
+        continue
+      }
+      if (
+        info.type === 'File' &&
+        entry.endsWith('.ts') &&
+        !entry.endsWith('.d.ts')
+      ) {
+        files.push(absolutePath)
+      }
+    }
+    return files
+  })
+
+const loadSections = (
+  fileSystem: FileSystemService,
+  path: PathService,
   server: ViteDevServer,
   contentRoot: string,
   factsRoot: string,
   config: FactsRepositoryConfigSource
-) => {
-  const sections: FactsSectionModuleSource[] = []
-  for (const locale of config.locales) {
-    const localeRoot = resolve(factsRoot, locale)
-    assertWithinCheckout(contentRoot, localeRoot)
-    for (const absolutePath of await collectSectionFiles(localeRoot)) {
-      sections.push({
-        locale,
-        relativePath: relative(contentRoot, absolutePath).replaceAll('\\', '/'),
-        value: await loadDefaultExport(server, absolutePath),
-      })
-    }
-  }
-  return sections
-}
-
-const sha256 = async (bytes: Uint8Array) => {
-  const digest = await crypto.subtle.digest('SHA-256', bytes.slice())
-  return Buffer.from(digest).toString('hex')
-}
-
-const loadAssets = async (
-  factsRoot: string,
-  authoredAssets: unknown
-): Promise<{
-  readonly digests: Readonly<Record<string, string>>
-  readonly sources: ReadonlyArray<FactsAssetSource>
-}> => {
-  const assets = await Effect.runPromise(
-    Schema.decodeUnknownEffect(FactAssetRegistrySourceSchema)(authoredAssets)
-  )
-  const assetRoot = resolve(factsRoot, 'assets')
-  const entries = (await exists(assetRoot))
-    ? await readdir(assetRoot, { withFileTypes: true })
-    : []
-  const files = entries.map((entry) => {
-    if (!entry.isFile()) {
-      throw new Error(`Unexpected entry in facts/assets: ${entry.name}`)
-    }
-    return entry.name
-  })
-  const expectedFiles = new Set<string>()
-  const digests: Record<string, string> = {}
-  const sources: FactsAssetSource[] = []
-  for (const [id, asset] of Object.entries(assets).sort(([left], [right]) =>
-    left.localeCompare(right)
-  )) {
-    if (basename(asset.fileName) !== asset.fileName) {
-      throw new Error(`Asset ${id} must use a flat, safe file name.`)
-    }
-    if (expectedFiles.has(asset.fileName)) {
-      throw new Error(
-        `Asset file ${asset.fileName} is declared more than once.`
+) =>
+  Effect.gen(function* () {
+    const sections: FactsSectionModuleSource[] = []
+    for (const locale of config.locales) {
+      const localeRoot = path.resolve(factsRoot, locale)
+      yield* canonicalPathWithinCheckout(
+        fileSystem,
+        path,
+        contentRoot,
+        localeRoot
       )
+      const sectionFiles = yield* collectSectionFiles(
+        fileSystem,
+        path,
+        contentRoot,
+        localeRoot
+      )
+      for (const absolutePath of sectionFiles) {
+        sections.push({
+          locale,
+          relativePath: path
+            .relative(contentRoot, absolutePath)
+            .replaceAll('\\', '/'),
+          value: yield* loadDefaultExport(server, absolutePath),
+        })
+      }
     }
-    expectedFiles.add(asset.fileName)
-    const bytes = new Uint8Array(
-      await readFile(resolve(assetRoot, asset.fileName))
-    )
-    digests[id] = await sha256(bytes)
-    sources.push({ bytes, fileName: asset.fileName, id })
-  }
-  const unexpected = files.find((file) => !expectedFiles.has(file))
-  if (unexpected) {
-    throw new Error(`Undeclared facts asset: ${unexpected}`)
-  }
-  return { digests, sources }
-}
+    return sections
+  })
 
-const assertFactsRootShape = async (
+const sha256 = (bytes: Uint8Array) =>
+  sourcePromise('Could not hash a declared facts asset.', async () => {
+    const digest = await crypto.subtle.digest('SHA-256', bytes.slice())
+    return Buffer.from(digest).toString('hex')
+  })
+
+const loadAssets = (
+  fileSystem: FileSystemService,
+  path: PathService,
+  contentRoot: string,
   factsRoot: string,
-  config: FactsRepositoryConfigSource
-) => {
-  const allowed = new Set([
-    'assets',
-    'assets.ts',
-    'evidence.ts',
-    ...config.locales,
-  ])
-  const entries = await readdir(factsRoot, { withFileTypes: true })
-  const unexpected = entries.find((entry) => !allowed.has(entry.name))
-  if (unexpected) {
-    throw new Error(
-      `Unexpected facts source entry not declared by facts.config.ts: ${unexpected.name}`
-    )
-  }
-}
-
-const loadFactsSource = async (
-  contentRoot: string
-): Promise<LoadedFactsSource> => {
-  const checkoutRoot = resolve(contentRoot)
-  const cacheRoot = await mkdtemp(join(tmpdir(), 'cv-facts-vite-'))
-  const server = await createServer({
-    appType: 'custom',
-    cacheDir: cacheRoot,
-    configFile: false,
-    logLevel: 'silent',
-    root: checkoutRoot,
-    server: {
-      fs: { allow: [checkoutRoot] },
-      middlewareMode: true,
-    },
-  })
-  try {
-    const configPath = resolve(checkoutRoot, 'facts.config.ts')
-    const configSource = await loadDefaultExport(server, configPath)
-    const config = await Effect.runPromise(
-      decodeFactsRepositoryConfig(configSource)
-    )
-    const factsRoot = resolve(checkoutRoot, config.factsDir)
-    assertWithinCheckout(checkoutRoot, factsRoot)
-    await assertFactsRootShape(factsRoot, config)
-    const evidence = await loadOptionalDefaultExport(
-      server,
-      resolve(factsRoot, 'evidence.ts')
-    )
-    const assets = await loadOptionalDefaultExport(
-      server,
-      resolve(factsRoot, 'assets.ts')
-    )
-    const sections = await loadSections(server, checkoutRoot, factsRoot, config)
-    const loadedAssets = await loadAssets(factsRoot, assets)
-    return {
-      assetDigests: loadedAssets.digests,
-      assetSources: loadedAssets.sources,
-      assets,
-      config: configSource,
-      evidence,
-      sections,
+  assets: FactAssetRegistrySource
+) =>
+  Effect.gen(function* () {
+    const assetRoot = path.resolve(factsRoot, 'assets')
+    const digests: Record<string, string> = {}
+    const sources: FactsAssetSource[] = []
+    const files = new Map<
+      string,
+      { readonly bytes: Uint8Array; readonly sha256: string }
+    >()
+    for (const [id, asset] of sortBy(Object.entries(assets), [
+      ([key]) => key,
+    ])) {
+      const cached = files.get(asset.fileName)
+      const assetPath = path.resolve(assetRoot, asset.fileName)
+      const canonical = yield* canonicalPathWithinCheckout(
+        fileSystem,
+        path,
+        contentRoot,
+        assetPath
+      )
+      const bytes =
+        cached?.bytes ??
+        (yield* fileSystem
+          .readFile(canonical)
+          .pipe(
+            Effect.mapError(
+              loadSourceError(`Could not read declared facts asset ${id}.`)
+            )
+          ))
+      const digest = cached?.sha256 ?? (yield* sha256(bytes))
+      files.set(asset.fileName, { bytes, sha256: digest })
+      digests[id] = digest
+      sources.push({ bytes, fileName: asset.fileName, id, sha256: digest })
     }
-  } finally {
-    await server.close()
-    await rm(cacheRoot, { force: true, recursive: true })
-  }
-}
-
-const loadFactsSourceEffect = (contentRoot: string) =>
-  Effect.tryPromise({
-    try: () => loadFactsSource(contentRoot),
-    catch: (cause) =>
-      sourceError(
-        'load-source',
-        'Could not load the TypeScript facts repository.',
-        cause
-      ),
+    return { digests, sources }
   })
+
+const loadFactsSource = Effect.fn('FactsPublisher.loadSource')(
+  (contentRoot: string) =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem
+      const path = yield* Path
+      return yield* Effect.scoped(
+        Effect.gen(function* () {
+          const checkoutRoot = yield* fileSystem
+            .realPath(path.resolve(contentRoot))
+            .pipe(
+              Effect.mapError(
+                loadSourceError(
+                  `Could not resolve the facts checkout ${contentRoot}.`
+                )
+              )
+            )
+          const cacheRoot = yield* fileSystem
+            .makeTempDirectoryScoped({ prefix: 'cv-facts-vite-' })
+            .pipe(
+              Effect.mapError(
+                loadSourceError('Could not create the Vite cache directory.')
+              )
+            )
+          return yield* Effect.acquireUseRelease(
+            sourcePromise('Could not start the facts module loader.', () =>
+              createServer({
+                appType: 'custom',
+                cacheDir: cacheRoot,
+                configFile: false,
+                logLevel: 'silent',
+                root: checkoutRoot,
+                server: {
+                  fs: { allow: [checkoutRoot] },
+                  middlewareMode: true,
+                },
+              })
+            ),
+            (server) =>
+              Effect.gen(function* () {
+                const configPath = path.resolve(checkoutRoot, 'facts.config.ts')
+                const canonicalConfigPath = yield* canonicalPathWithinCheckout(
+                  fileSystem,
+                  path,
+                  checkoutRoot,
+                  configPath
+                )
+                const configSource = yield* loadDefaultExport(
+                  server,
+                  canonicalConfigPath
+                )
+                const config = yield* decodeFactsRepositoryConfig(configSource)
+                const factsRoot = path.resolve(checkoutRoot, config.factsDir)
+                const canonicalFactsRoot = yield* canonicalPathWithinCheckout(
+                  fileSystem,
+                  path,
+                  checkoutRoot,
+                  factsRoot
+                )
+                const evidenceSource = yield* loadOptionalDefaultExport(
+                  fileSystem,
+                  path,
+                  server,
+                  checkoutRoot,
+                  path.resolve(canonicalFactsRoot, 'evidence.ts')
+                )
+                const assetSource = yield* loadOptionalDefaultExport(
+                  fileSystem,
+                  path,
+                  server,
+                  checkoutRoot,
+                  path.resolve(canonicalFactsRoot, 'assets.ts')
+                )
+                const evidence = yield* decodeFactEvidenceRegistry(
+                  evidenceSource,
+                  `${config.factsDir}/evidence.ts`
+                )
+                const assets = yield* decodeFactAssetRegistry(
+                  assetSource,
+                  `${config.factsDir}/assets.ts`
+                )
+                const sections = yield* loadSections(
+                  fileSystem,
+                  path,
+                  server,
+                  checkoutRoot,
+                  canonicalFactsRoot,
+                  config
+                )
+                const loadedAssets = yield* loadAssets(
+                  fileSystem,
+                  path,
+                  checkoutRoot,
+                  canonicalFactsRoot,
+                  assets
+                )
+                return {
+                  assetDigests: loadedAssets.digests,
+                  assetSources: loadedAssets.sources,
+                  assets,
+                  config,
+                  evidence,
+                  sections,
+                } satisfies LoadedFactsSource
+              }),
+            (server) =>
+              sourcePromise('Could not close the facts module loader.', () =>
+                server.close()
+              )
+          )
+        })
+      )
+    })
+)
 
 export const compileFactsCheckout = Effect.fn('FactsPublisher.compileCheckout')(
   (
@@ -279,13 +432,13 @@ export const compileFactsCheckout = Effect.fn('FactsPublisher.compileCheckout')(
     | FactsAuthoringCompositionError
     | FactsAuthoringValidationError
     | FactsPublisherSourceError
-    | import('@cv/facts-release').FactsReleaseAssetError
-    | import('@cv/facts-release').FactsReleaseHashError
-    | import('@cv/facts-release').FactsReleaseValidationError
+    | FactsReleaseAssetError
+    | FactsReleaseHashError,
+    FileSystemService | PathService
   > =>
     Effect.gen(function* () {
-      const loaded = yield* loadFactsSourceEffect(contentRoot)
-      const compilation = yield* composeFactsRepository({
+      const loaded = yield* loadFactsSource(contentRoot)
+      const compilation = yield* composeDecodedFactsRepository({
         assetDigests: loaded.assetDigests,
         assets: loaded.assets,
         config: loaded.config,

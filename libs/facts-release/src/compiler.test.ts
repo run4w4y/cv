@@ -5,7 +5,6 @@ import {
   compileFactsRelease,
   FactsReleaseAssetError,
   FactsReleaseManifestV1Schema,
-  FactsReleaseValidationError,
 } from './index'
 import {
   factsCatalogueFixture,
@@ -28,6 +27,7 @@ const fixture = async () => {
         bytes: fixtureAssetBytes,
         fileName: 'employment-review.pdf',
         id: 'asset.employment-review',
+        sha256: assetSha256,
       },
     ],
     catalogues: [
@@ -175,58 +175,6 @@ describe('facts release compiler', () => {
       bundle.objects.filter((object) => object.kind === 'asset')
     ).toHaveLength(1)
   })
-
-  test('rejects invalid facts through the code-owned facts contract', async () => {
-    const input = await fixture()
-    const error = await Effect.runPromise(
-      Effect.flip(
-        compileFactsRelease({
-          ...input,
-          catalogues: input.catalogues.map((catalogue, index) =>
-            index === 0
-              ? {
-                  ...catalogue,
-                  sections: catalogue.sections.map((section) => ({
-                    ...section,
-                    facts: section.facts.map((fact) => ({
-                      ...fact,
-                      status: 'draft',
-                    })),
-                  })),
-                }
-              : catalogue
-          ),
-        })
-      )
-    )
-
-    expect(error).toBeInstanceOf(FactsReleaseValidationError)
-    if (error._tag !== 'FactsReleaseValidationError') {
-      throw new Error('Expected a facts release validation error.')
-    }
-    expect(error.context).toBe('catalogue')
-  })
-
-  test('requires full immutable source and compiler commit hashes', async () => {
-    const input = await fixture()
-    const error = await Effect.runPromise(
-      Effect.flip(
-        compileFactsRelease({
-          ...input,
-          provenance: {
-            ...input.provenance,
-            source: { ...input.provenance.source, commit: 'main' },
-          },
-        })
-      )
-    )
-
-    expect(error).toBeInstanceOf(FactsReleaseValidationError)
-    if (error._tag !== 'FactsReleaseValidationError') {
-      throw new Error('Expected a facts release validation error.')
-    }
-    expect(error.context).toBe('provenance')
-  })
 })
 
 describe('facts release asset validation', () => {
@@ -255,6 +203,7 @@ describe('facts release asset validation', () => {
               bytes: new Uint8Array(),
               fileName: 'extra.txt',
               id: 'asset.extra',
+              sha256: '0'.repeat(64),
             },
           ],
         })
@@ -279,40 +228,67 @@ describe('facts release asset validation', () => {
     expect(duplicate.issue).toBe('duplicate-source')
   })
 
-  test('rejects unsafe names and bytes that do not match review', async () => {
+  test('rejects inconsistent precomputed asset digests', async () => {
     const input = await fixture()
-    const unsafe = await Effect.runPromise(
-      Effect.flip(
-        compileFactsRelease({
-          ...input,
-          assets: input.assets.map((asset) => ({
-            ...asset,
-            fileName: '../review.pdf',
-          })),
-        })
-      )
-    )
     const mismatch = await Effect.runPromise(
       Effect.flip(
         compileFactsRelease({
           ...input,
           assets: input.assets.map((asset) => ({
             ...asset,
-            bytes: new TextEncoder().encode('not reviewed'),
+            sha256: '0'.repeat(64),
           })),
         })
       )
     )
 
-    if (unsafe._tag !== 'FactsReleaseAssetError') {
-      throw new Error('Expected an unsafe facts asset error.')
-    }
     if (mismatch._tag !== 'FactsReleaseAssetError') {
       throw new Error('Expected a facts asset digest error.')
     }
-    expect(unsafe.issue).toBe('invalid-file-name')
     expect(mismatch.issue).toBe('digest-mismatch')
     expect(mismatch.expected).toBe(input.catalogues[0]?.assets[0]?.sha256)
     expect(mismatch.actual).toHaveLength(64)
+  })
+
+  test('rejects different media types for one content-addressed asset', async () => {
+    const input = await fixture()
+    const original = input.catalogues[0]?.assets[0]
+    const originalSource = input.assets[0]
+    if (!original || !originalSource) {
+      throw new Error('Expected the facts fixture to include one asset.')
+    }
+    const error = await Effect.runPromise(
+      Effect.flip(
+        compileFactsRelease({
+          ...input,
+          assets: [
+            ...input.assets,
+            {
+              ...originalSource,
+              fileName: 'employment-review.txt',
+              id: 'asset.employment-review-text',
+            },
+          ],
+          catalogues: input.catalogues.map((catalogue) => ({
+            ...catalogue,
+            assets: [
+              original,
+              {
+                ...original,
+                id: 'asset.employment-review-text',
+                mediaType: 'text/plain',
+              },
+            ],
+          })),
+        })
+      )
+    )
+
+    if (error._tag !== 'FactsReleaseAssetError') {
+      throw new Error('Expected a facts release asset error.')
+    }
+    expect(error.issue).toBe('media-type-conflict')
+    expect(error.expected).toBe('application/pdf')
+    expect(error.actual).toBe('text/plain')
   })
 })

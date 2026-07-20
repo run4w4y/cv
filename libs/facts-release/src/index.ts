@@ -4,7 +4,6 @@ export {
   factsReleaseManifestMediaType,
 } from './compiler'
 export * from './errors'
-export { verifyFactsReleaseBundle } from './integrity'
 export {
   factsAssetObjectKey,
   factsCurrentObjectKey,

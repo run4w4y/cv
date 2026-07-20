@@ -1,11 +1,6 @@
-import { Effect } from 'effect'
-
-import { FactsReleaseValidationError } from '../errors'
+import { isPlainObject } from 'es-toolkit/predicate'
 
 const encoder = new TextEncoder()
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
 
 const canonicalize = (value: unknown): unknown => {
   if (
@@ -27,7 +22,7 @@ const canonicalize = (value: unknown): unknown => {
     return value.map(canonicalize)
   }
 
-  if (isRecord(value)) {
+  if (isPlainObject(value)) {
     const output: Record<string, unknown> = {}
     for (const key of Object.keys(value).sort()) {
       const item = value[key]
@@ -41,16 +36,5 @@ const canonicalize = (value: unknown): unknown => {
   throw new TypeError(`Canonical JSON cannot encode ${typeof value}.`)
 }
 
-export const encodeCanonicalJson = (
-  value: unknown,
-  context: 'catalogue' | 'manifest'
-): Effect.Effect<Uint8Array, FactsReleaseValidationError> =>
-  Effect.try({
-    try: () => encoder.encode(`${JSON.stringify(canonicalize(value))}\n`),
-    catch: (cause) =>
-      new FactsReleaseValidationError({
-        cause,
-        context,
-        message: `Could not encode the facts release ${context} as canonical JSON.`,
-      }),
-  })
+export const encodeCanonicalJson = (value: unknown): Uint8Array =>
+  encoder.encode(`${JSON.stringify(canonicalize(value))}\n`)

@@ -11,10 +11,12 @@ import {
   FactTailoringGuidanceV1Schema,
   IdentityFactsSectionV1Schema,
   IdentityLanguageV1Schema,
+  MediaTypeSchema,
   ProjectContributionV1Schema,
   ProjectEntryV1Schema,
   ProjectsFactsSectionV1Schema,
   ReviewedFactV1Schema,
+  SafeFileNameSchema,
   SkillEntryV1Schema,
   SkillGroupV1Schema,
   SkillsFactsSectionV1Schema,
@@ -98,10 +100,10 @@ export interface FactEvidenceRegistrySource
   extends Schema.Schema.Type<typeof FactEvidenceRegistrySourceSchema> {}
 
 export const FactAssetSourceSchema = Schema.Struct({
-  fileName: RelativePathSchema,
+  fileName: SafeFileNameSchema,
   label: ShortTextSchema,
   description: TextSchema.pipe(Schema.check(Schema.isMaxLength(1_000))),
-  mediaType: ShortTextSchema,
+  mediaType: MediaTypeSchema,
 }).annotate({ identifier: 'FactAssetSource' })
 
 export interface FactAssetSource
