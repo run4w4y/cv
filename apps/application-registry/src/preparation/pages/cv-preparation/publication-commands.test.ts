@@ -2,7 +2,13 @@ import { describe, expect, test } from 'bun:test'
 import type { CvLink } from '@cv/application-registry-entity'
 
 import type { CvPageState } from '@/preparation/data'
-import type { CvPublicationRun } from '@/preparation/publication'
+import {
+  type CvPublicationRun,
+  currentCvPdfArtifact,
+  cvPublicationCanGeneratePdf,
+  cvPublicationHasReadyPdf,
+  cvPublicationIsShareable,
+} from '@/preparation/publication'
 import { resolveCurrentCvPage } from './publication-view'
 
 const publication = {
@@ -118,5 +124,31 @@ describe('resolveCurrentCvPage', () => {
 
     expect(resolved?.link).toBe(nextLink)
     expect(resolved?.artifact).toBeNull()
+  })
+
+  test('rejects a stale artifact for shareability and publication commands', () => {
+    const staleArtifact: CvPageState = {
+      artifact: {
+        ...publication.artifact,
+        publicationVersion: publication.link.publicationVersion - 1,
+      },
+      link: publication.link,
+    }
+
+    expect(currentCvPdfArtifact(staleArtifact)).toBeNull()
+    expect(cvPublicationHasReadyPdf(staleArtifact)).toBe(false)
+    expect(cvPublicationIsShareable(staleArtifact)).toBe(false)
+    expect(cvPublicationCanGeneratePdf(staleArtifact)).toBe(true)
+  })
+
+  test('allows manual PDF generation only while the page is enabled', () => {
+    const disabled: CvPageState = {
+      ...publication,
+      link: disabledLink(2),
+    }
+
+    expect(cvPublicationHasReadyPdf(disabled)).toBe(true)
+    expect(cvPublicationIsShareable(disabled)).toBe(false)
+    expect(cvPublicationCanGeneratePdf(disabled)).toBe(false)
   })
 })

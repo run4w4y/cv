@@ -36,3 +36,9 @@ export {
   cvPublicationProgressLayer,
 } from './progress'
 export { CvPublicationWorkflowProvider } from './provider'
+export {
+  currentCvPdfArtifact,
+  cvPublicationCanGeneratePdf,
+  cvPublicationHasReadyPdf,
+  cvPublicationIsShareable,
+} from './readiness'

@@ -2,6 +2,12 @@ import { Badge, Button } from '@cv/internal-ui'
 import { Download, ExternalLink, EyeOff, RefreshCw } from 'lucide-react'
 
 import type { CvPageState } from '../data'
+import {
+  currentCvPdfArtifact,
+  cvPublicationCanGeneratePdf,
+  cvPublicationHasReadyPdf,
+  cvPublicationIsShareable,
+} from '../publication'
 
 export type CvPublicationPanelPendingAction =
   | 'availability'
@@ -29,18 +35,28 @@ export const CvPublicationPanel = ({
   readonly pendingAction: CvPublicationPanelPendingAction
   readonly publication: CvPageState
 }) => {
-  const { artifact, link } = publication
+  const { link } = publication
+  const artifact = currentCvPdfArtifact(publication)
   const earlierRevision =
     currentHeadRevisionId !== null &&
     currentHeadRevisionId !== link.currentRevisionId
   const controlsDisabled = disabled || pendingAction !== null
   const pdfStatus = artifact?.status ?? 'missing'
+  const hasReadyPdf = cvPublicationHasReadyPdf(publication)
+  const shareable = cvPublicationIsShareable(publication)
+  const availabilityLabel = shareable
+    ? 'Page and PDF ready'
+    : link.enabled
+      ? pdfStatus === 'failed'
+        ? 'Publication blocked'
+        : 'Preparing publication'
+      : 'Private draft'
 
   return (
     <div className="mt-4 grid gap-3 rounded-md border border-border p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant={link.enabled ? 'secondary' : 'outline'}>
-          {link.enabled ? 'Page is public' : 'Private draft'}
+        <Badge variant={shareable ? 'secondary' : 'outline'}>
+          {availabilityLabel}
         </Badge>
         <Badge variant={pdfStatus === 'ready' ? 'secondary' : 'outline'}>
           {pdfStatus === 'missing'
@@ -71,7 +87,7 @@ export const CvPublicationPanel = ({
           <RefreshCw />
           {pendingAction === 'refresh' ? 'Refreshing…' : 'Refresh status'}
         </Button>
-        {link.enabled ? (
+        {shareable ? (
           <a
             className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
             href={link.publicUrl}
@@ -93,7 +109,9 @@ export const CvPublicationPanel = ({
         <Button
           size="sm"
           variant="outline"
-          disabled={controlsDisabled || pdfStatus === 'pending'}
+          disabled={
+            controlsDisabled || !cvPublicationCanGeneratePdf(publication)
+          }
           onClick={onGeneratePdf}
         >
           <RefreshCw />
@@ -106,7 +124,7 @@ export const CvPublicationPanel = ({
         <Button
           size="sm"
           variant="outline"
-          disabled={controlsDisabled}
+          disabled={controlsDisabled || (!link.enabled && !hasReadyPdf)}
           onClick={() => onSetAvailability(!link.enabled)}
         >
           {link.enabled ? <EyeOff /> : <ExternalLink />}

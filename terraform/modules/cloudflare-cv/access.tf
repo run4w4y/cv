@@ -31,7 +31,7 @@ resource "cloudflare_zero_trust_access_application" "application_registry_machin
 
   account_id           = var.cloudflare_account_id
   name                 = "CV application registry machine API"
-  domain               = "${local.application_registry_access_domain}/v1/*"
+  domain               = "${local.application_registry_access_domain}/machine/*"
   type                 = "self_hosted"
   app_launcher_visible = false
   session_duration     = "720h"

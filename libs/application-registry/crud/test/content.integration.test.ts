@@ -416,7 +416,7 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
       })
 
       const firstArtifact = artifact()
-      yield* artifacts.persistPending(firstArtifact, outbox(firstArtifact))
+      yield* artifacts.persistPending(firstArtifact, outbox(firstArtifact), 1)
       const failed = yield* artifacts.markFailed(
         'pdf-artifact-1',
         'render_failed',
@@ -427,12 +427,12 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
         id: 'pdf-artifact-2',
         requestId: 'request-2',
       })
-      yield* artifacts.persistPending(retryArtifact, outbox(retryArtifact))
+      yield* artifacts.persistPending(retryArtifact, outbox(retryArtifact), 1)
       const duplicate = artifact({
         id: 'pdf-artifact-duplicate',
         requestId: 'request-2',
       })
-      yield* artifacts.persistPending(duplicate, outbox(duplicate))
+      yield* artifacts.persistPending(duplicate, outbox(duplicate), 1)
       const pendingDispatch = yield* artifacts.findPendingDispatch(
         retryArtifact.id
       )
@@ -477,6 +477,26 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
         null,
         '2026-07-17T17:00:00.000Z'
       )
+      const restoredLink = yield* links.findByEntry('content-entry-1')
+      const staleFailureDisable = yield* links.disableForFailedArtifact(
+        'cv-link-1',
+        restoredLink?.version ?? -1,
+        firstArtifact,
+        'pdf_generation_failed',
+        '2026-07-17T17:30:00.000Z'
+      )
+      const linkAfterStaleFailure = yield* links.findByEntry('content-entry-1')
+      const staleStartArtifact = artifact({
+        createdAt: '2026-07-17T18:00:00.000Z',
+        id: 'pdf-artifact-stale-start',
+        requestId: 'request-stale-start',
+        updatedAt: '2026-07-17T18:00:00.000Z',
+      })
+      yield* artifacts.persistPending(
+        staleStartArtifact,
+        outbox(staleStartArtifact),
+        1
+      )
 
       return {
         disabled,
@@ -509,8 +529,11 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
         pendingDispatch,
         ready,
         dispatched,
+        linkAfterStaleFailure,
         retryByRequest: yield* artifacts.findByRequestId('request-2'),
-        restoredLink: yield* links.findByEntry('content-entry-1'),
+        restoredLink,
+        staleFailureDisable,
+        staleStart: yield* artifacts.findByRequestId('request-stale-start'),
       }
     })
   )
@@ -519,6 +542,9 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
   assert.equal(result.failed, true)
   assert.equal(result.disabled, true)
   assert.equal(result.enabled, true)
+  assert.equal(result.staleFailureDisable, false)
+  assert.equal(result.linkAfterStaleFailure?.enabled, true)
+  assert.equal(result.staleStart, undefined)
   assert.equal(result.pendingDispatch?.artifactId, 'pdf-artifact-2')
   assert.equal(result.pendingDispatch?.attempts, 0)
   assert.equal(result.failedDispatch?.attempts, 1)
@@ -613,7 +639,11 @@ test('deleting an application cascades through its complete prepared CV graph', 
       const pendingArtifact = artifact({
         contentRevisionId: 'content-revision-1',
       })
-      yield* artifacts.persistPending(pendingArtifact, outbox(pendingArtifact))
+      yield* artifacts.persistPending(
+        pendingArtifact,
+        outbox(pendingArtifact),
+        1
+      )
 
       return yield* applications.remove(application.applicationId)
     })

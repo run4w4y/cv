@@ -6,7 +6,7 @@ import {
   jobPostingSnapshots,
   pdfGenerationOutbox,
 } from '@cv/application-registry-entity'
-import { and, asc, desc, eq, exists, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, exists, gt, notExists, or, sql } from 'drizzle-orm'
 import type { BatchItem } from 'drizzle-orm/batch'
 import { Effect } from 'effect'
 
@@ -292,6 +292,19 @@ export const findCvLinkByEntry = (
       Effect.mapError(databaseFailure('Failed to load content CV link'))
     )
 
+export const findCvLinksByApplication = (
+  database: RegistryQueryDatabase,
+  applicationId: string
+) =>
+  database
+    .select()
+    .from(cvLinks)
+    .where(eq(cvLinks.applicationId, applicationId))
+    .orderBy(asc(cvLinks.createdAt), asc(cvLinks.id))
+    .pipe(
+      Effect.mapError(databaseFailure('Failed to load application CV links'))
+    )
+
 export const stageCvLink = (
   database: RegistryQueryDatabase,
   link: PersistedCvLink
@@ -354,6 +367,90 @@ export const setCvLinkEnabled = (
     .pipe(
       Effect.map((rows) => rows.length > 0),
       Effect.mapError(databaseFailure('Failed to change CV link availability'))
+    )
+
+export const disableCvLinkForFailedArtifact = (
+  database: RegistryQueryDatabase,
+  id: string,
+  expectedVersion: number,
+  artifact: PersistedGeneratedArtifact,
+  reason: string,
+  disabledAt: string
+) =>
+  database
+    .update(cvLinks)
+    .set({
+      enabled: false,
+      disabledAt,
+      disabledReason: reason,
+      updatedAt: disabledAt,
+      version: sql`${cvLinks.version} + 1`,
+    })
+    .where(
+      and(
+        eq(cvLinks.id, id),
+        eq(cvLinks.version, expectedVersion),
+        eq(cvLinks.enabled, true),
+        eq(cvLinks.currentRevisionId, artifact.contentRevisionId),
+        eq(cvLinks.publicationVersion, artifact.publicationVersion),
+        eq(cvLinks.publicUrl, artifact.qrTarget),
+        exists(
+          database
+            .select({ id: generatedArtifacts.id })
+            .from(generatedArtifacts)
+            .where(
+              and(
+                eq(generatedArtifacts.id, artifact.id),
+                eq(generatedArtifacts.cvLinkId, id),
+                eq(
+                  generatedArtifacts.contentRevisionId,
+                  artifact.contentRevisionId
+                ),
+                eq(generatedArtifacts.kind, 'pdf'),
+                eq(generatedArtifacts.status, 'failed'),
+                eq(
+                  generatedArtifacts.publicationVersion,
+                  artifact.publicationVersion
+                ),
+                eq(generatedArtifacts.qrTarget, artifact.qrTarget)
+              )
+            )
+        ),
+        notExists(
+          database
+            .select({ id: generatedArtifacts.id })
+            .from(generatedArtifacts)
+            .where(
+              and(
+                eq(generatedArtifacts.cvLinkId, id),
+                eq(
+                  generatedArtifacts.contentRevisionId,
+                  artifact.contentRevisionId
+                ),
+                eq(generatedArtifacts.kind, 'pdf'),
+                eq(
+                  generatedArtifacts.publicationVersion,
+                  artifact.publicationVersion
+                ),
+                eq(generatedArtifacts.qrTarget, artifact.qrTarget),
+                or(
+                  gt(generatedArtifacts.createdAt, artifact.createdAt),
+                  and(
+                    eq(generatedArtifacts.createdAt, artifact.createdAt),
+                    gt(generatedArtifacts.id, artifact.id)
+                  )
+                )
+              )
+            )
+        )
+      )
+    )
+    .returning({ id: cvLinks.id })
+    .pipe(
+      Effect.map((rows) => rows.length > 0),
+      Effect.mapError(
+        databaseFailure('Failed to disable CV link for failed PDF artifact')
+      )
     )
 
 export const disableCvLinksForApplication = (
@@ -497,8 +594,62 @@ export const findCurrentArtifactForPublication = (
 export const persistPendingArtifact = (
   database: RegistryConnections,
   artifact: PersistedGeneratedArtifact,
-  outbox: PersistedPdfGenerationOutbox
+  outbox: PersistedPdfGenerationOutbox,
+  expectedLinkVersion: number
 ) => {
+  const artifactInsert = database.batch
+    .insert(generatedArtifacts)
+    .select(
+      database.batch
+        .select({
+          id: sql<string>`${artifact.id}`.as('id'),
+          cvLinkId: sql<string>`${artifact.cvLinkId}`.as('cv_link_id'),
+          contentRevisionId: sql<string>`${artifact.contentRevisionId}`.as(
+            'content_revision_id'
+          ),
+          kind: sql<PersistedGeneratedArtifact['kind']>`${artifact.kind}`.as(
+            'kind'
+          ),
+          status: sql<
+            PersistedGeneratedArtifact['status']
+          >`${artifact.status}`.as('status'),
+          requestId: sql<string>`${artifact.requestId}`.as('request_id'),
+          rendererVersion: sql<string>`${artifact.rendererVersion}`.as(
+            'renderer_version'
+          ),
+          publicationVersion: sql<number>`${artifact.publicationVersion}`.as(
+            'publication_version'
+          ),
+          qrTarget: sql<string>`${artifact.qrTarget}`.as('qr_target'),
+          objectKey: sql<string | null>`${artifact.objectKey}`.as('object_key'),
+          sha256: sql<string | null>`${artifact.sha256}`.as('sha256'),
+          byteLength: sql<number | null>`${artifact.byteLength}`.as(
+            'byte_length'
+          ),
+          mediaType: sql<string | null>`${artifact.mediaType}`.as('media_type'),
+          errorCode: sql<string | null>`${artifact.errorCode}`.as('error_code'),
+          errorMessage: sql<string | null>`${artifact.errorMessage}`.as(
+            'error_message'
+          ),
+          generatedAt: sql<string | null>`${artifact.generatedAt}`.as(
+            'generated_at'
+          ),
+          createdAt: sql<string>`${artifact.createdAt}`.as('created_at'),
+          updatedAt: sql<string>`${artifact.updatedAt}`.as('updated_at'),
+        })
+        .from(cvLinks)
+        .where(
+          and(
+            eq(cvLinks.id, artifact.cvLinkId),
+            eq(cvLinks.version, expectedLinkVersion),
+            eq(cvLinks.currentRevisionId, artifact.contentRevisionId),
+            eq(cvLinks.publicationVersion, artifact.publicationVersion),
+            eq(cvLinks.publicUrl, artifact.qrTarget)
+          )
+        )
+    )
+    .onConflictDoNothing({ target: generatedArtifacts.requestId })
+
   const outboxInsert = database.batch
     .insert(pdfGenerationOutbox)
     .select(
@@ -531,10 +682,7 @@ export const persistPendingArtifact = (
     .onConflictDoNothing({ target: pdfGenerationOutbox.artifactId })
 
   return runBatch(database.batch, 'PDF job creation', [
-    database.batch
-      .insert(generatedArtifacts)
-      .values(artifact)
-      .onConflictDoNothing({ target: generatedArtifacts.requestId }),
+    artifactInsert,
     outboxInsert,
   ]).pipe(Effect.asVoid)
 }

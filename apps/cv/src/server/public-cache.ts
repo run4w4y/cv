@@ -116,25 +116,8 @@ export const withoutSharedCaching = (response: Response): Response => {
   headers.set('Referrer-Policy', 'no-referrer')
   headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive')
   headers.delete('Cache-Tag')
+  headers.delete('CDN-Cache-Control')
   headers.delete('Cloudflare-CDN-Cache-Control')
-  return new Response(response.body, {
-    headers,
-    status: response.status,
-    statusText: response.statusText,
-  })
-}
-
-export const withPublicCaching = async (
-  response: Response,
-  token: string
-): Promise<Response> => {
-  if (response.status !== 200) return withoutSharedCaching(response)
-
-  const headers = new Headers(response.headers)
-  headers.set('Cache-Control', 'public, max-age=0, must-revalidate')
-  headers.set('Cloudflare-CDN-Cache-Control', 'public, max-age=300')
-  headers.set('Cache-Tag', await cacheTagForToken(token))
-  headers.set('Referrer-Policy', 'no-referrer')
   return new Response(response.body, {
     headers,
     status: response.status,

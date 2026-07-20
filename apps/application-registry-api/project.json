@@ -76,7 +76,15 @@
     },
     "lint": {},
     "lint:fix": {},
-    "test:unit": {},
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "bun test apps/application-registry-api/src apps/application-registry-api/scripts"
+      }
+    },
     "typecheck": {},
     "format": {},
     "format:check": {}

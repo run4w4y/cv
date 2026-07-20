@@ -1,6 +1,7 @@
 import { ArtifactStore } from '@cv/application-registry-artifact-store'
 import {
   ApplicationsCrud,
+  ArtifactsCrud,
   ContentCrud,
   CvLinksCrud,
 } from '@cv/application-registry-crud'
@@ -67,6 +68,7 @@ const publicUrl = (
 
 const make = Effect.gen(function* () {
   const applications = yield* ApplicationsCrud
+  const artifacts = yield* ArtifactsCrud
   const content = yield* ContentCrud
   const links = yield* CvLinksCrud
   const store = yield* ArtifactStore
@@ -192,11 +194,42 @@ const make = Effect.gen(function* () {
           applicationIdentifier
         )
         if (application.applicationStatus === 'rejected') return 0
-        return yield* links.enableForApplication(
-          application.id,
-          applicationRejectedDisableReason,
-          yield* registryNow
+        const applicationLinks = yield* links.findByApplication(application.id)
+        const restored = yield* Effect.forEach(
+          applicationLinks,
+          Effect.fn('CvPublicationsService.restoreReadyLinkAfterRejection')(
+            function* (link) {
+              if (
+                link.enabled ||
+                link.disabledReason !== applicationRejectedDisableReason
+              ) {
+                return 0
+              }
+
+              const currentArtifact =
+                yield* artifacts.findCurrentForPublication(
+                  link.id,
+                  link.currentRevisionId,
+                  null,
+                  link.publicationVersion,
+                  link.publicUrl
+                )
+              if (currentArtifact?.status !== 'ready') return 0
+
+              const enabled = yield* links.setEnabled(
+                link.id,
+                link.version,
+                link.publicationVersion,
+                true,
+                null,
+                yield* registryNow
+              )
+              return enabled ? 1 : 0
+            }
+          ),
+          { concurrency: 1 }
         )
+        return restored.reduce<number>((total, count) => total + count, 0)
       })
     ),
     stage: Effect.fn('CvPublicationsService.stage')(

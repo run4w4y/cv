@@ -8,7 +8,7 @@ another.
 | `data/` | Registry queries, remote mutations, cache invalidation | Drafts, Workflow progress |
 | `@cv/application-preparation-workflow` | CV/letter generation execution, private review/execution handles, cancellation, run progress | React form state, publication |
 | `workflow/` | Browser layers, memory-engine composition, and Effect Atom adapters for the package | Workflow invariants or generation logic |
-| `publication/` | Public-page enablement, independent PDF start, publication run progress | Document generation or editing |
+| `publication/` | Public-page enablement, PDF-readiness gating, publication run progress | Document generation or editing |
 | `editor/` + `workspace/` | Human override, detached-candidate decision, pure joined read model | Registry heads or Workflow runs |
 
 React routes subscribe to `preparationWorkspaceAtom` and issue commands through
@@ -52,19 +52,25 @@ state, and approval mode. `editor/atoms.ts` owns only local mutations.
 
 CV approval depends on the document schema and review decision. The PDF worker
 owns exact A4 measurement because Browser Rendering is the authoritative print
-environment; a layout failure is recorded on the PDF artifact and never changes
-page visibility.
+environment. A layout or generation failure is recorded on the PDF artifact and
+disables only the still-current matching publication.
 
 ## Publication run
 
 Saving a CV revision stages the single page record as private and rotates its
-preview capability. The management iframe and PDF worker render that protected
-stored preview; unsaved browser state is never a second rendering protocol.
+preview capability. The management iframe renders that protected stored
+preview; unsaved browser state is never a second rendering protocol. After the
+publication is enabled, the PDF worker renders the literal public URL that it
+also embeds in the document's QR code.
 
-The publication Workflow accepts an approved staged revision, flips the page's
-`enabled` boolean, then attempts to start PDF generation. PDF-start failure is
-reported separately and does not roll back visibility. Artifact state is read
-from the registry and can be refreshed, generated, or regenerated explicitly.
+The publication Workflow accepts an approved staged revision, temporarily
+enables the exact page URL required by Browser Rendering, and starts PDF
+generation. Management treats the publication as shareable only when that page
+is still enabled and its matching artifact is `ready`. A synchronous PDF-start
+failure rolls the page back to disabled; an asynchronous generation failure
+does the same only when the failed artifact still identifies the current
+revision, publication version, and URL. Retry uses the publication Workflow so
+the page is re-enabled for a fresh attempt.
 
 Publication execution is also memory-backed. The registry page record and every
 artifact attempt remain authoritative and survive browser runtime loss.

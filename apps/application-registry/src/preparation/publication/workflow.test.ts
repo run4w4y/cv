@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'bun:test'
-import type { PdfJobResponse } from '@cv/application-registry-api-contract'
-import type { ContentEntry, CvLink } from '@cv/application-registry-entity'
+import type {
+  PdfJobResponse,
+  SetCvLinkAvailabilityRequest,
+} from '@cv/application-registry-api-contract'
+import {
+  type ContentEntry,
+  type CvLink,
+  pdfGenerationFailedDisableReason,
+} from '@cv/application-registry-entity'
 import {
   Cause,
   Deferred,
@@ -151,14 +158,23 @@ describe('session CV publication Workflow', () => {
     expect(observed.run?._tag).toBe('Published')
   })
 
-  test('keeps the page public when PDF generation cannot start', async () => {
-    const availabilityRequests: boolean[] = []
+  test('disables the page and fails when PDF generation cannot start', async () => {
+    const availabilityRequests: SetCvLinkAvailabilityRequest[] = []
     const observed = await execute(
       makeRepository({
         setPublicationAvailability: ({ input: request }) =>
           Effect.sync(() => {
-            availabilityRequests.push(request.enabled)
-            return link
+            availabilityRequests.push(request)
+            return request.enabled
+              ? link
+              : {
+                  ...link,
+                  disabledAt: recordedAt,
+                  disabledReason: request.reason ?? null,
+                  enabled: false,
+                  publicationVersion: link.publicationVersion,
+                  version: link.version + 1,
+                }
           }),
         startPdfGeneration: () =>
           Effect.fail(
@@ -170,13 +186,68 @@ describe('session CV publication Workflow', () => {
       })
     )
 
-    expect(Exit.isSuccess(observed.exit)).toBe(true)
-    if (Exit.isFailure(observed.exit)) throw new Error('Expected success.')
-    expect(observed.exit.value.link.enabled).toBe(true)
-    expect(observed.exit.value.job).toBeNull()
-    expect(observed.exit.value.pdfStartError).toContain('PDF Queue unavailable')
-    expect(availabilityRequests).toEqual([true])
-    expect(observed.run?._tag).toBe('Published')
+    expect(Exit.isFailure(observed.exit)).toBe(true)
+    if (Exit.isSuccess(observed.exit)) throw new Error('Expected failure.')
+    const error = Cause.findErrorOption(observed.exit.cause)
+    expect(Option.isSome(error)).toBe(true)
+    if (Option.isNone(error)) throw new Error('Expected typed failure.')
+    expect(error.value).toBeInstanceOf(CvPublicationWorkflowError)
+    expect(error.value.stage).toBe('start-pdf')
+    expect(error.value.message).toContain('PDF Queue unavailable')
+    expect(availabilityRequests).toEqual([
+      {
+        enabled: true,
+        expectedPublicationVersion: input.expectedPublicationVersion,
+      },
+      {
+        enabled: false,
+        expectedPublicationVersion: link.publicationVersion,
+        reason: pdfGenerationFailedDisableReason,
+      },
+    ])
+    expect(observed.run?._tag).toBe('Failed')
+  })
+
+  test('preserves the PDF start failure when disabling the page also fails', async () => {
+    const availabilityRequests: SetCvLinkAvailabilityRequest[] = []
+    const observed = await execute(
+      makeRepository({
+        setPublicationAvailability: ({ input: request }) => {
+          availabilityRequests.push(request)
+          return request.enabled
+            ? Effect.succeed(link)
+            : Effect.fail(
+                new PreparationDataError({
+                  message: 'Publication version changed during cleanup.',
+                  operation: 'set-publication-availability',
+                })
+              )
+        },
+        startPdfGeneration: () =>
+          Effect.fail(
+            new PreparationDataError({
+              message: 'PDF Queue unavailable.',
+              operation: 'start-pdf-generation',
+            })
+          ),
+      })
+    )
+
+    expect(Exit.isFailure(observed.exit)).toBe(true)
+    if (Exit.isSuccess(observed.exit)) throw new Error('Expected failure.')
+    const error = Cause.findErrorOption(observed.exit.cause)
+    expect(Option.isSome(error)).toBe(true)
+    if (Option.isNone(error)) throw new Error('Expected typed failure.')
+    expect(error.value).toBeInstanceOf(CvPublicationWorkflowError)
+    expect(error.value.stage).toBe('start-pdf')
+    expect(error.value.message).toContain('PDF Queue unavailable')
+    expect(error.value.message).not.toContain('during cleanup')
+    expect(availabilityRequests.at(-1)).toEqual({
+      enabled: false,
+      expectedPublicationVersion: link.publicationVersion,
+      reason: pdfGenerationFailedDisableReason,
+    })
+    expect(observed.run?._tag).toBe('Failed')
   })
 
   test('fails before PDF generation when the page cannot be enabled', async () => {
@@ -261,5 +332,73 @@ describe('session CV publication Workflow', () => {
 
     expect(observed.run?._tag).toBe('Cancelled')
     expect(observed.invalidations).toEqual([1, 1, 1])
+  })
+
+  test('disables the page when publication is cancelled during PDF startup', async () => {
+    const cancelledInput = {
+      ...input,
+      runId: 'publication-run-cancelled-during-pdf',
+    }
+    const availabilityRequests: SetCvLinkAvailabilityRequest[] = []
+    const observed = await Effect.runPromise(
+      Effect.gen(function* () {
+        const startingPdf = yield* Deferred.make<void>()
+        const neverStart = yield* Deferred.make<void>()
+        const repository = makeRepository({
+          setPublicationAvailability: ({ input: request }) =>
+            Effect.sync(() => {
+              availabilityRequests.push(request)
+              return request.enabled
+                ? link
+                : {
+                    ...link,
+                    disabledAt: recordedAt,
+                    disabledReason: request.reason ?? null,
+                    enabled: false,
+                    publicationVersion: link.publicationVersion,
+                    version: link.version + 1,
+                  }
+            }),
+          startPdfGeneration: () =>
+            Effect.gen(function* () {
+              yield* Deferred.succeed(startingPdf, undefined)
+              yield* Deferred.await(neverStart)
+              return runningPdf
+            }),
+        })
+
+        return yield* Effect.gen(function* () {
+          const progress = yield* CvPublicationProgress
+          const executionId =
+            yield* PublishCvWorkflow.executionId(cancelledInput)
+          yield* progress.reserve(cancelledInput, executionId)
+          yield* PublishCvWorkflow.execute(cancelledInput, { discard: true })
+          yield* Deferred.await(startingPdf)
+          yield* cancelCvPublication({
+            executionId,
+            runId: cancelledInput.runId,
+          })
+          return {
+            requests: availabilityRequests,
+            run: (yield* SubscriptionRef.get(progress.runs)).get(
+              cancelledInput.runId
+            ),
+          }
+        }).pipe(Effect.provide(testLayer(repository)))
+      })
+    )
+
+    expect(observed.requests).toEqual([
+      {
+        enabled: true,
+        expectedPublicationVersion: cancelledInput.expectedPublicationVersion,
+      },
+      {
+        enabled: false,
+        expectedPublicationVersion: link.publicationVersion,
+        reason: pdfGenerationFailedDisableReason,
+      },
+    ])
+    expect(observed.run?._tag).toBe('Cancelled')
   })
 })

@@ -7,15 +7,19 @@ versions in parallel.
 The Worker composition root provides:
 
 - the unversioned registry API under `/api/registry`;
+- a bearer-only machine transport under `/machine/*`;
 - public `GET /health` and `/openapi.json` endpoints;
 - the management SPA and same-origin BFF authentication;
 - D1, private R2, analytics, listing-check scheduling, and PDF queue bindings;
 - the existing internal CV-public resolver service binding.
 
-Direct API clients send `Authorization: Bearer <REGISTRY_API_TOKEN>`. Browser
-requests to `/api/registry/*` omit that header; the same Worker injects it from
-its secret before running the identical generated router. Registry responses
-are marked `private, no-store`.
+Browser requests to `/api/registry/*` omit the authorization header; the
+Cloudflare Access-protected Worker injects its secret before running the
+generated router. Direct clients instead use
+`/machine/api/registry/*` (or `/machine/health`) and must send
+`Authorization: Bearer <REGISTRY_API_TOKEN>`. The Worker validates that
+credential before stripping `/machine`; missing credentials are never filled
+in on this transport. Registry responses are marked `private, no-store`.
 
 ## Resource model
 
@@ -97,3 +101,30 @@ bunx nx run application-registry-api:test:e2e
 The integration suite exercises the built Worker against Miniflare D1/R2. The
 end-to-end suite uses the generated client and verifies that OpenAPI exposes
 only the unversioned resource surface.
+
+## First deployment
+
+The steady-state Worker binds to `cv-public` as `CV_APP` for authenticated
+cache invalidation. Because `cv-public` also binds to this Worker's
+`CvPublicResolver` entrypoint, the first deployment must break the binding
+cycle once.
+
+Follow the canonical
+[`terraform/README.md`](../../terraform/README.md#first-production-deployment)
+sequence rather than running this section independently. It includes the
+management build, explicit cutover approval, cron quiescence and 30-minute
+wait, fresh full D1 backup and checksum, remote migrations, PDF queue consumer,
+both Worker deployments, and the final Terraform apply. Only after those
+documented prerequisites and migrations have completed, bootstrap the binding
+pair in this order:
+
+```bash
+APPLICATION_REGISTRY_CV_APP_BINDING_ENABLED=false \
+  bunx nx run application-registry-api:deploy
+bunx nx run cv:deploy
+bunx nx run application-registry-api:deploy
+```
+
+The override omits the entire `services` block from only the first generated
+registry config. It defaults to `true` and must not be persisted as a deployment
+secret or CI variable.

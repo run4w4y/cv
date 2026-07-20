@@ -6,7 +6,6 @@ import {
   type PublicCachePurgeOptions,
   publicToken,
   withoutSharedCaching,
-  withPublicCaching,
 } from './public-cache'
 
 const successfulPurger =
@@ -35,20 +34,25 @@ describe('public CV cache policy', () => {
     expect(publicToken('/c/bad%2Ftoken')).toBeNull()
   })
 
-  test('marks successful public pages for edge-only caching', async () => {
-    const response = await withPublicCaching(
-      new Response('CV', { headers: { 'X-Test': 'preserved' } }),
-      'public-token'
+  test('keeps successful public pages out of every shared cache', () => {
+    const response = withoutSharedCaching(
+      new Response('CV', {
+        headers: {
+          'Cache-Tag': 'old-tag',
+          'CDN-Cache-Control': 'public, max-age=300',
+          'Cloudflare-CDN-Cache-Control': 'public, max-age=300',
+          'X-Test': 'preserved',
+        },
+      })
     )
 
-    expect(response.headers.get('cache-control')).toBe(
-      'public, max-age=0, must-revalidate'
-    )
-    expect(response.headers.get('cloudflare-cdn-cache-control')).toBe(
-      'public, max-age=300'
-    )
-    expect(response.headers.get('cache-tag')).toBe(
-      await cacheTagForToken('public-token')
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+    expect(response.headers.has('cache-tag')).toBe(false)
+    expect(response.headers.has('cdn-cache-control')).toBe(false)
+    expect(response.headers.has('cloudflare-cdn-cache-control')).toBe(false)
+    expect(response.headers.get('referrer-policy')).toBe('no-referrer')
+    expect(response.headers.get('x-robots-tag')).toBe(
+      'noindex, nofollow, noarchive'
     )
     expect(response.headers.get('x-test')).toBe('preserved')
   })
@@ -58,6 +62,7 @@ describe('public CV cache policy', () => {
       new Response('missing', {
         headers: {
           'Cache-Tag': 'old-tag',
+          'CDN-Cache-Control': 'public, max-age=300',
           'Cloudflare-CDN-Cache-Control': 'public, max-age=300',
         },
         status: 404,
@@ -67,6 +72,7 @@ describe('public CV cache policy', () => {
     expect(response.status).toBe(404)
     expect(response.headers.get('cache-control')).toBe('private, no-store')
     expect(response.headers.has('cache-tag')).toBe(false)
+    expect(response.headers.has('cdn-cache-control')).toBe(false)
     expect(response.headers.has('cloudflare-cdn-cache-control')).toBe(false)
   })
 

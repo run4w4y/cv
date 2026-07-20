@@ -8,7 +8,6 @@ import {
   notFoundResponse,
   publicToken,
   withoutSharedCaching,
-  withPublicCaching,
 } from './src/server/public-cache'
 
 type OpenNextWorker = {
@@ -48,9 +47,7 @@ export default {
 
     const response = await application.fetch(request, env, context)
     if (token !== null) {
-      return request.method === 'GET' || request.method === 'HEAD'
-        ? withPublicCaching(response, token)
-        : withoutSharedCaching(response)
+      return withoutSharedCaching(response)
     }
     return pathname.startsWith('/c/_preview/')
       ? withoutSharedCaching(response)

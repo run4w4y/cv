@@ -49,8 +49,9 @@ Pages. Terraform attaches the new Worker only to `CV_WEB_HOST/c/*`; neither the
 Worker's source config nor its deployment config declares a route.
 
 Builds use OpenNext to produce the deployable Worker and immutable assets under
-`.open-next`. The production config writer enables Cloudflare Workers Cache and
-emits the registry resolver binding:
+`.open-next`. The production config writer preserves Cloudflare Workers Cache
+support for the authenticated compatibility purge endpoint and emits the
+registry resolver binding:
 
 ```sh
 bun x nx run cv:build
@@ -73,11 +74,15 @@ The public Worker binds to the registry resolver for reads. The registry has a
 separate binding back to the public Worker only to invalidate a token after a
 staged revision or availability change; preview documents never cross that
 binding.
-Public pages render dynamically on a cache miss. The outer Worker gives only
-successful `/c/:token` responses a five-minute edge TTL and a token-specific
-cache tag; browsers must revalidate, and previews, missing pages, and failures
-are never shared. Publication changes call the owning Worker's global purge API
-for the exact token tag. On a first deployment, deploy the registry Worker
-first, then `cv-public`, and only then apply the Terraform route overlay. Until
-that route exists, the frozen Pages deployment continues handling the entire
-hostname.
+Public pages render dynamically and every `/c/:token` response is marked
+`private, no-store`; the outer Worker removes Cloudflare/CDN cache overrides
+and cache tags before returning it. A D1 availability change therefore takes
+effect on the next public request, including a disable triggered by asynchronous
+PDF failure. Publication changes still call the owning Worker's authenticated
+purge API on a best-effort basis for compatibility. On a first deployment,
+deploy the registry once
+with `APPLICATION_REGISTRY_CV_APP_BINDING_ENABLED=false`, deploy `cv-public`,
+then redeploy the registry without that override before applying the Terraform
+route overlay. This breaks the two Workers' creation-time binding cycle without
+changing their steady-state configuration. Until the route exists, the frozen
+Pages deployment continues handling the entire hostname.

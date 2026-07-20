@@ -83,11 +83,12 @@ key refs.
 
 CV publication is a separate typed Workflow. Saving stages the current revision
 on one private page record and exposes it through a capability preview. The
-Workflow makes that page public by setting its `enabled` boolean, then attempts
-to start PDF generation. PDF status is an independent artifact lifecycle: a
-failed or missing PDF does not disable the page, and the UI can refresh or retry
-it. Publication progress and cancellation are exposed through keyed atoms just
-like preparation runs.
+Workflow makes that page public by setting its `enabled` boolean, then starts
+PDF generation. Management exposes the stable link as shareable only after the
+matching PDF artifact is ready. A generation failure disables that exact
+still-current publication; a retry must re-enable it and produce a ready PDF
+before it can be shared. Publication progress and cancellation are exposed
+through keyed atoms just like preparation runs.
 
 Only orchestration and transient progress are local to the browser. URL capture
 remains a server boundary because arbitrary job sites are not generally

@@ -152,6 +152,12 @@ does not configure an API-billed provider. The Cloudflare stack later writes
 the Worker URL, D1 identifiers, R2 bucket name, KV namespace ID, Worker name,
 and its Access-protected `workers.dev` state into the same folder.
 
+The Infisical stack also generates `/cv/deploy:CV_REVALIDATION_SECRET` once.
+Both deployment workflows receive that same value through their recursive
+`/cv` export, while the root `.envrc` receives it when loading `/cv/deploy`.
+The registry uses it to authenticate targeted invalidation requests to the
+public CV Worker; it is not a user-owned placeholder.
+
 Required under `/cv/content`:
 
 - `CONTENT_REPO_TOKEN`, a GitHub token or GitHub App installation token that CI
@@ -179,6 +185,7 @@ The Infisical stack generates these secrets:
 - `/cv/application-registry:REGISTRY_API_TOKEN`
 - `/cv/content:PRIVATE_CONTENT_AUDIENCE_KEY`, used only to decode frozen-v1
   private audience paths in the existing analytics history
+- `/cv/deploy:CV_REVALIDATION_SECRET`
 
 `CONTENT_ID_SALT` and `PRIVATE_CONTENT_ROOT_KEY` have been relinquished: the v2
 Infisical module neither creates nor rotates them. Existing copies may remain
@@ -239,8 +246,8 @@ This stack creates:
 - the `cv-chatgpt-sessions` Workers KV namespace for encrypted ChatGPT auth
   sessions and short-lived proxy rate counters;
 - a single-owner Cloudflare Access application for the management UI and BFF,
-  plus a narrower `/v1/*` bypass whose requests still require the registry
-  bearer token;
+  plus a narrower `/machine/*` bypass whose requests must present the registry
+  bearer token explicitly;
 - the application registry Worker's `workers.dev` exposure and derived URL,
   enabled only after those Access applications exist;
 - `ANALYTICS_CONNECTOR_URL` in `/cv/analytics` when Infisical sync is enabled;
@@ -268,23 +275,171 @@ from Terraform state with `destroy = false`; keep those blocks until that state
 transition has been applied successfully in production. Pages continues to
 serve every path other than the Terraform-owned `/c/*` overlay.
 
-Build the management assets with their final public-CV base URL, apply the
-registry schema, and deploy the registry Worker with both runtime secrets:
+## First production deployment
+
+Build the management assets with their final public-CV base URL. Then ensure
+both PDF queues exist and deploy their private consumer before either side of
+the circular service-binding pair. Deploying the idle consumer is safe before
+the D1 cutover because no v2 jobs exist yet:
 
 ```sh
 VITE_CV_PUBLIC_BASE_URL="https://${CV_WEB_HOST}/c" \
   bunx nx run application-registry-management:build
+PDF_QUEUE="${CV_PDF_QUEUE_NAME:-cv-pdf-generation}"
+PDF_DLQ="${CV_PDF_DLQ_NAME:-cv-pdf-generation-dead-letter}"
+node node_modules/wrangler/bin/wrangler.js queues info "$PDF_QUEUE" >/dev/null 2>&1 || \
+  node node_modules/wrangler/bin/wrangler.js queues create "$PDF_QUEUE"
+node node_modules/wrangler/bin/wrangler.js queues info "$PDF_DLQ" >/dev/null 2>&1 || \
+  node node_modules/wrangler/bin/wrangler.js queues create "$PDF_DLQ"
+bunx nx run cv-pdf-worker:deploy
+```
+
+### Production D1 cutover gate
+
+The remote migrations intentionally replace legacy tables and discard legacy
+data that has no v2 representation. Stop here until the owner explicitly
+approves that destructive production cutover and the reviewed loss set. An
+approval to deploy Workers or Terraform is not an approval to migrate D1.
+
+Close the old management UI before quiescing the Worker and do not reopen or
+use it during the wait, backup, migration, or v2 Worker bootstrap. Do not run
+mutating CLI, Grafana, or automation requests in that interval either. The old
+UI speaks the old schema and must never write after the backup or migration.
+
+For an approved cutover, set `CV_CUTOVER_BACKUP_DIR` to a new absolute
+directory on durable private storage. The following commands create it with
+owner-only permissions, snapshot the current cron schedule, replace the
+schedule through Cloudflare's API with `[]`, and prove that no cron remains:
+
+```sh
+: "${CV_CUTOVER_BACKUP_DIR:?set a new absolute private backup directory}"
+case "$CV_CUTOVER_BACKUP_DIR" in
+  /*) ;;
+  *) echo "CV_CUTOVER_BACKUP_DIR must be absolute" >&2; exit 1 ;;
+esac
+umask 077
+mkdir -m 700 "$CV_CUTOVER_BACKUP_DIR"
+
+CV_CUTOVER_WORKER="${APPLICATION_REGISTRY_WORKER_NAME:-cv-application-registry}"
+CV_CUTOVER_SCHEDULES_URL="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${CV_CUTOVER_WORKER}/schedules"
+
+curl --fail-with-body --silent --show-error \
+  --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+  "$CV_CUTOVER_SCHEDULES_URL" \
+  >"$CV_CUTOVER_BACKUP_DIR/worker-schedules.before.json"
+jq -e '.success == true and (.result | type == "array")' \
+  "$CV_CUTOVER_BACKUP_DIR/worker-schedules.before.json" >/dev/null
+
+curl --fail-with-body --silent --show-error \
+  --request PUT \
+  --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+  --header 'Content-Type: application/json' \
+  --data '[]' \
+  "$CV_CUTOVER_SCHEDULES_URL" \
+  >"$CV_CUTOVER_BACKUP_DIR/worker-schedules.disable-response.json"
+jq -e '.success == true' \
+  "$CV_CUTOVER_BACKUP_DIR/worker-schedules.disable-response.json" >/dev/null
+
+curl --fail-with-body --silent --show-error \
+  --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+  "$CV_CUTOVER_SCHEDULES_URL" \
+  >"$CV_CUTOVER_BACKUP_DIR/worker-schedules.disabled.json"
+jq -e '.success == true and (.result | type == "array") and (.result | length == 0)' \
+  "$CV_CUTOVER_BACKUP_DIR/worker-schedules.disabled.json" >/dev/null
+```
+
+If the cutover is cancelled before migrations start, restore the saved cron
+values and verify that they match the snapshot before resuming v1 operations:
+
+```sh
+jq '[.result[] | {cron: .cron}]' \
+  "$CV_CUTOVER_BACKUP_DIR/worker-schedules.before.json" \
+  >"$CV_CUTOVER_BACKUP_DIR/worker-schedules.restore-body.json"
+curl --fail-with-body --silent --show-error \
+  --request PUT \
+  --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+  --header 'Content-Type: application/json' \
+  --data "@$CV_CUTOVER_BACKUP_DIR/worker-schedules.restore-body.json" \
+  "$CV_CUTOVER_SCHEDULES_URL" \
+  >"$CV_CUTOVER_BACKUP_DIR/worker-schedules.restore-response.json"
+jq -e '.success == true' \
+  "$CV_CUTOVER_BACKUP_DIR/worker-schedules.restore-response.json" >/dev/null
+curl --fail-with-body --silent --show-error \
+  --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+  "$CV_CUTOVER_SCHEDULES_URL" \
+  >"$CV_CUTOVER_BACKUP_DIR/worker-schedules.restored.json"
+test "$(jq -cS '[.result[].cron] | sort' \
+  "$CV_CUTOVER_BACKUP_DIR/worker-schedules.before.json")" = \
+  "$(jq -cS '[.result[].cron] | sort' \
+  "$CV_CUTOVER_BACKUP_DIR/worker-schedules.restored.json")"
+```
+
+Do not use that rollback after migrations have started; from that point, repair
+forward to the v2 Worker.
+
+Wait at least 30 minutes after that successful empty-schedule verification.
+This covers Cloudflare's schedule propagation window and any invocation that
+was already running. Keep the old management UI and every other mutation path
+idle for the full wait. After 30 minutes, fetch and verify the empty schedule
+again:
+
+```sh
+curl --fail-with-body --silent --show-error \
+  --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+  "$CV_CUTOVER_SCHEDULES_URL" \
+  >"$CV_CUTOVER_BACKUP_DIR/worker-schedules.after-wait.json"
+jq -e '.success == true and (.result | type == "array") and (.result | length == 0)' \
+  "$CV_CUTOVER_BACKUP_DIR/worker-schedules.after-wait.json" >/dev/null
+```
+
+Only now take a fresh full export. Do not reuse the earlier rehearsal backup.
+The export must contain schema and data, be non-empty and mode `600`, and have
+a recorded SHA-256 checksum before migrations begin:
+
+```sh
+bun apps/application-registry-api/scripts/write-wrangler-config.ts \
+  apps/application-registry-api/wrangler.deploy.jsonc
+CV_CUTOVER_D1_BACKUP="$CV_CUTOVER_BACKUP_DIR/application-registry-pre-v2.sql"
+node node_modules/wrangler/bin/wrangler.js d1 export APPLICATION_REGISTRY_DB \
+  --remote \
+  --config apps/application-registry-api/wrangler.deploy.jsonc \
+  --output "$CV_CUTOVER_D1_BACKUP"
+chmod 600 "$CV_CUTOVER_D1_BACKUP"
+test -s "$CV_CUTOVER_D1_BACKUP"
+test "$(stat -c '%a' "$CV_CUTOVER_D1_BACKUP")" = 600
+sha256sum "$CV_CUTOVER_D1_BACKUP" \
+  >"$CV_CUTOVER_D1_BACKUP.sha256"
+chmod 600 "$CV_CUTOVER_D1_BACKUP.sha256"
+sha256sum --check "$CV_CUTOVER_D1_BACKUP.sha256"
+```
+
+If any schedule, wait, export, permission, or checksum check fails, do not run
+the migration. Once all gates pass, apply the pending remote migrations and
+continue directly to the v2 Worker bootstrap below; do not use the old
+management UI again:
+
+```sh
 bunx nx run application-registry-api:migrations:apply:remote
+```
+
+The two Workers have intentional steady-state bindings in both directions:
+`cv-public` reads through the registry's `CvPublicResolver` entrypoint, and the
+registry invalidates public cache entries through `CV_APP`. Break that cycle
+only for the first deployment by omitting `CV_APP` from the initial registry
+version, then deploy both steady-state versions in this exact order:
+
+```sh
+APPLICATION_REGISTRY_CV_APP_BINDING_ENABLED=false \
+  bunx nx run application-registry-api:deploy
+bunx nx run cv:deploy
 bunx nx run application-registry-api:deploy
 ```
 
-Deploy the public Worker only after the registry exists, because its production
-version contains a named `CV_PUBLIC_RESOLVER` binding to the registry's
-`CvPublicResolver` entrypoint:
-
-```sh
-bunx nx run cv:deploy
-```
+`APPLICATION_REGISTRY_CV_APP_BINDING_ENABLED` defaults to `true`; do not store
+the bootstrap override in Infisical or CI variables. The first command scopes
+`false` to that one process. The last command regenerates the config with the
+normal `CV_APP` binding now that `cv-public` exists. Re-running any ordinary
+registry deployment therefore preserves the steady-state binding.
 
 The full Cloudflare stack also manages the existing analytics Worker's
 `workers.dev` exposure. Before the full apply, confirm that the Worker named by
@@ -293,9 +448,9 @@ exists. The current v1 installation already has it. If it has been removed,
 run the `CI` workflow on the intended branch with deployment target
 `analytics`; that deployment restores the Worker and its runtime secrets.
 
-After the targeted storage apply, deploy the registry and then `cv-public`
-before the full Cloudflare apply attaches Access, the path route, and managed
-script-subdomain settings:
+After the targeted storage apply, perform the bootstrap registry → `cv-public`
+→ steady-state registry sequence above before the full Cloudflare apply
+attaches Access, the path route, and managed script-subdomain settings:
 
 ```sh
 cd terraform/live/prod/cloudflare
@@ -308,18 +463,20 @@ registry's `workers.dev` hostname, then syncs
 `APPLICATION_REGISTRY_WORKERS_DEV_ENABLED=true` so later Wrangler deployments
 preserve that protected endpoint. Until that apply, the registry has no public
 management/BFF hostname and the frozen Pages project continues serving the
-whole CV hostname. CI enforces the same registry-before-CV order for main,
-`all`, and CV-only deployments. There is intentionally no reverse
-registry-to-CV preview binding. The one-time targeted apply above is required
-because the registry deployment needs the Terraform-created D1, R2, and KV
-identifiers, while the full Terraform apply needs both Worker scripts to exist.
+whole CV hostname. CI uses the normal binding-enabled registry configuration
+and therefore assumes the one-time bootstrap has already completed. The
+registry-to-CV binding exists only for authenticated public-cache invalidation;
+preview documents never cross it. The targeted apply is required because the
+registry deployment needs the Terraform-created D1, R2, and KV identifiers,
+while the full Terraform apply needs both Worker scripts to exist.
 
 Terraform owns D1, R2, KV, Access, route overlays, dedicated `workers.dev`
 exposure resources, derived URLs, and Infisical writes. Wrangler owns Worker
-creation and deployed versions, observability configuration, the public
-Worker's one-way service binding, registry storage and Browser Run bindings,
-PDF Queue bindings, migrations, and runtime secrets. The deployment workflow
-creates the main PDF queue and dead-letter queue when they do not yet exist.
+creation and deployed versions, observability configuration, the public-to-
+registry resolver binding, the registry-to-public invalidation binding,
+registry storage and Browser Run bindings, PDF Queue bindings, migrations, and
+runtime secrets. The deployment workflow creates the main PDF queue and
+dead-letter queue when they do not yet exist.
 
 Apply Grafana after the analytics connector URL, application registry URL and
 token, and Grafana token are available:
@@ -348,11 +505,14 @@ request, following `pageInfo.nextCursor` through the `after` query parameter for
 up to five continuation pages.
 
 The applications table also exposes confirmed row actions for lifecycle
-events, notes, labels, contact and research events, and follow-up scheduling.
-They use the application version shown in the row for optimistic concurrency
-where the registry command supports it. Note bodies and sources are entered as
-JSON strings, labels as a JSON string array, and event/status values use the
-registry contract's literal names. Actions call the registry through Grafana's
+status, notes, labels, and follow-up scheduling. They use the application
+version shown in the row for optimistic concurrency and send the required
+idempotency header. Note actions additionally require a fresh request ID for
+each distinct note, so two same-kind notes on an otherwise unchanged row do not
+replay one another. Note bodies and sources are entered as JSON strings, labels
+as a JSON string array, and status values use the registry contract's literal
+names. Removed v1-only contact and research event commands are intentionally
+not emulated. Actions call `/machine/api/registry/*` through Grafana's
 same-origin datasource proxy, which keeps the shared bearer token in the
 provisioned datasource rather than the dashboard JSON. The dashboard refreshes
 every 30 seconds after mutations; refresh manually when the updated row is

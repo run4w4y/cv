@@ -46,7 +46,7 @@ const publication = {
 afterEach(cleanup)
 
 describe('CvPublicationPanel', () => {
-  test('represents page visibility and PDF readiness as independent controls', () => {
+  test('exposes the public link only when the enabled page and PDF are ready', () => {
     const onDownload = mock(() => undefined)
     const onGeneratePdf = mock(() => undefined)
     const onSetAvailability = mock((_enabled: boolean) => undefined)
@@ -63,7 +63,7 @@ describe('CvPublicationPanel', () => {
       />
     )
 
-    expect(view.getByText('Page is public')).toBeTruthy()
+    expect(view.getByText('Page and PDF ready')).toBeTruthy()
     expect(view.getByText('PDF ready')).toBeTruthy()
     expect(view.getByText('Preview uses an earlier revision')).toBeTruthy()
     expect(
@@ -77,6 +77,55 @@ describe('CvPublicationPanel', () => {
     expect(onDownload).toHaveBeenCalledTimes(1)
     expect(onGeneratePdf).toHaveBeenCalledTimes(1)
     expect(onSetAvailability).toHaveBeenCalledWith(false)
+  })
+
+  test('keeps an enabled page private to management while its PDF is pending', () => {
+    const onGeneratePdf = mock(() => undefined)
+    const pending: CvPageState = {
+      artifact: {
+        ...publication.artifact,
+        byteLength: null,
+        generatedAt: null,
+        mediaType: null,
+        objectKey: null,
+        sha256: null,
+        status: 'pending',
+      },
+      link: publication.link,
+    }
+    const view = render(
+      <CvPublicationPanel
+        currentHeadRevisionId="revision-current"
+        disabled={false}
+        publication={pending}
+        pendingAction={null}
+        onDownload={() => undefined}
+        onGeneratePdf={onGeneratePdf}
+        onRefresh={() => undefined}
+        onSetAvailability={() => undefined}
+      />
+    )
+
+    expect(view.getByText('Preparing publication')).toBeTruthy()
+    expect(view.getByText('PDF generating')).toBeTruthy()
+    expect(view.queryByRole('link', { name: /Open published CV/ })).toBeNull()
+    expect(
+      (
+        view.getByRole('button', {
+          name: 'Regenerate PDF',
+        }) as HTMLButtonElement
+      ).disabled
+    ).toBe(true)
+    expect(
+      (
+        view.getByRole('button', {
+          name: 'Make page private',
+        }) as HTMLButtonElement
+      ).disabled
+    ).toBe(false)
+
+    fireEvent.click(view.getByRole('button', { name: 'Regenerate PDF' }))
+    expect(onGeneratePdf).not.toHaveBeenCalled()
   })
 
   test('keeps a private page previewable when its PDF generation failed', () => {
@@ -124,9 +173,63 @@ describe('CvPublicationPanel', () => {
         .disabled
     ).toBe(true)
 
+    expect(
+      (
+        view.getByRole('button', {
+          name: 'Regenerate PDF',
+        }) as HTMLButtonElement
+      ).disabled
+    ).toBe(true)
+    expect(
+      (
+        view.getByRole('button', {
+          name: 'Make page public',
+        }) as HTMLButtonElement
+      ).disabled
+    ).toBe(true)
+
     fireEvent.click(view.getByRole('button', { name: 'Regenerate PDF' }))
     fireEvent.click(view.getByRole('button', { name: 'Make page public' }))
-    expect(onGeneratePdf).toHaveBeenCalledTimes(1)
-    expect(onSetAvailability).toHaveBeenCalledWith(true)
+    expect(onGeneratePdf).not.toHaveBeenCalled()
+    expect(onSetAvailability).not.toHaveBeenCalled()
+  })
+
+  test('marks an enabled page with a failed PDF as blocked', () => {
+    const failed: CvPageState = {
+      artifact: {
+        ...publication.artifact,
+        byteLength: null,
+        errorCode: 'cv_page_overflow',
+        errorMessage: 'The CV exceeds one A4 page.',
+        generatedAt: null,
+        mediaType: null,
+        objectKey: null,
+        sha256: null,
+        status: 'failed',
+      },
+      link: publication.link,
+    }
+    const view = render(
+      <CvPublicationPanel
+        currentHeadRevisionId="revision-current"
+        disabled={false}
+        publication={failed}
+        pendingAction={null}
+        onDownload={() => undefined}
+        onGeneratePdf={() => undefined}
+        onRefresh={() => undefined}
+        onSetAvailability={() => undefined}
+      />
+    )
+
+    expect(view.getByText('Publication blocked')).toBeTruthy()
+    expect(view.queryByRole('link', { name: /Open published CV/ })).toBeNull()
+    expect(
+      (
+        view.getByRole('button', {
+          name: 'Regenerate PDF',
+        }) as HTMLButtonElement
+      ).disabled
+    ).toBe(false)
   })
 })

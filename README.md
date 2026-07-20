@@ -75,7 +75,9 @@ continue to run unchanged.
    Management polls the artifact-backed job until it becomes ready or failed.
 7. A rejection disables the application's public link with the system reason
    `application_rejected`; reopening restores only links disabled for that
-   reason. Manual and PDF-failure disables remain in force.
+   reason whose latest artifact for the exact revision, publication version,
+   and public URL is a ready PDF. Pending or failed retries keep the page
+   private, and manual and PDF-failure disables remain in force.
 
 Cover letters use a separate content entry and prompt flow, but reference the
 same persisted posting snapshot. AI interaction state is browser-owned and is
@@ -100,9 +102,12 @@ bunx nx run cv-pdf-worker:dev
 bunx nx run cv:dev
 ```
 
-The management SPA is built into and served by the registry Worker. Direct
-`/api/registry/*` requests require `Authorization: Bearer <REGISTRY_API_TOKEN>`;
-the same-origin management BFF injects that token server-side.
+The management SPA is built into and served by the registry Worker. Browser
+requests use `/api/registry/*`; the Access-protected same-origin BFF injects
+the token server-side. CLI, Grafana, and automation use the distinct
+`/machine/api/registry/*` transport and must send
+`Authorization: Bearer <REGISTRY_API_TOKEN>` themselves. The machine namespace
+never injects a missing credential.
 Production additionally puts the browser-facing Worker routes behind
 Cloudflare Access for the configured owner email.
 
@@ -119,17 +124,33 @@ bunx nx run cv:build
 
 ## Deployment and legacy coexistence
 
-The deployment order is:
+The first deployment order is:
 
-1. apply D1 migrations and deploy `cv-application-registry` without a public
-   hostname;
-2. deploy `cv-public`, whose one-way service binding targets the registry's
+1. bootstrap the durable resources, build the management assets, ensure both
+   PDF queues exist, and deploy their private `cv-pdf-worker` consumer;
+2. obtain explicit approval for the production D1 cutover, then follow the
+   canonical quiesce procedure: snapshot the registry Worker's cron schedule,
+   replace it with an empty schedule, verify it is empty, wait 30 minutes
+   without using the old management UI, and take a fresh permission-restricted
+   full D1 backup with a recorded SHA-256 checksum. Apply migrations only after
+   every one of those gates passes;
+3. deploy `cv-application-registry` without its `CV_APP` invalidation binding
+   or a public hostname;
+4. deploy `cv-public`, whose resolver binding targets the registry's
    `CvPublicResolver` entrypoint;
-3. apply Terraform, which configures the personal management Access policy
+5. redeploy `cv-application-registry` with its normal `CV_APP` binding to the
+   now-existing public Worker;
+6. apply Terraform, which configures the personal management Access policy
    before enabling the registry hostname, then attaches only
    `CV_WEB_HOST/c/*` to `cv-public`;
-4. publish a facts release from the facts-only `cv-content` repository; its
+7. publish a facts release from the facts-only `cv-content` repository; its
    immutable objects are uploaded before `current.json` changes.
+
+Only step 3 sets
+`APPLICATION_REGISTRY_CV_APP_BINDING_ENABLED=false`; the default is `true` for
+CI and every steady-state deployment. See the canonical
+[`terraform/README.md`](terraform/README.md#first-production-deployment) sequence
+for the exact cutover, backup, migration, and bootstrap commands.
 
 The old Pages resources use Terraform `removed` blocks with `destroy = false`.
 Keep them through the first successful production apply; the deployed Pages

@@ -39,7 +39,7 @@ describe('application registry client config', () => {
         REGISTRY_DEVICE_ID: 'laptop',
       })
     )
-    expect(config.apiUrl.href).toBe('https://registry.example.test/')
+    expect(config.apiUrl.href).toBe('https://registry.example.test/machine/')
     expect(config.deviceId).toBe('laptop')
     expect(config.outboxDirectory).toEndWith(
       '/.cv-work/application-registry/outbox'

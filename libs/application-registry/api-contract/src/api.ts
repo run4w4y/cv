@@ -75,6 +75,7 @@ import {
   UpdateApplicationRequestSchema,
   UpdateApplicationResponseSchema,
 } from './schemas'
+import { applicationRegistryApiPrefix } from './transport'
 
 const endpointErrors = [
   BadRequestErrorSchema,
@@ -82,8 +83,6 @@ const endpointErrors = [
   ConflictErrorSchema,
   InternalServerErrorSchema,
 ] as const
-
-const apiPrefix = '/api/registry'
 
 const CreatedApplicationResponseSchema = ApplicationResponseSchema.pipe(
   HttpApiSchema.status('Created')
@@ -219,7 +218,7 @@ export const ApplicationsApi = HttpApiGroup.make('applications')
   .add(applicationEndpoints[10])
   .add(applicationEndpoints[11])
   .add(applicationEndpoints[12])
-  .prefix(apiPrefix)
+  .prefix(applicationRegistryApiPrefix)
   .middleware(RegistryAuthorization)
 
 const contentEndpoints = [
@@ -365,7 +364,7 @@ export const ContentApi = HttpApiGroup.make('content')
   .add(contentEndpoints[11])
   .add(contentEndpoints[12])
   .add(contentEndpoints[13])
-  .prefix(apiPrefix)
+  .prefix(applicationRegistryApiPrefix)
   .middleware(RegistryAuthorization)
 
 const publicationEndpoints = [
@@ -449,7 +448,7 @@ export const PublicationsApi = HttpApiGroup.make('publications')
   .add(publicationEndpoints[4])
   .add(publicationEndpoints[5])
   .add(publicationEndpoints[6])
-  .prefix(apiPrefix)
+  .prefix(applicationRegistryApiPrefix)
   .middleware(RegistryAuthorization)
 
 const automationEndpoints = [
@@ -479,7 +478,7 @@ assertUniqueHttpApiEndpoints('automation', automationEndpoints)
 export const AutomationApi = HttpApiGroup.make('automation')
   .add(automationEndpoints[0])
   .add(automationEndpoints[1])
-  .prefix(apiPrefix)
+  .prefix(applicationRegistryApiPrefix)
   .middleware(RegistryAuthorization)
 
 export const ApplicationRegistryApi = HttpApi.make('applicationRegistry').add(

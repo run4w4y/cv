@@ -35,5 +35,8 @@ output "generated_secrets" {
       infisical_secret.chatgpt_session_secret.name,
       infisical_secret.registry_api_token.name,
     ]
+    (local.deploy_path) = [
+      infisical_secret.cv_revalidation_secret.name,
+    ]
   }
 }

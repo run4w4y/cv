@@ -6,6 +6,7 @@ import {
   appendContentRevision,
   approveContentRevision,
   createContentEntry,
+  disableCvLinkForFailedArtifact,
   disableCvLinksForApplication,
   enableCvLinksForApplication,
   findArtifact,
@@ -16,6 +17,7 @@ import {
   findCurrentArtifactForPublication,
   findCvLinkByEntry,
   findCvLinkByToken,
+  findCvLinksByApplication,
   findJobPostingSnapshot,
   findLatestJobPostingSnapshot,
   findPendingPdfDispatch,
@@ -96,6 +98,23 @@ export const makeContentCrudLive = (database: Effect.Effect<D1Database>) =>
         ),
     }),
     Layer.succeed(CvLinksCrud, {
+      disableForFailedArtifact: (
+        id,
+        expectedVersion,
+        artifact,
+        reason,
+        disabledAt
+      ) =>
+        withRegistryConnections(database, ({ query }) =>
+          disableCvLinkForFailedArtifact(
+            query,
+            id,
+            expectedVersion,
+            artifact,
+            reason,
+            disabledAt
+          )
+        ),
       disableForApplication: (applicationId, reason, disabledAt) =>
         withRegistryConnections(database, ({ query }) =>
           disableCvLinksForApplication(query, applicationId, reason, disabledAt)
@@ -112,6 +131,10 @@ export const makeContentCrudLive = (database: Effect.Effect<D1Database>) =>
       findByEntry: (contentEntryId) =>
         withRegistryConnections(database, ({ query }) =>
           findCvLinkByEntry(query, contentEntryId)
+        ),
+      findByApplication: (applicationId) =>
+        withRegistryConnections(database, ({ query }) =>
+          findCvLinksByApplication(query, applicationId)
         ),
       findByToken: (token) =>
         withRegistryConnections(database, ({ query }) =>
@@ -204,9 +227,14 @@ export const makeContentCrudLive = (database: Effect.Effect<D1Database>) =>
         withRegistryConnections(database, ({ query }) =>
           markArtifactReady(query, artifact)
         ),
-      persistPending: (artifact, outbox) =>
+      persistPending: (artifact, outbox, expectedLinkVersion) =>
         withRegistryConnections(database, (connections) =>
-          persistPendingArtifact(connections, artifact, outbox)
+          persistPendingArtifact(
+            connections,
+            artifact,
+            outbox,
+            expectedLinkVersion
+          )
         ),
       pendingDispatches: (limit) =>
         withRegistryConnections(database, ({ query }) =>

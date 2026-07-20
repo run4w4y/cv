@@ -1,4 +1,5 @@
 import { resolve } from 'node:path'
+import { applicationRegistryMachineBaseUrl } from '@cv/application-registry-api-contract'
 import type { Redacted } from 'effect'
 import { Config, Effect, Option, Schema } from 'effect'
 import { ApplicationRegistryConfigError } from './errors'
@@ -53,7 +54,7 @@ const readOptionalConfig = Effect.gen(function* () {
   ).pipe(Config.withDefault(defaultRegistryOutboxDirectory))
 
   return Option.some({
-    apiUrl: apiUrl.value,
+    apiUrl: applicationRegistryMachineBaseUrl(apiUrl.value),
     deviceId: Option.getOrNull(deviceId),
     outboxDirectory,
     token: token.value,

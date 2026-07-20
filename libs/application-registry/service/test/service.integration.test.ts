@@ -15,6 +15,8 @@ import {
   ContentEntriesService,
   type CreateApplicationInput,
   CvAnalyticsTrafficSource,
+  CvPublicationsService,
+  PdfArtifactsService,
 } from '../src'
 import { RegistryServicesLive } from '../src/live'
 
@@ -292,4 +294,106 @@ test('keeps content payloads as exact opaque bytes across revision history', asy
     result.approved.entry.approvedRevisionId,
     result.appended.revision.id
   )
+})
+
+test('restores a rejection-disabled publication only after its current PDF is ready', async () => {
+  const pdf = new TextEncoder().encode('%PDF ready after rejection')
+  const result = await runtime.runPromise(
+    Effect.gen(function* () {
+      const applications = yield* ApplicationsService
+      const content = yield* ContentEntriesService
+      const publications = yield* CvPublicationsService
+      const pdfs = yield* PdfArtifactsService
+      const application = yield* applications.create(
+        applicationInput('publication-restore')
+      )
+      const entry = yield* content.ensure(application.id, {
+        kind: 'cv',
+        locale: 'en',
+      })
+      const appended = yield* content.appendRevision(application.id, entry.id, {
+        contractId: '@cv/contracts/cv-document',
+        contractVersion: '1',
+        expectedVersion: entry.version,
+        operationId: 'publication-restore-revision',
+        payload: {
+          bytes: new TextEncoder().encode('{"publication":"restore"}'),
+          mediaType: 'application/json',
+        },
+        source: 'human',
+      })
+      const approved = yield* content.approveRevision(
+        application.id,
+        entry.id,
+        {
+          expectedVersion: appended.entry.version,
+          revisionId: appended.revision.id,
+        }
+      )
+      const staged = yield* publications.stage(application.id, entry.id, {
+        expectedContentVersion: approved.entry.version,
+        publicBaseUrl: 'https://cv.example.test/c',
+        revisionId: appended.revision.id,
+      })
+      yield* publications.setAvailability(application.id, entry.id, {
+        enabled: true,
+        expectedPublicationVersion: staged.publicationVersion,
+      })
+      const pending = yield* pdfs.startJob(application.id, entry.id, {
+        expectedPublicationVersion: staged.publicationVersion,
+        requestId: 'publication-restore-pdf',
+      })
+
+      const rejected = yield* applications.update(application.id, {
+        applicationStatus: 'rejected',
+        expectedVersion: application.version,
+        idempotencyKey: 'publication-rejected',
+      })
+      yield* publications.disableForApplication(
+        application.id,
+        'application_rejected'
+      )
+      const reopened = yield* applications.update(application.id, {
+        applicationStatus: 'preparing',
+        expectedVersion: rejected.application.version,
+        idempotencyKey: 'publication-reopened',
+      })
+      const restoredWhilePending = yield* publications.restoreAfterRejection(
+        application.id
+      )
+      const linkWhilePending = yield* publications.findByEntry(
+        application.id,
+        entry.id
+      )
+
+      const ready = yield* pdfs.complete(
+        application.id,
+        pending.id,
+        'renderer-v1',
+        pdf
+      )
+      const restoredWhenReady = yield* publications.restoreAfterRejection(
+        application.id
+      )
+      const restoredLink = yield* publications.findByEntry(
+        application.id,
+        entry.id
+      )
+      return {
+        linkWhilePending,
+        ready,
+        reopened,
+        restoredLink,
+        restoredWhenReady,
+        restoredWhilePending,
+      }
+    })
+  )
+
+  assert.equal(result.reopened.application.applicationStatus, 'preparing')
+  assert.equal(result.restoredWhilePending, 0)
+  assert.equal(result.linkWhilePending.enabled, false)
+  assert.equal(result.ready.status, 'ready')
+  assert.equal(result.restoredWhenReady, 1)
+  assert.equal(result.restoredLink.enabled, true)
 })

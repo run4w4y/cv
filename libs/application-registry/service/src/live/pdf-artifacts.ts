@@ -5,7 +5,10 @@ import {
   ContentCrud,
   CvLinksCrud,
 } from '@cv/application-registry-crud'
-import type { GeneratedArtifact } from '@cv/application-registry-entity'
+import {
+  type GeneratedArtifact,
+  pdfGenerationFailedDisableReason,
+} from '@cv/application-registry-entity'
 import { Effect, Layer, Result } from 'effect'
 
 import {
@@ -157,6 +160,40 @@ const make = Effect.gen(function* () {
           })
         )
 
+  const disableFailedPublication = Effect.fn(
+    'PdfArtifactsService.disableFailedPublication'
+  )(function* (entryId: string, artifact: GeneratedArtifact) {
+    const link = yield* links.findByEntry(entryId)
+    if (
+      !link?.enabled ||
+      link.id !== artifact.cvLinkId ||
+      link.currentRevisionId !== artifact.contentRevisionId ||
+      link.publicationVersion !== artifact.publicationVersion ||
+      link.publicUrl !== artifact.qrTarget
+    ) {
+      return
+    }
+
+    const current = yield* artifacts.findCurrentForPublication(
+      link.id,
+      link.currentRevisionId,
+      null,
+      link.publicationVersion,
+      link.publicUrl
+    )
+    if (current?.id !== artifact.id) {
+      return
+    }
+
+    yield* links.disableForFailedArtifact(
+      link.id,
+      link.version,
+      artifact,
+      pdfGenerationFailedDisableReason,
+      yield* registryNow
+    )
+  })
+
   return {
     startJob: Effect.fn('PdfArtifactsService.startJob')(
       (
@@ -193,6 +230,12 @@ const make = Effect.gen(function* () {
           if (link.publicationVersion !== input.expectedPublicationVersion) {
             return yield* new RegistryConflictError({
               message: `Public CV publication version ${link.publicationVersion} does not match expected version ${input.expectedPublicationVersion}.`,
+            })
+          }
+          if (!link.enabled) {
+            return yield* new RegistryConflictError({
+              message:
+                'The public CV link must be temporarily enabled before PDF generation starts.',
             })
           }
           if (entry.approvedRevisionId !== link.currentRevisionId) {
@@ -240,25 +283,30 @@ const make = Effect.gen(function* () {
             requestId,
           }
           const persisted = yield* Effect.result(
-            artifacts.persistPending(pending, {
-              applicationId: application.id,
-              artifactId: pending.id,
-              attempts: 0,
-              contentEntryId: entry.id,
-              createdAt: now,
-              dispatchedAt: null,
-              lastAttemptAt: null,
-              lastError: null,
-              messageVersion: 1,
-              updatedAt: now,
-            })
+            artifacts.persistPending(
+              pending,
+              {
+                applicationId: application.id,
+                artifactId: pending.id,
+                attempts: 0,
+                contentEntryId: entry.id,
+                createdAt: now,
+                dispatchedAt: null,
+                lastAttemptAt: null,
+                lastError: null,
+                messageVersion: 1,
+                updatedAt: now,
+              },
+              link.version
+            )
           )
           const stored = yield* artifacts.findByRequestId(requestId)
           if (!stored) {
             if (Result.isFailure(persisted)) return yield* persisted.failure
-            return yield* missingRegistryData(
-              `Pending PDF artifact was not persisted: ${pending.id}`
-            )
+            return yield* new RegistryConflictError({
+              message:
+                'The public CV link changed while PDF generation was starting.',
+            })
           }
           return yield* validateJobIdentity(stored, identity)
         })
@@ -344,7 +392,7 @@ const make = Effect.gen(function* () {
         errorMessage: string
       ) =>
         Effect.gen(function* () {
-          const { artifact } = yield* findArtifactForApplication(
+          const { artifact, entry } = yield* findArtifactForApplication(
             applicationIdentifier,
             artifactId
           )
@@ -358,6 +406,7 @@ const make = Effect.gen(function* () {
               artifact.errorCode === code &&
               artifact.errorMessage === message
             ) {
+              yield* disableFailedPublication(entry.id, artifact)
               return artifact
             }
             return yield* new RegistryConflictError({
@@ -378,7 +427,7 @@ const make = Effect.gen(function* () {
                 'The PDF artifact changed while its failure was being recorded.',
             })
           }
-          return yield* artifacts
+          const failed = yield* artifacts
             .find(artifact.id)
             .pipe(
               Effect.flatMap((stored) =>
@@ -391,6 +440,8 @@ const make = Effect.gen(function* () {
                     )
               )
             )
+          yield* disableFailedPublication(entry.id, failed)
+          return failed
         })
     ),
     findJob: Effect.fn('PdfArtifactsService.findJob')(

@@ -1,3 +1,7 @@
+import {
+  applicationRegistryApiPrefix,
+  applicationRegistryMachinePrefix,
+} from '@cv/application-registry-api-contract'
 import { Effect, Redacted } from 'effect'
 import { handleChatGPTRequest, isChatGPTRequest } from './chatgpt/handler'
 import { applicationRegistryWebHandler } from './http/runtime'
@@ -16,30 +20,95 @@ import type {
 
 export { CvPublicResolver } from './internal/cv-public-resolver-entrypoint'
 
+const isRegistryApiPath = (path: string) =>
+  path === applicationRegistryApiPrefix ||
+  path.startsWith(`${applicationRegistryApiPrefix}/`)
+
 const withPrivateCachePolicy = (request: Request, response: Response) => {
   const path = new URL(request.url).pathname
-  if (path.startsWith('/api/chatgpt/') || path.startsWith('/api/registry/')) {
+  if (
+    path.startsWith('/api/chatgpt/') ||
+    isRegistryApiPath(path) ||
+    path === applicationRegistryMachinePrefix ||
+    path.startsWith(`${applicationRegistryMachinePrefix}/`)
+  ) {
     response.headers.set('Cache-Control', 'private, no-store')
   }
 
   return response
 }
 
+const isMachineTransportRequest = (request: Request) => {
+  const path = new URL(request.url).pathname
+  return (
+    path === applicationRegistryMachinePrefix ||
+    path.startsWith(`${applicationRegistryMachinePrefix}/`)
+  )
+}
+
+const presentedBearerToken = (request: Request): string | null => {
+  const authorization = request.headers.get('authorization')
+  const match = authorization?.match(/^Bearer[\t ]+([^\s]+)$/i)
+  return match?.[1] ?? null
+}
+
+const machineTransportError = (status: 401 | 503, message: string): Response =>
+  Response.json(
+    {
+      code: status === 401 ? 'unauthorized' : 'service_unavailable',
+      message,
+    },
+    { status }
+  )
+
+const rewriteMachineTransportRequest = (request: Request): Request => {
+  const url = new URL(request.url)
+  url.pathname =
+    url.pathname.slice(applicationRegistryMachinePrefix.length) || '/'
+  return new Request(url, request)
+}
+
+const machineTransportRequestEffect = Effect.fn(
+  'RegistryMachineTransport.prepareRequest'
+)(function* (request: Request) {
+  const presented = presentedBearerToken(request)
+  if (presented === null) {
+    return machineTransportError(401, 'Missing or invalid registry API token.')
+  }
+
+  const configured = yield* readRegistryApiToken
+  if (presented !== Redacted.value(configured)) {
+    return machineTransportError(401, 'Missing or invalid registry API token.')
+  }
+
+  return rewriteMachineTransportRequest(request)
+})
+
+const machineTransportRequest = (
+  request: Request,
+  env: ApplicationRegistryEnv
+): Promise<Request | Response> =>
+  machineTransportRequestEffect(request).pipe(
+    provideWorkerConfiguration(env),
+    Effect.catchTag('Worker.ConfigurationError', () =>
+      Effect.succeed(
+        machineTransportError(503, 'Registry API token is not configured.')
+      )
+    ),
+    Effect.runPromise
+  )
+
 const isRegistryBffRequest = (request: Request) => {
   const path = new URL(request.url).pathname
   return (
-    request.headers.get('authorization') === null &&
-    (path === '/api/registry' || path.startsWith('/api/registry/'))
+    request.headers.get('authorization') === null && isRegistryApiPath(path)
   )
 }
 
 const isDirectRegistryRequest = (request: Request) => {
   const path = new URL(request.url).pathname
   return (
-    path === '/health' ||
-    path === '/openapi.json' ||
-    path === '/api/registry' ||
-    path.startsWith('/api/registry/')
+    path === '/health' || path === '/openapi.json' || isRegistryApiPath(path)
   )
 }
 
@@ -84,6 +153,21 @@ export default {
         return withPrivateCachePolicy(
           request,
           await handleChatGPTRequest(request, env)
+        )
+      }
+
+      if (isMachineTransportRequest(request)) {
+        const proxied = await machineTransportRequest(request, env)
+        if (proxied instanceof Response) {
+          return withPrivateCachePolicy(request, proxied)
+        }
+
+        return withPrivateCachePolicy(
+          request,
+          await applicationRegistryWebHandler(env)(
+            proxied,
+            makeWorkerRequestContext(env, context)
+          )
         )
       }
 

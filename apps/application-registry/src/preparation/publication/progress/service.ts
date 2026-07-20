@@ -100,7 +100,8 @@ export const cvPublicationProgressLayer = Layer.effect(
                   ...publicationRunIdentity(run),
                   _tag: 'StartingPdf',
                   link,
-                  message: 'CV page is public. Starting PDF generation.',
+                  message:
+                    'Preparing the public CV and starting PDF generation.',
                 }
           )
         )
@@ -119,8 +120,8 @@ export const cvPublicationProgressLayer = Layer.effect(
                 _tag: 'Published',
                 message:
                   result.job === null
-                    ? 'The CV is public. PDF generation still needs to be started.'
-                    : 'The CV is public and PDF generation has started.',
+                    ? 'PDF generation still needs to be started before the CV is shareable.'
+                    : 'PDF generation has started; the CV is shareable when it is ready.',
                 result,
               }
         )

@@ -62,15 +62,10 @@ test('renders a valid publication through the named service binding', async () =
   assert.match(html, /href="\/c\/_next\/static\/[^"]+\.css/u)
   assert.doesNotMatch(html, /data-cv-renderer-styles/u)
   assert.match(html, /data-cv-public-url="https:\/\/cv\.example\.test/u)
-  assert.equal(
-    response.headers.get('cache-control'),
-    'public, max-age=0, must-revalidate'
-  )
-  assert.equal(
-    response.headers.get('cloudflare-cdn-cache-control'),
-    'public, max-age=300'
-  )
-  assert.match(response.headers.get('cache-tag') ?? '', /^cv:[a-f0-9]{64}$/u)
+  assert.equal(response.headers.get('cache-control'), 'private, no-store')
+  assert.equal(response.headers.get('cdn-cache-control'), null)
+  assert.equal(response.headers.get('cloudflare-cdn-cache-control'), null)
+  assert.equal(response.headers.get('cache-tag'), null)
   assert.match(response.headers.get('x-robots-tag') ?? '', /noindex/u)
   assert.equal(
     response.headers

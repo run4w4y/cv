@@ -62,6 +62,18 @@ test('serves the unversioned OpenAPI and protects registry resources', async () 
   )
   assert.equal(unauthorized.status, 401)
   assert.equal(unauthorized.headers.get('cache-control'), 'private, no-store')
+
+  const missingMachineCredential = await fetch(
+    new URL('/machine/health', harness.url)
+  )
+  assert.equal(missingMachineCredential.status, 401)
+
+  const machineHealth = await fetch(new URL('/machine/health', harness.url), {
+    headers: { authorization: `Bearer ${registryTestToken}` },
+  })
+  assert.equal(machineHealth.status, 200)
+  assert.deepEqual(await machineHealth.json(), { ok: true })
+  assert.equal(machineHealth.headers.get('cache-control'), 'private, no-store')
 })
 
 test('creates, queries, updates, annotates, and replays through one resource API', async () => {

@@ -68,6 +68,13 @@ export const ContentCrud = Context.Service<ContentCrud>(
 )
 
 export interface CvLinksCrud {
+  readonly disableForFailedArtifact: (
+    id: string,
+    expectedVersion: number,
+    artifact: GeneratedArtifact,
+    reason: string,
+    disabledAt: string
+  ) => Effect.Effect<boolean, RegistryDatabaseError>
   readonly disableForApplication: (
     applicationId: string,
     reason: string,
@@ -81,6 +88,9 @@ export interface CvLinksCrud {
   readonly findByEntry: (
     contentEntryId: string
   ) => Effect.Effect<CvLink | undefined, RegistryDatabaseError>
+  readonly findByApplication: (
+    applicationId: string
+  ) => Effect.Effect<readonly CvLink[], RegistryDatabaseError>
   readonly findByToken: (
     token: string
   ) => Effect.Effect<CvLink | undefined, RegistryDatabaseError>
@@ -144,7 +154,8 @@ export interface ArtifactsCrud {
   ) => Effect.Effect<boolean, RegistryDatabaseError>
   readonly persistPending: (
     artifact: PersistedGeneratedArtifact,
-    outbox: PersistedPdfGenerationOutbox
+    outbox: PersistedPdfGenerationOutbox,
+    expectedLinkVersion: number
   ) => Effect.Effect<void, RegistryDatabaseError>
   readonly pendingDispatches: (
     limit: number

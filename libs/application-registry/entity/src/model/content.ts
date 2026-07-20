@@ -42,3 +42,5 @@ export const ArtifactStatusSchema = Schema.Literals([
 ])
 export const artifactStatusValues = ArtifactStatusSchema.literals
 export type ArtifactStatus = Schema.Schema.Type<typeof ArtifactStatusSchema>
+
+export const pdfGenerationFailedDisableReason = 'pdf_generation_failed'

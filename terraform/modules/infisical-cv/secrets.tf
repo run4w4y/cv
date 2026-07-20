@@ -39,6 +39,11 @@ resource "random_password" "chatgpt_session_secret" {
   special = false
 }
 
+resource "random_password" "cv_revalidation_secret" {
+  length  = 64
+  special = false
+}
+
 resource "random_password" "private_audience_key" {
   length  = 48
   special = false
@@ -114,6 +119,26 @@ resource "infisical_secret" "chatgpt_session_secret" {
 
   metadata = merge(local.common_metadata, {
     description = "Terraform-generated key used to encrypt Login with ChatGPT sessions stored in Workers KV."
+    kind        = "generated-secret"
+  })
+
+  depends_on = [infisical_secret_folder.child]
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "infisical_secret" "cv_revalidation_secret" {
+  name             = "CV_REVALIDATION_SECRET"
+  value_wo         = random_password.cv_revalidation_secret.result
+  value_wo_version = 1
+  env_slug         = var.environment_slug
+  workspace_id     = var.infisical_project_id
+  folder_path      = local.deploy_path
+
+  metadata = merge(local.common_metadata, {
+    description = "Terraform-generated secret shared by the registry and public CV Workers for authenticated cache revalidation."
     kind        = "generated-secret"
   })
 

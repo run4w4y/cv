@@ -29,3 +29,8 @@ export {
 export { applicationRegistryOpenApi } from './openapi'
 export * from './pdf-jobs'
 export * from './schemas'
+export {
+  applicationRegistryApiPrefix,
+  applicationRegistryMachineBaseUrl,
+  applicationRegistryMachinePrefix,
+} from './transport'

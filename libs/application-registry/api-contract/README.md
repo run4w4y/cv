@@ -6,9 +6,11 @@ the schemas used by the Worker, browser management app, and CLI client. There
 is no parallel legacy API.
 
 The public health endpoint is `GET /health`. Registry resources live under
-`/api/registry` and require bearer authentication for direct clients. The
-management SPA uses the same Worker as a same-origin BFF, which injects that
-credential server-side.
+`/api/registry` and require bearer authentication. Browser callers reach those
+paths through the same-origin BFF. Direct clients use the Worker's
+`/machine/api/registry` transport, which validates the explicitly supplied
+bearer credential and strips `/machine` before invoking this contract. Missing
+machine credentials are never replaced with the Worker's configured token.
 
 The contract is grouped internally by responsibility while remaining one API:
 

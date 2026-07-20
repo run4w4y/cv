@@ -13,6 +13,8 @@ import {
 import { keyedCommandFamily } from '@/preparation/keyed-command'
 import {
   currentCvPageAtom,
+  cvPublicationCanGeneratePdf,
+  cvPublicationHasReadyPdf,
   cvPublicationRunAtom,
   makeCancelCvPublicationAtom,
   makeStartCvPublicationAtom,
@@ -183,7 +185,8 @@ export const useCvPublicationCommands = (workspace: PreparationWorkspace) => {
     if (
       enabled &&
       (approvedRevision === null ||
-        page.link.currentRevisionId !== approvedRevision.revision.id)
+        page.link.currentRevisionId !== approvedRevision.revision.id ||
+        !cvPublicationHasReadyPdf(page))
     ) {
       return
     }
@@ -210,7 +213,7 @@ export const useCvPublicationCommands = (workspace: PreparationWorkspace) => {
       page === null ||
       approvedRevision === null ||
       page.link.currentRevisionId !== approvedRevision.revision.id ||
-      page.artifact?.status === 'pending'
+      !cvPublicationCanGeneratePdf(page)
     ) {
       return
     }

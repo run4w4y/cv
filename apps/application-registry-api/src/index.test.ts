@@ -71,6 +71,86 @@ describe('application registry worker', () => {
     expect(response.headers.get('cache-control')).toBe('private, no-store')
   })
 
+  test('serves bearer-authenticated machine requests without BFF injection', async () => {
+    const response = await worker.fetch(
+      new Request('https://registry.example.test/machine/health', {
+        headers: { authorization: 'Bearer test-token' },
+      }),
+      env,
+      context
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+    expect((await response.json()) as { readonly ok: boolean }).toEqual({
+      ok: true,
+    })
+  })
+
+  test('rejects machine requests that omit or present the wrong bearer token', async () => {
+    const missing = await worker.fetch(
+      new Request('https://registry.example.test/machine/health'),
+      env,
+      context
+    )
+    const invalid = await worker.fetch(
+      new Request('https://registry.example.test/machine/health', {
+        headers: { authorization: 'Bearer wrong-token' },
+      }),
+      env,
+      context
+    )
+
+    expect(missing.status).toBe(401)
+    expect(invalid.status).toBe(401)
+    expect(missing.headers.get('cache-control')).toBe('private, no-store')
+    expect(
+      (await missing.json()) as {
+        readonly code: string
+        readonly message: string
+      }
+    ).toEqual({
+      code: 'unauthorized',
+      message: 'Missing or invalid registry API token.',
+    })
+  })
+
+  test('fails closed when machine authentication is not configured', async () => {
+    const response = await worker.fetch(
+      new Request('https://registry.example.test/machine/health', {
+        headers: { authorization: 'Bearer test-token' },
+      }),
+      { ...env, REGISTRY_API_TOKEN: undefined },
+      context
+    )
+
+    expect(response.status).toBe(503)
+    expect(
+      (await response.json()) as {
+        readonly code: string
+        readonly message: string
+      }
+    ).toEqual({
+      code: 'service_unavailable',
+      message: 'Registry API token is not configured.',
+    })
+  })
+
+  test('does not serve management assets through the machine namespace', async () => {
+    const ASSETS = {
+      fetch: () => Promise.resolve(new Response('management asset')),
+    }
+    const response = await worker.fetch(
+      new Request('https://registry.example.test/machine/not-an-api', {
+        headers: { authorization: 'Bearer test-token' },
+      }),
+      { ...env, ASSETS },
+      context
+    )
+
+    expect(response.status).toBe(404)
+  })
+
   test('fails closed when browser BFF authentication is not configured', async () => {
     const response = await worker.fetch(
       new Request('https://registry.example.test/api/registry/health'),

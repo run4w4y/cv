@@ -90,7 +90,7 @@ const withClient = <A, E>(
   const platformLayer = Layer.merge(BunServices.layer, fetchLayer)
   const dependencies = Layer.merge(
     makeApplicationRegistryHttpClientLayer({
-      baseUrl: new URL('https://registry.example.test'),
+      baseUrl: new URL('https://registry.example.test/machine/'),
       token: Redacted.make('test-token'),
     }),
     makeRegistryOutboxLayer(root)
@@ -167,17 +167,17 @@ describe('application registry client', () => {
     expect(requests.map(({ method, url }) => ({ method, url }))).toEqual([
       {
         method: 'POST',
-        url: 'https://registry.example.test/api/registry/applications',
+        url: 'https://registry.example.test/machine/api/registry/applications',
       },
       {
         method: 'PATCH',
-        url: 'https://registry.example.test/api/registry/applications/application-1',
+        url: 'https://registry.example.test/machine/api/registry/applications/application-1',
       },
       {
         method: 'GET',
-        url: 'https://registry.example.test/api/registry/applications/application-1/activities',
+        url: 'https://registry.example.test/machine/api/registry/applications/application-1/activities',
       },
-      { method: 'GET', url: 'https://registry.example.test/health' },
+      { method: 'GET', url: 'https://registry.example.test/machine/health' },
     ])
     expect(requests[1]?.headers.get('idempotency-key')).toBe('update-key')
   })

@@ -59,8 +59,10 @@ const invalidatePublicationCache = (
   invalidation: Parameters<typeof invalidateCvCache>[0]
 ) =>
   invalidateCvCache(invalidation).pipe(
-    Effect.mapError((error) =>
-      InternalServerError.make({ message: error.message })
+    Effect.catch((error) =>
+      Effect.logWarning('CV cache compatibility purge failed.', {
+        message: error.message,
+      })
     )
   )
 
@@ -76,7 +78,7 @@ const syncCvLinksForStatus = (
       )
     : cvPublications.restoreAfterRejection(applicationId)
   ).pipe(
-    Effect.tap(() => invalidateCvCache({ all: true })),
+    Effect.tap(() => invalidatePublicationCache({ all: true })),
     Effect.asVoid,
     Effect.catch((error) => Effect.logWarning(error.message))
   )

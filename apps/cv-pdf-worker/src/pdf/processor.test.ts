@@ -1,9 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { Message } from '@cloudflare/workers-types'
-import {
-  cvPreviewUrl,
-  type PdfGenerationRequested,
-} from '@cv/application-registry-api-contract'
+import type { PdfGenerationRequested } from '@cv/application-registry-api-contract'
 import type {
   ContentEntry,
   ContentRevision,
@@ -173,7 +170,7 @@ const queueMessage = (body: unknown, attempts = 1) => {
 }
 
 describe('PDF Queue job processor', () => {
-  test('renders the protected preview and completes the pending artifact', async () => {
+  test('renders the exact public URL and completes the pending artifact', async () => {
     const renderedUrls: string[] = []
     const completions: Uint8Array[] = []
     const bytes = new Uint8Array([1, 2, 3])
@@ -211,7 +208,7 @@ describe('PDF Queue job processor', () => {
       })
     )
 
-    expect(renderedUrls).toEqual([cvPreviewUrl(link)])
+    expect(renderedUrls).toEqual([link.publicUrl])
     expect(completions).toEqual([bytes])
   })
 
@@ -254,6 +251,50 @@ describe('PDF Queue job processor', () => {
     })
   })
 
+  test('rejects a disabled publication before opening its public URL', async () => {
+    let renderCalls = 0
+
+    const error = await run(
+      processPdfJobEffect(request).pipe(Effect.flip),
+      persistence({
+        load: () => Effect.succeed(job({}, { enabled: false })),
+      }),
+      renderer({
+        render: () => {
+          renderCalls += 1
+          return Effect.succeed({
+            bytes: new Uint8Array(),
+            rendererVersion: 'cv-render.v1:deployment-1',
+          })
+        },
+      })
+    )
+
+    expect(error).toMatchObject({
+      _tag: 'PdfJobPermanentError',
+      code: 'pdf_publication_changed',
+    })
+    expect(renderCalls).toBe(0)
+  })
+
+  test('rejects a QR target that no longer matches the final public URL', async () => {
+    const error = await run(
+      processPdfJobEffect(request).pipe(Effect.flip),
+      persistence({
+        load: () =>
+          Effect.succeed(
+            job({ qrTarget: 'https://cv.example.test/c/stale-token' })
+          ),
+      }),
+      renderer()
+    )
+
+    expect(error).toMatchObject({
+      _tag: 'PdfJobPermanentError',
+      code: 'pdf_publication_changed',
+    })
+  })
+
   test('preserves typed transient render failures for Queue retry', async () => {
     const transient = new PdfJobTransientError({
       cause: new Error('Browser capacity unavailable.'),
@@ -271,7 +312,7 @@ describe('PDF Queue job processor', () => {
     expect(error).toBe(transient)
   })
 
-  test('records a permanent failure without changing page visibility', async () => {
+  test('records a permanent failure for registry publication reconciliation', async () => {
     const failures: string[][] = []
     const permanent = new PdfJobPermanentError({
       cause: new Error('The CV exceeds one page.'),

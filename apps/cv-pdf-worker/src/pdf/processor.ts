@@ -1,7 +1,4 @@
-import {
-  cvPreviewUrl,
-  type PdfGenerationRequested,
-} from '@cv/application-registry-api-contract'
+import type { PdfGenerationRequested } from '@cv/application-registry-api-contract'
 import type { PdfArtifactJob } from '@cv/application-registry-service'
 import { Effect } from 'effect'
 
@@ -35,6 +32,7 @@ const validatePendingJob = Effect.fn('PdfJob.validatePending')(function* (
     link.id !== artifact.cvLinkId ||
     link.applicationId !== request.applicationId ||
     link.contentEntryId !== request.entryId ||
+    !link.enabled ||
     link.currentRevisionId !== artifact.contentRevisionId ||
     link.publicationVersion !== artifact.publicationVersion ||
     link.publicUrl !== artifact.qrTarget ||
@@ -57,7 +55,7 @@ export const processPdfJobEffect = Effect.fn('PdfJob.process')(function* (
   if (job.artifact.status === 'failed') return
 
   yield* validatePendingJob(request, job)
-  const rendered = yield* renderer.render(cvPreviewUrl(job.link))
+  const rendered = yield* renderer.render(job.link.publicUrl)
   const ready = yield* persistence.complete(
     request.applicationId,
     request.artifactId,

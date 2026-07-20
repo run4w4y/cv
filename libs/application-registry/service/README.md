@@ -23,6 +23,11 @@ Key services are:
 - `CvPublicationsService`, `CvAnalyticsService`, and `PdfArtifactsService`:
   stable publications, traffic, and exact PDF artifacts.
 
+Reopening an application restores a rejection-disabled publication only when
+the latest PDF artifact for its exact revision, publication version, and public
+URL is ready. A missing, pending, or failed current attempt leaves the link
+disabled even when an older matching PDF succeeded.
+
 Activities are annotations, not authoritative commands. Application creation,
 aggregate updates, notes, and listing decisions issue them from the backend as
 part of the same persistence operation. Clients never ask the service to append

@@ -1,7 +1,10 @@
 import { CloudflareAnalytics } from '@cv/cloudflare-analytics-client'
 import { Config, Effect } from 'effect'
 
-import { applicationRegistryWorkersDevEnabled } from './deployment-config'
+import {
+  applicationRegistryCvAppBindingEnabled,
+  applicationRegistryWorkersDevEnabled,
+} from './deployment-config'
 
 type WranglerConfig = {
   readonly $schema: string
@@ -9,7 +12,13 @@ type WranglerConfig = {
     readonly binding: 'ASSETS'
     readonly directory: '../application-registry/dist'
     readonly not_found_handling: 'single-page-application'
-    readonly run_worker_first: readonly ['/api/*', '/health', '/openapi.json']
+    readonly run_worker_first: readonly [
+      '/api/*',
+      '/machine',
+      '/machine/*',
+      '/health',
+      '/openapi.json',
+    ]
   }
   readonly compatibility_date: string
   readonly compatibility_flags: readonly ['nodejs_compat']
@@ -38,7 +47,7 @@ type WranglerConfig = {
     readonly binding: 'CV_OBJECTS'
     readonly bucket_name: string
   }[]
-  readonly services: readonly {
+  readonly services?: readonly {
     readonly binding: 'CV_APP'
     readonly service: string
   }[]
@@ -76,7 +85,7 @@ const readOutputPath = Effect.sync(
   () => process.argv[2]?.trim() || defaultOutputPath
 )
 
-const readConfig = Effect.all({
+export const readWranglerConfig = Effect.all({
   chatgptSessionsKvId: Config.nonEmptyString('CHATGPT_SESSIONS_KV_ID'),
   compatibilityDate: optionalString(
     'APPLICATION_REGISTRY_COMPATIBILITY_DATE',
@@ -93,6 +102,7 @@ const readConfig = Effect.all({
     'cv-application-registry'
   ),
   cvObjectsBucketName: optionalString('CV_OBJECTS_BUCKET_NAME', 'cv-objects'),
+  cvAppBindingEnabled: applicationRegistryCvAppBindingEnabled,
   cvPublicWorkerName: optionalString('CV_PUBLIC_WORKER_NAME', 'cv-public'),
   cvWebHost: Config.nonEmptyString('CV_WEB_HOST'),
   pdfQueueName: optionalString('CV_PDF_QUEUE_NAME', 'cv-pdf-generation'),
@@ -108,6 +118,7 @@ const readConfig = Effect.all({
       cloudflareGraphqlEndpoint,
       cloudflareZoneId,
       compatibilityDate,
+      cvAppBindingEnabled,
       cvObjectsBucketName,
       cvPublicWorkerName,
       cvWebHost,
@@ -123,7 +134,13 @@ const readConfig = Effect.all({
           binding: 'ASSETS',
           directory: '../application-registry/dist',
           not_found_handling: 'single-page-application',
-          run_worker_first: ['/api/*', '/health', '/openapi.json'],
+          run_worker_first: [
+            '/api/*',
+            '/machine',
+            '/machine/*',
+            '/health',
+            '/openapi.json',
+          ],
         },
         compatibility_date: compatibilityDate,
         compatibility_flags: ['nodejs_compat'],
@@ -161,12 +178,16 @@ const readConfig = Effect.all({
             bucket_name: cvObjectsBucketName,
           },
         ],
-        services: [
-          {
-            binding: 'CV_APP',
-            service: cvPublicWorkerName,
-          },
-        ],
+        ...(cvAppBindingEnabled
+          ? {
+              services: [
+                {
+                  binding: 'CV_APP',
+                  service: cvPublicWorkerName,
+                },
+              ],
+            }
+          : {}),
         secrets: {
           required: [
             'CHATGPT_SESSION_SECRET',
@@ -190,7 +211,10 @@ const readConfig = Effect.all({
 )
 
 const program = Effect.gen(function* () {
-  const [outputPath, config] = yield* Effect.all([readOutputPath, readConfig])
+  const [outputPath, config] = yield* Effect.all([
+    readOutputPath,
+    readWranglerConfig,
+  ])
 
   yield* Effect.tryPromise({
     try: () => Bun.write(outputPath, `${JSON.stringify(config, null, 2)}\n`),
@@ -198,7 +222,9 @@ const program = Effect.gen(function* () {
   })
 })
 
-Effect.runPromise(program).catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : String(error))
-  process.exitCode = 1
-})
+if (import.meta.main) {
+  Effect.runPromise(program).catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exitCode = 1
+  })
+}

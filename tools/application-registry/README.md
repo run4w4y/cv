@@ -6,7 +6,7 @@ maintain handwritten routes or codecs.
 
 Configuration:
 
-- `REGISTRY_API_URL`: Worker base URL;
+- `REGISTRY_API_URL`: Worker HTTPS origin (without `/machine`);
 - `REGISTRY_API_TOKEN`: bearer token;
 - `REGISTRY_OUTBOX_DIR`: optional durable mutation outbox directory.
 
@@ -27,8 +27,10 @@ application-registry outbox list|sync
 application-registry health
 ```
 
-Application creation uses `POST /api/registry/applications`; preparation and
-manual callers use the same operation. Applications are addressed by UUID and
+The client derives the bearer-only `/machine` transport from that origin.
+Application creation therefore reaches
+`POST /machine/api/registry/applications`; the underlying shared operation is
+still `POST /api/registry/applications`. Applications are addressed by UUID and
 their input uses `postingUrl`, company, role, and planning/lifecycle fields.
 There is no upsert, delete, deduplication, job-key lookup, or client activity
 append compatibility command.
