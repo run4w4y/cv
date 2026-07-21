@@ -1,0 +1,20 @@
+{
+  "name": "@cv/application-registry-mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nx run application-registry-mcp-server:build",
+    "start": "nx run application-registry-mcp-server:serve"
+  },
+  "dependencies": {
+    "@cv/application-registry-api-client": "workspace:*",
+    "@cv/application-registry-api-contract": "workspace:*",
+    "@cv/application-registry-entity": "workspace:*",
+    "@effect/platform-bun": "4.0.0-beta.99",
+    "effect": "4.0.0-beta.99"
+  },
+  "devDependencies": {
+    "bun-types": "1.3.13"
+  }
+}

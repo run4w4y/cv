@@ -1,0 +1,26 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "test-infrastructure",
+  "projectType": "library",
+  "sourceRoot": "libs/test-infrastructure/src",
+  "tags": ["scope:test", "type:test-support", "visibility:private"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/test-infrastructure/src/index.ts",
+        "outputPath": "libs/test-infrastructure/dist",
+        "rootDir": "libs/test-infrastructure/src",
+        "tsConfig": "libs/test-infrastructure/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "format": {},
+    "format:check": {},
+    "lint": {},
+    "lint:fix": {},
+    "typecheck": {}
+  }
+}

@@ -15,6 +15,12 @@ export interface Range {
   readonly to: string
 }
 
+export interface DatasetLimits {
+  readonly maxDurationMs: number
+  readonly maxPageSize: number
+  readonly retentionMs: number
+}
+
 /**
  * Exact provider path mapped to an application-owned identifier. The raw path
  * is accepted only at the Cloudflare adapter boundary and is never returned

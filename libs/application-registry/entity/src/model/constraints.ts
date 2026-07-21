@@ -37,7 +37,8 @@ export const RegistryRevisionSchema = Schema.Int.pipe(
 export type RegistryRevision = Schema.Schema.Type<typeof RegistryRevisionSchema>
 
 export const NonNegativeMinorAmountSchema = Schema.Int.pipe(
-  Schema.check(Schema.isGreaterThanOrEqualTo(0))
+  Schema.check(Schema.isGreaterThanOrEqualTo(0)),
+  Schema.check(Schema.isLessThanOrEqualTo(Number.MAX_SAFE_INTEGER))
 )
 
 export const PositiveRateSchema = Schema.Number.pipe(

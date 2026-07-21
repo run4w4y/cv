@@ -3,26 +3,57 @@ import type * as DurableDeferred from 'effect/unstable/workflow/DurableDeferred'
 import type { SavedCandidate } from './candidate'
 import type { DocumentKind } from './input'
 
-export type PreparationStage =
-  | 'queued'
-  | 'application'
-  | 'capture'
-  | 'analysis'
-  | 'evidence'
-  | 'briefs'
-  | 'composition'
-  | 'validation'
-  | 'saving'
-  | 'review'
-  | 'complete'
+export const preparationStages = [
+  'queued',
+  'application',
+  'capture',
+  'analysis',
+  'evidence',
+  'briefs',
+  'composition',
+  'validation',
+  'saving',
+  'review',
+  'complete',
+] as const
+
+export type PreparationStage = (typeof preparationStages)[number]
+
+export type PreparationStepStatus =
+  | 'pending'
+  | 'running'
+  | 'waiting'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+
+export type PreparationStepHistoryEntry = {
+  readonly message: string
+  readonly occurredAt: number
+  readonly stage: PreparationStage
+  readonly status: Exclude<PreparationStepStatus, 'pending'>
+}
+
+export type PreparationStepSummary = {
+  readonly completedAt: number | null
+  readonly message: string | null
+  readonly stage: PreparationStage
+  readonly startedAt: number | null
+  readonly status: PreparationStepStatus
+}
 
 type PreparationRunBase = {
   readonly applicationId: string | null
+  readonly batchId: string
+  readonly batchPosition: number
+  readonly createdAt: number
   readonly kind: DocumentKind
   readonly locale: string
   readonly message: string
   readonly runId: string
   readonly stage: PreparationStage
+  readonly stepHistory: ReadonlyArray<PreparationStepHistoryEntry>
+  readonly updatedAt: number
   readonly url: string
 }
 

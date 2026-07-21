@@ -47,7 +47,6 @@ export const BarChart = ({
   showLegend = true,
   valueFormat = formatChartValue,
 }: BarChartProps) => {
-  const titleId = useId()
   const descriptionId = useId()
   const { height, margin, width } = DEFAULT_CHART_BOUNDS
   const plotLeft = margin.left
@@ -87,98 +86,104 @@ export const BarChart = ({
       className={cn('flex min-w-0 flex-col gap-3', className)}
       data-slot="bar-chart"
     >
-      <svg
-        aria-describedby={descriptionId}
-        aria-labelledby={titleId}
-        className="h-auto w-full overflow-visible"
-        preserveAspectRatio="xMidYMid meet"
-        role="img"
-        viewBox={`0 0 ${width} ${height}`}
+      <section
+        aria-label={`${ariaLabel} plot`}
+        className="max-w-full overflow-x-auto pb-1"
+        data-slot="chart-scroll-area"
       >
-        <title id={titleId}>{ariaLabel}</title>
-        <desc id={descriptionId}>{description}</desc>
+        <svg
+          aria-describedby={descriptionId}
+          aria-label={ariaLabel}
+          className="h-auto min-w-180 w-full overflow-visible"
+          preserveAspectRatio="xMidYMid meet"
+          role="img"
+          viewBox={`0 0 ${width} ${height}`}
+        >
+          <desc id={descriptionId}>{description}</desc>
 
-        {showGrid
-          ? yTicks.map((tick) => {
-              const y = yScale(tick)
-              return (
-                <line
-                  key={tick}
-                  stroke={chartCssVars.grid}
-                  strokeWidth="1"
-                  x1={plotLeft}
-                  x2={plotRight}
-                  y1={y}
-                  y2={y}
-                />
-              )
-            })
-          : null}
+          {showGrid
+            ? yTicks.map((tick) => {
+                const y = yScale(tick)
+                return (
+                  <line
+                    key={tick}
+                    stroke={chartCssVars.grid}
+                    strokeWidth="1"
+                    x1={plotLeft}
+                    x2={plotRight}
+                    y1={y}
+                    y2={y}
+                  />
+                )
+              })
+            : null}
 
-        {yTicks.map((tick) => (
-          <text
-            fill={chartCssVars.axis}
-            fontSize="11"
-            key={tick}
-            textAnchor="end"
-            x={plotLeft - 10}
-            y={yScale(tick) + 4}
-          >
-            {formatCompactChartValue(tick)}
-          </text>
-        ))}
-
-        {data.map((item, index) => {
-          const centerX = plotLeft + slotWidth * index + slotWidth / 2
-          const valueY = yScale(item.value)
-          const rectY = Math.min(valueY, baseline)
-          const rectHeight = Math.max(1, Math.abs(baseline - valueY))
-          const color =
-            item.color ?? defaultChartColors[index % defaultChartColors.length]
-          const label = `${item.label}: ${valueFormat(item.value)}`
-
-          return (
-            <g
-              aria-label={label}
-              className="group outline-none"
-              key={item.id ?? `${item.label}-${index}`}
-              tabIndex={0}
+          {yTicks.map((tick) => (
+            <text
+              fill={chartCssVars.axis}
+              fontSize="11"
+              key={tick}
+              textAnchor="end"
+              x={plotLeft - 10}
+              y={yScale(tick) + 4}
             >
-              <rect
-                className="transition-opacity group-hover:opacity-80 group-focus-visible:stroke-chart-focus group-focus-visible:stroke-2"
-                fill={color}
-                height={rectHeight}
-                rx="5"
-                width={barWidth}
-                x={centerX - barWidth / 2}
-                y={rectY}
-              />
-              <text
-                fill={chartCssVars.axis}
-                fontSize="11"
-                textAnchor="middle"
-                x={centerX}
-                y={plotBottom + 26}
+              {formatCompactChartValue(tick)}
+            </text>
+          ))}
+
+          {data.map((item, index) => {
+            const centerX = plotLeft + slotWidth * index + slotWidth / 2
+            const valueY = yScale(item.value)
+            const rectY = Math.min(valueY, baseline)
+            const rectHeight = Math.max(1, Math.abs(baseline - valueY))
+            const color =
+              item.color ??
+              defaultChartColors[index % defaultChartColors.length]
+            const label = `${item.label}: ${valueFormat(item.value)}`
+
+            return (
+              <g
+                aria-label={label}
+                className="group outline-none"
+                key={item.id ?? `${item.label}-${index}`}
+                tabIndex={0}
               >
-                {truncateAxisLabel(item.label)}
-              </text>
-              {data.length <= 12 ? (
+                <rect
+                  className="transition-opacity group-hover:opacity-80 group-focus-visible:stroke-chart-focus group-focus-visible:stroke-2"
+                  fill={color}
+                  height={rectHeight}
+                  rx="5"
+                  width={barWidth}
+                  x={centerX - barWidth / 2}
+                  y={rectY}
+                />
                 <text
-                  fill="var(--foreground)"
+                  fill={chartCssVars.axis}
                   fontSize="11"
-                  fontWeight="600"
                   textAnchor="middle"
                   x={centerX}
-                  y={item.value >= 0 ? rectY - 7 : rectY + rectHeight + 14}
+                  y={plotBottom + 26}
                 >
-                  {formatCompactChartValue(item.value)}
+                  {truncateAxisLabel(item.label)}
                 </text>
-              ) : null}
-              <title>{label}</title>
-            </g>
-          )
-        })}
-      </svg>
+                {data.length <= 12 ? (
+                  <text
+                    fill="var(--foreground)"
+                    fontSize="11"
+                    fontWeight="600"
+                    textAnchor="middle"
+                    x={centerX}
+                    y={item.value >= 0 ? rectY - 7 : rectY + rectHeight + 14}
+                  >
+                    {formatCompactChartValue(item.value)}
+                  </text>
+                ) : null}
+                <title>{label}</title>
+              </g>
+            )
+          })}
+        </svg>
+      </section>
 
       {showLegend ? (
         <ChartLegend items={legendItems} valueFormat={valueFormat} />

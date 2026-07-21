@@ -1,8 +1,4 @@
-export {
-  type FinalizableQuery,
-  finalizeQuery,
-  resolveQuery,
-} from './query'
+export { type FinalizableQuery, finalizeQuery, resolveQuery } from './query'
 export {
   CursorPageInfoSchema,
   CursorPaginationQuerySchema,
@@ -28,7 +24,9 @@ export {
   type QueryParamsRequest,
   type QueryParamsSchemaOptions,
   type QuerySchemaDefinition,
+  type QuerySearchParamsCodec,
   queryPageSchema,
+  queryParamsCodec,
   queryParamsSchema,
   queryRequestSchema,
   schemaBinaryFilterOperator,

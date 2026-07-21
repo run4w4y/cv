@@ -11,12 +11,10 @@ import {
   type ApplicationNote,
   ApplicationNoteSchema,
   ApplicationSchema,
-  CurrencyCodeSchema,
   ExpectedApplicationVersionSchema,
   type ListingCheckRun,
   ListingCheckRunSchema,
   NonEmptyTrimmedStringSchema as NonEmptyString,
-  UtcIsoTimestampSchema,
 } from '@cv/application-registry-entity'
 import {
   type AnnualCompensation,
@@ -245,56 +243,14 @@ export const ListApplicationActivitiesResponseSchema: Schema.Codec<ListApplicati
     Schema.Struct({ items: Schema.Array(ApplicationActivitySchema) })
   )
 
-export const ListApplicationCompensationsQuerySchema = Schema.Struct({
-  currency: Schema.optional(CurrencyCodeSchema),
-})
-
-export type ListApplicationCompensationsQuery = Schema.Schema.Type<
-  typeof ListApplicationCompensationsQuerySchema
->
-
-export type ConvertedCompensation = {
-  readonly currencyCode: string
-  readonly minimumMinor: number | null
-  readonly maximumMinor: number | null
-  readonly rate: number
-  readonly provider: string
-  readonly observedAt: string
-}
-
-export const ConvertedCompensationSchema: Schema.Codec<ConvertedCompensation> =
-  Schema.revealCodec(
-    Schema.Struct({
-      currencyCode: CurrencyCodeSchema,
-      minimumMinor: Schema.NullOr(Schema.Int),
-      maximumMinor: Schema.NullOr(Schema.Int),
-      rate: Schema.Number.pipe(Schema.check(Schema.isGreaterThan(0))),
-      provider: NonEmptyString,
-      observedAt: UtcIsoTimestampSchema,
-    })
-  )
-
-export type ApplicationCompensationResponseItem = {
-  readonly original: ApplicationCompensation
-  readonly conversion: ConvertedCompensation | null
-}
-
-export const ApplicationCompensationResponseItemSchema: Schema.Codec<ApplicationCompensationResponseItem> =
-  Schema.revealCodec(
-    Schema.Struct({
-      original: ApplicationCompensationSchema,
-      conversion: Schema.NullOr(ConvertedCompensationSchema),
-    })
-  )
-
 export type ListApplicationCompensationsResponse = {
-  readonly items: readonly ApplicationCompensationResponseItem[]
+  readonly items: readonly ApplicationCompensation[]
 }
 
 export const ListApplicationCompensationsResponseSchema: Schema.Codec<ListApplicationCompensationsResponse> =
   Schema.revealCodec(
     Schema.Struct({
-      items: Schema.Array(ApplicationCompensationResponseItemSchema),
+      items: Schema.Array(ApplicationCompensationSchema),
     })
   )
 

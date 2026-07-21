@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 
+import { CvHtmlDocument } from '@/app/cv-html-document'
 import { loadCvPublicationForToken } from '@/server/load-publication'
 import { decodeCvToken } from '@/server/token'
 import '../global.css'
@@ -20,8 +21,8 @@ export default async function PublicCvLayout({
     publication.tag === 'success' ? publication.document : undefined
 
   return (
-    <html dir={document?.direction ?? 'ltr'} lang={document?.locale ?? 'en'}>
-      <body>{children}</body>
-    </html>
+    <CvHtmlDocument direction={document?.direction} language={document?.locale}>
+      {children}
+    </CvHtmlDocument>
   )
 }

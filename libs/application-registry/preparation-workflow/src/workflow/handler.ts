@@ -72,13 +72,13 @@ const withActivityTimeout = <A, R>(
 ): Effect.Effect<A, PreparationWorkflowError, R> =>
   effect.pipe(
     Effect.timeout(duration),
-    Effect.mapError((error) =>
-      error._tag === 'PreparationWorkflowError'
-        ? error
-        : new PreparationWorkflowError({
-            message: `The ${stage} activity exceeded its ${String(duration)} time limit.`,
-            stage,
-          })
+    Effect.catchTag('TimeoutError', () =>
+      Effect.fail(
+        new PreparationWorkflowError({
+          message: `The ${stage} activity exceeded its ${String(duration)} time limit.`,
+          stage,
+        })
+      )
     )
   )
 
@@ -189,7 +189,7 @@ const executePreparation = Effect.fn('PrepareApplication.run')(
         yield* progress.stage(
           input.runId,
           'briefs',
-          'Building section briefs with bounded parallel AI calls.'
+          'Building section briefs with bounded parallel generation calls.'
         )
         const briefs = yield* Effect.forEach(
           gateway.sectionIds(input.kind),
@@ -246,6 +246,11 @@ const executePreparation = Effect.fn('PrepareApplication.run')(
           ],
         }
 
+        yield* progress.stage(
+          input.runId,
+          'validation',
+          'Validating the generated document and its requested format.'
+        )
         if (!candidateMatchesDocumentKind(candidate, input.kind)) {
           return yield* Effect.fail(
             new PreparationWorkflowError({

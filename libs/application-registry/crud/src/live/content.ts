@@ -1,7 +1,6 @@
-import type { D1Database } from '@cloudflare/workers-types'
-import { type Effect, Layer } from 'effect'
+import { Layer } from 'effect'
 
-import { withRegistryConnections } from '../internal/connection'
+import type { RegistryDatabase } from '../internal/connection'
 import {
   appendContentRevision,
   approveContentRevision,
@@ -40,62 +39,36 @@ import {
   JobPostingSnapshotsCrud,
 } from '../services/content'
 
-export const makeContentCrudLive = (database: Effect.Effect<D1Database>) =>
+export const makeContentCrudLive = (database: RegistryDatabase) =>
   Layer.mergeAll(
     Layer.succeed(JobPostingSnapshotsCrud, {
-      find: (id) =>
-        withRegistryConnections(database, ({ query }) =>
-          findJobPostingSnapshot(query, id)
-        ),
+      find: (id) => findJobPostingSnapshot(database, id),
       latest: (applicationId) =>
-        withRegistryConnections(database, ({ query }) =>
-          findLatestJobPostingSnapshot(query, applicationId)
-        ),
-      persist: (snapshot) =>
-        withRegistryConnections(database, ({ query }) =>
-          persistJobPostingSnapshot(query, snapshot)
-        ),
+        findLatestJobPostingSnapshot(database, applicationId),
+      persist: (snapshot) => persistJobPostingSnapshot(database, snapshot),
     }),
     Layer.succeed(ContentCrud, {
       approve: (entryId, revisionId, expectedVersion, updatedAt) =>
-        withRegistryConnections(database, ({ query }) =>
-          approveContentRevision(
-            query,
-            entryId,
-            revisionId,
-            expectedVersion,
-            updatedAt
-          )
+        approveContentRevision(
+          database,
+          entryId,
+          revisionId,
+          expectedVersion,
+          updatedAt
         ),
       appendRevision: (revision, expectedEntryVersion, updatedAt) =>
-        withRegistryConnections(database, (connections) =>
-          appendContentRevision(
-            connections,
-            revision,
-            expectedEntryVersion,
-            updatedAt
-          )
+        appendContentRevision(
+          database,
+          revision,
+          expectedEntryVersion,
+          updatedAt
         ),
-      createEntry: (entry) =>
-        withRegistryConnections(database, ({ query }) =>
-          createContentEntry(query, entry)
-        ),
-      findEntry: (id) =>
-        withRegistryConnections(database, ({ query }) =>
-          findContentEntry(query, id)
-        ),
+      createEntry: (entry) => createContentEntry(database, entry),
+      findEntry: (id) => findContentEntry(database, id),
       findEntryByApplication: (applicationId, kind, locale) =>
-        withRegistryConnections(database, ({ query }) =>
-          findContentEntryByApplication(query, applicationId, kind, locale)
-        ),
-      findRevision: (id) =>
-        withRegistryConnections(database, ({ query }) =>
-          findContentRevision(query, id)
-        ),
-      listRevisions: (entryId) =>
-        withRegistryConnections(database, ({ query }) =>
-          listContentRevisions(query, entryId)
-        ),
+        findContentEntryByApplication(database, applicationId, kind, locale),
+      findRevision: (id) => findContentRevision(database, id),
+      listRevisions: (entryId) => listContentRevisions(database, entryId),
     }),
     Layer.succeed(CvLinksCrud, {
       disableForFailedArtifact: (
@@ -105,45 +78,35 @@ export const makeContentCrudLive = (database: Effect.Effect<D1Database>) =>
         reason,
         disabledAt
       ) =>
-        withRegistryConnections(database, ({ query }) =>
-          disableCvLinkForFailedArtifact(
-            query,
-            id,
-            expectedVersion,
-            artifact,
-            reason,
-            disabledAt
-          )
+        disableCvLinkForFailedArtifact(
+          database,
+          id,
+          expectedVersion,
+          artifact,
+          reason,
+          disabledAt
         ),
       disableForApplication: (applicationId, reason, disabledAt) =>
-        withRegistryConnections(database, ({ query }) =>
-          disableCvLinksForApplication(query, applicationId, reason, disabledAt)
+        disableCvLinksForApplication(
+          database,
+          applicationId,
+          reason,
+          disabledAt
         ),
       enableForApplication: (applicationId, disabledReason, updatedAt) =>
-        withRegistryConnections(database, ({ query }) =>
-          enableCvLinksForApplication(
-            query,
-            applicationId,
-            disabledReason,
-            updatedAt
-          )
+        enableCvLinksForApplication(
+          database,
+          applicationId,
+          disabledReason,
+          updatedAt
         ),
       findByEntry: (contentEntryId) =>
-        withRegistryConnections(database, ({ query }) =>
-          findCvLinkByEntry(query, contentEntryId)
-        ),
+        findCvLinkByEntry(database, contentEntryId),
       findByApplication: (applicationId) =>
-        withRegistryConnections(database, ({ query }) =>
-          findCvLinksByApplication(query, applicationId)
-        ),
-      findByToken: (token) =>
-        withRegistryConnections(database, ({ query }) =>
-          findCvLinkByToken(query, token)
-        ),
-      stage: (link) =>
-        withRegistryConnections(database, ({ query }) =>
-          stageCvLink(query, link)
-        ),
+        findCvLinksByApplication(database, applicationId),
+      findByToken: (token) => findCvLinkByToken(database, token),
+      stage: (link, expectedContentVersion) =>
+        stageCvLink(database, link, expectedContentVersion),
       setEnabled: (
         id,
         expectedVersion,
@@ -152,31 +115,22 @@ export const makeContentCrudLive = (database: Effect.Effect<D1Database>) =>
         reason,
         updatedAt
       ) =>
-        withRegistryConnections(database, ({ query }) =>
-          setCvLinkEnabled(
-            query,
-            id,
-            expectedVersion,
-            expectedPublicationVersion,
-            enabled,
-            reason,
-            updatedAt
-          )
+        setCvLinkEnabled(
+          database,
+          id,
+          expectedVersion,
+          expectedPublicationVersion,
+          enabled,
+          reason,
+          updatedAt
         ),
     }),
     Layer.succeed(ArtifactsCrud, {
-      find: (id) =>
-        withRegistryConnections(database, ({ query }) =>
-          findArtifact(query, id)
-        ),
+      find: (id) => findArtifact(database, id),
       findByRequestId: (requestId) =>
-        withRegistryConnections(database, ({ query }) =>
-          findArtifactByRequestId(query, requestId)
-        ),
+        findArtifactByRequestId(database, requestId),
       findPendingDispatch: (artifactId) =>
-        withRegistryConnections(database, ({ query }) =>
-          findPendingPdfDispatch(query, artifactId)
-        ),
+        findPendingPdfDispatch(database, artifactId),
       findCurrentForPublication: (
         cvLinkId,
         contentRevisionId,
@@ -184,15 +138,13 @@ export const makeContentCrudLive = (database: Effect.Effect<D1Database>) =>
         publicationVersion,
         qrTarget
       ) =>
-        withRegistryConnections(database, ({ query }) =>
-          findCurrentArtifactForPublication(
-            query,
-            cvLinkId,
-            contentRevisionId,
-            rendererVersion,
-            publicationVersion,
-            qrTarget
-          )
+        findCurrentArtifactForPublication(
+          database,
+          cvLinkId,
+          contentRevisionId,
+          rendererVersion,
+          publicationVersion,
+          qrTarget
         ),
       findReadyForPublication: (
         cvLinkId,
@@ -201,44 +153,23 @@ export const makeContentCrudLive = (database: Effect.Effect<D1Database>) =>
         publicationVersion,
         qrTarget
       ) =>
-        withRegistryConnections(database, ({ query }) =>
-          findReadyArtifactForPublication(
-            query,
-            cvLinkId,
-            contentRevisionId,
-            rendererVersion,
-            publicationVersion,
-            qrTarget
-          )
+        findReadyArtifactForPublication(
+          database,
+          cvLinkId,
+          contentRevisionId,
+          rendererVersion,
+          publicationVersion,
+          qrTarget
         ),
       markFailed: (id, errorCode, errorMessage, updatedAt) =>
-        withRegistryConnections(database, ({ query }) =>
-          markArtifactFailed(query, id, errorCode, errorMessage, updatedAt)
-        ),
+        markArtifactFailed(database, id, errorCode, errorMessage, updatedAt),
       markDispatchFailed: (artifactId, message, attemptedAt) =>
-        withRegistryConnections(database, ({ query }) =>
-          markPdfDispatchFailed(query, artifactId, message, attemptedAt)
-        ),
+        markPdfDispatchFailed(database, artifactId, message, attemptedAt),
       markDispatched: (artifactId, dispatchedAt) =>
-        withRegistryConnections(database, ({ query }) =>
-          markPdfDispatched(query, artifactId, dispatchedAt)
-        ),
-      markReady: (artifact) =>
-        withRegistryConnections(database, ({ query }) =>
-          markArtifactReady(query, artifact)
-        ),
+        markPdfDispatched(database, artifactId, dispatchedAt),
+      markReady: (artifact) => markArtifactReady(database, artifact),
       persistPending: (artifact, outbox, expectedLinkVersion) =>
-        withRegistryConnections(database, (connections) =>
-          persistPendingArtifact(
-            connections,
-            artifact,
-            outbox,
-            expectedLinkVersion
-          )
-        ),
-      pendingDispatches: (limit) =>
-        withRegistryConnections(database, ({ query }) =>
-          listPendingPdfDispatches(query, limit)
-        ),
+        persistPendingArtifact(database, artifact, outbox, expectedLinkVersion),
+      pendingDispatches: (limit) => listPendingPdfDispatches(database, limit),
     })
   )

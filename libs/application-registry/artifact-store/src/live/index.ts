@@ -1,1 +1,1 @@
-export { makeR2ArtifactStore, makeR2ArtifactStoreLayer } from './r2'
+export { makeS3ArtifactStore, makeS3ArtifactStoreLayer } from './s3'

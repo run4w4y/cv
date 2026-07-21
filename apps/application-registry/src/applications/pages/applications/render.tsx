@@ -111,6 +111,16 @@ export const ApplicationsPage = () => {
         </Alert>
       ) : null}
 
+      {list.error === undefined && list.conversionError !== undefined ? (
+        <Alert className="shrink-0 rounded-none border-x-0 border-t-0 px-5 py-3">
+          <AlertCircle />
+          <AlertTitle>Currency conversion unavailable</AlertTitle>
+          <AlertDescription className="whitespace-normal break-words">
+            {list.conversionError} Original compensation values remain visible.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       <ApplicationsTable
         data={list.applications}
         loading={list.tableLoading}
@@ -124,6 +134,8 @@ export const ApplicationsPage = () => {
         columnVisibility={workspace.columnVisibility}
         onColumnVisibilityChange={workspace.setColumnVisibility}
         availableLabels={facets?.labels ?? emptyLabels}
+        compensationDisplayCurrency={workspace.queryState.currency}
+        compensationFxRateTable={list.compensationFxRateTable}
         headerActions={<NewApplicationDialog />}
         renderViewControl={(table) => (
           <ApplicationSavedViews

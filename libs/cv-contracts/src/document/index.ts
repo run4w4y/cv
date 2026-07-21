@@ -1,52 +1,19 @@
 import { Option, Schema } from 'effect'
 import {
-  type GenerationGuidance,
-  GenerationGuidanceAnnotationId,
-} from '../guidance'
-import {
   CvLocaleSchema,
   NonEmptyTextSchema,
   ShortTextSchema,
   StableIdentifierSchema,
   UriSchema,
 } from '../internal/primitives'
+import { cvDocumentV1ContractId, cvDocumentV1Version } from './ids'
 
-export {
-  collectGenerationGuidance,
-  type GenerationGuidance,
-  GenerationGuidanceAnnotationId,
-  type GenerationGuidanceItem,
-  type GenerationGuidanceSource,
-  generationGuidanceSourceValues,
-  getGenerationGuidance,
-} from '../guidance'
-
-export const cvDocumentV1ContractId = 'cv.document.v1' as const
-export const cvDocumentV1Version = 1 as const
-
-export const cvDocumentV1GenerationGuidance = {
-  instruction:
-    'Produce a truthful, concise one-page CV. Use the job context only to select, order, and emphasize relevant material; every factual claim must be supported by the trusted facts catalogue.',
-  sources: ['trusted-facts', 'job-context'],
-  rules: [
-    'Never invent employers, dates, skills, metrics, qualifications, links, or responsibilities.',
-    'Prefer concrete evidence and outcomes over generic self-description.',
-    'Use exactly the requested locale and keep every section concise enough for one-page rendering.',
-    'Return only data accepted by this schema; renderer-owned labels, QR links, navigation, and print controls are not document content.',
-  ],
-} as const satisfies GenerationGuidance & {
-  readonly rules: ReadonlyArray<string>
-}
+export * from './generation-guidance'
+export * from './ids'
 
 const HeadlineSchema = ShortTextSchema.annotate({
   title: 'Headline',
   description: 'A short role-focused professional headline.',
-  [GenerationGuidanceAnnotationId]: {
-    instruction:
-      'Tailor the headline to the role without claiming a title or speciality unsupported by the trusted facts.',
-    sources: ['trusted-facts', 'job-context'],
-    maxWords: 14,
-  } satisfies GenerationGuidance,
 })
 
 const SummarySchema = NonEmptyTextSchema.pipe(
@@ -54,12 +21,6 @@ const SummarySchema = NonEmptyTextSchema.pipe(
 ).annotate({
   title: 'Professional summary',
   description: 'A compact role-specific professional summary.',
-  [GenerationGuidanceAnnotationId]: {
-    instruction:
-      'Write a compact opening that aligns verified strengths with the role. Do not repeat the job description or introduce unsupported claims.',
-    sources: ['trusted-facts', 'job-context'],
-    maxWords: 90,
-  } satisfies GenerationGuidance,
 })
 
 const HighlightSchema = NonEmptyTextSchema.pipe(
@@ -67,12 +28,6 @@ const HighlightSchema = NonEmptyTextSchema.pipe(
 ).annotate({
   title: 'Highlight',
   description: 'A concise, evidence-backed accomplishment or responsibility.',
-  [GenerationGuidanceAnnotationId]: {
-    instruction:
-      'Select or faithfully rephrase a supported accomplishment. Preserve the meaning and all quantities from the trusted fact.',
-    sources: ['trusted-facts', 'job-context'],
-    maxWords: 30,
-  } satisfies GenerationGuidance,
 })
 
 const TechnologySchema = ShortTextSchema.pipe(
@@ -80,12 +35,6 @@ const TechnologySchema = ShortTextSchema.pipe(
 ).annotate({
   title: 'Technology',
   description: 'A technology, tool, method, or domain skill.',
-  [GenerationGuidanceAnnotationId]: {
-    instruction:
-      'Include only a technology explicitly supported by the trusted facts catalogue.',
-    sources: ['trusted-facts'],
-    maxWords: 5,
-  } satisfies GenerationGuidance,
 })
 
 export const CvContactLinkV1Schema = Schema.Struct({
@@ -107,20 +56,11 @@ export const CvContactLinkV1Schema = Schema.Struct({
   value: ShortTextSchema.annotate({
     title: 'Contact value',
     description: 'The exact contact value shown to the reader.',
-    [GenerationGuidanceAnnotationId]: {
-      instruction: 'Copy the exact approved contact value from trusted facts.',
-      sources: ['trusted-facts'],
-      maxWords: 12,
-    } satisfies GenerationGuidance,
   }),
   href: Schema.optional(
     UriSchema.annotate({
       title: 'Contact link',
       description: 'Absolute URI opened for this contact method.',
-      [GenerationGuidanceAnnotationId]: {
-        instruction: 'Copy the exact approved URI from trusted facts.',
-        sources: ['trusted-facts'],
-      } satisfies GenerationGuidance,
     })
   ),
 }).annotate({
@@ -135,23 +75,12 @@ export const CvPersonV1Schema = Schema.Struct({
   name: ShortTextSchema.annotate({
     title: 'Name',
     description: 'The person name displayed as the document title.',
-    [GenerationGuidanceAnnotationId]: {
-      instruction: 'Copy the approved display name exactly from trusted facts.',
-      sources: ['trusted-facts'],
-      maxWords: 8,
-    } satisfies GenerationGuidance,
   }),
   headline: HeadlineSchema,
   location: Schema.optional(
     ShortTextSchema.annotate({
       title: 'Location',
       description: 'Public location or remote-work location statement.',
-      [GenerationGuidanceAnnotationId]: {
-        instruction:
-          'Use only an approved location statement from trusted facts.',
-        sources: ['trusted-facts'],
-        maxWords: 12,
-      } satisfies GenerationGuidance,
     })
   ),
   summary: SummarySchema,
@@ -174,49 +103,22 @@ export const CvExperienceItemV1Schema = Schema.Struct({
   }),
   company: ShortTextSchema.annotate({
     title: 'Company',
-    [GenerationGuidanceAnnotationId]: {
-      instruction: 'Copy the approved employer name from trusted facts.',
-      sources: ['trusted-facts'],
-      maxWords: 10,
-    } satisfies GenerationGuidance,
   }),
   role: ShortTextSchema.annotate({
     title: 'Role',
-    [GenerationGuidanceAnnotationId]: {
-      instruction: 'Copy the approved role title from trusted facts.',
-      sources: ['trusted-facts'],
-      maxWords: 12,
-    } satisfies GenerationGuidance,
   }),
   period: ShortTextSchema.annotate({
     title: 'Period',
     description: 'Human-readable employment period.',
-    [GenerationGuidanceAnnotationId]: {
-      instruction: 'Preserve the approved dates exactly.',
-      sources: ['trusted-facts'],
-      maxWords: 8,
-    } satisfies GenerationGuidance,
   }),
   location: Schema.optional(
     ShortTextSchema.annotate({
       title: 'Location',
-      [GenerationGuidanceAnnotationId]: {
-        instruction:
-          'Use the approved employment location or work-mode wording.',
-        sources: ['trusted-facts'],
-        maxWords: 10,
-      } satisfies GenerationGuidance,
     })
   ),
   summary: Schema.optional(
     NonEmptyTextSchema.pipe(Schema.check(Schema.isMaxLength(800))).annotate({
       title: 'Experience summary',
-      [GenerationGuidanceAnnotationId]: {
-        instruction:
-          'Summarize the scope of the role using only supported responsibilities, emphasizing relevance to the target role.',
-        sources: ['trusted-facts', 'job-context'],
-        maxWords: 45,
-      } satisfies GenerationGuidance,
     })
   ),
   highlights: Schema.Array(HighlightSchema).pipe(
@@ -239,22 +141,11 @@ export const CvProjectItemV1Schema = Schema.Struct({
   id: StableIdentifierSchema.annotate({ title: 'Project ID' }),
   name: ShortTextSchema.annotate({
     title: 'Project name',
-    [GenerationGuidanceAnnotationId]: {
-      instruction: 'Copy the approved project name from trusted facts.',
-      sources: ['trusted-facts'],
-      maxWords: 12,
-    } satisfies GenerationGuidance,
   }),
   summary: NonEmptyTextSchema.pipe(
     Schema.check(Schema.isMaxLength(800))
   ).annotate({
     title: 'Project summary',
-    [GenerationGuidanceAnnotationId]: {
-      instruction:
-        'Explain the project and verified contribution concisely, emphasizing the aspects most relevant to the job.',
-      sources: ['trusted-facts', 'job-context'],
-      maxWords: 55,
-    } satisfies GenerationGuidance,
   }),
   highlights: Schema.Array(HighlightSchema).pipe(
     Schema.check(Schema.isMaxLength(5))
@@ -277,12 +168,6 @@ export const CvSkillGroupV1Schema = Schema.Struct({
   id: StableIdentifierSchema.annotate({ title: 'Skill group ID' }),
   label: ShortTextSchema.annotate({
     title: 'Skill group label',
-    [GenerationGuidanceAnnotationId]: {
-      instruction:
-        'Use a concise grouping label that accurately describes the included verified skills.',
-      sources: ['trusted-facts', 'job-context'],
-      maxWords: 5,
-    } satisfies GenerationGuidance,
   }),
   items: Schema.Array(TechnologySchema).pipe(
     Schema.check(Schema.isMinLength(1)),
@@ -300,28 +185,12 @@ export const CvEducationItemV1Schema = Schema.Struct({
   id: StableIdentifierSchema.annotate({ title: 'Education ID' }),
   institution: ShortTextSchema.annotate({
     title: 'Institution',
-    [GenerationGuidanceAnnotationId]: {
-      instruction: 'Copy the approved institution name from trusted facts.',
-      sources: ['trusted-facts'],
-      maxWords: 16,
-    } satisfies GenerationGuidance,
   }),
   qualification: ShortTextSchema.annotate({
     title: 'Qualification',
-    [GenerationGuidanceAnnotationId]: {
-      instruction:
-        'Copy the approved degree, programme, or qualification from trusted facts.',
-      sources: ['trusted-facts'],
-      maxWords: 18,
-    } satisfies GenerationGuidance,
   }),
   period: ShortTextSchema.annotate({
     title: 'Period',
-    [GenerationGuidanceAnnotationId]: {
-      instruction: 'Preserve the approved education dates exactly.',
-      sources: ['trusted-facts'],
-      maxWords: 8,
-    } satisfies GenerationGuidance,
   }),
   location: Schema.optional(ShortTextSchema.annotate({ title: 'Location' })),
   details: Schema.Array(HighlightSchema).pipe(
@@ -343,12 +212,6 @@ export const CvAdditionalItemV1Schema = Schema.Struct({
   text: NonEmptyTextSchema.pipe(Schema.check(Schema.isMaxLength(500))).annotate(
     {
       title: 'Item text',
-      [GenerationGuidanceAnnotationId]: {
-        instruction:
-          'Include a concise statement supported by trusted facts. Use job context only to decide relevance and emphasis.',
-        sources: ['trusted-facts', 'job-context'],
-        maxWords: 35,
-      } satisfies GenerationGuidance,
     }
   ),
 }).annotate({
@@ -382,19 +245,10 @@ const CvDocumentV1StructureSchema = Schema.Struct({
   locale: CvLocaleSchema.annotate({
     title: 'Locale',
     description: 'Single locale used throughout this document.',
-    [GenerationGuidanceAnnotationId]: {
-      instruction:
-        'Use the requested facts locale and write every human-readable field in that locale.',
-      sources: ['literal'],
-    } satisfies GenerationGuidance,
   }),
   direction: Schema.Literal('ltr').annotate({
     title: 'Text direction',
     description: 'Text direction used by the renderer.',
-    [GenerationGuidanceAnnotationId]: {
-      instruction: 'Choose the direction implied by the requested locale.',
-      sources: ['literal'],
-    } satisfies GenerationGuidance,
   }),
   person: CvPersonV1Schema,
   experience: Schema.Array(CvExperienceItemV1Schema).pipe(
@@ -457,7 +311,6 @@ export const CvDocumentV1Schema = CvDocumentV1StructureSchema.pipe(
   description:
     'Flattened, single-locale content rendered as a one-page tailored CV.',
   parseOptions: { errors: 'all', onExcessProperty: 'error' },
-  [GenerationGuidanceAnnotationId]: cvDocumentV1GenerationGuidance,
 })
 
 export type CvDocumentV1 = Schema.Schema.Type<typeof CvDocumentV1Schema>
@@ -473,7 +326,6 @@ export const cvDocumentSchemaRegistry = [
     contractId: cvDocumentV1ContractId,
     version: cvDocumentV1Version,
     schema: CvDocumentV1Schema,
-    generationGuidance: cvDocumentV1GenerationGuidance,
   },
 ] as const
 

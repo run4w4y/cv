@@ -1,6 +1,5 @@
-import type { AiProviderShape } from '@cv/ai-provider'
 import type { JobPostingSnapshot } from '@cv/application-registry-entity'
-import type { FactsReaderShape } from '@cv/facts-r2'
+import type { FactsReaderShape } from '@cv/facts-reader/reader'
 import { Effect } from 'effect'
 
 import type { RegistryClient } from '@/lib/registry-client'
@@ -16,7 +15,6 @@ import { dataError, decodeOpaqueValue } from './shared'
 export const makePreparationContextRepository = (
   registry: RegistryClient['Service'],
   facts: FactsReaderShape,
-  ai: AiProviderShape,
   loadContentHead: PreparationRepositoryShape['loadContentHead']
 ) => {
   const latestSnapshotOrNull = Effect.fn(
@@ -105,6 +103,7 @@ export const makePreparationContextRepository = (
     )
 
     return {
+      cvGenerationGuidance: loaded.factsRelease.generationGuidance,
       factsCatalogue,
       factsRelease: {
         id: loaded.factsRelease.releaseId,
@@ -197,14 +196,22 @@ export const makePreparationContextRepository = (
     (effect) => effect.pipe(dataError('load-preparation-bootstrap'))
   )
 
-  const discoverModels = Effect.fn('PreparationRepository.discoverModels')(() =>
-    ai.discoverModels().pipe(dataError('discover-models'))
+  const loadCvGenerationGuidance = Effect.fn(
+    'PreparationRepository.loadCvGenerationGuidance'
+  )(() =>
+    facts.readGenerationGuidance().pipe(
+      Effect.map((loaded) => ({
+        factsReleaseId: loaded.releaseId,
+        guidance: loaded.generationGuidance,
+      })),
+      dataError('load-cv-generation-guidance')
+    )
   )
 
   return {
-    discoverModels,
     loadBootstrap,
     loadContext,
+    loadCvGenerationGuidance,
     loadWorkflowBootstrap,
   }
 }

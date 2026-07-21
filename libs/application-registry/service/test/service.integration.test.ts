@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict'
 import { after, afterEach, before, beforeEach, test } from 'node:test'
-import type { D1Database } from '@cloudflare/workers-types'
 import { makeInMemoryArtifactStoreLayer } from '@cv/application-registry-artifact-store/test-support'
-import { makeRegistryCrudLive } from '@cv/application-registry-crud/live'
-import { FxRates } from '@cv/application-registry-fx'
+import {
+  makeRegistryCrudLive,
+  type RegistryDatabaseShape,
+} from '@cv/application-registry-crud/live'
 import { ListingAvailabilityChecker } from '@cv/application-registry-listing-check'
-import { RegistryMiniflareHarness } from '@cv/worker-test-kit/application-registry'
 import { Effect, Layer, ManagedRuntime, Result } from 'effect'
+
+import { RegistryPostgresHarness } from '../../crud/test/postgres-harness.ts'
 
 import {
   ActivitiesService,
@@ -17,22 +19,14 @@ import {
   CvAnalyticsTrafficSource,
   CvPublicationsService,
   PdfArtifactsService,
+  ScheduledListingChecksRunner,
 } from '../src'
-import { RegistryServicesLive } from '../src/live'
+import {
+  RegistryServicesLive,
+  ScheduledListingChecksRunnerLive,
+} from '../src/live'
 
 const recordedAt = '2026-07-12T12:00:00.000Z'
-
-const FakeFxRatesLive = Layer.succeed(FxRates, {
-  get: (baseCurrency, quoteCurrency) =>
-    Effect.succeed({
-      baseCurrency,
-      fetchedAt: recordedAt,
-      observedAt: recordedAt,
-      provider: 'service-integration',
-      quoteCurrency,
-      rate: 2,
-    }),
-})
 
 const FakeListingAvailabilityCheckerLive = Layer.succeed(
   ListingAvailabilityChecker,
@@ -57,6 +51,8 @@ const FakeListingAvailabilityCheckerLive = Layer.succeed(
 const FakeCvAnalyticsTrafficSourceLive = Layer.succeed(
   CvAnalyticsTrafficSource,
   {
+    capabilities: () =>
+      Effect.succeed({ retentionMs: 31 * 24 * 60 * 60 * 1_000 }),
     read: (_aliases, range) =>
       Effect.succeed({
         generatedAt: recordedAt,
@@ -66,13 +62,11 @@ const FakeCvAnalyticsTrafficSourceLive = Layer.succeed(
   }
 )
 
-const makeRegistryServiceTestRuntime = (database: D1Database) =>
+const makeRegistryServiceTestRuntime = (database: RegistryDatabaseShape) =>
   ManagedRuntime.make(
     RegistryServicesLive.pipe(
-      Layer.provide(makeRegistryCrudLive(Effect.succeed(database))),
+      Layer.provide(makeRegistryCrudLive(database)),
       Layer.provide(makeInMemoryArtifactStoreLayer()),
-      Layer.provide(FakeFxRatesLive),
-      Layer.provide(FakeListingAvailabilityCheckerLive),
       Layer.provide(FakeCvAnalyticsTrafficSourceLive)
     )
   )
@@ -90,13 +84,19 @@ const applicationInput = (suffix: string): CreateApplicationInput => ({
   labels: ['seed'],
 })
 
-let harness: RegistryMiniflareHarness
+const makeScheduledRunnerTestRuntime = (database: RegistryDatabaseShape) =>
+  ManagedRuntime.make(
+    ScheduledListingChecksRunnerLive.pipe(
+      Layer.provide(makeRegistryCrudLive(database)),
+      Layer.provide(FakeListingAvailabilityCheckerLive)
+    )
+  )
+
+let harness: RegistryPostgresHarness
 let runtime: ReturnType<typeof makeRegistryServiceTestRuntime>
 
 before(async () => {
-  harness = await RegistryMiniflareHarness.make({
-    databaseBinding: 'APPLICATION_REGISTRY_DB',
-  })
+  harness = await RegistryPostgresHarness.make()
 })
 
 beforeEach(() => {
@@ -200,6 +200,42 @@ test('creates and updates applications while issuing read-only activities', asyn
     result.listed.items.map(({ id }) => id),
     [result.created.id]
   )
+})
+
+test('runs scheduled listing checks through the separate one-shot service', async () => {
+  const created = await runtime.runPromise(
+    ApplicationsService.pipe(
+      Effect.flatMap((applications) =>
+        applications.create(applicationInput('scheduled-runner'))
+      )
+    )
+  )
+  const scheduledRuntime = makeScheduledRunnerTestRuntime(harness.database)
+
+  try {
+    const first = await scheduledRuntime.runPromise(
+      ScheduledListingChecksRunner.pipe(
+        Effect.flatMap((runner) =>
+          runner.runOnce({ limit: 5, mode: 'archive_eligible' })
+        )
+      )
+    )
+    const second = await scheduledRuntime.runPromise(
+      ScheduledListingChecksRunner.pipe(
+        Effect.flatMap((runner) =>
+          runner.runOnce({ limit: 5, mode: 'archive_eligible' })
+        )
+      )
+    )
+
+    assert.equal(first.run?.state, 'completed')
+    assert.equal(first.run?.selectedCount, 1)
+    assert.equal(first.checks.at(0)?.applicationId, created.id)
+    assert.equal(second.run, null)
+    assert.deepEqual(second.checks, [])
+  } finally {
+    await scheduledRuntime.dispose()
+  }
 })
 
 test('persists notes idempotently and issues their activity on the backend', async () => {

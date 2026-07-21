@@ -1,4 +1,3 @@
-import { AiProvider } from '@cv/ai-provider'
 import type { Application } from '@cv/application-registry-entity'
 import { Context, Effect, Layer } from 'effect'
 import type {
@@ -15,6 +14,7 @@ import type {
   SectionBrief,
   SectionBriefResult,
 } from '../domain'
+import { StructuredGeneration } from '../generation/service'
 import { PreparationStore } from '../store'
 import { makePreparationContextGateway } from './context'
 import { makePreparationGenerationGateway } from './generation'
@@ -89,23 +89,25 @@ export class PreparationGateway extends Context.Service<
   PreparationGatewayService
 >()('@cv/application-registry/PreparationGateway') {}
 
-export const makePreparationGatewayLayer = (maximumConcurrentAiCalls: number) =>
+export const makePreparationGatewayLayer = (
+  maximumConcurrentGenerationCalls: number
+) =>
   Layer.effect(
     PreparationGateway,
     Effect.gen(function* () {
       const repository = yield* PreparationStore
-      const ai = yield* AiProvider
+      const structuredGeneration = yield* StructuredGeneration
 
       const context = makePreparationContextGateway(repository)
-      const generation = yield* makePreparationGenerationGateway(
-        ai,
-        maximumConcurrentAiCalls
+      const generationGateway = yield* makePreparationGenerationGateway(
+        structuredGeneration,
+        maximumConcurrentGenerationCalls
       )
       const persistence = makePreparationPersistenceGateway(repository)
 
       return PreparationGateway.of({
         ...context,
-        ...generation,
+        ...generationGateway,
         ...persistence,
       })
     })

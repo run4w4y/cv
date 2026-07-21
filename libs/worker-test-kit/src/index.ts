@@ -1,1 +1,0 @@
-export { workerTestCompatibilityDate } from './miniflare'

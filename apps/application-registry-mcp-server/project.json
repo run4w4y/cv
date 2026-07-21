@@ -1,0 +1,32 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "application-registry-mcp-server",
+  "projectType": "application",
+  "sourceRoot": "apps/application-registry-mcp-server/src",
+  "tags": ["scope:application-registry", "type:service", "visibility:private"],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "color": true,
+        "command": "bun build apps/application-registry-mcp-server/src/main.ts --target=bun --outdir=apps/application-registry-mcp-server/dist"
+      }
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^build"],
+      "options": {
+        "color": true,
+        "command": "bun run apps/application-registry-mcp-server/src/main.ts"
+      }
+    },
+    "format": {},
+    "format:check": {},
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {}
+  }
+}

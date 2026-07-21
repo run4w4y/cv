@@ -1,88 +1,74 @@
 # Public CV Worker
 
-This Next.js App Router application is the server-rendered public CV surface.
-It owns the document renderer and the exact `/c/:token` route. Every other
-public path returns `404`, allowing the existing Cloudflare Pages project to
-continue serving legacy routes while the Worker route is attached only to
-`/c/*`.
+Next.js App Router/OpenNext application for the exact `/c/:token` public CV
+surface. Cloudflare routes only `/c/*` to this Worker; the frozen Pages project
+continues serving every legacy route.
 
-The Worker reads enabled publications through the `CV_PUBLIC_RESOLVER` named
-service binding. The registry returns opaque bytes and publication metadata;
-this application is the schema-owning boundary that validates and renders
-`cv.document.v1`.
+The Worker resolves enabled publications over HTTPS through
+`CV_PUBLIC_RESOLVER_URL`. The self-hosted registry returns opaque document bytes
+and publication metadata from PostgreSQL/MinIO; this application validates the
+code-owned `cv.document.v1` contract and renders it. No management bearer token,
+database credential, MinIO credential, or Worker service binding is present.
 
-The public page is a React Server Component and does not define a client
-boundary. The management app uses the isolated `/c/_preview` iframe when it
-needs interactive previews; that is the only renderer route with client-side
-React code. The PDF worker opens the published `/c/:token` page, so PDF output
-uses the same deployed renderer as public SSR.
+The public and print layouts are intentionally separate. The public route is a
+responsive website, while the A4 renderer is deterministic and used by both
+the isolated management preview and the Playwright PDF runner.
 
-For local development, run the registry Worker and this app in separate
-shells so Wrangler can connect the service binding:
+## Development
+
+Run a registry API origin and this app in separate shells:
 
 ```sh
-bun x nx run application-registry-api:dev
+bun x nx run application-registry-api:build
+bun apps/application-registry-api/dist/main.js
 bun x nx run cv:dev
 ```
 
-The public Worker never calls a registry URL and never receives a management
-bearer token.
+The checked-in Wrangler config points `CV_PUBLIC_RESOLVER_URL` at
+`http://127.0.0.1:3000`. For a self-contained renderer instead:
+
+```sh
+bun x nx run cv:dev:fixture
+```
+
+Fixture mode serves representative documents at `/c/fixture` and
+`/c/_preview/fixture?access=fixture-preview`; it cannot activate in production.
 
 ## Testing
 
-`@cv/worker-test-kit/cv-public` runs the Wrangler-bundled OpenNext Worker in
-Miniflare and
-supplies a configurable in-process `CV_PUBLIC_RESOLVER` service. The CV test
-keeps its document examples and rendering assertions locally while the shared
-package owns module loading, Worker composition, resolver responses, and
-cleanup.
-
 ```sh
-bun x nx run cv:test:worker
+bun x nx run cv:test:e2e
 ```
+
+Playwright exercises the public and preview routes, responsive behavior, print
+layout, actual PDF generation, overflow detection, theme persistence, routing,
+security headers, and visual baselines.
 
 ## Production deployment
 
-The existing Cloudflare Pages deployment is deliberately frozen and no longer
-managed by this repository. Cloudflare continues to send every legacy path to
-Pages. Terraform attaches the new Worker only to `CV_WEB_HOST/c/*`; neither the
-Worker's source config nor its deployment config declares a route.
-
-Builds use OpenNext to produce the deployable Worker and immutable assets under
-`.open-next`. The production config writer preserves Cloudflare Workers Cache
-support for the authenticated compatibility purge endpoint and emits the
-registry resolver binding:
+Builds produce an OpenNext Worker and immutable assets under `.open-next`.
 
 ```sh
 bun x nx run cv:build
-bun apps/cv/scripts/write-wrangler-config.ts \
-  apps/cv/wrangler.deploy.jsonc
+bun apps/cv/scripts/write-wrangler-config.ts apps/cv/wrangler.deploy.jsonc
 bun apps/cv/scripts/deploy.ts apps/cv/wrangler.deploy.jsonc
 ```
 
-`bun x nx run cv:deploy` performs those steps in order. Production settings are
-read from:
+The generated config reads:
 
 - `CV_PUBLIC_WORKER_NAME`, default `cv-public`;
-- `CV_PUBLIC_REGISTRY_SERVICE_NAME`, falling back to
-  `APPLICATION_REGISTRY_WORKER_NAME` and then `cv-application-registry`;
-- `CV_PUBLIC_RESOLVER_ENTRYPOINT`, default `CvPublicResolver`;
+- `CV_PUBLIC_RESOLVER_URL`, required HTTPS Cloudflare Tunnel origin;
 - `CV_PUBLIC_COMPATIBILITY_DATE`, default `2026-07-19`;
-- `CV_REVALIDATION_SECRET`, required for authenticated invalidation.
+- `CV_REVALIDATION_SECRET`, required by the authenticated compatibility purge
+  endpoint.
 
-The public Worker binds to the registry resolver for reads. The registry has a
-separate binding back to the public Worker only to invalidate a token after a
-staged revision or availability change; preview documents never cross that
-binding.
-Public pages render dynamically and every `/c/:token` response is marked
-`private, no-store`; the outer Worker removes Cloudflare/CDN cache overrides
-and cache tags before returning it. A D1 availability change therefore takes
-effect on the next public request, including a disable triggered by asynchronous
-PDF failure. Publication changes still call the owning Worker's authenticated
-purge API on a best-effort basis for compatibility. On a first deployment,
-deploy the registry once
-with `APPLICATION_REGISTRY_CV_APP_BINDING_ENABLED=false`, deploy `cv-public`,
-then redeploy the registry without that override before applying the Terraform
-route overlay. This breaks the two Workers' creation-time binding cycle without
-changing their steady-state configuration. Until the route exists, the frozen
-Pages deployment continues handling the entire hostname.
+Publication and preview resolver paths are capability-token endpoints. The
+Cloudflare Access module bypasses only `/cv-*` at the resolver origin, while the
+management UI remains owner-only and `/machine/*` continues to require its
+registry bearer token.
+
+Public and preview pages currently render dynamically with
+`Cache-Control: private, no-store`. The API still sends best-effort invalidation
+requests to `/c/_internal/revalidate`; this keeps the boundary ready for a
+future bounded-staleness CDN policy without coupling the self-hosted API to a
+Cloudflare Worker binding.

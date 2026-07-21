@@ -1,17 +1,23 @@
-import type { AnalyticsDashboardData } from '@cv/analytics-core'
-import { Context, Effect, Layer } from 'effect'
+import { Cache, Context, Duration, Effect, Exit, Layer } from 'effect'
 import * as HttpClient from 'effect/unstable/http/HttpClient'
 import * as HttpClientRequest from 'effect/unstable/http/HttpClientRequest'
 
 import { normalizeAliasedPaths } from './aliased-normalize'
 import type { Error as ClientError } from './errors'
 import { GraphQLError, HttpError, ParseError, RequestError } from './errors'
-import { extractGraphqlErrors, normalizeResponses } from './normalize'
-import { buildQuery, buildVariables } from './query'
+import { extractGraphqlErrors } from './graphql-errors'
+import { decodeDatasetLimits } from './limits'
+import {
+  buildLimitsQuery,
+  buildLimitsVariables,
+  buildQuery,
+  buildVariables,
+} from './query'
 import { resolveRange } from './range'
 import type {
   AliasedPathData,
   Configuration as ConfigurationShape,
+  DatasetLimits,
   Range,
   ReadAliasedPathsOptions,
 } from './types'
@@ -23,12 +29,10 @@ export const Configuration = Context.Service<Configuration>(
 )
 
 export interface Interface {
+  readonly readLimits: () => Effect.Effect<DatasetLimits, ClientError>
   readonly readAliasedPaths: (
     options: ReadAliasedPathsOptions
   ) => Effect.Effect<AliasedPathData, ClientError>
-  readonly readDashboard: (
-    range: Range
-  ) => Effect.Effect<AnalyticsDashboardData, ClientError>
 }
 
 export const Service = Context.Service<Interface>(
@@ -58,15 +62,15 @@ const rejectGraphqlErrors = (payload: unknown) => {
 const requestPayload = Effect.fn('CloudflareAnalytics.request')(function* (
   client: HttpClient.HttpClient,
   configuration: ConfigurationShape,
-  range: Range,
-  pathLike?: string
+  query: string,
+  variables: unknown
 ) {
   const request = yield* HttpClientRequest.post(configuration.endpoint).pipe(
     HttpClientRequest.acceptJson,
     HttpClientRequest.bearerToken(configuration.apiToken),
     HttpClientRequest.bodyJson({
-      query: buildQuery(),
-      variables: buildVariables(configuration, range, pathLike),
+      query,
+      variables,
     }),
     Effect.mapError((cause) =>
       RequestError.fromCause({
@@ -103,35 +107,61 @@ const requestPayload = Effect.fn('CloudflareAnalytics.request')(function* (
   return yield* rejectGraphqlErrors(payload)
 })
 
+const requestAnalyticsPayload = (
+  client: HttpClient.HttpClient,
+  configuration: ConfigurationShape,
+  limits: DatasetLimits,
+  range: Range,
+  pathLike?: string
+) =>
+  requestPayload(
+    client,
+    configuration,
+    buildQuery(limits.maxPageSize),
+    buildVariables(configuration, range, pathLike)
+  )
+
 const make = Effect.gen(function* () {
   const configuration = yield* Configuration
   const httpClient = yield* HttpClient.HttpClient
 
-  const readDashboard = Effect.fn('CloudflareAnalytics.readDashboard')(
-    (range: Range) =>
-      resolveRange(range).pipe(
-        Effect.flatMap(({ chunks, effectiveRange }) =>
-          Effect.forEach(
-            chunks,
-            (chunk) => requestPayload(httpClient, configuration, chunk),
-            { concurrency: 1 }
-          ).pipe(
-            Effect.flatMap((payloads) =>
-              normalizeResponses(payloads, effectiveRange)
-            )
-          )
-        )
-      )
+  const limitsCache = yield* Cache.makeWith(
+    (_dataset: 'httpRequestsAdaptiveGroups') =>
+      requestPayload(
+        httpClient,
+        configuration,
+        buildLimitsQuery(),
+        buildLimitsVariables(configuration)
+      ).pipe(Effect.flatMap(decodeDatasetLimits)),
+    {
+      capacity: 1,
+      timeToLive: (exit) => (Exit.isSuccess(exit) ? '1 hour' : Duration.zero),
+    }
+  )
+
+  const readLimits = Effect.fn('CloudflareAnalytics.readLimits')(() =>
+    Cache.get(limitsCache, 'httpRequestsAdaptiveGroups')
   )
 
   const readAliasedPaths = Effect.fn('CloudflareAnalytics.readAliasedPaths')(
     ({ aliases, pathLike, range }: ReadAliasedPathsOptions) =>
-      resolveRange(range).pipe(
-        Effect.flatMap(({ chunks, effectiveRange }) =>
+      readLimits().pipe(
+        Effect.flatMap((limits) =>
+          resolveRange(range, limits).pipe(
+            Effect.map((resolved) => ({ ...resolved, limits }))
+          )
+        ),
+        Effect.flatMap(({ chunks, effectiveRange, limits }) =>
           Effect.forEach(
             chunks,
             (chunk) =>
-              requestPayload(httpClient, configuration, chunk, pathLike),
+              requestAnalyticsPayload(
+                httpClient,
+                configuration,
+                limits,
+                chunk,
+                pathLike
+              ),
             { concurrency: 1 }
           ).pipe(
             Effect.flatMap((payloads) =>
@@ -142,12 +172,11 @@ const make = Effect.gen(function* () {
       )
   )
 
-  return Service.of({ readAliasedPaths, readDashboard })
+  return Service.of({ readAliasedPaths, readLimits })
 })
 
 export const layer = Layer.effect(Service, make)
 
-export type { AnalyticsDashboardData as DashboardData } from '@cv/analytics-core'
 export type { Error } from './errors'
 export {
   describeError,
@@ -161,6 +190,7 @@ export {
 export type {
   AliasedPathData,
   AliasedPathRecord,
+  DatasetLimits,
   PathAlias,
   Range,
   ReadAliasedPathsOptions,

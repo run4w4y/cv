@@ -1,17 +1,16 @@
 import { registrySequence } from '@cv/application-registry-entity'
 import { sql } from 'drizzle-orm'
-import type { BatchItem } from 'drizzle-orm/batch'
 import { Effect } from 'effect'
-import { RegistryDatabaseError } from '../errors'
-import type { RegistryBatchDatabase } from '../internal/connection'
 
-export const currentRevision = sql<number>`(
-  select ${registrySequence.revision}
-  from ${registrySequence}
-  where ${registrySequence.id} = 1
-)`
+import { databaseFailure, RegistryDatabaseError } from '../errors'
+import type {
+  RegistryDatabase,
+  RegistryExecutor,
+  RegistryTransaction,
+} from '../internal/connection'
 
-export const allocateRevision = (database: RegistryBatchDatabase) =>
+/** Allocates the mutation revision inside the caller's transaction. */
+export const allocateRevision = (database: RegistryExecutor) =>
   database
     .insert(registrySequence)
     .values({ id: 1, revision: 1 })
@@ -19,17 +18,28 @@ export const allocateRevision = (database: RegistryBatchDatabase) =>
       target: registrySequence.id,
       set: { revision: sql`${registrySequence.revision} + 1` },
     })
+    .returning({ revision: registrySequence.revision })
+    .pipe(
+      Effect.flatMap((rows) => {
+        const row = rows.at(0)
+        return row === undefined
+          ? Effect.fail(
+              new RegistryDatabaseError({
+                cause: new Error(
+                  'Registry revision allocation returned no row.'
+                ),
+                message: 'Failed to allocate registry revision',
+              })
+            )
+          : Effect.succeed(row.revision)
+      })
+    )
 
-export const runBatch = (
-  database: RegistryBatchDatabase,
+export const runTransaction = <A, E, R>(
+  database: RegistryDatabase,
   operation: string,
-  statements: readonly [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]
-) =>
-  Effect.tryPromise({
-    try: () => database.batch(statements),
-    catch: (cause) =>
-      new RegistryDatabaseError({
-        cause,
-        message: `Failed to execute ${operation}`,
-      }),
-  })
+  transaction: (database: RegistryTransaction) => Effect.Effect<A, E, R>
+): Effect.Effect<A, RegistryDatabaseError, R> =>
+  database
+    .transaction(transaction)
+    .pipe(Effect.mapError(databaseFailure(`Failed to execute ${operation}`)))

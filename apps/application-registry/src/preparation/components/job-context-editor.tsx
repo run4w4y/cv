@@ -20,6 +20,7 @@ import * as Atom from 'effect/unstable/reactivity/Atom'
 import { CircleAlert, Save } from 'lucide-react'
 import * as React from 'react'
 
+import { asyncResultErrorMessage } from '@/lib/async-result'
 import {
   makePersistManualJobContextAtom,
   manualJobContextMaxBytes,
@@ -59,21 +60,17 @@ export const JobContextEditor = ({
   const value = override ?? initialText
   const [saveResult, saveContext] = useAtom(
     persistJobContextFamily(applicationId),
-    { mode: 'promise' }
+    { mode: 'promiseExit' }
   )
   const [saveExecuting, setSaveExecuting] = useAtom(
     persistJobContextGateFamily(applicationId)
   )
   const pending = saveExecuting || AsyncResult.isWaiting(saveResult)
-  const error = AsyncResult.matchWithError(saveResult, {
-    onInitial: () => null,
-    onError: (failure) => failure.message,
-    onDefect: (defect) =>
-      defect instanceof Error
-        ? defect.message
-        : 'The corrected job context could not be saved.',
-    onSuccess: () => null,
-  })
+  const error =
+    asyncResultErrorMessage(
+      saveResult,
+      'The corrected job context could not be saved.'
+    ) ?? null
   const byteLength = React.useMemo(
     () => new TextEncoder().encode(value.trim()).byteLength,
     [value]
@@ -89,10 +86,9 @@ export const JobContextEditor = ({
     })
     if (!claimed) return
     try {
-      await saveContext({ applicationId, value })
+      const exit = await saveContext({ applicationId, value })
+      if (exit._tag === 'Failure') return
       setOverride(null)
-    } catch {
-      // The mutation atom retains the typed failure rendered above.
     } finally {
       setSaveExecuting(false)
     }

@@ -20,5 +20,10 @@ export const factsReleaseCatalogueObjectKey = (
 ): string =>
   `releases/${checked(releaseId, releaseIdPattern, 'facts release ID')}/locales/${checked(locale, localePattern, 'facts locale')}.json`
 
+export const factsReleaseGenerationGuidanceObjectKey = (
+  releaseId: string
+): string =>
+  `releases/${checked(releaseId, releaseIdPattern, 'facts release ID')}/generation/cv.json`
+
 export const factsAssetObjectKey = (sha256: string): string =>
   `assets/sha256/${checked(sha256, sha256Pattern, 'facts asset digest')}`

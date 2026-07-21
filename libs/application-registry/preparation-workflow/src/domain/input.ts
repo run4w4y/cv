@@ -1,3 +1,4 @@
+import { CvGenerationGuidanceV1Schema } from '@cv/contracts/document'
 import { CvLocaleSchema } from '@cv/contracts/facts'
 import { Schema } from 'effect'
 
@@ -64,27 +65,44 @@ export const preparationSourceApplicationId = (
 export const preparationSourceUrl = (source: PreparationSource): string =>
   source.url
 
-export const PreparationWorkflowInputSchema = Schema.Struct({
+const PreparationWorkflowInputStructureSchema = Schema.Struct({
   coverLetterPrompt: Schema.NullOr(CoverLetterPromptSchema),
+  cvGenerationGuidance: Schema.NullOr(CvGenerationGuidanceV1Schema),
   kind: DocumentKindSchema,
   locale: CvLocaleSchema,
-  modelId: Schema.NonEmptyString,
   runId: Schema.NonEmptyString,
   source: PreparationSourceSchema,
 })
+
+export const PreparationWorkflowInputSchema =
+  PreparationWorkflowInputStructureSchema.pipe(
+    Schema.check(
+      Schema.makeFilter(
+        (input) =>
+          input.kind === 'cv'
+            ? input.cvGenerationGuidance !== null
+            : input.cvGenerationGuidance === null,
+        {
+          message:
+            'CV generation guidance must be present for CV runs and absent for cover-letter runs.',
+        }
+      )
+    )
+  )
 export interface PreparationWorkflowInput
   extends Schema.Schema.Type<typeof PreparationWorkflowInputSchema> {}
 
 export type StartPreparationInput = Omit<PreparationWorkflowInput, 'runId'>
 
 export type StartPreparationResult = {
+  readonly batchId: string
   readonly runId: string
 }
 
 export type StartPreparationBatchInput = {
   readonly coverLetterPrompt: string | null
+  readonly cvGenerationGuidance: typeof CvGenerationGuidanceV1Schema.Type | null
   readonly kind: DocumentKind
   readonly locale: typeof CvLocaleSchema.Type
-  readonly modelId: string
   readonly urls: ReadonlyArray<string>
 }

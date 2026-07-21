@@ -1,8 +1,8 @@
 import { useAtomValue } from '@effect/atom-react'
-import { Cause } from 'effect'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import { useParams, useSearchParams } from 'react-router'
 
+import { expectedErrorMessage } from '@/lib/async-result'
 import { usePreparationCommandGate } from '@/preparation/command-gate'
 import type { PreparationEditorIdentity } from '@/preparation/editor'
 import {
@@ -79,17 +79,24 @@ export const useCoverLetterPageController = () => {
     editor.adoptDetachedCandidate()
   }
 
-  const workspaceState =
-    workspaceResult._tag === 'Success'
-      ? ({ status: 'ready', value: workspaceResult.value } as const)
-      : workspaceResult._tag === 'Failure'
-        ? ({
-            message:
-              Cause.prettyErrors(workspaceResult.cause)[0]?.message ??
-              'The preparation context could not be loaded.',
-            status: 'error',
-          } as const)
-        : ({ status: 'loading' } as const)
+  const workspaceState = AsyncResult.matchWithError(workspaceResult, {
+    onDefect: () => ({
+      message: 'The preparation context could not be loaded.',
+      status: 'error' as const,
+    }),
+    onError: (error) => ({
+      message: expectedErrorMessage(
+        error,
+        'The preparation context could not be loaded.'
+      ),
+      status: 'error' as const,
+    }),
+    onInitial: () => ({ status: 'loading' as const }),
+    onSuccess: (success) => ({
+      status: 'ready' as const,
+      value: success.value,
+    }),
+  })
 
   return {
     actionError: commandGate.hasStarted
@@ -100,11 +107,12 @@ export const useCoverLetterPageController = () => {
     applicationId,
     approve: () => execute(editor.approve),
     approvePending: editor.approvePending,
-    authenticated: preparation.authenticated,
+    codexAvailable: preparation.codexAvailable,
     changeDraft: (document: unknown) => {
       if (!actionPending) editor.changeDraft(document)
     },
     changeLocale,
+    focusedReview: searchParams.get('focus') === 'review',
     generate: () => execute(preparation.generate),
     locale,
     prompt: preparation.prompt,
@@ -113,10 +121,6 @@ export const useCoverLetterPageController = () => {
     reviewPending: editor.reviewPending,
     save: () => execute(editor.save),
     savePending: editor.savePending,
-    selectModel: (modelId: string) => {
-      if (!actionPending) preparation.selectModel(modelId)
-    },
-    selectedModel: preparation.selectedModel,
     setPrompt: (prompt: string) => {
       if (!actionPending) preparation.setPrompt(prompt)
     },

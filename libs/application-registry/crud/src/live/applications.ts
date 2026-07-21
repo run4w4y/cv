@@ -1,6 +1,5 @@
-import type { D1Database } from '@cloudflare/workers-types'
-import { type Effect, Layer } from 'effect'
-import { withRegistryConnections } from '../internal/connection'
+import { Layer } from 'effect'
+import type { RegistryDatabase } from '../internal/connection'
 import {
   findApplicationByIdentifier,
   findApplicationByPostingFingerprint,
@@ -14,42 +13,21 @@ import {
 } from '../persistence/applications'
 import { ApplicationsCrud } from '../services/applications'
 
-export const makeApplicationsCrudLive = (database: Effect.Effect<D1Database>) =>
+export const makeApplicationsCrudLive = (database: RegistryDatabase) =>
   Layer.succeed(ApplicationsCrud, {
-    facets: () =>
-      withRegistryConnections(database, ({ query }) =>
-        listApplicationFacets(query)
-      ),
+    facets: () => listApplicationFacets(database),
     findByIdentifier: (identifier) =>
-      withRegistryConnections(database, ({ query }) =>
-        findApplicationByIdentifier(query, identifier)
-      ),
+      findApplicationByIdentifier(database, identifier),
     findByPostingFingerprint: (fingerprint) =>
-      withRegistryConnections(database, ({ query }) =>
-        findApplicationByPostingFingerprint(query, fingerprint)
-      ),
+      findApplicationByPostingFingerprint(database, fingerprint),
     findByPostingUrl: (postingUrlNormalized) =>
-      withRegistryConnections(database, ({ query }) =>
-        findApplicationsByPostingUrl(query, postingUrlNormalized)
-      ),
-    list: (resolved) =>
-      withRegistryConnections(database, ({ query }) =>
-        listApplications(query, resolved)
-      ),
+      findApplicationsByPostingUrl(database, postingUrlNormalized),
+    list: (resolved) => listApplications(database, resolved),
     patch: (applicationId, patch, recordedAt) =>
-      withRegistryConnections(database, (connections) =>
-        patchApplication(connections, applicationId, patch, recordedAt)
-      ),
+      patchApplication(database, applicationId, patch, recordedAt),
     updateManaged: (applicationId, input) =>
-      withRegistryConnections(database, (connections) =>
-        updateManagedApplication(connections, applicationId, input)
-      ),
-    persist: (input, options) =>
-      withRegistryConnections(database, (connections) =>
-        persistApplication(connections, input, options)
-      ),
+      updateManagedApplication(database, applicationId, input),
+    persist: (input, options) => persistApplication(database, input, options),
     remove: (applicationId, expectedVersion) =>
-      withRegistryConnections(database, ({ query }) =>
-        removeApplication(query, applicationId, expectedVersion)
-      ),
+      removeApplication(database, applicationId, expectedVersion),
   })

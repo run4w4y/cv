@@ -4,6 +4,7 @@ export {
   ApplicationsApi,
   AutomationApi,
   ContentApi,
+  FactsPublicationApi,
   PublicApi,
   PublicationsApi,
 } from './api'
@@ -26,6 +27,7 @@ export {
   UnauthorizedError,
   UnauthorizedErrorSchema,
 } from './errors'
+export * from './facts-publication'
 export { applicationRegistryOpenApi } from './openapi'
 export * from './pdf-jobs'
 export * from './schemas'

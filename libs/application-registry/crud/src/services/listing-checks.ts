@@ -9,6 +9,7 @@ import type {
   ClaimedListingCheckSchedule,
   ListingCheckRunCounts,
   PersistedListingCheck,
+  StartedScheduledListingCheckRun,
   StartListingCheckRun,
 } from '../types'
 
@@ -42,6 +43,12 @@ export interface ListingChecksCrud {
     readonly nextAttemptAt: string
     readonly now: string
   }) => Effect.Effect<void, RegistryDatabaseError>
+  readonly failRun: (input: {
+    readonly failedAt: string
+    readonly failureCode: string
+    readonly failureMessage: string
+    readonly runId: string
+  }) => Effect.Effect<void, RegistryDatabaseError>
   readonly findByOperation: (
     operationId: string
   ) => Effect.Effect<ApplicationListingCheck | undefined, RegistryDatabaseError>
@@ -60,6 +67,20 @@ export interface ListingChecksCrud {
   readonly startRun: (
     input: StartListingCheckRun
   ) => Effect.Effect<void, RegistryDatabaseError>
+  readonly startScheduledRun: (input: {
+    readonly id: string
+    readonly leaseUntil: string
+    readonly limit: number
+    readonly mode: StartListingCheckRun['mode']
+    readonly now: string
+  }) => Effect.Effect<
+    StartedScheduledListingCheckRun | null,
+    RegistryDatabaseError
+  >
+  readonly reconcileOrphanedRuns: (input: {
+    readonly failedAt: string
+    readonly staleBefore: string
+  }) => Effect.Effect<number, RegistryDatabaseError>
   readonly updateRunCounts: (
     runId: string,
     counts: ListingCheckRunCounts

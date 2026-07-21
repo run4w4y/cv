@@ -1,0 +1,4118 @@
+{
+  "version": "8",
+  "dialect": "postgres",
+  "id": "090a70cd-4a4c-4fed-8309-3412aed45717",
+  "prevIds": ["00000000-0000-0000-0000-000000000000"],
+  "ddl": [
+    {
+      "isRlsEnabled": false,
+      "name": "application_activities",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "application_labels",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "application_notes",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "applications",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "generated_artifacts",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "application_compensations",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "content_entries",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "content_revisions",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "cv_links",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "job_posting_snapshots",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "application_listing_check_schedules",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "application_listing_checks",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "listing_check_runs",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "idempotency_receipts",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "pdf_generation_outbox",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "registry_sequence",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_activities"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_activities"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "kind",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_activities"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "actor",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_activities"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "source",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_activities"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "revision",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_activities"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "occurred_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_activities"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "payload",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_activities"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_labels"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "label",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_labels"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_labels"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_notes"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_notes"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "kind",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_notes"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "body",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_notes"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "source",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_notes"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_notes"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_notes"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "posting_url",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "posting_url_normalized",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "posting_fingerprint",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "company",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "role",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "location",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'not_started'",
+      "generated": null,
+      "identity": null,
+      "name": "application_status",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'backlog'",
+      "generated": null,
+      "identity": null,
+      "name": "target_stage",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "personal_priority",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "follow_up_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "applied_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'unchecked'",
+      "generated": null,
+      "identity": null,
+      "name": "listing_availability",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "listing_confidence",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "listing_reason_code",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "listing_checked_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "listing_closed_candidate_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "name": "listing_consecutive_closed_checks",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "1",
+      "generated": null,
+      "identity": null,
+      "name": "version",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "updated_revision",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "cv_link_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "content_revision_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "kind",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "status",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "request_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "renderer_version",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "publication_version",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "qr_target",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "object_key",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "sha256",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "byte_length",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "media_type",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "error_code",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "error_message",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "generated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_compensations"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_compensations"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "kind",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_compensations"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "currency_code",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_compensations"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "minimum_minor",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_compensations"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "maximum_minor",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_compensations"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "period",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_compensations"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "raw_text",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_compensations"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "source",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_compensations"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_compensations"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_compensations"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_entries"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_entries"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "kind",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_entries"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "locale",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_entries"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'draft'",
+      "generated": null,
+      "identity": null,
+      "name": "state",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_entries"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "head_revision_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_entries"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "approved_revision_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_entries"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "1",
+      "generated": null,
+      "identity": null,
+      "name": "version",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_entries"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_entries"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_entries"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "content_entry_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "revision_number",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "parent_revision_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "contract_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "contract_version",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "object_key",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "sha256",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "byte_length",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "media_type",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "source",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "facts_release_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "job_snapshot_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "operation_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "content_entry_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "current_revision_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "token",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "preview_token",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "public_url",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "name": "enabled",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "disabled_reason",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "disabled_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "1",
+      "generated": null,
+      "identity": null,
+      "name": "publication_version",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "1",
+      "generated": null,
+      "identity": null,
+      "name": "version",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "requested_url",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "final_url",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "status",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "fetched_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "fetcher_version",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "raw_object_key",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "raw_sha256",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "raw_byte_length",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "raw_media_type",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "normalized_object_key",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "normalized_sha256",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "normalized_byte_length",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "normalized_media_type",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "error_code",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "error_message",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_check_schedules"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "due_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_check_schedules"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "lease_token",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_check_schedules"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "lease_until",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_check_schedules"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "name": "attempt_count",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_check_schedules"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "last_error",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_check_schedules"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_check_schedules"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "run_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "operation_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "requested_url",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "final_url",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "provider",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "outcome",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "confidence",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "recommended_action",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "reason_code",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "http_status",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "evidence",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "content_hash",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "checker_version",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "checked_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "received_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "next_check_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "trigger",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "mode",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "state",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "name": "selected_count",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "name": "checked_count",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "name": "open_count",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "name": "closed_count",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "name": "review_count",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "name": "error_count",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "started_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "completed_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "failed_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "failure_code",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "failure_message",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "listing_check_runs"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "idempotency_key",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "idempotency_receipts"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "request_hash",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "idempotency_receipts"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "scope",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "idempotency_receipts"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "idempotency_receipts"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "resource_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "idempotency_receipts"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "idempotency_receipts"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "artifact_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pdf_generation_outbox"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "application_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pdf_generation_outbox"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "content_entry_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pdf_generation_outbox"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "message_version",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pdf_generation_outbox"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "attempts",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pdf_generation_outbox"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pdf_generation_outbox"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pdf_generation_outbox"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "last_attempt_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pdf_generation_outbox"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "last_error",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pdf_generation_outbox"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "dispatched_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pdf_generation_outbox"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "registry_sequence"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "revision",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "registry_sequence"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "application_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "occurred_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "application_activities_application_occurred_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "application_activities"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "application_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "revision",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "application_activities_application_revision_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "application_activities"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "revision",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "application_activities_revision_unique",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "application_activities"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "label",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "application_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "application_labels_label_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "application_labels"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "application_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "created_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "application_notes_application_created_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "application_notes"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "posting_fingerprint",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "applications_posting_fingerprint_unique",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "posting_url_normalized",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "applications_posting_url_normalized_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "company",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "applications_company_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "application_status",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "updated_revision",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "applications_status_updated_revision_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "target_stage",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "updated_revision",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "applications_target_stage_updated_revision_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "listing_availability",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "applications_listing_availability_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "updated_revision",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "applications_updated_revision_unique",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "request_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "generated_artifacts_request_unique",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "cv_link_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "content_revision_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "renderer_version",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "publication_version",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "status",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "updated_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "generated_artifacts_publication_status_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "cv_link_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "status",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "updated_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "generated_artifacts_link_status_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "application_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "kind",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "application_compensations_application_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "application_compensations"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "application_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "kind",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "locale",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "content_entries_application_kind_locale_unique",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "content_entries"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "application_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "updated_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "content_entries_application_updated_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "content_entries"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "content_entry_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "revision_number",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "content_revisions_entry_number_unique",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "operation_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "content_revisions_operation_unique",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "content_entry_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "created_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "content_revisions_entry_created_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "token",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "cv_links_token_unique",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "preview_token",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "cv_links_preview_token_unique",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "content_entry_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "cv_links_content_entry_unique",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "application_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "enabled",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "cv_links_application_enabled_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "application_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "fetched_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "job_posting_snapshots_application_fetched_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "due_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "lease_until",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "listing_check_schedules_due_lease_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "application_listing_check_schedules"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "operation_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "application_listing_checks_operation_unique",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "application_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "checked_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "application_listing_checks_application_checked_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "run_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "application_listing_checks_run_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "started_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "listing_check_runs_started_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "listing_check_runs"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "dispatched_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "created_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "pdf_generation_outbox_pending_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "pdf_generation_outbox"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["application_id"],
+      "schemaTo": "public",
+      "tableTo": "applications",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "application_activities_application_id_applications_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "application_activities"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["application_id"],
+      "schemaTo": "public",
+      "tableTo": "applications",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "application_labels_application_id_applications_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "application_labels"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["application_id"],
+      "schemaTo": "public",
+      "tableTo": "applications",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "application_notes_application_id_applications_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "application_notes"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["cv_link_id"],
+      "schemaTo": "public",
+      "tableTo": "cv_links",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "generated_artifacts_cv_link_id_cv_links_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["content_revision_id"],
+      "schemaTo": "public",
+      "tableTo": "content_revisions",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "generated_artifacts_dlJnOBskmw6I_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["application_id"],
+      "schemaTo": "public",
+      "tableTo": "applications",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "application_compensations_application_id_applications_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "application_compensations"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["application_id"],
+      "schemaTo": "public",
+      "tableTo": "applications",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "content_entries_application_id_applications_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "content_entries"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["content_entry_id"],
+      "schemaTo": "public",
+      "tableTo": "content_entries",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "content_revisions_content_entry_id_content_entries_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["job_snapshot_id"],
+      "schemaTo": "public",
+      "tableTo": "job_posting_snapshots",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "content_revisions_job_snapshot_id_job_posting_snapshots_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["application_id"],
+      "schemaTo": "public",
+      "tableTo": "applications",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "cv_links_application_id_applications_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["content_entry_id"],
+      "schemaTo": "public",
+      "tableTo": "content_entries",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "cv_links_content_entry_id_content_entries_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["current_revision_id"],
+      "schemaTo": "public",
+      "tableTo": "content_revisions",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "cv_links_current_revision_id_content_revisions_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["application_id"],
+      "schemaTo": "public",
+      "tableTo": "applications",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "job_posting_snapshots_application_id_applications_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["application_id"],
+      "schemaTo": "public",
+      "tableTo": "applications",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "application_listing_check_schedules_w60F9b0GyS3i_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "application_listing_check_schedules"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["application_id"],
+      "schemaTo": "public",
+      "tableTo": "applications",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "application_listing_checks_application_id_applications_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["run_id"],
+      "schemaTo": "public",
+      "tableTo": "listing_check_runs",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "application_listing_checks_run_id_listing_check_runs_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["application_id"],
+      "schemaTo": "public",
+      "tableTo": "applications",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "idempotency_receipts_application_id_applications_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "idempotency_receipts"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["artifact_id"],
+      "schemaTo": "public",
+      "tableTo": "generated_artifacts",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "pdf_generation_outbox_artifact_id_generated_artifacts_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "pdf_generation_outbox"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["application_id"],
+      "schemaTo": "public",
+      "tableTo": "applications",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "pdf_generation_outbox_application_id_applications_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "pdf_generation_outbox"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["content_entry_id"],
+      "schemaTo": "public",
+      "tableTo": "content_entries",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "pdf_generation_outbox_content_entry_id_content_entries_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "pdf_generation_outbox"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "application_activities_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "application_activities"
+    },
+    {
+      "columns": ["application_id", "label"],
+      "nameExplicit": false,
+      "name": "application_labels_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "application_labels"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "application_notes_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "application_notes"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "applications_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "generated_artifacts_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "application_compensations_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "application_compensations"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "content_entries_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "content_entries"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "content_revisions_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "cv_links_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "job_posting_snapshots_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "columns": ["application_id"],
+      "nameExplicit": false,
+      "name": "application_listing_check_schedules_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "application_listing_check_schedules"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "application_listing_checks_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "listing_check_runs_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "listing_check_runs"
+    },
+    {
+      "columns": ["idempotency_key"],
+      "nameExplicit": false,
+      "name": "idempotency_receipts_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "idempotency_receipts"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "registry_sequence_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "registry_sequence"
+    },
+    {
+      "columns": ["artifact_id"],
+      "nameExplicit": false,
+      "name": "pdf_generation_outbox_pkey",
+      "schema": "public",
+      "table": "pdf_generation_outbox",
+      "entityType": "pks"
+    },
+    {
+      "value": "\"kind\" in ('application_created', 'details_changed', 'status_changed', 'follow_up_changed', 'note_added', 'listing_availability_changed', 'preparation_started', 'content_approved', 'publication_changed', 'milestone_recorded')",
+      "name": "application_activities_kind_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "application_activities"
+    },
+    {
+      "value": "\"actor\" in ('user', 'system', 'automation', 'migration')",
+      "name": "application_activities_actor_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "application_activities"
+    },
+    {
+      "value": "\"source\" in ('management', 'preparation', 'listing_checker', 'publisher', 'migration')",
+      "name": "application_activities_source_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "application_activities"
+    },
+    {
+      "value": "\"kind\" in ('summary', 'role_description', 'why_this_fits', 'caveat', 'research', 'application', 'interview_prep', 'contact', 'general')",
+      "name": "application_notes_kind_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "application_notes"
+    },
+    {
+      "value": "\"application_status\" in ('not_started', 'preparing', 'applied', 'recruiter_screen', 'technical_screen', 'take_home', 'interview_loop', 'paused', 'offer', 'rejected', 'withdrawn', 'archived')",
+      "name": "applications_status_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "value": "\"target_stage\" in ('apply_next', 'verify_first', 'secondary', 'backlog', 'watch_after_move', 'closed_skip')",
+      "name": "applications_target_stage_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "value": "\"personal_priority\" is null or \"personal_priority\" in ('low', 'medium', 'high', 'pass')",
+      "name": "applications_personal_priority_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "value": "\"listing_availability\" in ('unchecked', 'open', 'suspected_closed', 'closed', 'unknown')",
+      "name": "applications_listing_availability_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "value": "\"listing_confidence\" is null or \"listing_confidence\" in ('low', 'medium', 'high', 'confirmed')",
+      "name": "applications_listing_confidence_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "value": "\"listing_reason_code\" is null or \"listing_reason_code\" in ('http_404', 'http_410', 'provider_open', 'provider_closed', 'valid_through_expired', 'explicit_closed_text', 'working_application_path', 'identity_mismatch', 'redirected_to_listing_page', 'access_forbidden', 'rate_limited', 'server_error', 'network_error', 'unclassified_page')",
+      "name": "applications_listing_reason_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "value": "\"listing_consecutive_closed_checks\" >= 0",
+      "name": "applications_listing_closed_count_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "value": "\"version\" >= 1",
+      "name": "applications_version_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "applications"
+    },
+    {
+      "value": "\"kind\" in ('pdf')",
+      "name": "generated_artifacts_kind_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "value": "\"status\" in ('pending', 'ready', 'failed')",
+      "name": "generated_artifacts_status_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "value": "\"byte_length\" is null or \"byte_length\" >= 0",
+      "name": "generated_artifacts_byte_length_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "value": "\"publication_version\" >= 1",
+      "name": "generated_artifacts_publication_version_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "generated_artifacts"
+    },
+    {
+      "value": "\"kind\" in ('base_salary', 'total_compensation', 'bonus', 'equity', 'other')",
+      "name": "application_compensations_kind_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "application_compensations"
+    },
+    {
+      "value": "\"currency_code\" ~ '^[A-Z]{3}$'",
+      "name": "application_compensations_currency_code_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "application_compensations"
+    },
+    {
+      "value": "\"period\" in ('hour', 'day', 'week', 'month', 'year', 'one_time', 'unknown')",
+      "name": "application_compensations_period_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "application_compensations"
+    },
+    {
+      "value": "\"minimum_minor\" is null or (\"minimum_minor\" between 0 and 9007199254740991)",
+      "name": "application_compensations_minimum_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "application_compensations"
+    },
+    {
+      "value": "\"maximum_minor\" is null or (\"maximum_minor\" between 0 and 9007199254740991)",
+      "name": "application_compensations_maximum_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "application_compensations"
+    },
+    {
+      "value": "\"minimum_minor\" is null or \"maximum_minor\" is null or \"minimum_minor\" <= \"maximum_minor\"",
+      "name": "application_compensations_range_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "application_compensations"
+    },
+    {
+      "value": "\"kind\" in ('cv', 'cover_letter')",
+      "name": "content_entries_kind_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "content_entries"
+    },
+    {
+      "value": "\"state\" in ('draft', 'approved')",
+      "name": "content_entries_state_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "content_entries"
+    },
+    {
+      "value": "\"version\" >= 1",
+      "name": "content_entries_version_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "content_entries"
+    },
+    {
+      "value": "\"source\" in ('ai', 'human', 'ai_adjustment', 'migration')",
+      "name": "content_revisions_source_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "value": "\"revision_number\" >= 1",
+      "name": "content_revisions_revision_number_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "value": "\"byte_length\" >= 0",
+      "name": "content_revisions_byte_length_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "content_revisions"
+    },
+    {
+      "value": "\"publication_version\" >= 1",
+      "name": "cv_links_publication_version_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "value": "\"version\" >= 1",
+      "name": "cv_links_version_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "cv_links"
+    },
+    {
+      "value": "\"status\" in ('fetched', 'provided', 'failed')",
+      "name": "job_posting_snapshots_status_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "value": "\"raw_byte_length\" is null or \"raw_byte_length\" >= 0",
+      "name": "job_posting_snapshots_raw_byte_length_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "value": "\"normalized_byte_length\" is null or \"normalized_byte_length\" >= 0",
+      "name": "job_posting_snapshots_normalized_byte_length_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "job_posting_snapshots"
+    },
+    {
+      "value": "\"attempt_count\" >= 0",
+      "name": "listing_check_schedules_attempt_count_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "application_listing_check_schedules"
+    },
+    {
+      "value": "\"outcome\" in ('open', 'closed', 'unknown')",
+      "name": "application_listing_checks_outcome_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "value": "\"confidence\" in ('low', 'medium', 'high', 'confirmed')",
+      "name": "application_listing_checks_confidence_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "value": "\"recommended_action\" in ('keep', 'recheck', 'review', 'archive')",
+      "name": "application_listing_checks_action_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "value": "\"reason_code\" in ('http_404', 'http_410', 'provider_open', 'provider_closed', 'valid_through_expired', 'explicit_closed_text', 'working_application_path', 'identity_mismatch', 'redirected_to_listing_page', 'access_forbidden', 'rate_limited', 'server_error', 'network_error', 'unclassified_page')",
+      "name": "application_listing_checks_reason_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "value": "\"http_status\" is null or (\"http_status\" >= 100 and \"http_status\" <= 599)",
+      "name": "application_listing_checks_http_status_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "application_listing_checks"
+    },
+    {
+      "value": "\"trigger\" in ('cli', 'scheduled')",
+      "name": "listing_check_runs_trigger_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "listing_check_runs"
+    },
+    {
+      "value": "\"mode\" in ('report', 'archive_eligible')",
+      "name": "listing_check_runs_mode_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "listing_check_runs"
+    },
+    {
+      "value": "\"state\" in ('running', 'completed', 'failed')",
+      "name": "listing_check_runs_state_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "listing_check_runs"
+    },
+    {
+      "value": "\"selected_count\" >= 0 and \"checked_count\" >= 0 and \"open_count\" >= 0 and \"closed_count\" >= 0 and \"review_count\" >= 0 and \"error_count\" >= 0",
+      "name": "listing_check_runs_counts_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "listing_check_runs"
+    },
+    {
+      "value": "(\"state\" = 'running' and \"completed_at\" is null and \"failed_at\" is null and \"failure_code\" is null and \"failure_message\" is null) or (\"state\" = 'completed' and \"completed_at\" is not null and \"failed_at\" is null and \"failure_code\" is null and \"failure_message\" is null) or (\"state\" = 'failed' and \"completed_at\" is null and \"failed_at\" is not null and \"failure_code\" is not null and \"failure_message\" is not null)",
+      "name": "listing_check_runs_terminal_state_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "listing_check_runs"
+    },
+    {
+      "value": "\"scope\" in ('application_update', 'application_note', 'listing_check')",
+      "name": "idempotency_receipts_scope_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "idempotency_receipts"
+    },
+    {
+      "value": "\"message_version\" >= 1",
+      "name": "pdf_generation_outbox_message_version_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "pdf_generation_outbox"
+    },
+    {
+      "value": "\"attempts\" >= 0",
+      "name": "pdf_generation_outbox_attempts_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "pdf_generation_outbox"
+    },
+    {
+      "value": "\"id\" = 1",
+      "name": "registry_sequence_singleton_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "registry_sequence"
+    },
+    {
+      "value": "\"revision\" >= 1",
+      "name": "registry_sequence_revision_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "registry_sequence"
+    }
+  ],
+  "renames": []
+}

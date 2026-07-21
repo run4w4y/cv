@@ -16,11 +16,7 @@
     "binding": "ASSETS",
     "directory": ".open-next/assets"
   },
-  "services": [
-    {
-      "binding": "CV_PUBLIC_RESOLVER",
-      "service": "cv-application-registry",
-      "entrypoint": "CvPublicResolver"
-    }
-  ]
+  "vars": {
+    "CV_PUBLIC_RESOLVER_URL": "http://127.0.0.1:3000"
+  }
 }

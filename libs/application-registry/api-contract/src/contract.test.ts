@@ -6,6 +6,8 @@ import {
   CreateApplicationRequestSchema,
   decodeListActivitiesSearchParams,
   decodeListApplicationsSearchParams,
+  encodeListApplicationsSearchParams,
+  FactsReleaseBundleBodySchema,
   IdempotencyHeadersSchema,
   UpdateApplicationRequestSchema,
 } from './index'
@@ -15,30 +17,14 @@ describe('application registry API contract', () => {
   test('derives application and activity queries from drizzle-query', () => {
     const applications = decodeListApplicationsSearchParams(
       new URLSearchParams({
-        filters: JSON.stringify([
-          {
-            type: 'condition',
-            field: 'applicationStatus',
-            operator: 'in',
-            value: ['applied', 'technical_screen'],
-          },
-        ]),
-        orderBy: JSON.stringify([
-          { field: 'updatedRevision', direction: 'desc' },
-        ]),
+        filter: 'applicationStatus:in:[applied,technical_screen]',
+        sort: 'updatedRevision:desc',
         size: '50',
       })
     )
     const activities = decodeListActivitiesSearchParams(
       new URLSearchParams({
-        filters: JSON.stringify([
-          {
-            type: 'condition',
-            field: 'kind',
-            operator: 'in',
-            value: ['status_changed', 'note_added'],
-          },
-        ]),
+        filter: 'kind:in:[status_changed,note_added]',
       })
     )
 
@@ -47,6 +33,19 @@ describe('application registry API contract', () => {
       { field: 'updatedRevision', direction: 'desc' },
     ])
     expect(activities.filters).toHaveLength(1)
+    const encoded = encodeListApplicationsSearchParams(applications)
+    expect(encoded.get('filter')).toBe(
+      'applicationStatus:in:[applied,technical_screen]'
+    )
+    expect(encoded.get('sort')).toBe('updatedRevision:desc')
+    expect(encoded.has('filters')).toBe(false)
+    expect(encoded.has('orderBy')).toBe(false)
+  })
+
+  test('ignores obsolete JSON query parameter names', () => {
+    expect(
+      decodeListApplicationsSearchParams('filters=whatever&orderBy=whatever')
+    ).toEqual({})
   })
 
   test('exposes no client-managed identity or event mutation fields', () => {
@@ -73,6 +72,9 @@ describe('application registry API contract', () => {
   test('uses raw Uint8Array transport for blobs', () => {
     const bytes = new Uint8Array([1, 2, 3])
     expect(Schema.decodeUnknownSync(BinaryBodySchema)(bytes)).toEqual(bytes)
+    expect(
+      Schema.decodeUnknownSync(FactsReleaseBundleBodySchema)(bytes)
+    ).toEqual(bytes)
   })
 
   test('publishes one unversioned registry surface', () => {
@@ -80,6 +82,8 @@ describe('application registry API contract', () => {
     expect(paths).toContain('/api/registry/applications')
     expect(paths).toContain('/api/registry/activities')
     expect(paths).toContain('/api/registry/blobs/{sha256}')
+    expect(paths).toContain('/machine/api/registry/facts/releases/{releaseId}')
+    expect(paths).toContain('/machine/api/registry/facts/current')
     expect(paths).not.toContain('/v1/applications')
     expect(paths.some((path) => path.includes('/events'))).toBeFalse()
   })

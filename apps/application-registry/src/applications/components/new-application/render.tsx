@@ -23,6 +23,10 @@ import * as React from 'react'
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router'
 
+import {
+  asyncResultErrorMessage,
+  expectedErrorMessage,
+} from '@/lib/async-result'
 import { createApplication } from '../../data'
 import { NewApplicationFields } from './fields'
 import {
@@ -60,21 +64,14 @@ export const NewApplicationDialog = ({
       Schema.toStandardSchemaV1(NewApplicationFormSchema)
     ),
   })
-  const createFailure = AsyncResult.matchWithError(createResult, {
-    onInitial: () => undefined,
-    onError: (error) => error,
-    onDefect: (defect) => defect,
-    onSuccess: () => undefined,
-  })
   const saving = AsyncResult.isWaiting(createResult) || overrideSaving
   const error =
     form.formState.errors.root?.server?.message ??
     overrideError ??
-    (createFailure === undefined
-      ? undefined
-      : createFailure instanceof Error
-        ? createFailure.message
-        : 'The application could not be created.')
+    asyncResultErrorMessage(
+      createResult,
+      'The application could not be created.'
+    )
 
   const submit = form.handleSubmit(async (values) => {
     form.clearErrors('root.server')
@@ -90,9 +87,7 @@ export const NewApplicationDialog = ({
     } catch (reason) {
       if (saveApplication !== undefined) {
         setOverrideError(
-          reason instanceof Error
-            ? reason.message
-            : 'The application could not be created.'
+          expectedErrorMessage(reason, 'The application could not be created.')
         )
       }
     } finally {

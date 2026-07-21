@@ -3,32 +3,23 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": {
-    "build": "nx run application-registry-api:build",
-    "dev": "nx run application-registry-api:dev",
-    "deploy": "nx run application-registry-api:deploy",
-    "test:integration": "nx run application-registry-api:test:integration",
-    "test:e2e": "nx run application-registry-api:test:e2e",
-    "migrations:apply:local": "nx run application-registry-api:migrations:apply:local",
-    "migrations:apply:remote": "nx run application-registry-api:migrations:apply:remote"
-  },
+  "scripts": {},
   "dependencies": {
-    "@cv/ai-provider": "workspace:*",
+    "@aws-sdk/client-s3": "3.984.0",
     "@cv/application-registry-api-contract": "workspace:*",
     "@cv/application-registry-artifact-store": "workspace:*",
     "@cv/application-registry-crud": "workspace:*",
     "@cv/application-registry-entity": "workspace:*",
-    "@cv/application-registry-fx": "workspace:*",
-    "@cv/application-registry-listing-check": "workspace:*",
     "@cv/application-registry-service": "workspace:*",
     "@cv/cloudflare-analytics-client": "workspace:*",
     "@cv/effect-http-auth": "workspace:*",
-    "@effect/platform-browser": "4.0.0-beta.99",
+    "@cv/facts-release": "workspace:*",
+    "@effect/platform-bun": "4.0.0-beta.99",
+    "@effect/sql-pg": "4.0.0-beta.99",
     "effect": "4.0.0-beta.99"
   },
   "devDependencies": {
     "@cv/application-registry-api-client": "workspace:*",
-    "@cloudflare/workers-types": "4.20260511.1",
-    "@cv/worker-test-kit": "workspace:*"
+    "@cv/test-infrastructure": "workspace:*"
   }
 }

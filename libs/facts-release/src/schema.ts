@@ -1,4 +1,8 @@
 import {
+  cvDocumentV1ContractId,
+  cvGenerationGuidanceV1ContractId,
+} from '@cv/contracts/document'
+import {
   cvFactsV1ContractId,
   MediaTypeSchema,
   SafeFileNameSchema,
@@ -21,7 +25,7 @@ const NonNegativeIntegerSchema = Schema.Int.pipe(
   Schema.check(Schema.isGreaterThanOrEqualTo(0))
 )
 
-export const factsReleaseManifestV1ContractId = 'cv.facts-release.v1' as const
+export const factsReleaseManifestV2ContractId = 'cv.facts-release.v2' as const
 
 export const FactsReleaseProvenanceSchema = Schema.Struct({
   compiler: Schema.Struct({
@@ -37,42 +41,47 @@ export const FactsReleaseProvenanceSchema = Schema.Struct({
   parseOptions: { errors: 'all', onExcessProperty: 'error' },
 })
 
-const FactsReleaseObjectDescriptorV1StructureSchema = Schema.Struct({
+const FactsReleaseObjectDescriptorV2StructureSchema = Schema.Struct({
   byteLength: NonNegativeIntegerSchema,
   mediaType: MediaTypeSchema,
   sha256: Sha256Schema,
 })
 
-export const FactsReleaseObjectDescriptorV1Schema =
-  FactsReleaseObjectDescriptorV1StructureSchema.annotate({
-    identifier: 'FactsReleaseObjectDescriptorV1',
+export const FactsReleaseObjectDescriptorV2Schema =
+  FactsReleaseObjectDescriptorV2StructureSchema.annotate({
+    identifier: 'FactsReleaseObjectDescriptorV2',
   })
 
-const FactsReleaseManifestV1StructureSchema = Schema.Struct({
-  $schema: Schema.Literal(factsReleaseManifestV1ContractId),
+const FactsReleaseManifestV2StructureSchema = Schema.Struct({
+  $schema: Schema.Literal(factsReleaseManifestV2ContractId),
   assets: Schema.Array(
     Schema.Struct({
       fileName: SafeFileNameSchema,
       id: NonEmptyTrimmedTextSchema,
-      object: FactsReleaseObjectDescriptorV1Schema,
+      object: FactsReleaseObjectDescriptorV2Schema,
     })
   ),
   catalogues: Schema.Array(
     Schema.Struct({
       locale: NonEmptyTrimmedTextSchema,
-      object: FactsReleaseObjectDescriptorV1Schema,
+      object: FactsReleaseObjectDescriptorV2Schema,
     })
   ).pipe(Schema.check(Schema.isMinLength(1))),
   factsContract: Schema.Literal(cvFactsV1ContractId),
+  generationGuidance: Schema.Struct({
+    contract: Schema.Literal(cvGenerationGuidanceV1ContractId),
+    documentContract: Schema.Literal(cvDocumentV1ContractId),
+    object: FactsReleaseObjectDescriptorV2Schema,
+  }),
   provenance: FactsReleaseProvenanceSchema,
 })
 
-type FactsReleaseManifestV1Structure = Schema.Schema.Type<
-  typeof FactsReleaseManifestV1StructureSchema
+type FactsReleaseManifestV2Structure = Schema.Schema.Type<
+  typeof FactsReleaseManifestV2StructureSchema
 >
 
 const duplicateManifestAssetIssues = (
-  manifest: FactsReleaseManifestV1Structure
+  manifest: FactsReleaseManifestV2Structure
 ): ReadonlyArray<Schema.FilterIssue> => {
   const seen = new Set<string>()
   return manifest.assets.flatMap((asset, index) => {
@@ -90,7 +99,7 @@ const duplicateManifestAssetIssues = (
 }
 
 const duplicateManifestLocaleIssues = (
-  manifest: FactsReleaseManifestV1Structure
+  manifest: FactsReleaseManifestV2Structure
 ): ReadonlyArray<Schema.FilterIssue> => {
   const seen = new Set<string>()
   return manifest.catalogues.flatMap((catalogue, index) => {
@@ -107,8 +116,8 @@ const duplicateManifestLocaleIssues = (
   })
 }
 
-export const FactsReleaseManifestV1Schema =
-  FactsReleaseManifestV1StructureSchema.pipe(
+export const FactsReleaseManifestV2Schema =
+  FactsReleaseManifestV2StructureSchema.pipe(
     Schema.check(
       Schema.makeFilter((manifest) => [
         ...duplicateManifestAssetIssues(manifest),
@@ -116,24 +125,24 @@ export const FactsReleaseManifestV1Schema =
       ])
     )
   ).annotate({
-    identifier: 'FactsReleaseManifestV1',
+    identifier: 'FactsReleaseManifestV2',
     parseOptions: { errors: 'all', onExcessProperty: 'error' },
   })
 
-export const factsCurrentPointerV1ContractId = 'cv.facts-current.v1' as const
+export const factsCurrentPointerV2ContractId = 'cv.facts-current.v2' as const
 
 const FactsReleaseIdSchema = Schema.String.pipe(
   Schema.check(Schema.isPattern(/^fr_[a-f0-9]{64}$/u))
 )
 
-const FactsCurrentPointerV1StructureSchema = Schema.Struct({
-  $schema: Schema.Literal(factsCurrentPointerV1ContractId),
-  manifest: FactsReleaseObjectDescriptorV1Schema,
+const FactsCurrentPointerV2StructureSchema = Schema.Struct({
+  $schema: Schema.Literal(factsCurrentPointerV2ContractId),
+  manifest: FactsReleaseObjectDescriptorV2Schema,
   releaseId: FactsReleaseIdSchema,
 })
 
-export const FactsCurrentPointerV1Schema =
-  FactsCurrentPointerV1StructureSchema.pipe(
+export const FactsCurrentPointerV2Schema =
+  FactsCurrentPointerV2StructureSchema.pipe(
     Schema.check(
       Schema.makeFilter(
         (pointer) => pointer.releaseId === `fr_${pointer.manifest.sha256}`,
@@ -141,6 +150,6 @@ export const FactsCurrentPointerV1Schema =
       )
     )
   ).annotate({
-    identifier: 'FactsCurrentPointerV1',
+    identifier: 'FactsCurrentPointerV2',
     parseOptions: { errors: 'all', onExcessProperty: 'error' },
   })

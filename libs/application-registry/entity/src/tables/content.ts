@@ -3,11 +3,11 @@ import {
   check,
   index,
   integer,
+  pgTable,
   primaryKey,
-  sqliteTable,
   text,
   uniqueIndex,
-} from 'drizzle-orm/sqlite-core'
+} from 'drizzle-orm/pg-core'
 
 import {
   contentEntryKindValues,
@@ -16,9 +16,10 @@ import {
 } from '../model/content'
 import { applications } from './applications'
 import { sqlStringList } from './checks'
+import { utcTimestamp } from './columns'
 import { jobPostingSnapshots } from './job-posting-snapshots'
 
-export const contentEntries = sqliteTable(
+export const contentEntries = pgTable(
   'content_entries',
   {
     id: text('id').notNull(),
@@ -33,8 +34,8 @@ export const contentEntries = sqliteTable(
     headRevisionId: text('head_revision_id'),
     approvedRevisionId: text('approved_revision_id'),
     version: integer('version').notNull().default(1),
-    createdAt: text('created_at').notNull(),
-    updatedAt: text('updated_at').notNull(),
+    createdAt: utcTimestamp('created_at').notNull(),
+    updatedAt: utcTimestamp('updated_at').notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.id] }),
@@ -60,7 +61,7 @@ export const contentEntries = sqliteTable(
   ]
 )
 
-export const contentRevisions = sqliteTable(
+export const contentRevisions = pgTable(
   'content_revisions',
   {
     id: text('id').notNull(),
@@ -84,7 +85,7 @@ export const contentRevisions = sqliteTable(
       { onDelete: 'set null' }
     ),
     operationId: text('operation_id').notNull(),
-    createdAt: text('created_at').notNull(),
+    createdAt: utcTimestamp('created_at').notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.id] }),

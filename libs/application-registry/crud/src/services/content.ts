@@ -95,8 +95,9 @@ export interface CvLinksCrud {
     token: string
   ) => Effect.Effect<CvLink | undefined, RegistryDatabaseError>
   readonly stage: (
-    link: PersistedCvLink
-  ) => Effect.Effect<void, RegistryDatabaseError>
+    link: PersistedCvLink,
+    expectedContentVersion: number
+  ) => Effect.Effect<boolean, RegistryDatabaseError>
   readonly setEnabled: (
     id: string,
     expectedVersion: number,

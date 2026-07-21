@@ -1,4 +1,3 @@
-import { Effect } from 'effect'
 import * as Atom from 'effect/unstable/reactivity/Atom'
 
 import {
@@ -80,22 +79,12 @@ const bootstrapFamily = Atom.family((input: PreparationIdentity) =>
 export const preparationBootstrapAtom = (input: PreparationIdentity) =>
   bootstrapFamily(input)
 
-const modelsFamily = Atom.family((enabled: boolean) =>
-  preparationDataRuntime
-    .atom(
-      enabled
-        ? PreparationRepository.use((repository) => repository.discoverModels())
-        : Effect.succeed([])
-    )
-    .pipe(
-      preparationDataRuntime.factory.withReactivity([
-        preparationReactivity.models,
-      ])
-    )
+/** Active release-wide CV generation guidance. */
+export const activeCvGenerationGuidanceAtom = preparationDataRuntime.atom(
+  PreparationRepository.use((repository) =>
+    repository.loadCvGenerationGuidance()
+  )
 )
-
-/** Model discovery stays dormant until the external ChatGPT session is ready. */
-export const preparationModelsAtom = (enabled: boolean) => modelsFamily(enabled)
 
 const publicationFamily = Atom.family((input: PublicationIdentity) =>
   preparationDataRuntime

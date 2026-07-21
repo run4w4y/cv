@@ -13,11 +13,7 @@ type WranglerConfig = {
   readonly name: string
   readonly observability: { readonly enabled: true }
   readonly preview_urls: false
-  readonly services: readonly {
-    readonly binding: 'CV_PUBLIC_RESOLVER'
-    readonly entrypoint: string
-    readonly service: string
-  }[]
+  readonly vars: { readonly CV_PUBLIC_RESOLVER_URL: string }
   readonly workers_dev: true
 }
 
@@ -28,29 +24,15 @@ const optionalString = (name: string, fallback: string) =>
   )
 
 const readConfig = Effect.all({
-  applicationRegistryWorkerName: optionalString(
-    'APPLICATION_REGISTRY_WORKER_NAME',
-    'cv-application-registry'
-  ),
   compatibilityDate: optionalString(
     'CV_PUBLIC_COMPATIBILITY_DATE',
     '2026-07-19'
   ),
-  registryEntrypoint: optionalString(
-    'CV_PUBLIC_RESOLVER_ENTRYPOINT',
-    'CvPublicResolver'
-  ),
-  registryServiceName: optionalString('CV_PUBLIC_REGISTRY_SERVICE_NAME', ''),
+  resolverUrl: Config.nonEmptyString('CV_PUBLIC_RESOLVER_URL'),
   workerName: optionalString('CV_PUBLIC_WORKER_NAME', 'cv-public'),
 }).pipe(
   Effect.map(
-    ({
-      applicationRegistryWorkerName,
-      compatibilityDate,
-      registryEntrypoint,
-      registryServiceName,
-      workerName,
-    }) =>
+    ({ compatibilityDate, resolverUrl, workerName }) =>
       ({
         $schema: '../../node_modules/wrangler/config-schema.json',
         assets: { binding: 'ASSETS', directory: '.open-next/assets' },
@@ -61,13 +43,7 @@ const readConfig = Effect.all({
         name: workerName,
         observability: { enabled: true },
         preview_urls: false,
-        services: [
-          {
-            binding: 'CV_PUBLIC_RESOLVER',
-            entrypoint: registryEntrypoint,
-            service: registryServiceName || applicationRegistryWorkerName,
-          },
-        ],
+        vars: { CV_PUBLIC_RESOLVER_URL: resolverUrl },
         workers_dev: true,
       }) satisfies WranglerConfig
   )

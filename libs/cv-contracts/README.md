@@ -7,9 +7,9 @@ The package intentionally has no root export. Import only the boundary needed
 by a consumer:
 
 ```ts
-import { CvDocumentV1Schema } from '@cv/contracts/document'
-import { FactsCatalogueV1Schema } from '@cv/contracts/facts'
-import { OpaqueInlineContentEnvelopeSchema } from '@cv/contracts/delivery'
+import { CvDocumentV1Schema } from "@cv/contracts/document";
+import { FactsCatalogueV1Schema } from "@cv/contracts/facts";
+import { OpaqueInlineContentEnvelopeSchema } from "@cv/contracts/delivery";
 ```
 
 The registry backend may use `@cv/contracts/delivery` to validate transport

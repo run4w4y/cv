@@ -10,6 +10,21 @@ export interface CvPublicResolverBinding {
   readonly fetch: (request: Request) => Promise<Response>
 }
 
+export const makeHttpCvPublicResolver = (
+  origin: string | URL
+): CvPublicResolverBinding => {
+  const baseUrl = new URL(origin)
+  return {
+    fetch: (request) => {
+      const source = new URL(request.url)
+      const target = new URL(baseUrl)
+      target.pathname = source.pathname
+      target.search = source.search
+      return fetch(new Request(target, request))
+    },
+  }
+}
+
 export type LoadedCvPublication = {
   readonly document: CvDocumentV1
   readonly publicUrl: string

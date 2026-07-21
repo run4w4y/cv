@@ -71,7 +71,6 @@ export const preparationReactivity = {
     `registry:applications:${applicationId}:content:${entryId}:publication`,
   pdf: (applicationId: string, entryId: string) =>
     `registry:applications:${applicationId}:content:${entryId}:pdf`,
-  models: 'preparation:chatgpt-models',
 } as const
 
 export const preparationContextReactivityKeys = (

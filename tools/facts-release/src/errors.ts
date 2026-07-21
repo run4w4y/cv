@@ -1,15 +1,16 @@
 import { Schema } from 'effect'
 
-export class FactsPublisherConfigError extends Schema.TaggedErrorClass<FactsPublisherConfigError>()(
-  'FactsPublisherConfigError',
+export class FactsToolchainError extends Schema.TaggedErrorClass<FactsToolchainError>()(
+  'FactsToolchainError',
   {
     cause: Schema.Defect(),
+    issue: Schema.Literals(['configuration', 'http', 'io']),
     message: Schema.String,
   }
 ) {}
 
-export class FactsPublisherSourceError extends Schema.TaggedErrorClass<FactsPublisherSourceError>()(
-  'FactsPublisherSourceError',
+export class FactsToolchainSourceError extends Schema.TaggedErrorClass<FactsToolchainSourceError>()(
+  'FactsToolchainSourceError',
   {
     cause: Schema.Defect(),
     message: Schema.String,
@@ -17,6 +18,6 @@ export class FactsPublisherSourceError extends Schema.TaggedErrorClass<FactsPubl
   }
 ) {}
 
-export type FactsPublisherError =
-  | FactsPublisherConfigError
-  | FactsPublisherSourceError
+export type FactsToolchainFailure =
+  | FactsToolchainError
+  | FactsToolchainSourceError

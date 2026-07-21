@@ -12,15 +12,45 @@ type FetchResponse = (
   init?: RequestInit
 ) => Promise<Response>
 
+interface ClientOptions {
+  readonly readLimits?: () => Response | Promise<Response>
+}
+
+const defaultLimitsPayload = {
+  data: {
+    viewer: {
+      zones: [
+        {
+          settings: {
+            httpRequestsAdaptiveGroups: {
+              enabled: true,
+              maxDuration: 86_400,
+              maxPageSize: 5_000,
+              notOlderThan: 2_678_400,
+            },
+          },
+        },
+      ],
+    },
+  },
+} as const
+
 const makeFetch = (respond: FetchResponse): typeof globalThis.fetch =>
   Object.assign(respond, { preconnect: globalThis.fetch.preconnect })
 
 const withClient = <A, E>(
   respond: FetchResponse,
-  use: (client: Interface) => Effect.Effect<A, E>
+  use: (client: Interface) => Effect.Effect<A, E>,
+  options: ClientOptions = {}
 ) => {
+  const respondWithLimits: FetchResponse = async (input, init) =>
+    isLimitsRequest(init)
+      ? await (options.readLimits?.() ?? Response.json(defaultLimitsPayload))
+      : respond(input, init)
   const httpLayer = FetchHttpClient.layer.pipe(
-    Layer.provide(Layer.succeed(FetchHttpClient.Fetch, makeFetch(respond)))
+    Layer.provide(
+      Layer.succeed(FetchHttpClient.Fetch, makeFetch(respondWithLimits))
+    )
   )
   const dependencies = Layer.merge(
     Layer.succeed(Configuration, testConfiguration),
@@ -34,8 +64,9 @@ const withClient = <A, E>(
 
 const runWithClient = <A, E>(
   respond: FetchResponse,
-  use: (client: Interface) => Effect.Effect<A, E>
-) => Effect.runPromise(withClient(respond, use))
+  use: (client: Interface) => Effect.Effect<A, E>,
+  options?: ClientOptions
+) => Effect.runPromise(withClient(respond, use, options))
 
 const requestBodyText = (body: BodyInit | null | undefined) =>
   body instanceof Uint8Array
@@ -43,6 +74,15 @@ const requestBodyText = (body: BodyInit | null | undefined) =>
     : typeof body === 'string'
       ? body
       : String(body)
+
+const isLimitsRequest = (init: RequestInit | undefined) => {
+  const body = JSON.parse(requestBodyText(init?.body))
+  return (
+    isPlainObject(body) &&
+    typeof body.query === 'string' &&
+    body.query.includes('query AnalyticsLimits')
+  )
+}
 
 const readRequestRange = (init: RequestInit | undefined) => {
   const body = JSON.parse(requestBodyText(init?.body))
@@ -113,6 +153,62 @@ const recentRange = () => {
 }
 
 describe('CloudflareAnalytics', () => {
+  test('discovers and caches provider dataset limits', async () => {
+    let limitRequests = 0
+
+    const values = await runWithClient(
+      async () => {
+        throw new Error('Analytics data should not be requested.')
+      },
+      (client) => Effect.all([client.readLimits(), client.readLimits()]),
+      {
+        readLimits: () => {
+          limitRequests += 1
+          return Response.json(defaultLimitsPayload)
+        },
+      }
+    )
+
+    expect(values).toEqual([
+      {
+        maxDurationMs: 86_400_000,
+        maxPageSize: 5_000,
+        retentionMs: 2_678_400_000,
+      },
+      {
+        maxDurationMs: 86_400_000,
+        maxPageSize: 5_000,
+        retentionMs: 2_678_400_000,
+      },
+    ])
+    expect(limitRequests).toBe(1)
+  })
+
+  test('does not cache failed provider-limit discovery', async () => {
+    let limitRequests = 0
+
+    const exits = await runWithClient(
+      async () => {
+        throw new Error('Analytics data should not be requested.')
+      },
+      (client) =>
+        Effect.gen(function* () {
+          const first = yield* Effect.exit(client.readLimits())
+          const second = yield* Effect.exit(client.readLimits())
+          return [first, second]
+        }),
+      {
+        readLimits: () => {
+          limitRequests += 1
+          return Response.json({ data: { viewer: { zones: [] } } })
+        },
+      }
+    )
+
+    expect(exits.every((exit) => exit._tag === 'Failure')).toBe(true)
+    expect(limitRequests).toBe(2)
+  })
+
   test('keeps exact CV paths inside the adapter boundary', async () => {
     const token = 'secret-publication-token'
     let requestBody: unknown
@@ -176,10 +272,14 @@ describe('CloudflareAnalytics', () => {
           status: 200,
         })
       },
-      (client) => client.readDashboard(recentRange())
+      (client) =>
+        client.readAliasedPaths({
+          aliases: [{ key: 'home', path: '/en/' }],
+          range: recentRange(),
+        })
     )
 
-    expect(data.audiences).toHaveLength(1)
+    expect(data.records[0]?.totals).toEqual({ pageViews: 8, visits: 5 })
     expect(requestUrl).toBe(testConfiguration.endpoint.toString())
     expect(requestHeaders?.get('authorization')).toBe('Bearer secret-token')
     expect(JSON.stringify(data)).not.toContain('secret-token')
@@ -201,12 +301,13 @@ describe('CloudflareAnalytics', () => {
         })
       },
       (client) =>
-        client.readDashboard(
-          makeRange({
+        client.readAliasedPaths({
+          aliases: [{ key: 'home', path: '/en/' }],
+          range: makeRange({
             from: rangeFrom.toISOString(),
             to: rangeTo.toISOString(),
-          })
-        )
+          }),
+        })
     )
 
     expect(requestedRanges).toEqual([
@@ -219,7 +320,7 @@ describe('CloudflareAnalytics', () => {
         to: rangeTo.toISOString(),
       },
     ])
-    expect(data.summary.publicViews).toBe(2)
+    expect(data.records[0]?.totals).toEqual({ pageViews: 2, visits: 2 })
     expect(data.range).toMatchObject({
       from: rangeFrom.toISOString(),
       to: rangeTo.toISOString(),
@@ -233,7 +334,11 @@ describe('CloudflareAnalytics', () => {
           new Response(JSON.stringify({ errors: [{ message: 'bad zone' }] }), {
             status: 200,
           }),
-        (client) => client.readDashboard(makeRange())
+        (client) =>
+          client.readAliasedPaths({
+            aliases: [{ key: 'home', path: '/en/' }],
+            range: makeRange(),
+          })
       )
     )
 

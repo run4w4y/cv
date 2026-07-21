@@ -1,15 +1,19 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
+  activeCvGenerationGuidanceAtom,
   contentHeadAtom,
   contentRevisionAtom,
   cvPageStateAtom,
   preparationBootstrapAtom,
   preparationContextAtom,
-  preparationModelsAtom,
 } from './queries'
 
 describe('preparation query atom families', () => {
+  test('exposes one locale-independent active guidance query', () => {
+    expect(activeCvGenerationGuidanceAtom).toBeDefined()
+  })
+
   test('reuses context and bootstrap atoms for equivalent value keys', () => {
     expect(
       preparationContextAtom({ applicationId: 'application-1', locale: 'en' })
@@ -87,10 +91,5 @@ describe('preparation query atom families', () => {
         rendererVersion: 'renderer-2',
       })
     )
-  })
-
-  test('keeps authenticated and dormant model discovery separate', () => {
-    expect(preparationModelsAtom(true)).toBe(preparationModelsAtom(true))
-    expect(preparationModelsAtom(true)).not.toBe(preparationModelsAtom(false))
   })
 })

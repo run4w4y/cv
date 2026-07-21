@@ -12,7 +12,7 @@ const withCompensation = (
 ): ApplicationCompensation => ({ ...compensation, ...overrides })
 
 describe('application list compensation', () => {
-  test('prefers annual base salary in the requested display currency', () => {
+  test('prefers annual base salary in its stored currency', () => {
     const total = withCompensation({
       currencyCode: 'GBP',
       id: 'annual-total',
@@ -21,25 +21,16 @@ describe('application list compensation', () => {
       minimumMinor: 15_000_000,
     })
     const base = withCompensation({ id: 'annual-base' })
-    const convertedBase = withCompensation({
-      currencyCode: 'USD',
-      id: base.id,
-      maximumMinor: 24_000_000,
-      minimumMinor: 20_000_000,
+
+    const item = toApplicationListItem({
+      ...applicationListRecord,
+      compensations: [total, base],
     })
 
-    const item = toApplicationListItem(
-      {
-        ...applicationListRecord,
-        compensations: [total, base],
-      },
-      [convertedBase, total]
-    )
-
     expect(item.annualCompensation).toEqual({
-      currencyCode: 'USD',
-      maximumMinor: 24_000_000,
-      minimumMinor: 20_000_000,
+      currencyCode: base.currencyCode,
+      maximumMinor: base.maximumMinor,
+      minimumMinor: base.minimumMinor,
     })
   })
 

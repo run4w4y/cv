@@ -1,5 +1,8 @@
+import { pathToFileURL } from 'node:url'
 import {
+  type CvGenerationGuidanceSource,
   composeDecodedFactsRepository,
+  decodeCvGenerationGuidance,
   decodeFactAssetRegistry,
   decodeFactEvidenceRegistry,
   decodeFactsRepositoryConfig,
@@ -24,9 +27,8 @@ import {
 } from 'effect/FileSystem'
 import { Path, type Path as PathService } from 'effect/Path'
 import { sortBy } from 'es-toolkit'
-import { createServer, type ViteDevServer } from 'vite'
 
-import { FactsPublisherSourceError } from './errors'
+import { FactsToolchainSourceError } from './errors'
 
 type SourceProvenance = {
   readonly compilerCommit: string
@@ -41,14 +43,15 @@ type LoadedFactsSource = {
   readonly assets: FactAssetRegistrySource
   readonly config: FactsRepositoryConfigSource
   readonly evidence: FactEvidenceRegistrySource
+  readonly generationGuidance: CvGenerationGuidanceSource
   readonly sections: ReadonlyArray<FactsSectionModuleSource>
 }
 
 const sourceError = (
-  operation: FactsPublisherSourceError['operation'],
+  operation: FactsToolchainSourceError['operation'],
   message: string,
   cause: unknown
-) => new FactsPublisherSourceError({ cause, message, operation })
+) => new FactsToolchainSourceError({ cause, message, operation })
 
 const loadSourceError = (message: string) => (cause: unknown) =>
   sourceError('load-source', message, cause)
@@ -84,12 +87,10 @@ const assertWithinCheckout = (
   return Effect.void
 }
 
-const viteModuleId = (absolutePath: string) =>
-  `/@fs/${absolutePath.replaceAll('\\', '/')}`
-
-const loadDefaultExport = (server: ViteDevServer, absolutePath: string) =>
-  sourcePromise(`Could not load authored facts module ${absolutePath}.`, () =>
-    server.ssrLoadModule(viteModuleId(absolutePath))
+const loadDefaultExport = (absolutePath: string) =>
+  sourcePromise(
+    `Could not load authored facts module ${absolutePath}.`,
+    () => import(pathToFileURL(absolutePath).href)
   ).pipe(
     Effect.flatMap((loaded) => {
       if (loaded === null || typeof loaded !== 'object') {
@@ -136,7 +137,6 @@ const canonicalPathWithinCheckout = (
 const loadOptionalDefaultExport = (
   fileSystem: FileSystemService,
   path: PathService,
-  server: ViteDevServer,
   contentRoot: string,
   absolutePath: string
 ) =>
@@ -151,9 +151,7 @@ const loadOptionalDefaultExport = (
             path,
             contentRoot,
             absolutePath
-          ).pipe(
-            Effect.flatMap((canonical) => loadDefaultExport(server, canonical))
-          )
+          ).pipe(Effect.flatMap(loadDefaultExport))
         : Effect.succeed({} as const)
     )
   )
@@ -226,7 +224,6 @@ const collectSectionFiles = (
 const loadSections = (
   fileSystem: FileSystemService,
   path: PathService,
-  server: ViteDevServer,
   contentRoot: string,
   factsRoot: string,
   config: FactsRepositoryConfigSource
@@ -253,7 +250,7 @@ const loadSections = (
           relativePath: path
             .relative(contentRoot, absolutePath)
             .replaceAll('\\', '/'),
-          value: yield* loadDefaultExport(server, absolutePath),
+          value: yield* loadDefaultExport(absolutePath),
         })
       }
     }
@@ -309,121 +306,93 @@ const loadAssets = (
     return { digests, sources }
   })
 
-const loadFactsSource = Effect.fn('FactsPublisher.loadSource')(
+const loadFactsSource = Effect.fn('FactsToolchain.loadSource')(
   (contentRoot: string) =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem
       const path = yield* Path
-      return yield* Effect.scoped(
-        Effect.gen(function* () {
-          const checkoutRoot = yield* fileSystem
-            .realPath(path.resolve(contentRoot))
-            .pipe(
-              Effect.mapError(
-                loadSourceError(
-                  `Could not resolve the facts checkout ${contentRoot}.`
-                )
-              )
+      const checkoutRoot = yield* fileSystem
+        .realPath(path.resolve(contentRoot))
+        .pipe(
+          Effect.mapError(
+            loadSourceError(
+              `Could not resolve the facts checkout ${contentRoot}.`
             )
-          const cacheRoot = yield* fileSystem
-            .makeTempDirectoryScoped({ prefix: 'cv-facts-vite-' })
-            .pipe(
-              Effect.mapError(
-                loadSourceError('Could not create the Vite cache directory.')
-              )
-            )
-          return yield* Effect.acquireUseRelease(
-            sourcePromise('Could not start the facts module loader.', () =>
-              createServer({
-                appType: 'custom',
-                cacheDir: cacheRoot,
-                configFile: false,
-                logLevel: 'silent',
-                root: checkoutRoot,
-                server: {
-                  fs: { allow: [checkoutRoot] },
-                  middlewareMode: true,
-                },
-              })
-            ),
-            (server) =>
-              Effect.gen(function* () {
-                const configPath = path.resolve(checkoutRoot, 'facts.config.ts')
-                const canonicalConfigPath = yield* canonicalPathWithinCheckout(
-                  fileSystem,
-                  path,
-                  checkoutRoot,
-                  configPath
-                )
-                const configSource = yield* loadDefaultExport(
-                  server,
-                  canonicalConfigPath
-                )
-                const config = yield* decodeFactsRepositoryConfig(configSource)
-                const factsRoot = path.resolve(checkoutRoot, config.factsDir)
-                const canonicalFactsRoot = yield* canonicalPathWithinCheckout(
-                  fileSystem,
-                  path,
-                  checkoutRoot,
-                  factsRoot
-                )
-                const evidenceSource = yield* loadOptionalDefaultExport(
-                  fileSystem,
-                  path,
-                  server,
-                  checkoutRoot,
-                  path.resolve(canonicalFactsRoot, 'evidence.ts')
-                )
-                const assetSource = yield* loadOptionalDefaultExport(
-                  fileSystem,
-                  path,
-                  server,
-                  checkoutRoot,
-                  path.resolve(canonicalFactsRoot, 'assets.ts')
-                )
-                const evidence = yield* decodeFactEvidenceRegistry(
-                  evidenceSource,
-                  `${config.factsDir}/evidence.ts`
-                )
-                const assets = yield* decodeFactAssetRegistry(
-                  assetSource,
-                  `${config.factsDir}/assets.ts`
-                )
-                const sections = yield* loadSections(
-                  fileSystem,
-                  path,
-                  server,
-                  checkoutRoot,
-                  canonicalFactsRoot,
-                  config
-                )
-                const loadedAssets = yield* loadAssets(
-                  fileSystem,
-                  path,
-                  checkoutRoot,
-                  canonicalFactsRoot,
-                  assets
-                )
-                return {
-                  assetDigests: loadedAssets.digests,
-                  assetSources: loadedAssets.sources,
-                  assets,
-                  config,
-                  evidence,
-                  sections,
-                } satisfies LoadedFactsSource
-              }),
-            (server) =>
-              sourcePromise('Could not close the facts module loader.', () =>
-                server.close()
-              )
           )
-        })
+        )
+      const configPath = path.resolve(checkoutRoot, 'facts.config.ts')
+      const canonicalConfigPath = yield* canonicalPathWithinCheckout(
+        fileSystem,
+        path,
+        checkoutRoot,
+        configPath
       )
+      const configSource = yield* loadDefaultExport(canonicalConfigPath)
+      const config = yield* decodeFactsRepositoryConfig(configSource)
+      const generationGuidancePath = yield* canonicalPathWithinCheckout(
+        fileSystem,
+        path,
+        checkoutRoot,
+        path.resolve(checkoutRoot, config.generationGuidance)
+      )
+      const generationGuidance = yield* decodeCvGenerationGuidance(
+        yield* loadDefaultExport(generationGuidancePath),
+        config.generationGuidance
+      )
+      const factsRoot = path.resolve(checkoutRoot, config.factsDir)
+      const canonicalFactsRoot = yield* canonicalPathWithinCheckout(
+        fileSystem,
+        path,
+        checkoutRoot,
+        factsRoot
+      )
+      const evidenceSource = yield* loadOptionalDefaultExport(
+        fileSystem,
+        path,
+        checkoutRoot,
+        path.resolve(canonicalFactsRoot, 'evidence.ts')
+      )
+      const assetSource = yield* loadOptionalDefaultExport(
+        fileSystem,
+        path,
+        checkoutRoot,
+        path.resolve(canonicalFactsRoot, 'assets.ts')
+      )
+      const evidence = yield* decodeFactEvidenceRegistry(
+        evidenceSource,
+        `${config.factsDir}/evidence.ts`
+      )
+      const assets = yield* decodeFactAssetRegistry(
+        assetSource,
+        `${config.factsDir}/assets.ts`
+      )
+      const sections = yield* loadSections(
+        fileSystem,
+        path,
+        checkoutRoot,
+        canonicalFactsRoot,
+        config
+      )
+      const loadedAssets = yield* loadAssets(
+        fileSystem,
+        path,
+        checkoutRoot,
+        canonicalFactsRoot,
+        assets
+      )
+      return {
+        assetDigests: loadedAssets.digests,
+        assetSources: loadedAssets.sources,
+        assets,
+        config,
+        evidence,
+        generationGuidance,
+        sections,
+      } satisfies LoadedFactsSource
     })
 )
 
-export const compileFactsCheckout = Effect.fn('FactsPublisher.compileCheckout')(
+export const compileFactsCheckout = Effect.fn('FactsToolchain.compileCheckout')(
   (
     contentRoot: string,
     provenance: SourceProvenance
@@ -431,7 +400,7 @@ export const compileFactsCheckout = Effect.fn('FactsPublisher.compileCheckout')(
     CompiledFactsRelease,
     | FactsAuthoringCompositionError
     | FactsAuthoringValidationError
-    | FactsPublisherSourceError
+    | FactsToolchainSourceError
     | FactsReleaseAssetError
     | FactsReleaseHashError,
     FileSystemService | PathService
@@ -443,11 +412,13 @@ export const compileFactsCheckout = Effect.fn('FactsPublisher.compileCheckout')(
         assets: loaded.assets,
         config: loaded.config,
         evidence: loaded.evidence,
+        generationGuidance: loaded.generationGuidance,
         sections: loaded.sections,
       })
       return yield* compileFactsRelease({
         assets: loaded.assetSources,
         catalogues: compilation.catalogues,
+        generationGuidance: compilation.generationGuidance,
         provenance: {
           compiler: {
             commit: provenance.compilerCommit,

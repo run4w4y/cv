@@ -1,4 +1,3 @@
-import { ConflictError } from '@cv/application-registry-api-contract'
 import type { Application } from '@cv/application-registry-entity'
 import { Form } from '@cv/internal-forms'
 import {
@@ -22,6 +21,7 @@ import { AlertCircle, Pencil, RefreshCw } from 'lucide-react'
 import * as React from 'react'
 import { useForm } from 'react-hook-form'
 
+import { asyncResultError } from '@/lib/async-result'
 import { reloadLatestApplication, updateManagedApplication } from '../../data'
 import {
   type OperationSubmission,
@@ -108,13 +108,8 @@ export const ApplicationEditDialog = ({
       })
     }
   })
-  const updateFailure = AsyncResult.matchWithError(updateResult, {
-    onInitial: () => undefined,
-    onError: (error) => error,
-    onDefect: (defect) => defect,
-    onSuccess: () => undefined,
-  })
-  const conflict = updateFailure instanceof ConflictError
+  const updateFailure = asyncResultError(updateResult)
+  const conflict = updateFailure?._tag === 'ConflictError'
   const pending =
     AsyncResult.isWaiting(updateResult) ||
     reloading ||

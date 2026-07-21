@@ -1,0 +1,40 @@
+{
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "name": "application-registry-pdf-queue",
+  "projectType": "library",
+  "sourceRoot": "libs/application-registry/pdf-queue/src",
+  "tags": [
+    "scope:application-registry",
+    "type:data-access",
+    "visibility:private"
+  ],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/application-registry/pdf-queue/src/index.ts",
+        "outputPath": "libs/application-registry/pdf-queue/dist",
+        "rootDir": "libs/application-registry/pdf-queue/src",
+        "tsConfig": "libs/application-registry/pdf-queue/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "node --import tsx --test libs/application-registry/pdf-queue/test/jetstream.integration.test.ts"
+      }
+    },
+    "typecheck": {},
+    "format": {},
+    "format:check": {}
+  }
+}

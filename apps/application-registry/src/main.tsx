@@ -3,6 +3,7 @@ import { RegistryProvider } from '@effect/atom-react'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { RouterProvider } from 'react-router'
+import { HostBootstrap } from './host/bootstrap'
 import { CvPublicationWorkflowProvider } from './preparation/publication'
 import { PreparationWorkflowProvider } from './preparation/workflow/provider'
 import { router } from './router'
@@ -17,13 +18,15 @@ if (root === null) {
 ReactDOM.createRoot(root).render(
   <React.StrictMode>
     <RegistryProvider>
-      <TooltipProvider delay={400}>
-        <PreparationWorkflowProvider>
-          <CvPublicationWorkflowProvider>
-            <RouterProvider router={router} />
-          </CvPublicationWorkflowProvider>
-        </PreparationWorkflowProvider>
-      </TooltipProvider>
+      <HostBootstrap>
+        <TooltipProvider delay={400}>
+          <PreparationWorkflowProvider>
+            <CvPublicationWorkflowProvider>
+              <RouterProvider router={router} />
+            </CvPublicationWorkflowProvider>
+          </PreparationWorkflowProvider>
+        </TooltipProvider>
+      </HostBootstrap>
     </RegistryProvider>
   </React.StrictMode>
 )

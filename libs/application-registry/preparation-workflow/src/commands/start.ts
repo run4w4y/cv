@@ -1,4 +1,4 @@
-import { Cause, Crypto, Effect, Exit, Ref } from 'effect'
+import { Crypto, Effect, Exit, Match, Predicate, Ref, Schema } from 'effect'
 import * as WorkflowEngine from 'effect/unstable/workflow/WorkflowEngine'
 import { compact, partition, uniq } from 'es-toolkit/array'
 
@@ -16,35 +16,45 @@ import {
 } from '../domain'
 import { PreparationProgress } from '../progress'
 
-const randomRunId = Crypto.Crypto.pipe(
+const randomId = Crypto.Crypto.pipe(
   Effect.flatMap((crypto) => crypto.randomUUIDv4)
 )
 
 const inputError = Effect.mapError((cause: unknown) =>
-  cause instanceof PreparationWorkflowError
-    ? cause
-    : new PreparationWorkflowError({
-        message:
-          Cause.prettyErrors(Cause.fail(cause))[0]?.message ?? String(cause),
-        stage: 'input',
-      })
+  Match.value(cause).pipe(
+    Match.when(Schema.is(PreparationWorkflowError), (error) => error),
+    Match.orElse(
+      (cause) =>
+        new PreparationWorkflowError({
+          message: Match.value(cause).pipe(
+            Match.when(Predicate.isError, (error) => error.message),
+            Match.orElse(String)
+          ),
+          stage: 'input',
+        })
+    )
+  )
 )
 
 export type PreparedStart = {
+  readonly batchId: string
+  readonly batchPosition: number
   readonly executionId: string
   readonly payload: PreparationWorkflowInput
   readonly result: StartPreparationResult
 }
 
 const prepareStart = Effect.fn('PreparationWorkflow.prepareStart')(function* (
-  input: StartPreparationInput
+  input: StartPreparationInput,
+  batchId: string,
+  batchPosition: number
 ) {
-  const runId = yield* randomRunId
+  const runId = yield* randomId
   const decoded = yield* PreparationWorkflowInputSchema.makeEffect({
     coverLetterPrompt: input.coverLetterPrompt,
+    cvGenerationGuidance: input.cvGenerationGuidance,
     kind: input.kind,
     locale: input.locale,
-    modelId: input.modelId,
     runId,
     source: {
       ...input.source,
@@ -60,9 +70,11 @@ const prepareStart = Effect.fn('PreparationWorkflow.prepareStart')(function* (
   }
   const executionId = yield* PrepareApplicationWorkflow.executionId(payload)
   return {
+    batchId,
+    batchPosition,
     executionId,
     payload,
-    result: { runId },
+    result: { batchId, runId },
   } satisfies PreparedStart
 })
 
@@ -75,7 +87,13 @@ export const startReservedPreparations = Effect.fn(
   return yield* Effect.acquireUseRelease(
     Effect.gen(function* () {
       const attempted = yield* Ref.make<ReadonlySet<string>>(new Set())
-      yield* progress.reserve(prepared.map(({ payload }) => payload))
+      yield* progress.reserve(
+        prepared.map(({ batchId, batchPosition, payload }) => ({
+          batchId,
+          batchPosition,
+          input: payload,
+        }))
+      )
       return attempted
     }),
     (attempted) =>
@@ -149,7 +167,8 @@ export const startReservedPreparations = Effect.fn(
 
 export const startPreparation = Effect.fn('PreparationWorkflow.start')(
   function* (input: StartPreparationInput) {
-    const prepared = yield* prepareStart(input)
+    const batchId = yield* randomId
+    const prepared = yield* prepareStart(input, batchId, 0)
     const results = yield* startReservedPreparations([prepared])
     const result = results[0]
     if (result === undefined) {
@@ -163,6 +182,7 @@ export const startPreparation = Effect.fn('PreparationWorkflow.start')(
 export const startPreparationBatch = Effect.fn(
   'PreparationWorkflow.startBatch'
 )(function* (input: StartPreparationBatchInput) {
+  const batchId = yield* randomId
   const decodedUrls = yield* Effect.forEach(
     compact(input.urls.map((url) => url.trim())),
     (url) => HttpUrlSchema.makeEffect(url)
@@ -171,17 +191,21 @@ export const startPreparationBatch = Effect.fn(
   const validated = yield* PreparationBatchUrlsSchema.makeEffect(urls)
   const prepared = yield* Effect.forEach(
     validated,
-    (url) =>
-      prepareStart({
-        coverLetterPrompt: input.coverLetterPrompt,
-        kind: input.kind,
-        locale: input.locale,
-        modelId: input.modelId,
-        source: {
-          _tag: 'CaptureUrl',
-          url,
+    (url, batchPosition) =>
+      prepareStart(
+        {
+          coverLetterPrompt: input.coverLetterPrompt,
+          cvGenerationGuidance: input.cvGenerationGuidance,
+          kind: input.kind,
+          locale: input.locale,
+          source: {
+            _tag: 'CaptureUrl',
+            url,
+          },
         },
-      }),
+        batchId,
+        batchPosition
+      ),
     { concurrency: 4 }
   )
   return yield* startReservedPreparations(prepared)

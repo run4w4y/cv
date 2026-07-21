@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { fixtureAssetBytes } from '@cv/facts-release/test-support'
+import type { CompiledFactsRelease } from '@cv/facts-release'
+import {
+  cvGenerationGuidanceFixture,
+  fixtureAssetBytes,
+} from '@cv/facts-release/test-support'
 import { BunServices } from '@effect/platform-bun'
 import { Effect } from 'effect'
 import {
@@ -22,9 +26,14 @@ const configSource = `import type { FactsRepositoryConfig } from 'virtual:facts'
 export default {
   defaultLocale: 'en',
   factsDir: 'facts',
+  generationGuidance: 'generation/cv.ts',
   locales: ['en', 'ru'],
 } satisfies FactsRepositoryConfig
 `
+
+const generationGuidanceSource = `export default ${JSON.stringify(
+  cvGenerationGuidanceFixture
+)}`
 
 const evidenceSource = `import type { FactEvidenceRegistry } from 'virtual:facts'
 
@@ -97,6 +106,9 @@ const withCheckout = <A, E, R>(
       yield* fileSystem.makeDirectory(path.join(root, 'facts/assets'), {
         recursive: true,
       })
+      yield* fileSystem.makeDirectory(path.join(root, 'generation'), {
+        recursive: true,
+      })
       yield* fileSystem.makeDirectory(path.join(root, 'facts/en/employment'), {
         recursive: true,
       })
@@ -111,6 +123,10 @@ const withCheckout = <A, E, R>(
           fileSystem.writeFileString(
             path.join(root, 'facts.config.ts'),
             configSource
+          ),
+          fileSystem.writeFileString(
+            path.join(root, 'generation/cv.ts'),
+            generationGuidanceSource
           ),
           fileSystem.writeFileString(
             path.join(root, 'facts/evidence.ts'),
@@ -186,7 +202,7 @@ const runWithCheckout = <A, E>(
 
 describe('facts source checkout', () => {
   test('loads sectioned TypeScript for every config-owned locale', async () => {
-    const release = await runWithCheckout((root) =>
+    const release: CompiledFactsRelease = await runWithCheckout((root) =>
       compileFactsCheckout(root, provenance)
     )
 
@@ -253,8 +269,8 @@ describe('facts source checkout', () => {
       { assetSymlinkEscape: true }
     )
 
-    expect(error._tag).toBe('FactsPublisherSourceError')
-    if (error._tag === 'FactsPublisherSourceError') {
+    expect(error._tag).toBe('FactsToolchainSourceError')
+    if (error._tag === 'FactsToolchainSourceError') {
       expect(error.operation).toBe('load-source')
       expect(error.message).toContain('escapes the content checkout')
     }
@@ -266,8 +282,8 @@ describe('facts source checkout', () => {
       { omitRussian: true }
     )
 
-    expect(error._tag).toBe('FactsPublisherSourceError')
-    if (error._tag === 'FactsPublisherSourceError') {
+    expect(error._tag).toBe('FactsToolchainSourceError')
+    if (error._tag === 'FactsToolchainSourceError') {
       expect(error.operation).toBe('load-source')
     }
   })

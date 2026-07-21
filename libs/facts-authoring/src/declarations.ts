@@ -3,6 +3,7 @@ import { Schema } from 'effect'
 import {
   ContactItemSourceSchema,
   ContactSectionSourceSchema,
+  CvGenerationGuidanceSourceSchema,
   EducationEntrySourceSchema,
   EducationSectionSourceSchema,
   EducationThesisSourceSchema,
@@ -29,6 +30,7 @@ import {
 
 const portableReferenceNames: Readonly<Record<string, string>> = {
   ContactSectionSource: 'ContactSection',
+  CvGenerationGuidanceV1: 'CvGenerationGuidance',
   EducationSectionSource: 'EducationSection',
   ExperienceSectionSource: 'ExperienceSection',
   FactAssetSource: 'FactAsset',
@@ -164,6 +166,7 @@ const portableType = (name: string, schema: Schema.Top) => {
 
 const portableSchemas: ReadonlyArray<readonly [string, Schema.Top]> = [
   ['FactsRepositoryConfig', FactsRepositoryConfigSourceSchema],
+  ['CvGenerationGuidance', CvGenerationGuidanceSourceSchema],
   ['FactTailoringGuidance', FactTailoringGuidanceSourceSchema],
   ['ReviewedFact', ReviewedFactSourceSchema],
   ['FactLink', FactLinkSourceSchema],
@@ -194,7 +197,7 @@ export const renderFactsAuthoringDeclarations = (): string => {
     portableType(name, schema)
   )
   return `// Generated from the authoritative cv facts schemas. Do not edit by hand.
-// Regenerate this file with the facts-types tool from run4w4y/cv.
+// This file must match the declaration in the pinned public cv-facts artifact.
 
 declare module 'virtual:facts' {
 ${declarations.join('\n\n')}

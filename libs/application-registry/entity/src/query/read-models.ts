@@ -10,7 +10,7 @@ import {
 } from '../codecs/compensations'
 import { NonEmptyTrimmedStringSchema } from '../model/constraints'
 
-/** Annual range in the list query's requested display currency. */
+/** Annual range in its stored currency. */
 export type AnnualCompensation = Pick<
   ApplicationCompensation,
   'currencyCode' | 'maximumMinor' | 'minimumMinor'

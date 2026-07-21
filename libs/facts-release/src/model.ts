@@ -1,9 +1,10 @@
+import type { CvGenerationGuidanceV1 } from '@cv/contracts/document'
 import type { FactsCatalogueV1 } from '@cv/contracts/facts'
 import type { Schema } from 'effect'
 
 import type {
-  FactsCurrentPointerV1Schema,
-  FactsReleaseManifestV1Schema,
+  FactsCurrentPointerV2Schema,
+  FactsReleaseManifestV2Schema,
   FactsReleaseProvenanceSchema,
 } from './schema'
 
@@ -11,12 +12,12 @@ export type FactsReleaseProvenance = Schema.Schema.Type<
   typeof FactsReleaseProvenanceSchema
 >
 
-export type FactsReleaseManifestV1 = Schema.Schema.Type<
-  typeof FactsReleaseManifestV1Schema
+export type FactsReleaseManifestV2 = Schema.Schema.Type<
+  typeof FactsReleaseManifestV2Schema
 >
 
-export type FactsCurrentPointerV1 = Schema.Schema.Type<
-  typeof FactsCurrentPointerV1Schema
+export type FactsCurrentPointerV2 = Schema.Schema.Type<
+  typeof FactsCurrentPointerV2Schema
 >
 
 export type FactsAssetSource = {
@@ -29,10 +30,15 @@ export type FactsAssetSource = {
 export type CompileFactsReleaseInput = {
   readonly assets: ReadonlyArray<FactsAssetSource>
   readonly catalogues: ReadonlyArray<FactsCatalogueV1>
+  readonly generationGuidance: CvGenerationGuidanceV1
   readonly provenance: FactsReleaseProvenance
 }
 
-export type FactsReleaseObjectKind = 'asset' | 'catalogue' | 'manifest'
+export type FactsReleaseObjectKind =
+  | 'asset'
+  | 'catalogue'
+  | 'generation-guidance'
+  | 'manifest'
 
 export type FactsReleaseObject = {
   readonly byteLength: number
@@ -51,7 +57,8 @@ export const CompiledFactsReleaseTypeId: unique symbol = Symbol.for(
 export type CompiledFactsRelease = {
   readonly [CompiledFactsReleaseTypeId]: typeof CompiledFactsReleaseTypeId
   readonly catalogues: ReadonlyArray<FactsCatalogueV1>
-  readonly manifest: FactsReleaseManifestV1
+  readonly generationGuidance: CvGenerationGuidanceV1
+  readonly manifest: FactsReleaseManifestV2
   readonly manifestObject: FactsReleaseObject
   readonly objects: ReadonlyArray<FactsReleaseObject>
   readonly releaseId: string
@@ -64,11 +71,4 @@ export type PublishedFactsObject = {
   readonly key: string
   readonly mediaType: string
   readonly sha256: string
-}
-
-export type PublishedFactsRelease = {
-  readonly immutableObjectCount: number
-  readonly pointer: FactsCurrentPointerV1
-  readonly releaseId: string
-  readonly status: 'activated' | 'already-active'
 }

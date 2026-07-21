@@ -23,7 +23,6 @@
     "@cv/application-registry-artifact-store": "workspace:*",
     "@cv/application-registry-crud": "workspace:*",
     "@cv/application-registry-entity": "workspace:*",
-    "@cv/application-registry-fx": "workspace:*",
     "@cv/application-registry-listing-check": "workspace:*",
     "@cv/drizzle-query": "workspace:*",
     "@cv/drizzle-query-effect": "workspace:*",
@@ -32,8 +31,6 @@
     "htmlparser2": "^12.0.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "4.20260511.1",
-    "@cv/worker-test-kit": "workspace:*",
     "drizzle-orm": "1.0.0-rc.4"
   }
 }

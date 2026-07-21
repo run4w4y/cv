@@ -13,6 +13,15 @@
         "color": true
       }
     },
+    "dev:fixture": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "CV_FIXTURE_MODE=1 CV_FIXTURE_PUBLIC_URL=http://localhost:${CV_FIXTURE_PORT:-4381}/c/fixture bun run dev -- --port ${CV_FIXTURE_PORT:-4381}",
+        "cwd": "apps/cv",
+        "color": true
+      }
+    },
     "build": {
       "executor": "nx:run-commands",
       "dependsOn": ["^build"],
@@ -46,23 +55,26 @@
         "color": true
       }
     },
-    "test:worker": {
+    "test:e2e": {
       "executor": "nx:run-commands",
-      "dependsOn": ["build"],
-      "outputs": [],
+      "cache": false,
+      "outputs": ["{workspaceRoot}/.cv-work/cv-playwright-results"],
       "options": {
-        "commands": [
-          "node node_modules/wrangler/bin/wrangler.js deploy --dry-run --config apps/cv/wrangler.jsonc --outfile apps/cv/.open-next/deploy-check/worker.js",
-          "node --import tsx --test apps/cv/test/public-worker.integration.test.ts"
-        ],
-        "parallel": false,
+        "command": "playwright test --config apps/cv/playwright.config.ts",
         "cwd": ".",
         "color": true
       }
     },
     "lint": {},
     "lint:fix": {},
-    "typecheck": {},
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bunx next typegen && bunx tsc --pretty --noEmit --project tsconfig.json",
+        "cwd": "apps/cv",
+        "color": true
+      }
+    },
     "test:unit": {},
     "format": {},
     "format:check": {}

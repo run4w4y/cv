@@ -1,19 +1,26 @@
-import { Cause, type Crypto, Effect, type Schema } from 'effect'
+import { type Crypto, Effect, Match, Predicate, Schema } from 'effect'
 import { PreparationDataError } from '../types'
 
 const messageFromUnknown = (cause: unknown): string =>
-  Cause.prettyErrors(Cause.fail(cause))[0]?.message ?? String(cause)
+  Match.value(cause).pipe(
+    Match.when(Predicate.isError, (error) => error.message),
+    Match.orElse(String)
+  )
 
 export const asPreparationDataError = (
   operation: string,
   cause: unknown
 ): PreparationDataError =>
-  cause instanceof PreparationDataError
-    ? cause
-    : new PreparationDataError({
-        message: messageFromUnknown(cause),
-        operation,
-      })
+  Match.value(cause).pipe(
+    Match.when(Schema.is(PreparationDataError), (error) => error),
+    Match.orElse(
+      (cause) =>
+        new PreparationDataError({
+          message: messageFromUnknown(cause),
+          operation,
+        })
+    )
+  )
 
 export const dataError = (operation: string) =>
   Effect.mapError((cause: unknown) => asPreparationDataError(operation, cause))

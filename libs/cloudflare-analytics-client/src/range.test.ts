@@ -2,15 +2,26 @@ import { describe, expect, test } from 'bun:test'
 import * as Effect from 'effect/Effect'
 
 import { chunkRange, resolveRange } from './range'
+import type { DatasetLimits } from './types'
+
+const dayMs = 24 * 60 * 60 * 1_000
+
+const limits = (overrides: Partial<DatasetLimits> = {}): DatasetLimits => ({
+  maxDurationMs: dayMs,
+  maxPageSize: 5_000,
+  retentionMs: 31 * dayMs,
+  ...overrides,
+})
 
 describe('cloudflare analytics range chunking', () => {
-  test('splits wider ranges into one-day chunks', async () => {
+  test('splits ranges using the provider maximum duration', async () => {
     const chunks = await Effect.runPromise(
       chunkRange(
         {
           from: '2026-06-01T00:00:00.000Z',
           to: '2026-06-03T00:00:00.000Z',
         },
+        limits(),
         {
           now: new Date('2026-06-03T00:00:00.000Z'),
         }
@@ -29,13 +40,14 @@ describe('cloudflare analytics range chunking', () => {
     ])
   })
 
-  test('clamps broad dashboard ranges to the free-plan lookback window', async () => {
+  test('accepts the full provider retention window without clipping it', async () => {
     const resolved = await Effect.runPromise(
       resolveRange(
         {
           from: '2026-05-24T00:00:00.000Z',
           to: '2026-06-23T00:00:00.000Z',
         },
+        limits({ maxDurationMs: 7 * dayMs }),
         {
           now: new Date('2026-06-23T00:00:00.000Z'),
         }
@@ -43,16 +55,16 @@ describe('cloudflare analytics range chunking', () => {
     )
 
     expect(resolved.effectiveRange).toEqual({
-      from: '2026-06-16T00:00:00.000Z',
+      from: '2026-05-24T00:00:00.000Z',
       to: '2026-06-23T00:00:00.000Z',
     })
-    expect(resolved.chunks).toHaveLength(7)
+    expect(resolved.chunks).toHaveLength(5)
     expect(resolved.chunks[0]).toEqual({
-      from: '2026-06-16T00:00:00.000Z',
-      to: '2026-06-17T00:00:00.000Z',
+      from: '2026-05-24T00:00:00.000Z',
+      to: '2026-05-31T00:00:00.000Z',
     })
     expect(resolved.chunks.at(-1)).toEqual({
-      from: '2026-06-22T00:00:00.000Z',
+      from: '2026-06-21T00:00:00.000Z',
       to: '2026-06-23T00:00:00.000Z',
     })
   })
@@ -64,6 +76,7 @@ describe('cloudflare analytics range chunking', () => {
           from: String(Date.parse('2026-06-21T00:00:00.000Z')),
           to: String(Date.parse('2026-06-22T00:00:00.000Z')),
         },
+        limits(),
         {
           now: new Date('2026-06-23T00:00:00.000Z'),
         }
@@ -84,25 +97,21 @@ describe('cloudflare analytics range chunking', () => {
     })
   })
 
-  test('returns no chunks when the whole range is outside available analytics', async () => {
-    const resolved = await Effect.runPromise(
+  test('rejects ranges older than provider retention instead of clipping', async () => {
+    const exit = await Effect.runPromiseExit(
       resolveRange(
         {
           from: '2026-05-01T00:00:00.000Z',
           to: '2026-05-02T00:00:00.000Z',
         },
+        limits(),
         {
           now: new Date('2026-06-23T00:00:00.000Z'),
         }
       )
     )
 
-    expect(resolved).toEqual({
-      chunks: [],
-      effectiveRange: {
-        from: '2026-05-01T00:00:00.000Z',
-        to: '2026-05-02T00:00:00.000Z',
-      },
-    })
+    expect(exit._tag).toBe('Failure')
+    expect(exit.toString()).toContain('RangeValidationError')
   })
 })

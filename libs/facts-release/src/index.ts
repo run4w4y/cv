@@ -1,5 +1,17 @@
 export {
+  compileFactsReleaseBundle,
+  encodeFactsReleaseBundle,
+  FactsReleaseBundleObjectV1Schema,
+  type FactsReleaseBundleV1,
+  FactsReleaseBundleV1Schema,
+  factsReleaseBundleMediaType,
+  factsReleaseBundleV1ContractId,
+  type VerifiedFactsReleaseBundle,
+  verifyFactsReleaseBundle,
+} from './bundle'
+export {
   compileFactsRelease,
+  cvGenerationGuidanceMediaType,
   factsCatalogueMediaType,
   factsReleaseManifestMediaType,
 } from './compiler'
@@ -8,19 +20,21 @@ export {
   factsAssetObjectKey,
   factsCurrentObjectKey,
   factsReleaseCatalogueObjectKey,
+  factsReleaseGenerationGuidanceObjectKey,
   factsReleaseManifestObjectKey,
 } from './layout'
 export type * from './model'
 export {
-  FactsReleasePublicationTarget,
-  type FactsReleasePublicationTargetShape,
-  publishFactsRelease,
+  compileFactsCurrentPointerObject,
+  compileFactsPublicationObjects,
+  factsCurrentCacheControl,
+  factsImmutableCacheControl,
 } from './publication'
 export {
-  FactsCurrentPointerV1Schema,
-  FactsReleaseManifestV1Schema,
-  FactsReleaseObjectDescriptorV1Schema,
+  FactsCurrentPointerV2Schema,
+  FactsReleaseManifestV2Schema,
+  FactsReleaseObjectDescriptorV2Schema,
   FactsReleaseProvenanceSchema,
-  factsCurrentPointerV1ContractId,
-  factsReleaseManifestV1ContractId,
+  factsCurrentPointerV2ContractId,
+  factsReleaseManifestV2ContractId,
 } from './schema'

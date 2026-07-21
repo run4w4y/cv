@@ -44,6 +44,17 @@ import {
   NotFoundErrorSchema,
 } from './errors'
 import {
+  ActivateFactsReleaseRequestSchema,
+  ActiveFactsReleaseResponseSchema,
+  FactsActivationResponseSchema,
+  FactsPublicationCapabilitiesSchema,
+  FactsPublisherAuthorization,
+  FactsRegistrationResponseSchema,
+  FactsReleaseBundleBodySchema,
+  FactsReleaseParamsSchema,
+  factsPublicationApiPrefix,
+} from './facts-publication'
+import {
   PdfJobParamsSchema,
   PdfJobResponseSchema,
   StartPdfJobRequestSchema,
@@ -61,7 +72,6 @@ import {
   ListActivitiesQuerySchema,
   ListActivitiesResponseSchema,
   ListApplicationActivitiesResponseSchema,
-  ListApplicationCompensationsQuerySchema,
   ListApplicationCompensationsResponseSchema,
   ListApplicationListingChecksResponseSchema,
   ListApplicationsQuerySchema,
@@ -171,7 +181,6 @@ const applicationEndpoints = [
     {
       error: endpointErrors,
       params: ApplicationIdentifierParamsSchema,
-      query: ListApplicationCompensationsQuerySchema,
       success: ListApplicationCompensationsResponseSchema,
     }
   ),
@@ -481,10 +490,43 @@ export const AutomationApi = HttpApiGroup.make('automation')
   .prefix(applicationRegistryApiPrefix)
   .middleware(RegistryAuthorization)
 
+const factsPublicationEndpoints = [
+  HttpApiEndpoint.get('getCapabilities', '/capabilities', {
+    error: endpointErrors,
+    success: FactsPublicationCapabilitiesSchema,
+  }),
+  HttpApiEndpoint.get('getCurrentRelease', '/current', {
+    error: endpointErrors,
+    success: ActiveFactsReleaseResponseSchema,
+  }),
+  HttpApiEndpoint.put('registerRelease', '/releases/:releaseId', {
+    error: endpointErrors,
+    params: FactsReleaseParamsSchema,
+    payload: FactsReleaseBundleBodySchema,
+    success: FactsRegistrationResponseSchema,
+  }),
+  HttpApiEndpoint.put('activateRelease', '/current', {
+    error: endpointErrors,
+    payload: ActivateFactsReleaseRequestSchema,
+    success: FactsActivationResponseSchema,
+  }),
+] as const
+
+assertUniqueHttpApiEndpoints('factsPublication', factsPublicationEndpoints)
+
+export const FactsPublicationApi = HttpApiGroup.make('factsPublication')
+  .add(factsPublicationEndpoints[0])
+  .add(factsPublicationEndpoints[1])
+  .add(factsPublicationEndpoints[2])
+  .add(factsPublicationEndpoints[3])
+  .prefix(factsPublicationApiPrefix)
+  .middleware(FactsPublisherAuthorization)
+
 export const ApplicationRegistryApi = HttpApi.make('applicationRegistry').add(
   PublicApi,
   ApplicationsApi,
   ContentApi,
   PublicationsApi,
-  AutomationApi
+  AutomationApi,
+  FactsPublicationApi
 )

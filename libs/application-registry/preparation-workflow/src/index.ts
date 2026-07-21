@@ -6,6 +6,16 @@ export {
   type PreparationRuns,
 } from './application-preparation'
 export {
+  StructuredGeneration,
+  StructuredGenerationError,
+  type StructuredGenerationErrorKind,
+  StructuredGenerationErrorKindSchema,
+  type StructuredGenerationRequest,
+  type StructuredGenerationResult,
+  type StructuredGenerationShape,
+  type StructuredGenerationUsage,
+} from './generation/service'
+export {
   type AppendCandidateRevisionInput,
   type ApproveCandidateRevisionInput,
   type ContentRevisionHistory,

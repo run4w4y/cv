@@ -1,4 +1,3 @@
-import { cvDocumentV1GuidanceItems } from '@cv/application-preparation-workflow/cv'
 import {
   Badge,
   Button,
@@ -7,10 +6,11 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Field,
+  FieldLabel,
+  Select,
 } from '@cv/internal-ui'
 import { RefreshCw, Sparkles } from 'lucide-react'
-import { Link } from 'react-router'
-import { ModelSelector } from '@/preparation/components/model-selector'
 import type { PreparationWorkspace } from '@/preparation/workspace/atoms'
 import type { CvPreparationActions } from './actions'
 
@@ -55,24 +55,27 @@ export const CvGenerationCard = ({
           </Badge>
           <Badge variant="outline">Locale {locale}</Badge>
           <Badge variant="outline">
-            {cvDocumentV1GuidanceItems.length} guidance rules
+            {actions.cvGenerationGuidance.fields.length} guided fields
           </Badge>
         </div>
-        <label className="grid max-w-48 gap-1 text-sm">
-          <span className="font-medium">Facts locale</span>
-          <select
-            className="h-9 rounded-md border border-input bg-background px-3"
+        <Field className="max-w-48">
+          <FieldLabel htmlFor="cv-facts-locale">Facts locale</FieldLabel>
+          <Select
+            id="cv-facts-locale"
+            className="w-full"
             value={locale}
+            options={bootstrap.context.factsRelease.locales.map(
+              (availableLocale) => ({
+                label: availableLocale,
+                value: availableLocale,
+              })
+            )}
             disabled={actions.commandPending || refreshPending}
-            onChange={(event) => onLocaleChange(event.currentTarget.value)}
-          >
-            {bootstrap.context.factsRelease.locales.map((availableLocale) => (
-              <option key={availableLocale} value={availableLocale}>
-                {availableLocale}
-              </option>
-            ))}
-          </select>
-        </label>
+            onValueChange={(value) => {
+              if (value !== null) onLocaleChange(value)
+            }}
+          />
+        </Field>
         <Button
           className="w-fit"
           variant="outline"
@@ -86,37 +89,25 @@ export const CvGenerationCard = ({
           <RefreshCw />
           {refreshPending ? 'Refreshing posting…' : 'Refresh job posting'}
         </Button>
-        <ModelSelector
-          authenticated={actions.authenticated}
-          value={actions.selectedModel}
-          onChange={actions.selectModel}
-        />
-        <div className="flex flex-wrap gap-2">
-          <Button
-            disabled={
-              actions.commandPending ||
-              actions.workflowOpen ||
-              !actions.authenticated ||
-              actions.selectedModel === null
-            }
-            onClick={() => void actions.generate()}
-          >
-            <Sparkles />
-            {actions.startPending
-              ? 'Starting workflow…'
-              : actions.workflowExecuting
-                ? `Running: ${run?.stage ?? 'starting'}`
-                : run?.status === 'awaiting_review'
-                  ? 'Review current candidate first'
-                  : 'Run preparation workflow'}
-          </Button>
-          <Link
-            to="/schema/cv-document"
-            className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-card px-3 text-sm font-medium hover:bg-muted"
-          >
-            Inspect schema guidance
-          </Link>
-        </div>
+        <Button
+          className="w-fit"
+          disabled={
+            actions.commandPending ||
+            actions.workflowOpen ||
+            !actions.codexAvailable ||
+            !actions.guidanceValid
+          }
+          onClick={() => void actions.generate()}
+        >
+          <Sparkles />
+          {actions.startPending
+            ? 'Starting workflow…'
+            : actions.workflowExecuting
+              ? `Running: ${run?.stage ?? 'starting'}`
+              : run?.status === 'awaiting_review'
+                ? 'Review current candidate first'
+                : 'Run preparation workflow'}
+        </Button>
       </CardContent>
     </Card>
   )

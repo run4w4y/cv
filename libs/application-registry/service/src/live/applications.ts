@@ -6,27 +6,19 @@ import {
   type PersistedActivity,
   type PersistedApplication,
 } from '@cv/application-registry-crud'
-import type {
-  ApplicationCompensation,
-  CurrencyCode,
-  FxRate,
-} from '@cv/application-registry-entity'
 import { normalizeApplicationPostingUrl } from '@cv/application-registry-entity'
 import { applicationListQuery } from '@cv/application-registry-entity/query'
-import { FxRates } from '@cv/application-registry-fx'
 import { Effect, Layer } from 'effect'
-import { uniq } from 'es-toolkit'
 
 import {
   RegistryBadRequestError,
   RegistryConflictError,
-  RegistryDatabaseError,
+  type RegistryDatabaseError,
 } from '../errors'
 import {
   selectAnnualCompensation,
   toApplicationListItem,
 } from '../internal/application-list-item'
-import { convertCompensationForDisplay } from '../internal/compensation-conversion'
 import { operationRequestSignature } from '../internal/operation-request-signature'
 import { resolveRegistryQuery } from '../internal/query-resolution'
 import {
@@ -72,31 +64,10 @@ const submittedStatuses = new Set([
   'offer',
 ])
 
-const convertForSummary = (
-  original: ApplicationCompensation,
-  quoteCurrency: CurrencyCode,
-  rates: ReadonlyMap<CurrencyCode, FxRate>
-): Effect.Effect<
-  ApplicationCompensation,
-  RegistryBadRequestError | RegistryDatabaseError
-> => {
-  const rate = rates.get(original.currencyCode)
-  if (!rate) {
-    return Effect.fail(
-      new RegistryDatabaseError({
-        cause: new Error('Resolved compensation rate disappeared.'),
-        message: 'Could not resolve a compensation exchange rate.',
-      })
-    )
-  }
-  return convertCompensationForDisplay(original, quoteCurrency, rate)
-}
-
 const make = Effect.gen(function* () {
   const applications = yield* ApplicationsCrud
   const annotations = yield* AnnotationsCrud
   const compensations = yield* CompensationsCrud
-  const fxRates = yield* FxRates
   const idempotency = yield* IdempotencyCrud
 
   const find = Effect.fn('ApplicationsService.find')((identifier: string) =>
@@ -205,7 +176,7 @@ const make = Effect.gen(function* () {
     list: Effect.fn('ApplicationsService.list')(
       (query: ListApplicationsInput) =>
         Effect.gen(function* () {
-          const { currency, q, ...request } = query
+          const { q, ...request } = query
           const keyword = q?.trim()
           const resolved = yield* resolveRegistryQuery(
             applicationListQuery,
@@ -226,40 +197,9 @@ const make = Effect.gen(function* () {
           )
           const page = yield* applications.list(resolved)
 
-          const quoteCurrency =
-            currency === undefined || currency === 'original'
-              ? undefined
-              : currency
-          const rates = quoteCurrency
-            ? new Map(
-                yield* Effect.forEach(
-                  uniq(
-                    page.items.flatMap(({ compensations }) =>
-                      compensations.map(({ currencyCode }) => currencyCode)
-                    )
-                  ),
-                  (baseCurrency) =>
-                    fxRates
-                      .get(baseCurrency, quoteCurrency)
-                      .pipe(Effect.map((rate) => [baseCurrency, rate] as const))
-                )
-              )
-            : undefined
-          const items = yield* Effect.forEach(page.items, (item) =>
-            quoteCurrency && rates
-              ? Effect.forEach(item.compensations, (original) =>
-                  convertForSummary(original, quoteCurrency, rates)
-                ).pipe(
-                  Effect.map((displayed) =>
-                    toApplicationListItem(item, displayed)
-                  )
-                )
-              : Effect.succeed(toApplicationListItem(item))
-          )
-
           return {
             ...page,
-            items,
+            items: page.items.map(toApplicationListItem),
           }
         })
     ),

@@ -1,17 +1,12 @@
 import { sql } from 'drizzle-orm'
-import {
-  check,
-  index,
-  integer,
-  sqliteTable,
-  text,
-} from 'drizzle-orm/sqlite-core'
+import { check, index, integer, pgTable, text } from 'drizzle-orm/pg-core'
 
 import { applications } from './applications'
 import { generatedArtifacts } from './artifacts'
+import { utcTimestamp } from './columns'
 import { contentEntries } from './content'
 
-export const pdfGenerationOutbox = sqliteTable(
+export const pdfGenerationOutbox = pgTable(
   'pdf_generation_outbox',
   {
     artifactId: text('artifact_id')
@@ -25,11 +20,11 @@ export const pdfGenerationOutbox = sqliteTable(
       .references(() => contentEntries.id, { onDelete: 'cascade' }),
     messageVersion: integer('message_version').notNull(),
     attempts: integer('attempts').notNull(),
-    createdAt: text('created_at').notNull(),
-    updatedAt: text('updated_at').notNull(),
-    lastAttemptAt: text('last_attempt_at'),
+    createdAt: utcTimestamp('created_at').notNull(),
+    updatedAt: utcTimestamp('updated_at').notNull(),
+    lastAttemptAt: utcTimestamp('last_attempt_at'),
     lastError: text('last_error'),
-    dispatchedAt: text('dispatched_at'),
+    dispatchedAt: utcTimestamp('dispatched_at'),
   },
   (table) => [
     index('pdf_generation_outbox_pending_idx').on(

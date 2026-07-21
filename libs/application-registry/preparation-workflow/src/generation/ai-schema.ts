@@ -1,10 +1,10 @@
-import type { AiJsonSchema } from '@cv/ai-provider'
 import { Schema } from 'effect'
+import type { JsonSchema } from 'effect/JsonSchema'
 
-/** Narrow interoperability boundary between Effect Schema and the AI SDK. */
-export const toAiJsonSchema = (schema: Schema.Top): AiJsonSchema => {
+/** Narrow interoperability boundary between Effect Schema and structured generation. */
+export const toGenerationJsonSchema = (schema: Schema.Top): JsonSchema => {
   const standard = Schema.toStandardJSONSchemaV1(schema)
   return standard['~standard'].jsonSchema.input({
     target: 'draft-07',
-  }) as AiJsonSchema
+  })
 }

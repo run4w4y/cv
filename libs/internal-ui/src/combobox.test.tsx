@@ -80,6 +80,34 @@ describe('Combobox', () => {
     expect(within(trigger).queryByText('2 selected')).toBeNull()
   })
 
+  test('only applies empty-state spacing when no options match', async () => {
+    const view = render(
+      <Combobox
+        ariaLabel="Application status"
+        searchPlaceholder="Search statuses"
+        value={null}
+        onValueChange={() => undefined}
+        options={options}
+      />
+    )
+
+    fireEvent.click(view.getByRole('combobox', { name: 'Application status' }))
+
+    const input = await view.findByLabelText('Search statuses')
+    const emptyRegion = view.getByRole('status')
+
+    expect(emptyRegion.textContent).toBe('')
+    expect(emptyRegion.classList.contains('py-6')).toBe(false)
+    expect(emptyRegion.children).toHaveLength(0)
+
+    fireEvent.change(input, { target: { value: 'missing' } })
+
+    await waitFor(() => {
+      const emptyMessage = within(emptyRegion).getByText('No options found.')
+      expect(emptyMessage.classList.contains('py-6')).toBe(true)
+    })
+  })
+
   test('owns its form value at the root and renders destructive invalid styling', () => {
     const view = render(
       <>

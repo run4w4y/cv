@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 
-import { CvDocumentRenderer } from '@/document/renderer/cv-document'
+import { PdfCvRenderer } from '@/document/renderer/pdf/pdf-cv'
 import { loadCvPreviewForToken } from '@/server/load-publication'
 import { cvRenderVersion } from '@/server/render-version'
 import { decodeCvToken } from '@/server/token'
@@ -26,11 +26,13 @@ export default async function CvPreviewPage({
   }
 
   return (
-    <CvDocumentRenderer
-      document={publication.document}
-      mode="print-preview"
-      publicUrl={publication.publicUrl}
-      renderVersion={cvRenderVersion()}
-    />
+    <main className="cv-preview-shell">
+      <PdfCvRenderer
+        document={publication.document}
+        presentation="preview"
+        publicUrl={publication.publicUrl}
+        renderVersion={cvRenderVersion()}
+      />
+    </main>
   )
 }

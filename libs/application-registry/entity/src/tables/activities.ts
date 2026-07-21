@@ -3,11 +3,12 @@ import {
   check,
   index,
   integer,
+  jsonb,
+  pgTable,
   primaryKey,
-  sqliteTable,
   text,
   uniqueIndex,
-} from 'drizzle-orm/sqlite-core'
+} from 'drizzle-orm/pg-core'
 
 import type { JsonValue } from '../model/constraints'
 import {
@@ -17,9 +18,10 @@ import {
 } from '../model/values'
 import { applications } from './applications'
 import { sqlStringList } from './checks'
+import { utcTimestamp } from './columns'
 
 /** Read-only descriptive history issued by registry backend workflows. */
-export const applicationActivities = sqliteTable(
+export const applicationActivities = pgTable(
   'application_activities',
   {
     id: text('id').notNull(),
@@ -30,8 +32,8 @@ export const applicationActivities = sqliteTable(
     actor: text('actor', { enum: applicationActivityActorValues }).notNull(),
     source: text('source', { enum: applicationActivitySourceValues }).notNull(),
     revision: integer('revision').notNull(),
-    occurredAt: text('occurred_at').notNull(),
-    payload: text('payload', { mode: 'json' }).$type<JsonValue>().notNull(),
+    occurredAt: utcTimestamp('occurred_at').notNull(),
+    payload: jsonb('payload').$type<JsonValue>().notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.id] }),
@@ -56,10 +58,6 @@ export const applicationActivities = sqliteTable(
     check(
       'application_activities_source_check',
       sql`${table.source} in (${sqlStringList(applicationActivitySourceValues)})`
-    ),
-    check(
-      'application_activities_payload_json_check',
-      sql`json_valid(${table.payload})`
     ),
   ]
 )

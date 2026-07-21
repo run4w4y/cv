@@ -16,6 +16,7 @@ const securityHeaders = [
 ] as const
 
 const nextConfig: NextConfig = {
+  devIndicators: false,
   basePath: '/c',
   poweredByHeader: false,
   reactStrictMode: true,
@@ -25,14 +26,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/:token((?!_preview$|_internal$)[^/]+)',
-        headers: [
-          ...securityHeaders,
-          {
-            key: 'Content-Security-Policy',
-            value:
-              "default-src 'none'; base-uri 'none'; connect-src 'none'; form-action 'none'; frame-ancestors 'none'; img-src data:; style-src 'self'",
-          },
-        ],
+        headers: [...securityHeaders],
       },
       {
         source: '/_preview/:path*',
@@ -42,11 +36,6 @@ const nextConfig: NextConfig = {
               key !== 'X-Frame-Options' &&
               key !== 'Cross-Origin-Resource-Policy'
           ),
-          {
-            key: 'Content-Security-Policy',
-            value:
-              "default-src 'none'; base-uri 'none'; connect-src 'none'; form-action 'none'; frame-ancestors *; img-src data:; style-src 'self'",
-          },
           { key: 'Cache-Control', value: 'private, no-store' },
         ],
       },

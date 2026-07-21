@@ -1,18 +1,20 @@
 import { sql } from 'drizzle-orm'
 import {
+  boolean,
   check,
   index,
   integer,
+  pgTable,
   primaryKey,
-  sqliteTable,
   text,
   uniqueIndex,
-} from 'drizzle-orm/sqlite-core'
+} from 'drizzle-orm/pg-core'
 
 import { applications } from './applications'
+import { utcTimestamp } from './columns'
 import { contentEntries, contentRevisions } from './content'
 
-export const cvLinks = sqliteTable(
+export const cvLinks = pgTable(
   'cv_links',
   {
     id: text('id').notNull(),
@@ -28,13 +30,13 @@ export const cvLinks = sqliteTable(
     token: text('token').notNull(),
     previewToken: text('preview_token').notNull(),
     publicUrl: text('public_url').notNull(),
-    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(false),
+    enabled: boolean('enabled').notNull().default(false),
     disabledReason: text('disabled_reason'),
-    disabledAt: text('disabled_at'),
+    disabledAt: utcTimestamp('disabled_at'),
     publicationVersion: integer('publication_version').notNull().default(1),
     version: integer('version').notNull().default(1),
-    createdAt: text('created_at').notNull(),
-    updatedAt: text('updated_at').notNull(),
+    createdAt: utcTimestamp('created_at').notNull(),
+    updatedAt: utcTimestamp('updated_at').notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.id] }),

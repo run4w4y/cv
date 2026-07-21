@@ -136,10 +136,9 @@ export const applicationAtom = Atom.family((applicationId: string) =>
 )
 
 export const applicationCompensationsAtom = Atom.family(
-  ({ applicationId, currency }: { applicationId: string; currency: string }) =>
+  (applicationId: string) =>
     registryQuery('listApplicationCompensations', {
       params: { id: applicationId },
-      query: currency === 'original' ? {} : { currency },
       reactivityKeys: [applicationReactivity.compensations(applicationId)],
       timeToLive: '5 minutes',
     })

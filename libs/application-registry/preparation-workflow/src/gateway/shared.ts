@@ -1,5 +1,5 @@
-import { Cause, Effect } from 'effect'
-import type { AiStageMetadata } from '../domain'
+import { Effect, Match, Predicate, Schema } from 'effect'
+import type { GenerationStageMetadata } from '../domain'
 import { PreparationWorkflowError } from '../domain'
 
 export const formatted = (value: unknown, maxCharacters = 120_000): string => {
@@ -10,32 +10,37 @@ export const formatted = (value: unknown, maxCharacters = 120_000): string => {
 }
 
 export const messageFromUnknown = (cause: unknown): string =>
-  Cause.prettyErrors(Cause.fail(cause))[0]?.message ?? String(cause)
+  Match.value(cause).pipe(
+    Match.when(Predicate.isError, (error) => error.message),
+    Match.orElse(String)
+  )
 
 export const stageError = (stage: string) =>
   Effect.mapError((cause: unknown) =>
-    cause instanceof PreparationWorkflowError
-      ? cause
-      : new PreparationWorkflowError({
-          message: messageFromUnknown(cause),
-          stage,
-        })
+    Match.value(cause).pipe(
+      Match.when(Schema.is(PreparationWorkflowError), (error) => error),
+      Match.orElse(
+        (cause) =>
+          new PreparationWorkflowError({
+            message: messageFromUnknown(cause),
+            stage,
+          })
+      )
+    )
   )
 
-export const aiStageMetadata = (
+export const generationStageMetadata = (
   stage: string,
   result: {
-    readonly finishReason: string
-    readonly modelId: string
+    readonly executor: string
     readonly usage: {
       readonly inputTokens: number | null
       readonly outputTokens: number | null
       readonly totalTokens: number | null
     }
   }
-): AiStageMetadata => ({
-  finishReason: result.finishReason,
-  modelId: result.modelId,
+): GenerationStageMetadata => ({
+  executor: result.executor,
   stage,
   usage: result.usage,
 })

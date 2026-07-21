@@ -1,12 +1,13 @@
 import { uniq } from 'es-toolkit/array'
 
-import type { PreparationRunState, PreparationWorkflowInput } from '../domain'
+import type { PreparationRunState } from '../domain'
 import { preparationSourceApplicationId, preparationSourceUrl } from '../domain'
-import type { PreparationRunStates } from './model'
+import type { PreparationRunReservation, PreparationRunStates } from './model'
 import {
   openPreparationStatuses,
   samePreparationIdentity,
   sameRequestedPreparationIdentity,
+  startPreparationHistory,
 } from './state'
 
 export type PreparationReservationResult = {
@@ -16,9 +17,11 @@ export type PreparationReservationResult = {
 
 export const reservePreparationRuns = (
   current: PreparationRunStates,
-  inputs: ReadonlyArray<PreparationWorkflowInput>
+  reservations: ReadonlyArray<PreparationRunReservation>,
+  createdAt: number
 ): PreparationReservationResult => {
-  for (const [index, input] of inputs.entries()) {
+  for (const [index, reservation] of reservations.entries()) {
+    const { input } = reservation
     if (current.has(input.runId)) {
       return {
         conflict: `Preparation run ${input.runId} already exists.`,
@@ -26,20 +29,25 @@ export const reservePreparationRuns = (
       }
     }
 
-    const precedingInputs = inputs.slice(0, index)
-    if (precedingInputs.some((requested) => requested.runId === input.runId)) {
+    const precedingReservations = reservations.slice(0, index)
+    if (
+      precedingReservations.some(
+        ({ input: requested }) => requested.runId === input.runId
+      )
+    ) {
       return {
         conflict: `Preparation run ${input.runId} is duplicated within this batch.`,
         runs: current,
       }
     }
 
-    const requestedConflict = precedingInputs.find((requested) =>
-      sameRequestedPreparationIdentity(input, requested)
+    const requestedConflict = precedingReservations.find(
+      ({ input: requested }) =>
+        sameRequestedPreparationIdentity(input, requested)
     )
     if (requestedConflict !== undefined) {
       return {
-        conflict: `Preparation run ${requestedConflict.runId} is duplicated within this batch.`,
+        conflict: `Preparation run ${requestedConflict.input.runId} is duplicated within this batch.`,
         runs: current,
       }
     }
@@ -58,19 +66,25 @@ export const reservePreparationRuns = (
   }
 
   const runs = new Map(current)
-  for (const input of inputs) {
+  for (const { batchId, batchPosition, input } of reservations) {
+    const message = 'Waiting for a preparation slot.'
     runs.set(input.runId, {
       applicationId: preparationSourceApplicationId(input.source),
+      batchId,
+      batchPosition,
       candidate: null,
+      createdAt,
       error: null,
       executionId: null,
       kind: input.kind,
       locale: input.locale,
-      message: 'Waiting for a preparation slot.',
+      message,
       reviewToken: null,
       runId: input.runId,
       stage: 'queued',
       status: 'queued',
+      stepHistory: startPreparationHistory(message, createdAt),
+      updatedAt: createdAt,
       url: preparationSourceUrl(input.source),
     })
   }

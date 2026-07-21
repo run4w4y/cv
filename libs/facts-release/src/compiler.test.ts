@@ -4,9 +4,10 @@ import { Effect, Schema } from 'effect'
 import {
   compileFactsRelease,
   FactsReleaseAssetError,
-  FactsReleaseManifestV1Schema,
+  FactsReleaseManifestV2Schema,
 } from './index'
 import {
+  cvGenerationGuidanceFixture,
   factsCatalogueFixture,
   fixtureAssetBytes,
   fixtureProvenance,
@@ -34,6 +35,7 @@ const fixture = async () => {
       factsCatalogueFixture(assetSha256),
       factsCatalogueFixture(assetSha256, 'ru'),
     ],
+    generationGuidance: cvGenerationGuidanceFixture,
     provenance: fixtureProvenance,
   }
 }
@@ -47,7 +49,7 @@ describe('facts release compiler', () => {
     expect(second.releaseId).toBe(first.releaseId)
     expect(second.manifestObject.bytes).toEqual(first.manifestObject.bytes)
     expect(first.releaseId).toBe(`fr_${first.manifestObject.sha256}`)
-    expect(first.objects).toHaveLength(4)
+    expect(first.objects).toHaveLength(5)
     expect(
       first.objects.every((object) => object.key === `sha256/${object.sha256}`)
     ).toBe(true)
@@ -55,6 +57,10 @@ describe('facts release compiler', () => {
       'application/vnd.cv.facts+json'
     )
     expect(first.manifest.assets[0]?.object.mediaType).toBe('application/pdf')
+    expect(first.manifest.generationGuidance).toMatchObject({
+      contract: 'cv.generation-guidance.v1',
+      documentContract: 'cv.document.v1',
+    })
   })
 
   test('canonicalizes configured locale order', async () => {
@@ -74,11 +80,11 @@ describe('facts release compiler', () => {
   test('emits a strict decodable release manifest without storage addresses', async () => {
     const bundle = await Effect.runPromise(compileFactsRelease(await fixture()))
     const manifestJson = new TextDecoder().decode(bundle.manifestObject.bytes)
-    const manifest = Schema.decodeUnknownSync(FactsReleaseManifestV1Schema)(
+    const manifest = Schema.decodeUnknownSync(FactsReleaseManifestV2Schema)(
       JSON.parse(manifestJson)
     )
 
-    expect(manifest.$schema).toBe('cv.facts-release.v1')
+    expect(manifest.$schema).toBe('cv.facts-release.v2')
     expect(manifest).not.toHaveProperty('releaseId')
     expect(manifest).not.toHaveProperty('createdAt')
     expect(manifest.provenance).toEqual(fixtureProvenance)
@@ -86,20 +92,24 @@ describe('facts release compiler', () => {
       'en',
       'ru',
     ])
+    const { generationGuidance: _, ...incompleteManifest } = manifest
+    expect(() =>
+      Schema.decodeUnknownSync(FactsReleaseManifestV2Schema)(incompleteManifest)
+    ).toThrow()
 
     const asset = manifest.assets[0]
     if (!asset) {
       throw new Error('Expected the manifest fixture to include one asset.')
     }
     expect(() =>
-      Schema.decodeUnknownSync(FactsReleaseManifestV1Schema)({
+      Schema.decodeUnknownSync(FactsReleaseManifestV2Schema)({
         ...manifest,
         assets: [asset, asset],
       })
     ).toThrow('Duplicate manifest asset identifier')
     expect(asset.object).not.toHaveProperty('key')
     expect(() =>
-      Schema.decodeUnknownSync(FactsReleaseManifestV1Schema)({
+      Schema.decodeUnknownSync(FactsReleaseManifestV2Schema)({
         ...manifest,
         assets: [
           {
@@ -138,6 +148,7 @@ describe('facts release compiler', () => {
     expect(bundle.objects.map((object) => object.kind)).toEqual([
       'catalogue',
       'catalogue',
+      'generation-guidance',
       'manifest',
     ])
   })

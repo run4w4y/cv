@@ -6,95 +6,102 @@ import {
   applicationWritableKeys,
 } from '@cv/application-registry-entity'
 import { eq } from 'drizzle-orm'
-import type { BatchItem } from 'drizzle-orm/batch'
-import type { SQLiteInsertValue } from 'drizzle-orm/sqlite-core'
+import type { PgInsertValue } from 'drizzle-orm/pg-core'
+import { Effect } from 'effect'
 import { uniq } from 'es-toolkit'
 import { pick } from 'es-toolkit/object'
 
-import type { RegistryBatchDatabase } from '../internal/connection'
+import type { RegistryExecutor } from '../internal/connection'
 import type { PersistedApplication, PersistedCompensation } from '../types'
-import { currentRevision } from './shared'
 
-const applicationValues = (
-  input: PersistedApplication
-): SQLiteInsertValue<typeof applications> => ({
+export const applicationValues = (
+  input: PersistedApplication,
+  revision: number
+): PgInsertValue<typeof applications> => ({
   ...pick(input, applicationWritableKeys),
   id: input.applicationId,
   postingFingerprint: input.postingFingerprint,
   postingUrlNormalized: input.postingUrlNormalized,
-  updatedRevision: currentRevision,
+  updatedRevision: revision,
   createdAt: input.recordedAt,
   updatedAt: input.recordedAt,
 })
 
-const applicationInsertStatement = (
-  database: RegistryBatchDatabase,
-  input: PersistedApplication
-) => {
-  return database.insert(applications).values(applicationValues(input))
-}
-
 const normalizedLabels = (labels: readonly string[]) =>
   uniq(labels.map((label) => label.trim()).filter(Boolean)).sort()
 
-export const replacementStatements = (
-  database: RegistryBatchDatabase,
+export const replaceApplicationValues = (
+  database: RegistryExecutor,
   applicationId: string,
   recordedAt: string,
   labels: readonly string[] | undefined,
   compensations: readonly PersistedCompensation[] | undefined
-): readonly BatchItem<'sqlite'>[] => [
-  ...(labels === undefined
-    ? []
-    : [
-        database
-          .delete(applicationLabels)
-          .where(eq(applicationLabels.applicationId, applicationId)),
-        ...normalizedLabels(labels).map((label) =>
-          database.insert(applicationLabels).values({
-            applicationId,
-            label,
-            createdAt: recordedAt,
-          })
-        ),
-      ]),
-  ...(compensations === undefined
-    ? []
-    : [
-        database
-          .delete(applicationCompensations)
-          .where(eq(applicationCompensations.applicationId, applicationId)),
-        ...compensations.map((compensation) =>
-          database.insert(applicationCompensations).values({
+) =>
+  Effect.gen(function* () {
+    if (labels !== undefined) {
+      yield* database
+        .delete(applicationLabels)
+        .where(eq(applicationLabels.applicationId, applicationId))
+
+      const values = normalizedLabels(labels).map((label) => ({
+        applicationId,
+        label,
+        createdAt: recordedAt,
+      }))
+      if (values.length > 0) {
+        yield* database.insert(applicationLabels).values(values)
+      }
+    }
+
+    if (compensations !== undefined) {
+      yield* database
+        .delete(applicationCompensations)
+        .where(eq(applicationCompensations.applicationId, applicationId))
+
+      if (compensations.length > 0) {
+        yield* database.insert(applicationCompensations).values(
+          compensations.map((compensation) => ({
             ...compensation,
             applicationId,
             createdAt: recordedAt,
             updatedAt: recordedAt,
-          })
-        ),
-      ]),
-]
+          }))
+        )
+      }
+    }
+  })
 
-export const applicationStatements = (
-  database: RegistryBatchDatabase,
-  input: PersistedApplication
-): readonly BatchItem<'sqlite'>[] => [
-  applicationInsertStatement(database, input),
-  database.insert(applicationActivities).values({
-    actor: input.activity.actor,
-    applicationId: input.applicationId,
-    id: input.activity.activityId,
-    kind: input.activity.kind,
-    occurredAt: input.activity.occurredAt,
-    payload: input.activity.payload,
-    revision: currentRevision,
-    source: input.activity.source,
-  }),
-  ...replacementStatements(
-    database,
-    input.applicationId,
-    input.recordedAt,
-    input.labels,
-    input.compensations
-  ),
-]
+export const persistApplicationAggregate = (
+  database: RegistryExecutor,
+  input: PersistedApplication,
+  revision: number
+) =>
+  Effect.gen(function* () {
+    const inserted = yield* database
+      .insert(applications)
+      .values(applicationValues(input, revision))
+      .onConflictDoNothing()
+      .returning({ id: applications.id })
+
+    if (inserted.length === 0) return false
+
+    yield* database.insert(applicationActivities).values({
+      actor: input.activity.actor,
+      applicationId: input.applicationId,
+      id: input.activity.activityId,
+      kind: input.activity.kind,
+      occurredAt: input.activity.occurredAt,
+      payload: input.activity.payload,
+      revision,
+      source: input.activity.source,
+    })
+
+    yield* replaceApplicationValues(
+      database,
+      input.applicationId,
+      input.recordedAt,
+      input.labels,
+      input.compensations
+    )
+    return true
+  })

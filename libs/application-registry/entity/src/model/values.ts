@@ -145,6 +145,7 @@ export type ListingCheckMode = Schema.Schema.Type<typeof ListingCheckModeSchema>
 export const ListingCheckRunStateSchema = Schema.Literals([
   'running',
   'completed',
+  'failed',
 ])
 
 export const listingCheckRunStateValues = ListingCheckRunStateSchema.literals

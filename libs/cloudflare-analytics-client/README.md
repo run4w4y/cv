@@ -2,17 +2,20 @@
 
 Layered Effect client for Cloudflare GraphQL Analytics.
 
-The package owns Cloudflare request construction, bounded range handling,
-provider error classification, and response normalization. It returns sanitized
-dashboard data or aggregates exact paths behind caller-owned opaque aliases; it
-never returns raw GraphQL rows or aliased paths to application code.
+The package owns Cloudflare request construction, provider-limit discovery,
+range chunking, provider error classification, and response normalization. It
+reads the active dataset's retention, maximum query duration, and page-size
+limits from Cloudflare, caches successful discovery for one hour, and rejects
+out-of-retention ranges without silently clipping them. It aggregates exact
+paths behind caller-owned opaque aliases and never returns raw GraphQL rows or
+aliased paths to application code.
 
 ## Services
 
 The package exports one `CloudflareAnalytics` module namespace:
 
 - `Configuration` is the required configuration service.
-- `Service` exposes `readDashboard` and `readAliasedPaths`.
+- `Service` exposes `readLimits` and `readAliasedPaths`.
 - `layer` builds the client from `Configuration` and Effect's `HttpClient`.
 
 Applications own configuration sources and runtime wiring. Environment variable

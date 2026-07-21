@@ -8,10 +8,10 @@ import { asc, eq } from 'drizzle-orm'
 import { Effect } from 'effect'
 
 import { databaseFailure } from '../errors'
-import type { RegistryQueryDatabase } from '../internal/connection'
+import type { RegistryExecutor } from '../internal/connection'
 import type { CvAnalyticsLinkRecord } from '../types'
 
-export const listCvAnalyticsLinks = (database: RegistryQueryDatabase) =>
+export const listCvAnalyticsLinks = (database: RegistryExecutor) =>
   database
     .select({
       application: {

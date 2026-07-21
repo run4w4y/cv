@@ -1,3 +1,4 @@
+import type { CvGenerationGuidanceV1 } from '@cv/contracts/document'
 import type { FactsCatalogueV1 } from '@cv/contracts/facts'
 
 import type {
@@ -17,6 +18,7 @@ export type FactsAuthoringCompilationInput = {
   readonly assets: unknown
   readonly config: unknown
   readonly evidence: unknown
+  readonly generationGuidance: unknown
   readonly sections: ReadonlyArray<FactsSectionModuleSource>
 }
 
@@ -25,6 +27,7 @@ export type DecodedFactsAuthoringCompilationInput = {
   readonly assets: FactAssetRegistrySource
   readonly config: FactsRepositoryConfigSource
   readonly evidence: FactEvidenceRegistrySource
+  readonly generationGuidance: CvGenerationGuidanceV1
   readonly sections: ReadonlyArray<FactsSectionModuleSource>
 }
 
@@ -33,4 +36,5 @@ export type FactsAuthoringCompilation = {
   readonly catalogues: ReadonlyArray<FactsCatalogueV1>
   readonly config: FactsRepositoryConfigSource
   readonly evidence: FactEvidenceRegistrySource
+  readonly generationGuidance: CvGenerationGuidanceV1
 }

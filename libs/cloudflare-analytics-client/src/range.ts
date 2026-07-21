@@ -1,11 +1,7 @@
 import * as Effect from 'effect/Effect'
 
 import { RangeValidationError } from './errors'
-import type { Range } from './types'
-
-export const chunkMs = 24 * 60 * 60 * 1000
-export const maxChunks = 7
-export const maxLookbackMs = maxChunks * chunkMs
+import type { DatasetLimits, Range } from './types'
 
 export const makeRange = (
   input: {
@@ -63,17 +59,12 @@ interface ResolvedRange {
 
 export const resolveRange = (
   range: Range,
+  limits: DatasetLimits,
   options: {
-    readonly chunkMs?: number
-    readonly maxLookbackMs?: number
-    readonly maxChunks?: number
     readonly now?: Date
   } = {}
 ) =>
   Effect.suspend((): Effect.Effect<ResolvedRange, RangeValidationError> => {
-    const effectiveChunkMs = options.chunkMs ?? chunkMs
-    const effectiveMaxLookbackMs = options.maxLookbackMs ?? maxLookbackMs
-    const effectiveMaxChunks = options.maxChunks ?? maxChunks
     const nowTimestamp = options.now?.getTime() ?? Date.now()
     const fromTimestamp = parseTimestamp(range.from)
     const toTimestamp = parseTimestamp(range.to)
@@ -82,7 +73,6 @@ export const resolveRange = (
       return Effect.fail(
         new RangeValidationError({
           from: range.from,
-          maxDays: effectiveMaxChunks,
           message: 'Cloudflare analytics range must use valid date values.',
           to: range.to,
         })
@@ -93,47 +83,38 @@ export const resolveRange = (
       return Effect.fail(
         new RangeValidationError({
           from: range.from,
-          maxDays: effectiveMaxChunks,
           message: 'Cloudflare analytics range end must be after its start.',
           to: range.to,
         })
       )
     }
 
-    const oldestAvailableTimestamp = nowTimestamp - effectiveMaxLookbackMs
-    const effectiveFromTimestamp = Math.max(
-      fromTimestamp,
-      oldestAvailableTimestamp
-    )
-    const effectiveToTimestamp = Math.min(toTimestamp, nowTimestamp)
-
-    if (effectiveToTimestamp <= effectiveFromTimestamp) {
-      return Effect.succeed({
-        chunks: [],
-        effectiveRange: range,
-      })
-    }
-
-    const chunkCount = Math.ceil(
-      (effectiveToTimestamp - effectiveFromTimestamp) / effectiveChunkMs
-    )
-
-    if (chunkCount > effectiveMaxChunks) {
+    const oldestAvailableTimestamp = nowTimestamp - limits.retentionMs
+    if (fromTimestamp < oldestAvailableTimestamp) {
       return Effect.fail(
         new RangeValidationError({
           from: range.from,
-          maxDays: effectiveMaxChunks,
-          message: `Cloudflare analytics range is too wide; maximum supported range is ${effectiveMaxChunks} days.`,
+          message: `Cloudflare analytics are available from ${new Date(oldestAvailableTimestamp).toISOString()}.`,
+          to: range.to,
+        })
+      )
+    }
+
+    if (toTimestamp > nowTimestamp) {
+      return Effect.fail(
+        new RangeValidationError({
+          from: range.from,
+          message: 'Cloudflare analytics ranges cannot include future time.',
           to: range.to,
         })
       )
     }
 
     const chunks: Range[] = []
-    let cursor = effectiveFromTimestamp
+    let cursor = fromTimestamp
 
-    while (cursor < effectiveToTimestamp) {
-      const next = Math.min(cursor + effectiveChunkMs, effectiveToTimestamp)
+    while (cursor < toTimestamp) {
+      const next = Math.min(cursor + limits.maxDurationMs, toTimestamp)
 
       chunks.push({
         from: new Date(cursor).toISOString(),
@@ -147,14 +128,16 @@ export const resolveRange = (
     return Effect.succeed({
       chunks,
       effectiveRange: {
-        from: chunks[0]?.from ?? range.from,
+        from: new Date(fromTimestamp).toISOString(),
         ...(range.host ? { host: range.host } : {}),
-        to: chunks.at(-1)?.to ?? range.to,
+        to: new Date(toTimestamp).toISOString(),
       },
     })
   })
 
 export const chunkRange = (
   range: Range,
-  options: Parameters<typeof resolveRange>[1] = {}
-) => resolveRange(range, options).pipe(Effect.map(({ chunks }) => chunks))
+  limits: DatasetLimits,
+  options: Parameters<typeof resolveRange>[2] = {}
+) =>
+  resolveRange(range, limits, options).pipe(Effect.map(({ chunks }) => chunks))

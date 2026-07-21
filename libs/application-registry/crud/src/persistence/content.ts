@@ -7,14 +7,10 @@ import {
   pdfGenerationOutbox,
 } from '@cv/application-registry-entity'
 import { and, asc, desc, eq, exists, gt, notExists, or, sql } from 'drizzle-orm'
-import type { BatchItem } from 'drizzle-orm/batch'
 import { Effect } from 'effect'
 
 import { databaseFailure } from '../errors'
-import type {
-  RegistryConnections,
-  RegistryQueryDatabase,
-} from '../internal/connection'
+import type { RegistryDatabase, RegistryExecutor } from '../internal/connection'
 import type {
   PersistedContentEntry,
   PersistedContentRevision,
@@ -23,12 +19,12 @@ import type {
   PersistedJobPostingSnapshot,
   PersistedPdfGenerationOutbox,
 } from '../types'
-import { runBatch } from './shared'
+import { runTransaction } from './shared'
 
 const first = <A>(rows: readonly A[]) => rows.at(0)
 
 export const findJobPostingSnapshot = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   id: string
 ) =>
   database
@@ -42,7 +38,7 @@ export const findJobPostingSnapshot = (
     )
 
 export const findLatestJobPostingSnapshot = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   applicationId: string
 ) =>
   database
@@ -59,7 +55,7 @@ export const findLatestJobPostingSnapshot = (
     )
 
 export const persistJobPostingSnapshot = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   snapshot: PersistedJobPostingSnapshot
 ) =>
   database
@@ -72,7 +68,7 @@ export const persistJobPostingSnapshot = (
     )
 
 export const createContentEntry = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   entry: PersistedContentEntry
 ) =>
   database
@@ -96,7 +92,7 @@ export const createContentEntry = (
       Effect.mapError(databaseFailure('Failed to create content entry'))
     )
 
-export const findContentEntry = (database: RegistryQueryDatabase, id: string) =>
+export const findContentEntry = (database: RegistryExecutor, id: string) =>
   database
     .select()
     .from(contentEntries)
@@ -108,7 +104,7 @@ export const findContentEntry = (database: RegistryQueryDatabase, id: string) =>
     )
 
 export const findContentEntryByApplication = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   applicationId: string,
   kind: (typeof contentEntries.$inferSelect)['kind'],
   locale: string
@@ -129,10 +125,7 @@ export const findContentEntryByApplication = (
       Effect.mapError(databaseFailure('Failed to load application content'))
     )
 
-export const findContentRevision = (
-  database: RegistryQueryDatabase,
-  id: string
-) =>
+export const findContentRevision = (database: RegistryExecutor, id: string) =>
   database
     .select()
     .from(contentRevisions)
@@ -144,7 +137,7 @@ export const findContentRevision = (
     )
 
 export const listContentRevisions = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   entryId: string
 ) =>
   database
@@ -160,74 +153,53 @@ const nullableEquals = (
 ) => (value === null ? sql`${column} is null` : eq(column, value))
 
 export const appendContentRevision = (
-  database: RegistryConnections,
+  database: RegistryDatabase,
   revision: PersistedContentRevision,
   expectedEntryVersion: number,
   updatedAt: string
-) => {
-  const eligibleEntry = and(
-    eq(contentEntries.id, revision.contentEntryId),
-    eq(contentEntries.version, expectedEntryVersion),
-    nullableEquals(contentEntries.headRevisionId, revision.parentRevisionId)
-  )
-  const revisionInsert = database.batch.insert(contentRevisions).select(
-    database.batch
-      .select({
-        id: sql<string>`${revision.id}`.as('id'),
-        contentEntryId: contentEntries.id,
-        revisionNumber: sql<number>`${revision.revisionNumber}`.as(
-          'revision_number'
-        ),
-        parentRevisionId: sql<string | null>`${revision.parentRevisionId}`.as(
-          'parent_revision_id'
-        ),
-        contractId: sql<string>`${revision.contractId}`.as('contract_id'),
-        contractVersion: sql<string>`${revision.contractVersion}`.as(
-          'contract_version'
-        ),
-        objectKey: sql<string>`${revision.objectKey}`.as('object_key'),
-        sha256: sql<string>`${revision.sha256}`.as('sha256'),
-        byteLength: sql<number>`${revision.byteLength}`.as('byte_length'),
-        mediaType: sql<string>`${revision.mediaType}`.as('media_type'),
-        source: sql`${revision.source}`.as('source'),
-        factsReleaseId: sql<string | null>`${revision.factsReleaseId}`.as(
-          'facts_release_id'
-        ),
-        jobSnapshotId: sql<string | null>`${revision.jobSnapshotId}`.as(
-          'job_snapshot_id'
-        ),
-        operationId: sql<string>`${revision.operationId}`.as('operation_id'),
-        createdAt: sql<string>`${revision.createdAt}`.as('created_at'),
-      })
-      .from(contentEntries)
-      .where(eligibleEntry)
-  )
-  const revisionExists = exists(
-    database.batch
-      .select({ id: contentRevisions.id })
-      .from(contentRevisions)
-      .where(eq(contentRevisions.id, revision.id))
-  )
-  const statements = [
-    revisionInsert,
-    database.batch
-      .update(contentEntries)
-      .set({
-        headRevisionId: revision.id,
-        state: 'draft',
-        updatedAt,
-        version: sql`${contentEntries.version} + 1`,
-      })
-      .where(and(eligibleEntry, revisionExists)),
-  ] satisfies [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]
+) =>
+  runTransaction(database, 'content revision append', (transaction) =>
+    Effect.gen(function* () {
+      const eligibleEntry = and(
+        eq(contentEntries.id, revision.contentEntryId),
+        eq(contentEntries.version, expectedEntryVersion),
+        nullableEquals(contentEntries.headRevisionId, revision.parentRevisionId)
+      )
+      const entries = yield* transaction
+        .select({ id: contentEntries.id })
+        .from(contentEntries)
+        .where(eligibleEntry)
+        .for('update')
+        .limit(1)
+      const entry = entries.at(0)
 
-  return runBatch(database.batch, 'content revision append', statements).pipe(
-    Effect.map((results) => (results.at(-1)?.meta.changes ?? 0) > 0)
+      if (entry === undefined) return false
+
+      yield* transaction.insert(contentRevisions).values(revision)
+
+      const updated = yield* transaction
+        .update(contentEntries)
+        .set({
+          headRevisionId: revision.id,
+          state: 'draft',
+          updatedAt,
+          version: sql`${contentEntries.version} + 1`,
+        })
+        .where(and(eligibleEntry, eq(contentEntries.id, entry.id)))
+        .returning({ id: contentEntries.id })
+
+      if (updated.length === 0) {
+        return yield* Effect.fail(
+          new Error('The content entry could not be advanced.')
+        )
+      }
+
+      return true
+    })
   )
-}
 
 export const approveContentRevision = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   entryId: string,
   revisionId: string,
   expectedVersion: number,
@@ -264,10 +236,7 @@ export const approveContentRevision = (
       Effect.mapError(databaseFailure('Failed to approve content revision'))
     )
 
-export const findCvLinkByToken = (
-  database: RegistryQueryDatabase,
-  token: string
-) =>
+export const findCvLinkByToken = (database: RegistryExecutor, token: string) =>
   database
     .select()
     .from(cvLinks)
@@ -279,7 +248,7 @@ export const findCvLinkByToken = (
     )
 
 export const findCvLinkByEntry = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   contentEntryId: string
 ) =>
   database
@@ -293,7 +262,7 @@ export const findCvLinkByEntry = (
     )
 
 export const findCvLinksByApplication = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   applicationId: string
 ) =>
   database
@@ -306,40 +275,113 @@ export const findCvLinksByApplication = (
     )
 
 export const stageCvLink = (
-  database: RegistryQueryDatabase,
-  link: PersistedCvLink
+  database: RegistryDatabase,
+  link: PersistedCvLink,
+  expectedContentVersion: number
 ) =>
-  database
-    .insert(cvLinks)
-    .values({
-      ...link,
-      disabledAt: link.updatedAt,
-      disabledReason: 'draft_revision',
-      enabled: false,
-      publicationVersion: 1,
-      version: 1,
+  runTransaction(database, 'CV page staging', (transaction) =>
+    Effect.gen(function* () {
+      const entry = yield* transaction
+        .select({ id: contentEntries.id })
+        .from(contentEntries)
+        .where(
+          and(
+            eq(contentEntries.id, link.contentEntryId),
+            eq(contentEntries.applicationId, link.applicationId),
+            eq(contentEntries.version, expectedContentVersion)
+          )
+        )
+        .limit(1)
+        .for('update')
+        .pipe(Effect.map((rows) => rows.at(0)))
+
+      if (entry === undefined) return false
+
+      const existing = yield* transaction
+        .select({
+          applicationId: cvLinks.applicationId,
+          currentRevisionId: cvLinks.currentRevisionId,
+          id: cvLinks.id,
+          publicUrl: cvLinks.publicUrl,
+          token: cvLinks.token,
+        })
+        .from(cvLinks)
+        .where(eq(cvLinks.contentEntryId, link.contentEntryId))
+        .limit(1)
+        .for('update')
+        .pipe(Effect.map((rows) => rows.at(0)))
+
+      if (existing === undefined) {
+        const inserted = yield* transaction
+          .insert(cvLinks)
+          .values({
+            ...link,
+            disabledAt: link.updatedAt,
+            disabledReason: 'draft_revision',
+            enabled: false,
+            publicationVersion: 1,
+            version: 1,
+          })
+          .returning({ id: cvLinks.id })
+
+        if (inserted.length !== 1) {
+          return yield* Effect.fail(
+            new Error('The new CV page could not be staged.')
+          )
+        }
+        return true
+      }
+
+      if (
+        existing.applicationId !== link.applicationId ||
+        existing.id !== link.id ||
+        existing.token !== link.token
+      ) {
+        return false
+      }
+
+      if (
+        existing.currentRevisionId === link.currentRevisionId &&
+        existing.publicUrl === link.publicUrl
+      ) {
+        return true
+      }
+
+      const updated = yield* transaction
+        .update(cvLinks)
+        .set({
+          currentRevisionId: link.currentRevisionId,
+          previewToken: link.previewToken,
+          publicUrl: link.publicUrl,
+          disabledAt: link.updatedAt,
+          disabledReason: 'draft_revision',
+          enabled: false,
+          updatedAt: link.updatedAt,
+          publicationVersion: sql`${cvLinks.publicationVersion} + 1`,
+          version: sql`${cvLinks.version} + 1`,
+        })
+        .where(
+          and(
+            eq(cvLinks.contentEntryId, link.contentEntryId),
+            eq(cvLinks.applicationId, link.applicationId),
+            eq(cvLinks.id, link.id),
+            eq(cvLinks.token, link.token)
+          )
+        )
+        .returning({ id: cvLinks.id })
+
+      if (updated.length !== 1) {
+        return yield* Effect.fail(
+          new Error('The existing CV page could not be staged.')
+        )
+      }
+
+      return true
     })
-    .onConflictDoUpdate({
-      target: cvLinks.contentEntryId,
-      set: {
-        currentRevisionId: link.currentRevisionId,
-        previewToken: link.previewToken,
-        publicUrl: link.publicUrl,
-        disabledAt: link.updatedAt,
-        disabledReason: 'draft_revision',
-        enabled: false,
-        updatedAt: link.updatedAt,
-        publicationVersion: sql`${cvLinks.publicationVersion} + 1`,
-        version: sql`${cvLinks.version} + 1`,
-      },
-    })
-    .pipe(
-      Effect.asVoid,
-      Effect.mapError(databaseFailure('Failed to stage CV page'))
-    )
+  )
 
 export const setCvLinkEnabled = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   id: string,
   expectedVersion: number,
   expectedPublicationVersion: number,
@@ -370,7 +412,7 @@ export const setCvLinkEnabled = (
     )
 
 export const disableCvLinkForFailedArtifact = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   id: string,
   expectedVersion: number,
   artifact: PersistedGeneratedArtifact,
@@ -454,7 +496,7 @@ export const disableCvLinkForFailedArtifact = (
     )
 
 export const disableCvLinksForApplication = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   applicationId: string,
   reason: string,
   disabledAt: string
@@ -478,7 +520,7 @@ export const disableCvLinksForApplication = (
     )
 
 export const enableCvLinksForApplication = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   applicationId: string,
   disabledReason: string,
   updatedAt: string
@@ -505,7 +547,7 @@ export const enableCvLinksForApplication = (
       Effect.mapError(databaseFailure('Failed to enable application CV links'))
     )
 
-export const findArtifact = (database: RegistryQueryDatabase, id: string) =>
+export const findArtifact = (database: RegistryExecutor, id: string) =>
   database
     .select()
     .from(generatedArtifacts)
@@ -517,7 +559,7 @@ export const findArtifact = (database: RegistryQueryDatabase, id: string) =>
     )
 
 export const findArtifactByRequestId = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   requestId: string
 ) =>
   database
@@ -531,7 +573,7 @@ export const findArtifactByRequestId = (
     )
 
 export const findReadyArtifactForPublication = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   cvLinkId: string,
   contentRevisionId: string,
   rendererVersion: string | null,
@@ -562,7 +604,7 @@ export const findReadyArtifactForPublication = (
     )
 
 export const findCurrentArtifactForPublication = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   cvLinkId: string,
   contentRevisionId: string,
   rendererVersion: string | null,
@@ -592,103 +634,58 @@ export const findCurrentArtifactForPublication = (
     )
 
 export const persistPendingArtifact = (
-  database: RegistryConnections,
+  database: RegistryDatabase,
   artifact: PersistedGeneratedArtifact,
   outbox: PersistedPdfGenerationOutbox,
   expectedLinkVersion: number
-) => {
-  const artifactInsert = database.batch
-    .insert(generatedArtifacts)
-    .select(
-      database.batch
-        .select({
-          id: sql<string>`${artifact.id}`.as('id'),
-          cvLinkId: sql<string>`${artifact.cvLinkId}`.as('cv_link_id'),
-          contentRevisionId: sql<string>`${artifact.contentRevisionId}`.as(
-            'content_revision_id'
-          ),
-          kind: sql<PersistedGeneratedArtifact['kind']>`${artifact.kind}`.as(
-            'kind'
-          ),
-          status: sql<
-            PersistedGeneratedArtifact['status']
-          >`${artifact.status}`.as('status'),
-          requestId: sql<string>`${artifact.requestId}`.as('request_id'),
-          rendererVersion: sql<string>`${artifact.rendererVersion}`.as(
-            'renderer_version'
-          ),
-          publicationVersion: sql<number>`${artifact.publicationVersion}`.as(
-            'publication_version'
-          ),
-          qrTarget: sql<string>`${artifact.qrTarget}`.as('qr_target'),
-          objectKey: sql<string | null>`${artifact.objectKey}`.as('object_key'),
-          sha256: sql<string | null>`${artifact.sha256}`.as('sha256'),
-          byteLength: sql<number | null>`${artifact.byteLength}`.as(
-            'byte_length'
-          ),
-          mediaType: sql<string | null>`${artifact.mediaType}`.as('media_type'),
-          errorCode: sql<string | null>`${artifact.errorCode}`.as('error_code'),
-          errorMessage: sql<string | null>`${artifact.errorMessage}`.as(
-            'error_message'
-          ),
-          generatedAt: sql<string | null>`${artifact.generatedAt}`.as(
-            'generated_at'
-          ),
-          createdAt: sql<string>`${artifact.createdAt}`.as('created_at'),
-          updatedAt: sql<string>`${artifact.updatedAt}`.as('updated_at'),
-        })
+) =>
+  runTransaction(database, 'PDF job creation', (transaction) =>
+    Effect.gen(function* () {
+      const currentLinks = yield* transaction
+        .select({ id: cvLinks.id })
         .from(cvLinks)
         .where(
           and(
             eq(cvLinks.id, artifact.cvLinkId),
             eq(cvLinks.version, expectedLinkVersion),
+            eq(cvLinks.enabled, true),
             eq(cvLinks.currentRevisionId, artifact.contentRevisionId),
             eq(cvLinks.publicationVersion, artifact.publicationVersion),
             eq(cvLinks.publicUrl, artifact.qrTarget)
           )
         )
-    )
-    .onConflictDoNothing({ target: generatedArtifacts.requestId })
+        .for('update')
+        .limit(1)
 
-  const outboxInsert = database.batch
-    .insert(pdfGenerationOutbox)
-    .select(
-      database.batch
-        .select({
-          applicationId: sql<string>`${outbox.applicationId}`.as(
-            'application_id'
-          ),
-          artifactId: generatedArtifacts.id,
-          attempts: sql<number>`${outbox.attempts}`.as('attempts'),
-          contentEntryId: sql<string>`${outbox.contentEntryId}`.as(
-            'content_entry_id'
-          ),
-          createdAt: sql<string>`${outbox.createdAt}`.as('created_at'),
-          dispatchedAt: sql<string | null>`${outbox.dispatchedAt}`.as(
-            'dispatched_at'
-          ),
-          lastAttemptAt: sql<string | null>`${outbox.lastAttemptAt}`.as(
-            'last_attempt_at'
-          ),
-          lastError: sql<string | null>`${outbox.lastError}`.as('last_error'),
-          messageVersion: sql<number>`${outbox.messageVersion}`.as(
-            'message_version'
-          ),
-          updatedAt: sql<string>`${outbox.updatedAt}`.as('updated_at'),
-        })
+      if (currentLinks.length === 0) return
+
+      yield* transaction
+        .insert(generatedArtifacts)
+        .values(artifact)
+        .onConflictDoNothing({ target: generatedArtifacts.requestId })
+
+      const storedArtifacts = yield* transaction
+        .select({ id: generatedArtifacts.id })
         .from(generatedArtifacts)
         .where(eq(generatedArtifacts.requestId, artifact.requestId))
-    )
-    .onConflictDoNothing({ target: pdfGenerationOutbox.artifactId })
+        .limit(1)
+      const storedArtifact = storedArtifacts.at(0)
 
-  return runBatch(database.batch, 'PDF job creation', [
-    artifactInsert,
-    outboxInsert,
-  ]).pipe(Effect.asVoid)
-}
+      if (storedArtifact === undefined) {
+        return yield* Effect.fail(
+          new Error('The pending PDF artifact was not persisted.')
+        )
+      }
+
+      yield* transaction
+        .insert(pdfGenerationOutbox)
+        .values({ ...outbox, artifactId: storedArtifact.id })
+        .onConflictDoNothing({ target: pdfGenerationOutbox.artifactId })
+    })
+  )
 
 export const findPendingPdfDispatch = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   artifactId: string
 ) =>
   database
@@ -707,7 +704,7 @@ export const findPendingPdfDispatch = (
     )
 
 export const listPendingPdfDispatches = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   limit: number
 ) =>
   database
@@ -721,7 +718,7 @@ export const listPendingPdfDispatches = (
     )
 
 export const markPdfDispatchFailed = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   artifactId: string,
   message: string,
   attemptedAt: string
@@ -747,7 +744,7 @@ export const markPdfDispatchFailed = (
     )
 
 export const markPdfDispatched = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   artifactId: string,
   dispatchedAt: string
 ) =>
@@ -773,7 +770,7 @@ export const markPdfDispatched = (
     )
 
 export const markArtifactReady = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   artifact: PersistedGeneratedArtifact
 ) =>
   database
@@ -816,7 +813,7 @@ export const markArtifactReady = (
     )
 
 export const markArtifactFailed = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   id: string,
   errorCode: string,
   errorMessage: string,

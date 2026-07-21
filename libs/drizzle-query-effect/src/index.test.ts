@@ -10,6 +10,7 @@ describe('package entrypoints', () => {
     expect(Object.keys(publicApi)).toContain('CursorPageInfoSchema')
     expect(Object.keys(publicApi)).toContain('queryRequestSchema')
     expect(Object.keys(publicApi)).toContain('queryParamsSchema')
+    expect(Object.keys(publicApi)).toContain('queryParamsCodec')
     expect(Object.keys(publicApi)).toContain('schemaBinaryFilterOperator')
     expect(Object.keys(publicApi)).toContain('schemaCursorState')
     expect(Object.keys(publicApi)).toContain('toSearchParams')

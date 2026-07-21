@@ -12,7 +12,6 @@ import type {
   ContentEntryKind,
   ContentRevision,
   ContentRevisionSource,
-  CurrencyCode,
   CvLink,
   GeneratedArtifact,
   JobSnapshotStatus,
@@ -35,6 +34,21 @@ import type { CursorPageInfo, QueryPage } from '@cv/drizzle-query'
 export type RegistryItems<A> = { readonly items: readonly A[] }
 
 export type CvAnalyticsDays = 1 | 3 | 7
+
+export type CvAnalyticsRangeInput = {
+  readonly days?: CvAnalyticsDays
+  readonly from?: string
+  readonly to?: string
+}
+
+export type CvAnalyticsTrafficCapabilities = {
+  readonly retentionMs: number
+}
+
+export type CvAnalyticsAvailability = {
+  readonly from: string
+  readonly to: string
+}
 
 export type CvAnalyticsTotals = {
   readonly pageViews: number
@@ -97,6 +111,7 @@ export type CvAnalyticsItem = {
 }
 
 export type CvAnalyticsResult = {
+  readonly availability: CvAnalyticsAvailability
   readonly countries: readonly CvAnalyticsCountry[]
   readonly generatedAt: string
   readonly items: readonly CvAnalyticsItem[]
@@ -141,7 +156,6 @@ export type UpdateApplicationResult = {
 }
 
 export type ListApplicationsInput = ApplicationListQueryRequest & {
-  readonly currency?: CurrencyCode | 'original'
   readonly q?: string
 }
 
@@ -172,22 +186,8 @@ export type ActivityListPage = QueryPage<
   CursorPageInfo
 >
 
-export type ConvertedCompensation = {
-  readonly currencyCode: CurrencyCode
-  readonly maximumMinor: number | null
-  readonly minimumMinor: number | null
-  readonly observedAt: string
-  readonly provider: string
-  readonly rate: number
-}
-
-export type ApplicationCompensationResultItem = {
-  readonly conversion: ConvertedCompensation | null
-  readonly original: ApplicationCompensation
-}
-
 export type ApplicationCompensationsResult =
-  RegistryItems<ApplicationCompensationResultItem>
+  RegistryItems<ApplicationCompensation>
 
 export type ReplaceAnnualCompensationInput = {
   readonly annualCompensation: AnnualCompensation | null
@@ -256,7 +256,7 @@ export type RunDueListingChecksInput = {
 
 export type RunDueListingChecksResult = {
   readonly checks: readonly ApplicationListingCheck[]
-  readonly run: ListingCheckRun
+  readonly run: ListingCheckRun | null
 }
 
 export type ListingCheckDecision = {

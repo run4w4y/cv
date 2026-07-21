@@ -47,19 +47,16 @@ jobs:
 
       - name: Resolve public CV Worker deployment values
         env:
-          CONFIGURED_CV_PUBLIC_REGISTRY_SERVICE_NAME: ${{ vars.CV_PUBLIC_REGISTRY_SERVICE_NAME }}
-          CONFIGURED_CV_PUBLIC_RESOLVER_ENTRYPOINT: ${{ vars.CV_PUBLIC_RESOLVER_ENTRYPOINT }}
+          CONFIGURED_CV_PUBLIC_RESOLVER_URL: ${{ vars.CV_PUBLIC_RESOLVER_URL }}
           CONFIGURED_CV_PUBLIC_WORKER_NAME: ${{ vars.CV_PUBLIC_WORKER_NAME }}
         run: |
           worker_name="${CONFIGURED_CV_PUBLIC_WORKER_NAME:-${CV_PUBLIC_WORKER_NAME:-cv-public}}"
-          resolver_entrypoint="${CONFIGURED_CV_PUBLIC_RESOLVER_ENTRYPOINT:-${CV_PUBLIC_RESOLVER_ENTRYPOINT:-CvPublicResolver}}"
-          registry_service_name="${CONFIGURED_CV_PUBLIC_REGISTRY_SERVICE_NAME:-${CV_PUBLIC_REGISTRY_SERVICE_NAME:-${APPLICATION_REGISTRY_WORKER_NAME:-}}}"
+          resolver_url="${CONFIGURED_CV_PUBLIC_RESOLVER_URL:-${CV_PUBLIC_RESOLVER_URL:-}}"
 
           {
             printf 'CV_PUBLIC_WORKER_NAME=%s\n' "$worker_name"
-            printf 'CV_PUBLIC_RESOLVER_ENTRYPOINT=%s\n' "$resolver_entrypoint"
-            if [[ -n "$registry_service_name" ]]; then
-              printf 'CV_PUBLIC_REGISTRY_SERVICE_NAME=%s\n' "$registry_service_name"
+            if [[ -n "$resolver_url" ]]; then
+              printf 'CV_PUBLIC_RESOLVER_URL=%s\n' "$resolver_url"
             fi
           } >> "$GITHUB_ENV"
 
@@ -70,6 +67,7 @@ jobs:
           for name in \
             CLOUDFLARE_ACCOUNT_ID \
             CLOUDFLARE_API_TOKEN \
+            CV_PUBLIC_RESOLVER_URL \
             CV_PUBLIC_WORKER_NAME \
             CV_REVALIDATION_SECRET
           do
@@ -80,11 +78,6 @@ jobs:
 
           if (( ${#missing[@]} > 0 )); then
             printf '::error title=Missing production CV Worker configuration::Missing: %s\n' "${missing[*]}"
-            exit 1
-          fi
-
-          if [[ -z "${CV_PUBLIC_REGISTRY_SERVICE_NAME:-}" && -z "${APPLICATION_REGISTRY_WORKER_NAME:-}" ]]; then
-            echo "::error title=Missing production CV Worker configuration::Set CV_PUBLIC_REGISTRY_SERVICE_NAME or APPLICATION_REGISTRY_WORKER_NAME."
             exit 1
           fi
 

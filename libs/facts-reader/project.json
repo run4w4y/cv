@@ -1,0 +1,27 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "facts-reader",
+  "projectType": "library",
+  "sourceRoot": "libs/facts-reader/src",
+  "tags": ["scope:cv", "type:platform", "visibility:private"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/facts-reader/src/index.ts",
+        "outputPath": "libs/facts-reader/dist",
+        "rootDir": "libs/facts-reader/src",
+        "tsConfig": "libs/facts-reader/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
+    "format": {},
+    "format:check": {}
+  }
+}

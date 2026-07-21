@@ -3,7 +3,6 @@ import {
   ApplicationMutableSchema,
   ApplicationNoteSchema,
   ApplicationWritableSchema,
-  CurrencyCodeSchema,
   ExpectedApplicationVersionSchema,
   ListingCheckModeSchema,
   ListingCheckTargetSchema,
@@ -17,10 +16,8 @@ import {
   applicationListQuery,
 } from '@cv/application-registry-entity/query'
 import {
-  fromSearchParams,
   PaginationSizeSchema,
-  queryParamsSchema,
-  toSearchParams,
+  queryParamsCodec,
 } from '@cv/drizzle-query-effect/schema'
 import { Effect, Schema } from 'effect'
 import { pick } from 'es-toolkit/object'
@@ -105,20 +102,16 @@ export type ResolveListingAvailabilityCommand = Schema.Schema.Type<
 
 export { PaginationSizeSchema }
 
-export const CompensationDisplayCurrencySchema = Schema.Union([
-  Schema.Literal('original'),
-  CurrencyCodeSchema,
-])
-
-export const ListApplicationsQuerySchema = queryParamsSchema(
+export const ListApplicationsQueryCodec = queryParamsCodec(
   applicationListQuery,
   {
     extras: {
-      currency: Schema.optional(CompensationDisplayCurrencySchema),
       q: Schema.optional(NonEmptyString),
     },
   }
 )
+
+export const ListApplicationsQuerySchema = ListApplicationsQueryCodec.schema
 
 export type ListApplicationsQuery = Schema.Schema.Type<
   typeof ListApplicationsQuerySchema
@@ -129,7 +122,7 @@ export const encodeListApplicationsSearchParams = (
   request: ListApplicationsQuery
 ) =>
   Effect.runSync(
-    toSearchParams(ListApplicationsQuerySchema, {
+    ListApplicationsQueryCodec.encode({
       ...request,
       filters: request.filters?.length === 0 ? undefined : request.filters,
       orderBy: request.orderBy?.length === 0 ? undefined : request.orderBy,
@@ -139,9 +132,11 @@ export const encodeListApplicationsSearchParams = (
 /** Decodes application-list query parameters with the canonical HTTP codec. */
 export const decodeListApplicationsSearchParams = (
   input: URLSearchParams | string
-) => Effect.runSync(fromSearchParams(ListApplicationsQuerySchema, input))
+) => Effect.runSync(ListApplicationsQueryCodec.decode(input))
 
-export const ListActivitiesQuerySchema = queryParamsSchema(activityListQuery)
+export const ListActivitiesQueryCodec = queryParamsCodec(activityListQuery)
+
+export const ListActivitiesQuerySchema = ListActivitiesQueryCodec.schema
 
 export type ListActivitiesQuery = Schema.Schema.Type<
   typeof ListActivitiesQuerySchema
@@ -152,7 +147,7 @@ export const encodeListActivitiesSearchParams = (
   request: ListActivitiesQuery
 ) =>
   Effect.runSync(
-    toSearchParams(ListActivitiesQuerySchema, {
+    ListActivitiesQueryCodec.encode({
       ...request,
       filters: request.filters?.length === 0 ? undefined : request.filters,
       orderBy: request.orderBy?.length === 0 ? undefined : request.orderBy,
@@ -162,4 +157,4 @@ export const encodeListActivitiesSearchParams = (
 /** Decodes activity-list query parameters with the canonical HTTP codec. */
 export const decodeListActivitiesSearchParams = (
   input: URLSearchParams | string
-) => Effect.runSync(fromSearchParams(ListActivitiesQuerySchema, input))
+) => Effect.runSync(ListActivitiesQueryCodec.decode(input))

@@ -10,12 +10,11 @@ import {
   type RegistryDatabaseError,
   type RegistryQueryTooComplexError,
 } from '../errors'
-import type { RegistryQueryDatabase } from '../internal/connection'
+import type { RegistryExecutor } from '../internal/connection'
 import type { ActivityListPage, ActivityListResolution } from '../types'
-import { enforceD1ParameterBudget } from './query-budget'
 
 export const listApplicationActivities = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   applicationId: string
 ) =>
   database
@@ -31,7 +30,7 @@ export const listApplicationActivities = (
     )
 
 export const listActivities = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   resolved: ActivityListResolution
 ): Effect.Effect<
   ActivityListPage,
@@ -55,7 +54,6 @@ export const listActivities = (
         .$dynamic()
     )
 
-    yield* enforceD1ParameterBudget(query, 'Registry activity list query')
     const rows = yield* query.pipe(
       Effect.mapError(databaseFailure('Failed to list registry activities'))
     )

@@ -29,11 +29,11 @@ export class FactsReleaseHashError extends Schema.TaggedErrorClass<FactsReleaseH
   }
 ) {}
 
-export class FactsReleasePublicationError extends Schema.TaggedErrorClass<FactsReleasePublicationError>()(
-  'FactsReleasePublicationError',
+export class FactsReleaseBundleError extends Schema.TaggedErrorClass<FactsReleaseBundleError>()(
+  'FactsReleaseBundleError',
   {
     cause: Schema.Defect(),
     message: Schema.String,
-    operation: Schema.Literals(['activate', 'upload']),
+    issue: Schema.Literals(['decode', 'integrity', 'layout']),
   }
 ) {}

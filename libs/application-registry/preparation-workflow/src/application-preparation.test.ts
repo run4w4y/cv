@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test'
-import { makeInMemoryAiProvider } from '@cv/ai-provider/test-support'
 import { Crypto, Effect, Exit, Layer, SubscriptionRef } from 'effect'
 import * as WorkflowEngine from 'effect/unstable/workflow/WorkflowEngine'
 
@@ -8,6 +7,7 @@ import {
   applicationPreparationLayer,
 } from './application-preparation'
 import { PreparationWorkflowError, ReviewDecisionSchema } from './domain'
+import { makeStructuredGenerationTestLayer } from './test-support/generation'
 import { makePreparationStoreTestLayer } from './test-support/store'
 
 const testCryptoLayer = Layer.succeed(
@@ -22,7 +22,7 @@ const testLayer = applicationPreparationLayer().pipe(
   Layer.provide(
     Layer.mergeAll(
       makePreparationStoreTestLayer(),
-      makeInMemoryAiProvider().layer,
+      makeStructuredGenerationTestLayer().layer,
       testCryptoLayer,
       WorkflowEngine.layerMemory
     )

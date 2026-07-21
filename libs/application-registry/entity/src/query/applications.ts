@@ -29,7 +29,13 @@ const escapeLikeLiteral = (value: string): string =>
 const likeEscapeCharacter = sql`${'\\'}`.inlineParams()
 
 const literalContains = (expression: SQLWrapper, value: string): SQL =>
-  sql`${expression} like ${sql.param(`%${escapeLikeLiteral(value)}%`)} escape ${likeEscapeCharacter}`
+  sql`${expression} ilike ${sql.param(`%${escapeLikeLiteral(value)}%`)} escape ${likeEscapeCharacter}`
+
+const caseInsensitiveContains = (expression: SQLWrapper) =>
+  schemaBinaryFilterOperator('contains', Schema.String, {
+    valueDescriptor: { type: 'string' },
+    compile: ({ value }) => literalContains(expression, value),
+  })
 
 /** Authoritative filtering, ordering, and cursor contract for application lists. */
 export const applicationListQuery = defineQuery(
@@ -45,15 +51,10 @@ export const applicationListQuery = defineQuery(
             ${literalContains(root.location, value)}
           )`,
     })
-    const companyContains = schemaBinaryFilterOperator(
-      'contains',
-      Schema.String,
-      {
-        valueDescriptor: { type: 'string' },
-        compile: ({ value }) =>
-          literalContains(sql`lower(${root.company})`, value.toLowerCase()),
-      }
-    )
+    const companyContains = caseInsensitiveContains(root.company)
+    const locationContains = caseInsensitiveContains(root.location)
+    const postingUrlContains = caseInsensitiveContains(root.postingUrl)
+    const roleContains = caseInsensitiveContains(root.role)
     const latestActivityAt = sql<string>`(
       select ${applicationActivities.occurredAt}
       from ${applicationActivities}
@@ -79,8 +80,11 @@ export const applicationListQuery = defineQuery(
           'company',
           'createdAt',
           'followUpAt',
+          'location',
           'postingFingerprint',
+          'postingUrl',
           'postingUrlNormalized',
+          'role',
           'applicationStatus',
           'targetStage',
           'personalPriority',
@@ -95,6 +99,15 @@ export const applicationListQuery = defineQuery(
       }),
       col.company
         .filterable((defaults) => replaceOperator(defaults, companyContains))
+        .sortable(),
+      col.location
+        .filterable((defaults) => replaceOperator(defaults, locationContains))
+        .sortable(),
+      col.postingUrl
+        .filterable((defaults) => replaceOperator(defaults, postingUrlContains))
+        .sortable(),
+      col.role
+        .filterable((defaults) => replaceOperator(defaults, roleContains))
         .sortable(),
       col.followUpAt
         .filterable((defaults) =>

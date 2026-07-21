@@ -92,7 +92,9 @@ export const makePreparationContentRepository = (
         entryId: input.entryId,
         id: input.applicationId,
       }
-      const revisions = yield* registry.content.listContentRevisions({ params })
+      const revisions = yield* registry.content.listContentRevisions({
+        params,
+      })
       const entry = yield* registry.content.getContentEntry({ params })
       return { entry, revisions: revisions.items }
     },

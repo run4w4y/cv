@@ -2,11 +2,12 @@ import {
   type ApplicationRegistryError,
   CvPublicationsService,
 } from '@cv/application-registry-service'
-import { Effect } from 'effect'
-
-import { makeRegistryServiceLayer } from '../layers/registry'
-import { WorkerEnv } from '../worker/bindings'
-import type { ApplicationRegistryEnv } from '../worker/types'
+import { Effect, Match } from 'effect'
+import {
+  HttpRouter,
+  HttpServerRequest,
+  HttpServerResponse,
+} from 'effect/unstable/http'
 
 export const cvPublicationHeaders = {
   byteLength: 'x-cv-content-byte-length',
@@ -66,6 +67,19 @@ const internalError = () =>
     status: 500,
   })
 
+const resolutionErrorResponse = Match.type<ApplicationRegistryError>().pipe(
+  Match.tags({
+    RegistryAnalyticsError: internalError,
+    RegistryArtifactError: internalError,
+    RegistryBadRequestError: internalError,
+    RegistryConflictError: internalError,
+    RegistryDatabaseError: internalError,
+    RegistryNotFoundError: notFound,
+    RegistryQueryTooComplexError: internalError,
+  }),
+  Match.exhaustive
+)
+
 export const parseCvPublicationResolverToken = (
   pathname: string
 ): string | null => {
@@ -122,20 +136,20 @@ export const makeCvPublicResolverHandler = (
     if (!publicToken && !previewToken) return notFound()
     if (request.method !== 'GET') return methodNotAllowed()
 
-    const resolution = publicToken
-      ? resolve(publicToken)
-      : resolvePreview && previewToken
-        ? (() => {
-            const access = url.searchParams.get('access')
-            return access ? resolvePreview(previewToken, access) : null
-          })()
-        : null
+    let resolution: ReturnType<ResolvePublicCv> | null = null
+    if (publicToken !== null) {
+      resolution = resolve(publicToken)
+    } else if (resolvePreview !== undefined && previewToken !== null) {
+      const access = url.searchParams.get('access')
+      if (access !== null && access.length > 0) {
+        resolution = resolvePreview(previewToken, access)
+      }
+    }
     if (resolution === null) return notFound()
 
     return resolution.pipe(
       Effect.match({
-        onFailure: (error) =>
-          error._tag === 'RegistryNotFoundError' ? notFound() : internalError(),
+        onFailure: resolutionErrorResponse,
         onSuccess: publicationResponse,
       }),
       Effect.runPromise
@@ -143,10 +157,9 @@ export const makeCvPublicResolverHandler = (
   }
 
 const resolvePublicCv =
-  (env: ApplicationRegistryEnv): ResolvePublicCv =>
+  (publications: CvPublicationsService): ResolvePublicCv =>
   (token) =>
     Effect.gen(function* () {
-      const publications = yield* CvPublicationsService
       const { bytes, entry, link, revision } =
         yield* publications.resolve(token)
 
@@ -160,16 +173,12 @@ const resolvePublicCv =
         publicUrl: link.publicUrl,
         sha256: revision.sha256,
       }
-    }).pipe(
-      Effect.provide(makeRegistryServiceLayer(env)),
-      Effect.provide(WorkerEnv.context(env))
-    )
+    })
 
 const resolveCvPreview =
-  (env: ApplicationRegistryEnv): ResolveCvPreview =>
+  (publications: CvPublicationsService): ResolveCvPreview =>
   (token, previewToken) =>
     Effect.gen(function* () {
-      const publications = yield* CvPublicationsService
       const { bytes, entry, link, revision } =
         yield* publications.resolvePreview(token, previewToken)
 
@@ -183,16 +192,26 @@ const resolveCvPreview =
         publicUrl: link.publicUrl,
         sha256: revision.sha256,
       }
-    }).pipe(
-      Effect.provide(makeRegistryServiceLayer(env)),
-      Effect.provide(WorkerEnv.context(env))
-    )
+    })
 
-export const handleCvPublicResolverRequest = (
-  request: Request,
-  env: ApplicationRegistryEnv
-): Promise<Response> =>
-  makeCvPublicResolverHandler(
-    resolvePublicCv(env),
-    resolveCvPreview(env)
-  )(request)
+export const CvPublicResolverRoutesLayer = HttpRouter.use((router) =>
+  Effect.gen(function* () {
+    const publications = yield* CvPublicationsService
+    const handler = makeCvPublicResolverHandler(
+      resolvePublicCv(publications),
+      resolveCvPreview(publications)
+    )
+    const route = (request: HttpServerRequest.HttpServerRequest) =>
+      HttpServerRequest.toWeb(request).pipe(
+        Effect.orDie,
+        Effect.flatMap((webRequest) =>
+          Effect.promise(() =>
+            handler(webRequest).then(HttpServerResponse.fromWeb)
+          )
+        )
+      )
+
+    yield* router.add('*', '/cv-publications/:token', route)
+    yield* router.add('*', '/cv-previews/:token', route)
+  })
+)

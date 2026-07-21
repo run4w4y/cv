@@ -5,6 +5,7 @@ import type {
   ContentRevisionSource,
   JobPostingSnapshot,
 } from '@cv/application-registry-entity'
+import type { CvGenerationGuidanceV1 } from '@cv/contracts/document'
 import type { FactsCatalogueV1 } from '@cv/contracts/facts'
 import { Context, Schema } from 'effect'
 import type * as Effect from 'effect/Effect'
@@ -12,6 +13,7 @@ import type * as Effect from 'effect/Effect'
 import type { ContentRevisionResult } from './domain'
 
 export type PreparationStoreContext = {
+  readonly cvGenerationGuidance: CvGenerationGuidanceV1
   readonly factsCatalogue: FactsCatalogueV1
   readonly factsReleaseId: string
   readonly jobContext: Schema.Json

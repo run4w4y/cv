@@ -11,6 +11,12 @@ import type {
 
 export type PreparationRunStates = ReadonlyMap<string, PreparationRunState>
 
+export type PreparationRunReservation = {
+  readonly batchId: string
+  readonly batchPosition: number
+  readonly input: PreparationWorkflowInput
+}
+
 export type CancellationClaim = {
   readonly mode: 'active' | 'suspended'
   readonly previous: PreparationRunState
@@ -33,13 +39,13 @@ export type ProgressService = {
   ) => Effect.Effect<void>
   readonly fail: (runId: string, message: string) => Effect.Effect<void>
   readonly register: (
-    input: PreparationWorkflowInput
+    reservation: PreparationRunReservation
   ) => Effect.Effect<void, PreparationWorkflowError>
   readonly releaseReservations: (
     runIds: ReadonlyArray<string>
   ) => Effect.Effect<void>
   readonly reserve: (
-    inputs: ReadonlyArray<PreparationWorkflowInput>
+    reservations: ReadonlyArray<PreparationRunReservation>
   ) => Effect.Effect<void, PreparationWorkflowError>
   readonly requestCancel: (
     runId: string,

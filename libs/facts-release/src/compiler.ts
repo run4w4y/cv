@@ -1,3 +1,7 @@
+import {
+  cvDocumentV1ContractId,
+  cvGenerationGuidanceV1ContractId,
+} from '@cv/contracts/document'
 import type { FactsCatalogueV1 } from '@cv/contracts/facts'
 import { Effect } from 'effect'
 import { groupBy, sortBy, uniqBy } from 'es-toolkit'
@@ -13,15 +17,17 @@ import type {
   CompiledFactsRelease,
   CompileFactsReleaseInput,
   FactsAssetSource,
-  FactsReleaseManifestV1,
+  FactsReleaseManifestV2,
   FactsReleaseObject,
 } from './model'
 import { CompiledFactsReleaseTypeId } from './model'
-import { factsReleaseManifestV1ContractId } from './schema'
+import { factsReleaseManifestV2ContractId } from './schema'
 
 export const factsCatalogueMediaType = 'application/vnd.cv.facts+json'
 export const factsReleaseManifestMediaType =
   'application/vnd.cv.facts-release+json'
+export const cvGenerationGuidanceMediaType =
+  'application/vnd.cv.generation-guidance+json'
 
 const normalizeCatalogue = (catalogue: FactsCatalogueV1): FactsCatalogueV1 => ({
   ...catalogue,
@@ -200,6 +206,12 @@ export const compileFactsRelease = Effect.fn('FactsRelease.compile')(
             factsCatalogueMediaType
           ).pipe(Effect.map((object) => ({ catalogue, object })))
       )
+      const generationGuidanceObject = yield* objectFromBytes(
+        encodeCanonicalJson(input.generationGuidance),
+        'generation-guidance',
+        cvGenerationGuidanceV1ContractId,
+        cvGenerationGuidanceMediaType
+      )
       const baseline = catalogues[0]
       if (!baseline) {
         return yield* Effect.die(
@@ -209,8 +221,8 @@ export const compileFactsRelease = Effect.fn('FactsRelease.compile')(
       const assets = yield* compileAssets(baseline.assets, input.assets)
       const uniqueAssets = yield* uniqueAssetObjects(assets)
 
-      const manifest: FactsReleaseManifestV1 = {
-        $schema: factsReleaseManifestV1ContractId,
+      const manifest: FactsReleaseManifestV2 = {
+        $schema: factsReleaseManifestV2ContractId,
         assets: assets.map(({ object, source }) => ({
           fileName: source.fileName,
           id: source.id,
@@ -221,6 +233,11 @@ export const compileFactsRelease = Effect.fn('FactsRelease.compile')(
           object: descriptor(object),
         })),
         factsContract: baseline.$schema,
+        generationGuidance: {
+          contract: cvGenerationGuidanceV1ContractId,
+          documentContract: cvDocumentV1ContractId,
+          object: descriptor(generationGuidanceObject),
+        },
         provenance: input.provenance,
       }
       const manifestBytes = encodeCanonicalJson(manifest)
@@ -234,11 +251,13 @@ export const compileFactsRelease = Effect.fn('FactsRelease.compile')(
       return {
         [CompiledFactsReleaseTypeId]: CompiledFactsReleaseTypeId,
         catalogues,
+        generationGuidance: input.generationGuidance,
         manifest,
         manifestObject,
         objects: [
           ...compiledCatalogues.map(({ object }) => object),
           ...uniqueAssets.map(({ object }) => object),
+          generationGuidanceObject,
           manifestObject,
         ],
         releaseId: `fr_${manifestObject.sha256}`,

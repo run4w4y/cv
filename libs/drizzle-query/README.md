@@ -55,24 +55,10 @@ relationship fields receive an API name with `.as(...)`.
 ```ts
 import { defineQuery, pagePagination } from "@cv/drizzle-query";
 
-const applicationsQuery = defineQuery(
-  applications,
-  ({ col }) => [
-    col.id.filterable().sortable({ unique: true }),
-    col.name.filterable().sortable(),
-    col.status
-      .filterable()
-      .sortable({ values: ["draft", "active", "archived"] }),
-    col.updatedAt.filterable().sortable(),
-  ],
-  {
-    pagination: pagePagination({ defaultSize: 25, maxSize: 100 }),
-    defaultOrderBy: [
-      { field: "updatedAt", direction: "desc" },
-      { field: "id" },
-    ],
-  },
-);
+const applicationsQuery = defineQuery(applications, ({ col }) => [col.id.filterable().sortable({ unique: true }), col.name.filterable().sortable(), col.status.filterable().sortable({ values: ["draft", "active", "archived"] }), col.updatedAt.filterable().sortable()], {
+  pagination: pagePagination({ defaultSize: 25, maxSize: 100 }),
+  defaultOrderBy: [{ field: "updatedAt", direction: "desc" }, { field: "id" }],
+});
 
 // Validate and decode the transport request before this point.
 const resolved = applicationsQuery.resolve({
@@ -89,14 +75,7 @@ const resolved = applicationsQuery.resolve({
 });
 
 const select = resolved.select;
-const rows = await select
-  .apply(
-    db
-      .select({ id: applications.id, name: applications.name })
-      .from(applications)
-      .$dynamic(),
-  )
-  .all();
+const rows = await select.apply(db.select({ id: applications.id, name: applications.name }).from(applications).$dynamic()).all();
 
 return select.finalize(rows, optionalTotalItems);
 ```
@@ -110,24 +89,11 @@ joins, grouping, or projections.
 ```ts
 import { cursorPagination, defineQuery } from "@cv/drizzle-query";
 
-const applicationsFeed = defineQuery(
-  applications,
-  ({ col }) => [
-    col.tenantId.sortable(),
-    col.id.sortable(),
-    col.name.filterable(),
-    col.updatedAt.sortable(),
-  ],
-  {
-    pagination: cursorPagination({ defaultSize: 50, maxSize: 100 }),
-    defaultOrderBy: [
-      { field: "updatedAt", direction: "desc" },
-      { field: "tenantId" },
-      { field: "id" },
-    ],
-    uniqueBy: [["tenantId", "id"]],
-  },
-);
+const applicationsFeed = defineQuery(applications, ({ col }) => [col.tenantId.sortable(), col.id.sortable(), col.name.filterable(), col.updatedAt.sortable()], {
+  pagination: cursorPagination({ defaultSize: 50, maxSize: 100 }),
+  defaultOrderBy: [{ field: "updatedAt", direction: "desc" }, { field: "tenantId" }, { field: "id" }],
+  uniqueBy: [["tenantId", "id"]],
+});
 
 const resolved = applicationsFeed.resolve(
   {
@@ -183,7 +149,14 @@ select.pagination.seekWhere;
 select.pagination.limit;
 select.pagination.offset;
 select.where;
+resolved.boundParameterCount;
 ```
+
+`boundParameterCount` reports the parameters introduced by the resolved
+filters, cursor seek, ordering projections, limit, and offset without compiling
+the complete consumer-owned query. Consumers with a database parameter limit
+must add parameters introduced by their own projections, joins, and nested
+relations before enforcing that limit.
 
 `select.where` already combines filtering and the cursor seek predicate.
 `select.apply` is the low-friction path and owns `where`, `orderBy`, `limit`,
@@ -226,6 +199,28 @@ at runtime without adding them to Drizzle's inferred public row type.
 `relational.finalize` reads and removes those extras. Always spread the config
 and finalize the rows from the same relational view; consumers do not need to
 construct or attach cursor metadata.
+
+## Compact query language
+
+The core package owns an Effect-free compact syntax for the existing
+`FilterNode[]` and `OrderRequest[]` IR. It adds transport syntax, not another
+query model:
+
+```text
+filter=listingAvailability:ne:closed;applicationStatus:notIn:[rejected,withdrawn,archived]
+sort=applicationStatus:desc,followUpAt:asc:last
+```
+
+Conditions use `field:operator[:value]`; unary operators omit the value. `;`
+means AND, `|` means OR, `!` means NOT, and parentheses preserve grouping.
+Arrays, tuples, and structs use compact JSON-like literals. Ordering terms use
+`field:direction[:null-placement]` and are comma-separated.
+
+`parseFilterExpression` and `parseSortExpression` return explicit results for
+untrusted input. `formatFilterExpression` and `formatSortExpression` emit one
+deterministic representation. The grammar validates syntax and structural
+limits only; integrations must still validate the resulting IR against the
+authoritative query definition.
 
 ## Composing individual fragments
 

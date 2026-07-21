@@ -1,30 +1,31 @@
 import assert from 'node:assert/strict'
 import { after, afterEach, before, test } from 'node:test'
-import type { FxRate } from '@cv/application-registry-entity'
+import {
+  applicationActivities as applicationActivityTable,
+  applications as applicationTable,
+  registrySequence,
+} from '@cv/application-registry-entity'
 import {
   activityListQuery,
   applicationListQuery,
 } from '@cv/application-registry-entity/query'
-import {
-  makeRegistryFactory,
-  RegistryMiniflareHarness,
-  seedRegistryDatabase,
-} from '@cv/worker-test-kit/application-registry'
 import { Effect } from 'effect'
+import { isSqlError } from 'effect/unstable/sql/SqlError'
 
 import {
   ActivitiesCrud,
   AnnotationsCrud,
   ApplicationsCrud,
   CompensationsCrud,
-  FxRatesCrud,
   ListingChecksCrud,
   type PersistedApplication,
+  type PersistedListingCheck,
   type PersistedNote,
 } from '../src'
 import { makeRegistryCrudLive } from '../src/live'
+import { RegistryPostgresHarness } from './postgres-harness'
 
-let harness: RegistryMiniflareHarness
+let harness: RegistryPostgresHarness
 
 const recordedAt = '2026-07-12T12:00:00.000Z'
 
@@ -66,14 +67,37 @@ const note = (noteId: string): PersistedNote => ({
   source: 'crud-test',
 })
 
-const fxRate: FxRate = {
-  baseCurrency: 'USD',
-  fetchedAt: recordedAt,
-  observedAt: '2026-07-12T00:00:00.000Z',
-  provider: 'crud-test',
-  quoteCurrency: 'EUR',
-  rate: 0.91,
-}
+const listingCheck = (
+  overrides: Partial<PersistedListingCheck> = {}
+): PersistedListingCheck => ({
+  applicationId: application.applicationId,
+  archiveApplication: false,
+  checkedAt: recordedAt,
+  checkerVersion: '1',
+  closedCandidateAt: null,
+  confidence: 'high',
+  consecutiveClosedChecks: 0,
+  contentHash: null,
+  activityId: null,
+  evidence: [],
+  expectedVersion: 1,
+  finalUrl: application.postingUrl,
+  httpStatus: 200,
+  id: 'listing-check-default',
+  listingAvailability: 'open',
+  nextCheckAt: '2026-07-13T12:00:00.000Z',
+  operationId: 'listing-check-operation-default',
+  outcome: 'open',
+  provider: 'example.test',
+  reasonCode: 'provider_open',
+  receivedAt: recordedAt,
+  recommendedAction: 'keep',
+  recordedAt,
+  requestHash: 'listing-check-signature-default',
+  requestedUrl: application.postingUrl,
+  runId: null,
+  ...overrides,
+})
 
 const runCrud = <A, E>(
   program: Effect.Effect<
@@ -83,14 +107,11 @@ const runCrud = <A, E>(
     | ActivitiesCrud
     | ApplicationsCrud
     | CompensationsCrud
-    | FxRatesCrud
     | ListingChecksCrud
   >
 ) =>
   Effect.runPromise(
-    program.pipe(
-      Effect.provide(makeRegistryCrudLive(Effect.succeed(harness.database)))
-    )
+    program.pipe(Effect.provide(makeRegistryCrudLive(harness.database)))
   )
 
 const seedApplication = Effect.gen(function* () {
@@ -102,9 +123,7 @@ const seedApplication = Effect.gen(function* () {
 })
 
 before(async () => {
-  harness = await RegistryMiniflareHarness.make({
-    databaseBinding: 'APPLICATION_REGISTRY_DB',
-  })
+  harness = await RegistryPostgresHarness.make()
 })
 
 afterEach(async () => {
@@ -135,6 +154,7 @@ test('executes application CRUD and database defaults through slice services', a
   assert.ok(result.created)
   assert.equal(result.created.id, 'crud-application-1')
   assert.equal(result.created.applicationStatus, 'not_started')
+  assert.equal(result.created.createdAt, recordedAt)
   assert.equal(result.created.targetStage, 'backlog')
   assert.equal(result.created.version, 1)
 
@@ -180,8 +200,8 @@ test('atomically replaces annual compensation and rejects a stale version', asyn
           id: 'crud-annual-replacement',
           kind: 'base_salary',
           currencyCode: 'EUR',
-          minimumMinor: 10_000_000,
-          maximumMinor: 13_000_000,
+          minimumMinor: 3_000_000_000,
+          maximumMinor: 5_000_000_000,
           rawText: null,
           source: 'table',
         },
@@ -210,8 +230,22 @@ test('atomically replaces annual compensation and rejects a stale version', asyn
   assert.equal(result.stale, false)
   assert.equal(result.application?.version, 2)
   assert.deepEqual(
-    result.compensations.map(({ currencyCode, id }) => ({ currencyCode, id })),
-    [{ currencyCode: 'EUR', id: 'crud-annual-replacement' }]
+    result.compensations.map(
+      ({ currencyCode, id, maximumMinor, minimumMinor }) => ({
+        currencyCode,
+        id,
+        maximumMinor,
+        minimumMinor,
+      })
+    ),
+    [
+      {
+        currencyCode: 'EUR',
+        id: 'crud-annual-replacement',
+        maximumMinor: 5_000_000_000,
+        minimumMinor: 3_000_000_000,
+      },
+    ]
   )
 })
 
@@ -641,16 +675,56 @@ test('filters before pagination and returns dashboard details and facets', async
   })
 })
 
-test('paginates every application and activity with numeric page sizes', async () => {
-  const itemCount = 101
-  await seedRegistryDatabase(
-    harness.database,
-    makeRegistryFactory({ now: recordedAt, seed: 7_171 }).graph({
-      applicationCount: itemCount,
-      applicationStatus: 'not_started',
-      activitiesPerApplication: 1,
+const seedPaginationGraph = async (itemCount: number) => {
+  const applications = Array.from({ length: itemCount }, (_, index) => {
+    const sequence = index + 1
+    const id = `pagination-application-${sequence.toString().padStart(3, '0')}`
+    const timestamp = new Date(
+      Date.parse(recordedAt) + sequence * 1_000
+    ).toISOString()
+    const postingUrl = `https://example.test/jobs/${id}`
+    return {
+      applicationStatus: 'not_started' as const,
+      company: `Pagination Company ${sequence}`,
+      createdAt: timestamp,
+      id,
+      location: null,
+      postingFingerprint: postingUrl,
+      postingUrl,
+      postingUrlNormalized: postingUrl,
+      role: `Pagination Role ${sequence}`,
+      targetStage: 'backlog' as const,
+      updatedAt: timestamp,
+      updatedRevision: sequence,
+    }
+  })
+  const activities = applications.map((application, index) => ({
+    actor: 'system' as const,
+    applicationId: application.id,
+    id: `pagination-activity-${(index + 1).toString().padStart(3, '0')}`,
+    kind: 'details_changed' as const,
+    occurredAt: application.createdAt,
+    payload: { index },
+    revision: index + 1,
+    source: 'migration' as const,
+  }))
+
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      yield* harness.database.insert(applicationTable).values(applications)
+      yield* harness.database
+        .insert(applicationActivityTable)
+        .values(activities)
+      yield* harness.database
+        .insert(registrySequence)
+        .values({ id: 1, revision: itemCount })
     })
   )
+}
+
+test('paginates every application and activity with numeric page sizes', async () => {
+  const itemCount = 101
+  await seedPaginationGraph(itemCount)
 
   const result = await runCrud(
     Effect.gen(function* () {
@@ -731,22 +805,7 @@ test('rolls back an atomic note write when its operation receipt conflicts', asy
   assert.deepEqual(notes, [{ id: 'crud-note-1' }])
 })
 
-test('persists and retrieves FX cache rows through FxRatesCrud', async () => {
-  const stored = await runCrud(
-    Effect.gen(function* () {
-      const fxRates = yield* FxRatesCrud
-      yield* fxRates.save(fxRate)
-      return yield* fxRates.findLatest('USD', 'EUR')
-    })
-  )
-
-  assert.ok(stored)
-  assert.equal(stored.baseCurrency, 'USD')
-  assert.equal(stored.quoteCurrency, 'EUR')
-  assert.equal(stored.rate, 0.91)
-})
-
-test('claims, records, and archives listing checks through migrated D1 tables', async () => {
+test('claims, records, and archives listing checks through PostgreSQL', async () => {
   const result = await runCrud(
     Effect.gen(function* () {
       const applications = yield* ApplicationsCrud
@@ -762,7 +821,7 @@ test('claims, records, and archives listing checks through migrated D1 tables', 
       yield* checks.ensureEligibleSchedules(recordedAt)
       const claimed = yield* checks.claimDue({
         leaseToken: 'listing-run-1',
-        leaseUntil: '2026-07-12T12:20:00.000Z',
+        leaseUntil: '2099-07-12T12:20:00.000Z',
         limit: 10,
         now: recordedAt,
       })
@@ -771,6 +830,7 @@ test('claims, records, and archives listing checks through migrated D1 tables', 
         archiveApplication: false,
         checkedAt: recordedAt,
         checkerVersion: '1',
+        claimedLeaseToken: 'listing-run-1',
         closedCandidateAt: recordedAt,
         confidence: 'high',
         consecutiveClosedChecks: 1,
@@ -782,6 +842,7 @@ test('claims, records, and archives listing checks through migrated D1 tables', 
         finalUrl: application.postingUrl,
         httpStatus: 404,
         id: 'listing-check-1',
+        expectedVersion: 1,
         listingAvailability: 'suspected_closed',
         nextCheckAt: '2026-07-13T12:00:00.000Z',
         operationId: 'listing-check-operation-1',
@@ -863,13 +924,253 @@ test('claims, records, and archives listing checks through migrated D1 tables', 
   assert.equal(result.run?.state, 'completed')
 
   const activities = await harness.query<{ kind: string }>(
-    `select kind from application_activities where id = ?1`,
+    `select kind from application_activities where id = $1`,
     ['listing-closed-activity-1']
   )
   assert.deepEqual(activities, [{ kind: 'listing_availability_changed' }])
 })
 
-test('enforces migrated D1 foreign keys and cascades application children', async () => {
+test('atomically starts scheduled runs and releases their leases on failure', async () => {
+  const result = await runCrud(
+    Effect.gen(function* () {
+      const checks = yield* ListingChecksCrud
+      yield* seedApplication
+      yield* checks.ensureEligibleSchedules(recordedAt)
+
+      const started = yield* checks.startScheduledRun({
+        id: 'scheduled-run-atomic',
+        leaseUntil: '2026-07-12T12:20:00.000Z',
+        limit: 5,
+        mode: 'archive_eligible',
+        now: recordedAt,
+      })
+      const empty = yield* checks.startScheduledRun({
+        id: 'scheduled-run-empty',
+        leaseUntil: '2026-07-12T12:20:00.000Z',
+        limit: 5,
+        mode: 'archive_eligible',
+        now: recordedAt,
+      })
+      yield* checks.failRun({
+        failedAt: '2026-07-12T12:01:00.000Z',
+        failureCode: 'runner_failed',
+        failureMessage: 'Synthetic runner interruption.',
+        runId: 'scheduled-run-atomic',
+      })
+
+      return {
+        empty,
+        missingEmptyRun: yield* checks.findRun('scheduled-run-empty'),
+        run: yield* checks.findRun('scheduled-run-atomic'),
+        started,
+      }
+    })
+  )
+
+  assert.equal(result.started?.schedules.length, 1)
+  assert.equal(result.started?.run.selectedCount, 1)
+  assert.equal(result.empty, null)
+  assert.equal(result.missingEmptyRun, undefined)
+  assert.equal(result.run?.state, 'failed')
+  assert.equal(result.run?.failureCode, 'runner_failed')
+
+  const schedules = await harness.query<{
+    leaseToken: string | null
+    leaseUntil: Date | null
+  }>(
+    `select lease_token as "leaseToken", lease_until as "leaseUntil"
+       from application_listing_check_schedules
+      where application_id = $1`,
+    [application.applicationId]
+  )
+  assert.deepEqual(schedules, [{ leaseToken: null, leaseUntil: null }])
+})
+
+test('reconciles orphaned scheduled runs before the next claim', async () => {
+  const reconciled = await runCrud(
+    Effect.gen(function* () {
+      const checks = yield* ListingChecksCrud
+      yield* seedApplication
+      yield* checks.ensureEligibleSchedules(recordedAt)
+      yield* checks.startScheduledRun({
+        id: 'scheduled-run-orphaned',
+        leaseUntil: '2026-07-12T12:20:00.000Z',
+        limit: 5,
+        mode: 'archive_eligible',
+        now: recordedAt,
+      })
+      const count = yield* checks.reconcileOrphanedRuns({
+        failedAt: '2026-07-12T12:21:00.000Z',
+        staleBefore: '2026-07-12T12:01:00.000Z',
+      })
+      return {
+        count,
+        run: yield* checks.findRun('scheduled-run-orphaned'),
+      }
+    })
+  )
+
+  assert.equal(reconciled.count, 1)
+  assert.equal(reconciled.run?.state, 'failed')
+  assert.equal(reconciled.run?.failureCode, 'orphaned_run')
+})
+
+test('fences a superseded listing-check claimant from persisting or releasing the newer lease', async () => {
+  const claimed = await runCrud(
+    Effect.gen(function* () {
+      const checks = yield* ListingChecksCrud
+      yield* seedApplication
+      yield* checks.ensureEligibleSchedules(recordedAt)
+      return yield* checks.claimDue({
+        leaseToken: 'superseded-listing-lease',
+        leaseUntil: '2099-07-12T12:20:00.000Z',
+        limit: 1,
+        now: recordedAt,
+      })
+    })
+  )
+  assert.equal(claimed.length, 1)
+
+  await harness.query(
+    `update application_listing_check_schedules
+        set lease_token = $1, lease_until = $2
+      where application_id = $3 and lease_token = $4`,
+    [
+      'newer-listing-lease',
+      '2099-07-12T12:40:00.000Z',
+      application.applicationId,
+      'superseded-listing-lease',
+    ]
+  )
+
+  const result = await runCrud(
+    Effect.gen(function* () {
+      const applications = yield* ApplicationsCrud
+      const checks = yield* ListingChecksCrud
+      const applied = yield* checks.persist(
+        listingCheck({
+          checkedAt: '2026-07-12T12:05:00.000Z',
+          claimedLeaseToken: 'superseded-listing-lease',
+          id: 'superseded-listing-check',
+          nextCheckAt: '2026-07-13T12:05:00.000Z',
+          operationId: 'superseded-listing-operation',
+          receivedAt: '2026-07-12T12:05:00.000Z',
+          recordedAt: '2026-07-12T12:05:00.000Z',
+          requestHash: 'superseded-listing-signature',
+        })
+      )
+      yield* checks.failClaim({
+        applicationId: application.applicationId,
+        error: 'The old claimant lost its lease.',
+        leaseToken: 'superseded-listing-lease',
+        nextAttemptAt: '2026-07-12T12:35:00.000Z',
+        now: '2026-07-12T12:05:00.000Z',
+      })
+      return {
+        application: yield* applications.findByIdentifier(
+          application.applicationId
+        ),
+        applied,
+        checks: yield* checks.listByApplication(application.applicationId),
+      }
+    })
+  )
+
+  assert.equal(result.applied, false)
+  assert.deepEqual(result.checks, [])
+  assert.equal(result.application?.listingAvailability, 'unchecked')
+  assert.equal(result.application?.version, 1)
+
+  const schedules = await harness.query<{
+    attemptCount: number
+    leaseToken: string | null
+    leaseUntil: Date | null
+  }>(
+    `select attempt_count as "attemptCount",
+            lease_token as "leaseToken",
+            lease_until as "leaseUntil"
+       from application_listing_check_schedules
+      where application_id = $1`,
+    [application.applicationId]
+  )
+  assert.deepEqual(schedules, [
+    {
+      attemptCount: 0,
+      leaseToken: 'newer-listing-lease',
+      leaseUntil: new Date('2099-07-12T12:40:00.000Z'),
+    },
+  ])
+
+  const receipts = await harness.query<{ count: number }>(
+    `select count(*)::int as count
+       from idempotency_receipts
+      where idempotency_key = $1`,
+    ['superseded-listing-operation']
+  )
+  assert.deepEqual(receipts, [{ count: 0 }])
+})
+
+test('fences a lease that expired after the listing observation was recorded', async () => {
+  const databaseClock = await harness.query<{ now: Date }>(
+    'select current_timestamp as now'
+  )
+  const now = databaseClock.at(0)?.now
+  assert.ok(now)
+  const expiredAt = new Date(now.getTime() - 60_000).toISOString()
+  const observedAt = new Date(now.getTime() - 120_000).toISOString()
+  const nextCheckAt = new Date(now.getTime() + 86_400_000).toISOString()
+
+  const result = await runCrud(
+    Effect.gen(function* () {
+      const applications = yield* ApplicationsCrud
+      const checks = yield* ListingChecksCrud
+      yield* seedApplication
+      yield* checks.ensureEligibleSchedules(recordedAt)
+      const claimed = yield* checks.claimDue({
+        leaseToken: 'expired-listing-lease',
+        leaseUntil: expiredAt,
+        limit: 1,
+        now: recordedAt,
+      })
+      const applied = yield* checks.persist(
+        listingCheck({
+          checkedAt: observedAt,
+          claimedLeaseToken: 'expired-listing-lease',
+          id: 'expired-listing-check',
+          nextCheckAt,
+          operationId: 'expired-listing-operation',
+          receivedAt: observedAt,
+          recordedAt: observedAt,
+          requestHash: 'expired-listing-signature',
+        })
+      )
+      return {
+        application: yield* applications.findByIdentifier(
+          application.applicationId
+        ),
+        applied,
+        claimed,
+        checks: yield* checks.listByApplication(application.applicationId),
+      }
+    })
+  )
+
+  assert.equal(result.claimed.length, 1)
+  assert.equal(result.applied, false)
+  assert.deepEqual(result.checks, [])
+  assert.equal(result.application?.listingAvailability, 'unchecked')
+  assert.equal(result.application?.version, 1)
+
+  const schedules = await harness.query<{ leaseToken: string | null }>(
+    `select lease_token as "leaseToken"
+       from application_listing_check_schedules
+      where application_id = $1`,
+    [application.applicationId]
+  )
+  assert.deepEqual(schedules, [{ leaseToken: 'expired-listing-lease' }])
+})
+
+test('enforces PostgreSQL foreign keys and cascades application children', async () => {
   await runCrud(
     Effect.gen(function* () {
       const annotations = yield* AnnotationsCrud
@@ -885,10 +1186,15 @@ test('enforces migrated D1 foreign keys and cascades application children', asyn
     () =>
       harness.query(
         `insert into application_labels (application_id, label, created_at)
-         values (?1, ?2, ?3)`,
+         values ($1, $2, $3)`,
         ['missing-application', 'invalid', recordedAt]
       ),
-    /FOREIGN KEY constraint failed/u
+    (error: unknown) => {
+      assert.equal(isSqlError(error), true)
+      if (!isSqlError(error)) return false
+      assert.equal(error.reason._tag, 'ConstraintError')
+      return true
+    }
   )
 
   const removed = await runCrud(
@@ -900,15 +1206,15 @@ test('enforces migrated D1 foreign keys and cascades application children', asyn
   assert.equal(removed, true)
 
   const notes = await harness.query<{ count: number }>(
-    `select count(*) as count
+    `select count(*)::int as count
        from application_notes
-      where application_id = ?1`,
+      where application_id = $1`,
     [application.applicationId]
   )
   const activities = await harness.query<{ count: number }>(
-    `select count(*) as count
+    `select count(*)::int as count
        from application_activities
-      where application_id = ?1`,
+      where application_id = $1`,
     [application.applicationId]
   )
 

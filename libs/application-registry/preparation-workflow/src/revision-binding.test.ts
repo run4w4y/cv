@@ -92,7 +92,10 @@ const candidate: SavedCandidate = {
 
 const run: PreparationRun = {
   applicationId: 'application-1',
+  batchId: 'batch-1',
+  batchPosition: 0,
   candidate,
+  createdAt: 1,
   error: null,
   kind: 'cv',
   locale: 'en',
@@ -100,6 +103,8 @@ const run: PreparationRun = {
   runId: 'run-1',
   stage: 'review',
   status: 'review_submitted',
+  stepHistory: [],
+  updatedAt: 2,
   url: 'https://jobs.example.test/role',
 }
 

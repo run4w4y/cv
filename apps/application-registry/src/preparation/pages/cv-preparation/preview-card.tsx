@@ -4,6 +4,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  cn,
 } from '@cv/internal-ui'
 import { Eye } from 'lucide-react'
 
@@ -14,21 +15,35 @@ import type { CvPreparationActions } from './actions'
 
 export const CvPreviewCard = ({
   actions,
+  presentation = 'preparation',
   workspace,
 }: {
   readonly actions: CvPreparationActions
+  readonly presentation?: 'preparation' | 'publication' | 'review'
   readonly workspace: PreparationWorkspace
 }) => {
   return (
-    <Card className="h-fit xl:sticky xl:top-0">
+    <Card
+      className={cn(
+        'h-fit',
+        presentation !== 'publication' && 'xl:sticky xl:top-0'
+      )}
+    >
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Eye className="size-4" />
-          Internal preview
+          {presentation === 'publication'
+            ? 'Publication preview'
+            : presentation === 'review'
+              ? 'Candidate preview'
+              : 'Internal preview'}
         </CardTitle>
         <CardDescription>
-          Saving a revision stages it as a private page. This is the same stored
-          document and renderer used by the public page and PDF worker.
+          {presentation === 'publication'
+            ? 'Inspect the exact staged document, then manage its PDF artifact and public availability.'
+            : presentation === 'review'
+              ? 'Compare the rendered candidate with the editable document before making the approval decision.'
+              : 'Saving a revision stages it as a private page. This is the same stored document and renderer used by the public page and PDF worker.'}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -39,7 +54,7 @@ export const CvPreviewCard = ({
         ) : (
           <CvDocumentPreview link={actions.publication.link} />
         )}
-        {actions.publication === null ? null : (
+        {actions.publication === null || presentation === 'review' ? null : (
           <CvPublicationPanel
             currentHeadRevisionId={
               workspace.editor.baseRevision?.revision.id ?? null

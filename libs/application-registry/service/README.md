@@ -6,8 +6,8 @@ service contracts and errors; concrete Layers are exported from
 
 The service owns optimistic concurrency, idempotent replay, URL normalization,
 status update semantics, backend activities, and coordination across CRUD,
-artifact storage, listing checks, analytics, and FX services. It contains no
-HTTP routing or D1 binding code.
+artifact storage, listing checks, and analytics. It contains no HTTP routing or
+PostgreSQL connection code.
 
 Key services are:
 
@@ -16,7 +16,10 @@ Key services are:
   compensation;
 - `ActivitiesService`: read-only per-application and registry-wide history;
 - `AnnotationsService`: annotation reads and idempotent note creation;
-- `ListingChecksService`: findings, runs, grace windows, and safe archival;
+- `ListingChecksService`: HTTP-facing findings, manual resolution, imports,
+  grace windows, and safe archival;
+- `ScheduledListingChecksRunner`: the separate one-shot periodic claim/check/
+  finalize workflow used only by the Nomad batch application;
 - `OpaqueObjectsService`: schema-free content-addressed bytes;
 - `JobPostingSnapshotsService`: immutable raw/normalized posting context;
 - `ContentEntriesService`: linear opaque revisions and head approval;
@@ -46,3 +49,7 @@ management client, not this service. Payload bytes remain opaque.
 bunx nx run application-registry-service:test:unit
 bunx nx run application-registry-service:test:integration
 ```
+
+The integration suite starts a disposable PostgreSQL 17 container, applies the
+canonical registry baseline, and resets it between tests. A working Docker
+daemon is required.

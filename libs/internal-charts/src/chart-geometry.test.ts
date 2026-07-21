@@ -17,7 +17,11 @@ describe('chart geometry', () => {
   })
 
   test('expands a flat extent', () => {
-    expect(getNumericExtent([0, 0])).toEqual({ minimum: -1, maximum: 1 })
+    expect(getNumericExtent([0, 0])).toEqual({ minimum: 0, maximum: 1 })
+    expect(getNumericExtent([0, 0], false)).toEqual({
+      minimum: -1,
+      maximum: 1,
+    })
   })
 
   test('builds line and area paths', () => {

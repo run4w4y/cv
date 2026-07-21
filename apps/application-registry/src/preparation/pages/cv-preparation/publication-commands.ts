@@ -1,8 +1,9 @@
 import { useAtom, useAtomSet, useAtomValue } from '@effect/atom-react'
-import { Cause } from 'effect'
+import { Exit } from 'effect'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import * as Atom from 'effect/unstable/reactivity/Atom'
 
+import { firstAsyncResultErrorMessage } from '@/lib/async-result'
 import { preparationCommandGateKey } from '@/preparation/command-gate'
 import {
   makeReadCurrentPdfAtom,
@@ -67,26 +68,26 @@ export const useCvPublicationCommands = (workspace: PreparationWorkspace) => {
   const refreshPageCommandAtom = refreshPageFamily(commandKey)
   const [publicationStartResult, startPublication] = useAtom(
     publicationStartCommandAtom,
-    { mode: 'promise' }
+    { mode: 'promiseExit' }
   )
   const [publicationCancelResult, cancelPublication] = useAtom(
     publicationCancelCommandAtom,
-    { mode: 'promise' }
+    { mode: 'promiseExit' }
   )
   const [downloadResult, readCurrentPdf] = useAtom(downloadPdfCommandAtom, {
-    mode: 'promise',
+    mode: 'promiseExit',
   })
   const [availabilityResult, setAvailability] = useAtom(
     availabilityCommandAtom,
-    { mode: 'promise' }
+    { mode: 'promiseExit' }
   )
   const [generatePdfResult, startPdfGeneration] = useAtom(
     generatePdfCommandAtom,
-    { mode: 'promise' }
+    { mode: 'promiseExit' }
   )
   const [refreshPageResult, refreshPageState] = useAtom(
     refreshPageCommandAtom,
-    { mode: 'promise' }
+    { mode: 'promiseExit' }
   )
   const resetPublicationStart = useAtomSet(publicationStartCommandAtom)
   const resetPublicationCancel = useAtomSet(publicationCancelCommandAtom)
@@ -140,44 +141,33 @@ export const useCvPublicationCommands = (workspace: PreparationWorkspace) => {
     ) {
       return
     }
-    try {
-      await startPublication({
-        applicationId: identity.applicationId,
-        entry: approvedRevision.entry,
-        expectedPublicationVersion: page.link.publicationVersion,
-      })
-    } catch {
-      // Workflow startup failures stay in the command atom.
-    }
+    await startPublication({
+      applicationId: identity.applicationId,
+      entry: approvedRevision.entry,
+      expectedPublicationVersion: page.link.publicationVersion,
+    })
   }
 
   const cancelPublishing = async () => {
     if (mutationPending || publicationRun === null || !publicationExecuting) {
       return
     }
-    try {
-      await cancelPublication({
-        executionId: publicationRun.executionId,
-        runId: publicationRun.runId,
-      })
-    } catch {
-      // The cancellation atom retains the typed failure.
-    }
+    await cancelPublication({
+      executionId: publicationRun.executionId,
+      runId: publicationRun.runId,
+    })
   }
 
   const downloadPdf = async () => {
     if (mutationPending || page === null || page.artifact?.status !== 'ready')
       return
-    try {
-      const ready = await readCurrentPdf(publicationIdentity)
-      downloadPdfBytes({
-        bytes: ready.bytes,
-        filename: `cv-${page.link.token}.pdf`,
-        mediaType: ready.artifact.mediaType ?? 'application/pdf',
-      })
-    } catch {
-      // The command atom retains the typed failure rendered by the page.
-    }
+    const exit = await readCurrentPdf(publicationIdentity)
+    if (Exit.isFailure(exit)) return
+    downloadPdfBytes({
+      bytes: exit.value.bytes,
+      filename: `cv-${page.link.token}.pdf`,
+      mediaType: exit.value.artifact.mediaType ?? 'application/pdf',
+    })
   }
 
   const setPublicationAvailability = async (enabled: boolean) => {
@@ -190,21 +180,17 @@ export const useCvPublicationCommands = (workspace: PreparationWorkspace) => {
     ) {
       return
     }
-    try {
-      await setAvailability({
-        applicationId: identity.applicationId,
-        entryId: page.link.contentEntryId,
-        input: {
-          enabled,
-          expectedPublicationVersion: page.link.publicationVersion,
-          ...(!enabled
-            ? { reason: 'Disabled manually from CV preparation.' }
-            : {}),
-        },
-      })
-    } catch {
-      // The command atom retains the typed failure rendered by the page.
-    }
+    await setAvailability({
+      applicationId: identity.applicationId,
+      entryId: page.link.contentEntryId,
+      input: {
+        enabled,
+        expectedPublicationVersion: page.link.publicationVersion,
+        ...(!enabled
+          ? { reason: 'Disabled manually from CV preparation.' }
+          : {}),
+      },
+    })
   }
 
   const generatePdf = async () => {
@@ -217,27 +203,19 @@ export const useCvPublicationCommands = (workspace: PreparationWorkspace) => {
     ) {
       return
     }
-    try {
-      await startPdfGeneration({
-        applicationId: identity.applicationId,
-        entryId: page.link.contentEntryId,
-        input: {
-          expectedPublicationVersion: page.link.publicationVersion,
-          requestId: crypto.randomUUID(),
-        },
-      })
-    } catch {
-      // The command atom retains the typed failure rendered by the page.
-    }
+    await startPdfGeneration({
+      applicationId: identity.applicationId,
+      entryId: page.link.contentEntryId,
+      input: {
+        expectedPublicationVersion: page.link.publicationVersion,
+        requestId: crypto.randomUUID(),
+      },
+    })
   }
 
   const refreshPage = async () => {
     if (mutationPending) return
-    try {
-      await refreshPageState(publicationIdentity)
-    } catch {
-      // The command atom retains the typed failure rendered by the page.
-    }
+    await refreshPageState(publicationIdentity)
   }
 
   const reset = () => {
@@ -258,25 +236,32 @@ export const useCvPublicationCommands = (workspace: PreparationWorkspace) => {
     downloading,
     generatePdf,
     generatingPdf,
-    commandError: AsyncResult.isFailure(publicationStartResult)
-      ? (Cause.prettyErrors(publicationStartResult.cause)[0]?.message ??
-        'The CV publication Workflow could not start.')
-      : AsyncResult.isFailure(publicationCancelResult)
-        ? (Cause.prettyErrors(publicationCancelResult.cause)[0]?.message ??
-          'The CV publication Workflow could not be cancelled.')
-        : AsyncResult.isFailure(downloadResult)
-          ? (Cause.prettyErrors(downloadResult.cause)[0]?.message ??
-            'The stored PDF could not be downloaded.')
-          : AsyncResult.isFailure(availabilityResult)
-            ? (Cause.prettyErrors(availabilityResult.cause)[0]?.message ??
-              'The public CV availability could not be changed.')
-            : AsyncResult.isFailure(generatePdfResult)
-              ? (Cause.prettyErrors(generatePdfResult.cause)[0]?.message ??
-                'PDF generation could not be started.')
-              : AsyncResult.isFailure(refreshPageResult)
-                ? (Cause.prettyErrors(refreshPageResult.cause)[0]?.message ??
-                  'The CV page status could not be refreshed.')
-                : null,
+    commandError: firstAsyncResultErrorMessage([
+      {
+        fallback: 'The CV publication Workflow could not start.',
+        result: publicationStartResult,
+      },
+      {
+        fallback: 'The CV publication Workflow could not be cancelled.',
+        result: publicationCancelResult,
+      },
+      {
+        fallback: 'The stored PDF could not be downloaded.',
+        result: downloadResult,
+      },
+      {
+        fallback: 'The public CV availability could not be changed.',
+        result: availabilityResult,
+      },
+      {
+        fallback: 'PDF generation could not be started.',
+        result: generatePdfResult,
+      },
+      {
+        fallback: 'The CV page status could not be refreshed.',
+        result: refreshPageResult,
+      },
+    ]),
     mutationPending,
     publication: page,
     publicationExecuting,
@@ -285,10 +270,12 @@ export const useCvPublicationCommands = (workspace: PreparationWorkspace) => {
     publishing,
     refreshPage,
     refreshingPage,
-    queryError: AsyncResult.isFailure(publicationQueryResult)
-      ? (Cause.prettyErrors(publicationQueryResult.cause)[0]?.message ??
-        'The existing CV publication could not be loaded.')
-      : null,
+    queryError: firstAsyncResultErrorMessage([
+      {
+        fallback: 'The existing CV publication could not be loaded.',
+        result: publicationQueryResult,
+      },
+    ]),
     reset,
     runError:
       publicationRun?._tag === 'Failed'

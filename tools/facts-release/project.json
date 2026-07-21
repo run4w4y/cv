@@ -1,6 +1,6 @@
 {
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
-  "name": "facts-release-publisher",
+  "name": "facts-toolchain",
   "projectType": "application",
   "sourceRoot": "tools/facts-release/src",
   "tags": ["scope:cv", "type:tool", "visibility:private"],
@@ -10,16 +10,16 @@
       "dependsOn": ["^build"],
       "outputs": [],
       "options": {
-        "command": "bun run tools/facts-release/src/check.ts --content-root ${CONTENT_ROOT:-../cv-content}",
+        "command": "bun run tools/facts-release/src/cli.ts check --content-root ${CONTENT_ROOT:-../cv-content}",
         "color": true
       }
     },
-    "publish": {
+    "build:artifact": {
       "executor": "nx:run-commands",
       "dependsOn": ["^build"],
       "outputs": [],
       "options": {
-        "command": "bun run tools/facts-release/src/main.ts",
+        "command": "bun build --compile --target=bun-linux-x64 tools/facts-release/src/cli.ts --outfile dist/facts-toolchain/cv-facts",
         "color": true
       }
     },

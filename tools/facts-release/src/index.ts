@@ -1,11 +1,3 @@
-export {
-  type FactsPublisherConfig,
-  readFactsPublisherConfig,
-} from './config'
+export { publishFactsBundle } from './client'
 export * from './errors'
-export {
-  type PublishFactsError,
-  type PublishFactsResult,
-  publishFactsCheckout,
-} from './publish'
 export { compileFactsCheckout } from './source'

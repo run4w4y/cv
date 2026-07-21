@@ -1,18 +1,17 @@
 import { describe, expect, test } from 'bun:test'
-import { Effect, Layer } from 'effect'
+import { Effect } from 'effect'
 
 import {
+  compileFactsCurrentPointerObject,
+  compileFactsPublicationObjects,
   compileFactsRelease,
-  FactsReleasePublicationError,
-  FactsReleasePublicationTarget,
   factsCurrentObjectKey,
-  publishFactsRelease,
 } from './index'
 import {
+  cvGenerationGuidanceFixture,
   factsCatalogueFixture,
   fixtureAssetBytes,
   fixtureProvenance,
-  makeInMemoryFactsReleasePublication,
 } from './test-support'
 
 const digest = async (bytes: Uint8Array) => {
@@ -35,61 +34,31 @@ const compiledFixture = async () => {
         },
       ],
       catalogues: [factsCatalogueFixture(assetSha256)],
+      generationGuidance: cvGenerationGuidanceFixture,
       provenance: fixtureProvenance,
     })
   )
 }
 
-describe('facts release publication', () => {
-  test('uploads immutable objects before activating the deterministic pointer', async () => {
-    const bundle = await compiledFixture()
-    const memory = makeInMemoryFactsReleasePublication()
-    const publication = await Effect.runPromise(
-      publishFactsRelease(bundle).pipe(Effect.provide(memory.layer))
+describe('facts release publication objects', () => {
+  test('keeps immutable objects separate from the active pointer', async () => {
+    const release = await compiledFixture()
+    const immutable = compileFactsPublicationObjects(release)
+    const current = await Effect.runPromise(
+      compileFactsCurrentPointerObject(release.manifestObject)
     )
 
-    expect(memory.objects.size).toBe(bundle.objects.length + 1)
-    expect(memory.writes.at(-1)).toBe(factsCurrentObjectKey)
-    expect(publication.releaseId).toBe(bundle.releaseId)
-    expect(publication.status).toBe('activated')
-    expect(publication.pointer).toEqual({
-      $schema: 'cv.facts-current.v1',
+    expect(immutable).toHaveLength(release.objects.length)
+    expect(immutable.map(({ key }) => key)).not.toContain(factsCurrentObjectKey)
+    expect(current.object.key).toBe(factsCurrentObjectKey)
+    expect(JSON.parse(new TextDecoder().decode(current.object.bytes))).toEqual({
+      $schema: 'cv.facts-current.v2',
       manifest: {
-        byteLength: bundle.manifestObject.byteLength,
+        byteLength: release.manifestObject.byteLength,
         mediaType: 'application/vnd.cv.facts-release+json',
-        sha256: bundle.manifestObject.sha256,
+        sha256: release.manifestObject.sha256,
       },
-      releaseId: bundle.releaseId,
+      releaseId: release.releaseId,
     })
-
-    const repeated = await Effect.runPromise(
-      publishFactsRelease(bundle).pipe(Effect.provide(memory.layer))
-    )
-    expect(repeated.status).toBe('already-active')
-  })
-
-  test('does not activate current.json when an immutable upload fails', async () => {
-    const bundle = await compiledFixture()
-    let activations = 0
-    const failure = new FactsReleasePublicationError({
-      cause: new Error('R2 unavailable'),
-      message: 'Could not upload release object.',
-      operation: 'upload',
-    })
-    const layer = Layer.succeed(FactsReleasePublicationTarget, {
-      putCurrent: () =>
-        Effect.sync(() => {
-          activations += 1
-          return 'activated' as const
-        }),
-      putImmutable: () => Effect.fail(failure),
-    })
-
-    const error = await Effect.runPromise(
-      Effect.flip(publishFactsRelease(bundle).pipe(Effect.provide(layer)))
-    )
-
-    expect(error).toBe(failure)
-    expect(activations).toBe(0)
   })
 })

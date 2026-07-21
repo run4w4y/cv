@@ -30,7 +30,7 @@ export const CoverLetterWorkflowFeedback = ({
                 {run.candidate.result.revision.revisionNumber} was persisted
                 from snapshot {run.candidate.result.revision.jobSnapshotId} and
                 facts {run.candidate.result.revision.factsReleaseId} before
-                review · {run.candidate.candidate.metadata.length} AI calls
+                review · {run.candidate.candidate.metadata.length} Codex calls
                 retained with usage metadata for this session.
               </span>
             )}

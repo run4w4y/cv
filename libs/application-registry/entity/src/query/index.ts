@@ -1,7 +1,4 @@
-export {
-  type ActivityListQueryRequest,
-  activityListQuery,
-} from './activities'
+export { type ActivityListQueryRequest, activityListQuery } from './activities'
 export {
   type ApplicationListQueryRequest,
   applicationListQuery,

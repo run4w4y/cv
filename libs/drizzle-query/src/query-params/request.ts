@@ -1,8 +1,8 @@
 export type QueryPaginationKind = 'cursor' | 'page'
 
 export const reservedQueryParameters: ReadonlySet<string> = new Set([
-  'filters',
-  'orderBy',
+  'filter',
+  'sort',
   'pagination',
   'after',
   'page',

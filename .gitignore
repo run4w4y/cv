@@ -13,6 +13,7 @@
 storybook-static/
 .DS_Store
 dist/
+apps/application-registry-desktop/release/
 node_modules/
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md

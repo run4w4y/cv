@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { cvGenerationGuidanceFieldTargetValues } from '@cv/contracts/document'
 import { Effect, Exit } from 'effect'
 
 import { composeFactsRepository } from './compose'
@@ -24,6 +25,7 @@ const input = {
   config: {
     defaultLocale: 'en',
     factsDir: 'facts',
+    generationGuidance: 'generation/cv.ts',
     locales: ['en', 'ru'],
   },
   evidence: {
@@ -31,6 +33,19 @@ const input = {
       kind: 'personal-review',
       title: 'Current role review',
     },
+  },
+  generationGuidance: {
+    $schema: 'cv.generation-guidance.v1',
+    documentContract: 'cv.document.v1',
+    fields: cvGenerationGuidanceFieldTargetValues.map((target) => ({
+      instruction: `Write ${target} from reviewed facts.`,
+      sources: ['trusted-facts'],
+      target,
+    })),
+    instruction: 'Produce a truthful CV from reviewed facts.',
+    label: 'Reviewed CV guidance',
+    rules: ['Do not invent claims.'],
+    sources: ['trusted-facts', 'job-context'],
   },
   sections: [
     {

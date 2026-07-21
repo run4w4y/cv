@@ -1,4 +1,4 @@
-import { Effect, Option, Schema } from 'effect'
+import { Effect, Match, Option, Predicate, Schema } from 'effect'
 
 import type { PersistJobPostingSnapshotInput } from '../types'
 
@@ -24,12 +24,23 @@ type CaptureOptions = {
   readonly timeoutMilliseconds?: number
 }
 
-class PayloadTooLargeError extends Error {
-  constructor(readonly maximumBytes: number) {
-    super(`Job posting response exceeds the ${maximumBytes}-byte limit.`)
-    this.name = 'PayloadTooLargeError'
+class PayloadTooLargeError extends Schema.TaggedErrorClass<PayloadTooLargeError>()(
+  'PayloadTooLargeError',
+  { maximumBytes: Schema.Number, message: Schema.String }
+) {
+  constructor(maximumBytes: number) {
+    super({
+      maximumBytes,
+      message: `Job posting response exceeds the ${maximumBytes}-byte limit.`,
+    })
   }
 }
+
+const errorMessage = (cause: unknown, fallback: string): string =>
+  Match.value(cause).pipe(
+    Match.when(Predicate.isError, (error) => error.message),
+    Match.orElse(() => fallback)
+  )
 
 const failedCapture = (
   requestedUrl: string,
@@ -198,9 +209,7 @@ const capture = async (
         timedOut ? 'request_timed_out' : 'fetch_failed',
         timedOut
           ? `The job posting request timed out after ${timeoutMilliseconds}ms.`
-          : cause instanceof Error
-            ? `The job posting request failed: ${cause.message}`
-            : 'The job posting request failed.',
+          : `The job posting request failed: ${errorMessage(cause, 'Unknown request failure.')}`,
         currentUrl.href
       )
     }
@@ -287,20 +296,27 @@ const capture = async (
     bytes = await readResponseBytes(response, maxBytes)
   } catch (cause) {
     const timedOut = timeoutSignal.aborted
-    return failedCapture(
-      requestedUrl,
-      cause instanceof PayloadTooLargeError
-        ? 'payload_too_large'
-        : timedOut
-          ? 'request_timed_out'
-          : 'response_read_failed',
-      timedOut
-        ? `The job posting request timed out after ${timeoutMilliseconds}ms.`
-        : cause instanceof Error
-          ? cause.message
-          : 'The job posting response could not be read.',
-      finalUrl
+    const failure = Match.value(cause).pipe(
+      Match.when(Schema.is(PayloadTooLargeError), (error) => ({
+        code: 'payload_too_large',
+        message: error.message,
+      })),
+      Match.when(
+        () => timedOut,
+        () => ({
+          code: 'request_timed_out',
+          message: `The job posting request timed out after ${timeoutMilliseconds}ms.`,
+        })
+      ),
+      Match.orElse((cause) => ({
+        code: 'response_read_failed',
+        message: errorMessage(
+          cause,
+          'The job posting response could not be read.'
+        ),
+      }))
     )
+    return failedCapture(requestedUrl, failure.code, failure.message, finalUrl)
   }
 
   const raw = { bytes, mediaType }

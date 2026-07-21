@@ -9,7 +9,10 @@ import {
 import { CircleAlert, RefreshCw } from 'lucide-react'
 
 import { JobContextEditor } from '@/preparation/components/job-context-editor'
-import { PreparationPageFrame } from '@/preparation/components/page-frame'
+import {
+  PreparationPageFrame,
+  PreparationSupportingContext,
+} from '@/preparation/components/page-frame'
 import { CoverLetterEditorCard } from './editor-card'
 import { CoverLetterGenerationSettings } from './generation-settings'
 import { useCoverLetterPageController } from './use-page-controller'
@@ -22,9 +25,17 @@ export const CoverLetterPage = () => {
   return (
     <PreparationPageFrame
       applicationId={page.applicationId}
-      eyebrow="Separate writing flow"
-      title="Prepare a cover letter"
-      description="Customize the writing instructions, generate from the same job snapshot and reviewed facts, edit the result, and store it as an opaque cover-letter revision."
+      eyebrow={page.focusedReview ? 'Workflow review' : 'Separate writing flow'}
+      title={
+        page.focusedReview
+          ? 'Review cover-letter candidate'
+          : 'Prepare a cover letter'
+      }
+      description={
+        page.focusedReview
+          ? 'Inspect the generated letter, make any necessary edits, and approve or reject it before the workflow can continue.'
+          : 'Customize the writing instructions, generate from the same job snapshot and reviewed facts, edit the result, and store it as an opaque cover-letter revision.'
+      }
     >
       {workspace.status === 'error' ? (
         <>
@@ -46,7 +57,13 @@ export const CoverLetterPage = () => {
               </Button>
             </AlertDescription>
           </Alert>
-          <JobContextEditor applicationId={page.applicationId} />
+          {page.focusedReview ? (
+            <PreparationSupportingContext description="The workflow candidate is unavailable, but you can still inspect or repair the saved job context.">
+              <JobContextEditor applicationId={page.applicationId} />
+            </PreparationSupportingContext>
+          ) : (
+            <JobContextEditor applicationId={page.applicationId} />
+          )}
         </>
       ) : workspace.status === 'loading' ? (
         <Card>
@@ -54,6 +71,31 @@ export const CoverLetterPage = () => {
             Loading the role context and active facts release…
           </CardContent>
         </Card>
+      ) : page.focusedReview ? (
+        <>
+          <CoverLetterWorkflowFeedback
+            page={page}
+            workspace={workspace.value}
+          />
+          {page.actionError === null ? null : (
+            <Alert variant="destructive">
+              <CircleAlert />
+              <AlertTitle>Cover-letter step failed</AlertTitle>
+              <AlertDescription>{page.actionError}</AlertDescription>
+            </Alert>
+          )}
+          <CoverLetterEditorCard page={page} workspace={workspace.value} />
+          <PreparationSupportingContext description="Open the job context and generation settings when you need to verify why this candidate was produced.">
+            <JobContextEditor
+              applicationId={page.applicationId}
+              initialContext={workspace.value.bootstrap.context.jobContext}
+            />
+            <CoverLetterGenerationSettings
+              page={page}
+              workspace={workspace.value}
+            />
+          </PreparationSupportingContext>
+        </>
       ) : (
         <>
           <JobContextEditor

@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { SQLiteDialect } from 'drizzle-orm/sqlite-core'
+import { PgDialect } from 'drizzle-orm/pg-core'
 
 import { activityListQuery } from './activities'
 
-const dialect = new SQLiteDialect()
+const dialect = new PgDialect()
 
 describe('activity list query definition', () => {
   test('publishes inferred activity fields and timestamp operators', () => {
@@ -42,9 +42,9 @@ describe('activity list query definition', () => {
     }
 
     const rendered = dialect.sqlToQuery(resolved.where)
-    expect(rendered.sql).toContain('"application_activities"."revision" > ?')
+    expect(rendered.sql).toContain('"application_activities"."revision" > $1')
     expect(rendered.sql).toContain(
-      '"application_activities"."occurred_at" >= ?'
+      '"application_activities"."occurred_at" >= $2'
     )
     expect(rendered.params).toEqual([
       10,

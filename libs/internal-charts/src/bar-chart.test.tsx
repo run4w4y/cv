@@ -16,6 +16,9 @@ describe('BarChart', () => {
     )
 
     expect(markup).toContain('data-slot="bar-chart"')
+    expect(markup).toContain('data-slot="chart-scroll-area"')
+    expect(markup).toContain('aria-label="Application outcomes"')
+    expect(markup).not.toContain('<title id=')
     expect(markup).toContain('aria-label="Viewed: 12"')
     expect(markup).toContain('tabindex="0"')
     expect(markup).toContain('<caption>Application outcomes</caption>')

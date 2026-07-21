@@ -1,4 +1,13 @@
-import { type Crypto, Effect } from 'effect'
+import { type Crypto, Effect, Schema } from 'effect'
+
+export class ListingFetchError extends Schema.TaggedErrorClass<ListingFetchError>()(
+  'ListingFetchError',
+  {
+    cause: Schema.Defect(),
+    message: Schema.String,
+    url: Schema.String,
+  }
+) {}
 
 export type ListingFetch = (
   input: RequestInfo | URL,
@@ -28,7 +37,12 @@ export const fetchListingPage = (url: string, fetcher: ListingFetch) =>
         status: response.status,
       }
     },
-    catch: (cause) => cause,
+    catch: (cause) =>
+      new ListingFetchError({
+        cause,
+        message: `Could not fetch listing ${url}.`,
+        url,
+      }),
   })
 
 export const hashListingContent = (crypto: Crypto.Crypto, value: string) =>

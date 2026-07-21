@@ -4,8 +4,7 @@ import type {
   PersistedApplication,
   PersistedManagedApplicationUpdate,
 } from '@cv/application-registry-crud'
-import { FxRates } from '@cv/application-registry-fx'
-import { SQLiteDialect } from 'drizzle-orm/sqlite-core'
+import { PgDialect } from 'drizzle-orm/pg-core'
 import { Effect, Layer } from 'effect'
 import { TestClock } from 'effect/testing'
 import {
@@ -28,20 +27,7 @@ const live = (applicationLayer = applicationsCrudLayer()) =>
     Layer.provide(applicationLayer),
     Layer.provide(annotationsCrudLayer()),
     Layer.provide(compensationsCrudLayer()),
-    Layer.provide(idempotencyCrudLayer()),
-    Layer.provide(
-      Layer.succeed(FxRates, {
-        get: (baseCurrency, quoteCurrency) =>
-          Effect.succeed({
-            baseCurrency,
-            fetchedAt: recordedAt,
-            observedAt: recordedAt,
-            provider: 'test',
-            quoteCurrency,
-            rate: 2,
-          }),
-      })
-    )
+    Layer.provide(idempotencyCrudLayer())
   )
 
 describe('ApplicationsService', () => {
@@ -135,9 +121,10 @@ describe('ApplicationsService', () => {
       throw new Error('Expected the query to contain a filtering expression')
     }
 
-    const dialect = new SQLiteDialect()
+    const dialect = new PgDialect()
     const rendered = dialect.sqlToQuery(where)
 
+    expect(rendered.sql).toContain(' ilike ')
     expect(rendered.params).toContain('%principal%')
     expect(rendered.params).toContain('rejected')
   })
@@ -206,9 +193,7 @@ describe('ApplicationsService', () => {
 
   test('decorates list rows for the dashboard', async () => {
     const page = await Effect.runPromise(
-      ApplicationsService.use((service) =>
-        service.list({ currency: 'USD' })
-      ).pipe(
+      ApplicationsService.use((service) => service.list({})).pipe(
         Effect.provide(
           live(
             applicationsCrudLayer({
@@ -243,9 +228,9 @@ describe('ApplicationsService', () => {
 
     expect(page.items[0]).toMatchObject({
       annualCompensation: {
-        currencyCode: 'USD',
-        maximumMinor: 24_000_000,
-        minimumMinor: 20_000_000,
+        currencyCode: 'EUR',
+        maximumMinor: 12_000_000,
+        minimumMinor: 10_000_000,
       },
       labels: ['priority'],
       latestActivity: { kind: 'status_changed', occurredAt: recordedAt },

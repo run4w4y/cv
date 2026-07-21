@@ -5,7 +5,6 @@ import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import { defineConfig, loadEnv, type ProxyOptions } from 'vite'
 
 const registryApiProxyPath = '/api/registry'
-const workerProxyPaths = ['/api/chatgpt'] as const
 
 const authorizedProxy = ({
   target,
@@ -31,8 +30,23 @@ export default defineConfig(({ mode }) => {
   const environment = loadEnv(mode, process.cwd(), '')
   const registryApiUrl = environment.REGISTRY_API_URL ?? 'http://127.0.0.1:8787'
   const registryApiToken = environment.REGISTRY_API_TOKEN
+  const desktopPublicCvBaseUrl =
+    mode === 'desktop' && environment.CV_WEB_HOST
+      ? `https://${environment.CV_WEB_HOST}/c`
+      : ''
 
   return {
+    base: mode === 'desktop' ? './' : '/',
+    envPrefix: ['VITE_CV_PUBLIC_BASE_URL'],
+    ...(mode === 'desktop'
+      ? {
+          define: {
+            'import.meta.env.VITE_CV_PUBLIC_BASE_URL': JSON.stringify(
+              environment.VITE_CV_PUBLIC_BASE_URL ?? desktopPublicCvBaseUrl
+            ),
+          },
+        }
+      : {}),
     root: 'apps/application-registry',
     plugins: [
       react(),
@@ -54,15 +68,6 @@ export default defineConfig(({ mode }) => {
           token: registryApiToken,
           rewrite: (path) => path.slice(registryApiProxyPath.length),
         }),
-        ...Object.fromEntries(
-          workerProxyPaths.map((path) => [
-            path,
-            authorizedProxy({
-              target: registryApiUrl,
-              token: registryApiToken,
-            }),
-          ])
-        ),
       },
     },
   }

@@ -12,141 +12,188 @@ concurrency:
   group: application-registry-production
   cancel-in-progress: false
 
-env:
-  INFISICAL_ENV: ${{ vars.INFISICAL_ENV || 'prod' }}
-  INFISICAL_HOST: ${{ vars.INFISICAL_HOST || 'https://app.infisical.com' }}
-
 jobs:
-  deploy-application-registry:
-    name: Migrate and deploy registry Worker
+  deploy-registry-api-server:
+    name: Publish and register self-hosted registry API
+    if: ${{ vars.CV_NOMAD_API_DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     environment: production
     permissions:
-      actions: read
       contents: read
-      deployments: write
-      id-token: write
+      packages: write
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: ${{ github.repository_owner }}/cv-application-registry-api
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          fetch-depth: 0
-          filter: tree:0
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Fetch Infisical secrets
-        if: ${{ !env.ACT }}
-        uses: ./.github/actions/fetch-infisical
+      - name: Build and push immutable API image
+        id: image
+        uses: docker/build-push-action@v6
         with:
-          identity-id: ${{ secrets.INFISICAL_IDENTITY_ID }}
-          project-slug: ${{ secrets.INFISICAL_PROJECT_SLUG }}
-          env-slug: ${{ env.INFISICAL_ENV }}
-          host: ${{ env.INFISICAL_HOST }}
+          context: .
+          file: apps/application-registry-api/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
-      - name: Set up workspace runtime
-        uses: ./.github/actions/setup-runtime
-
-      - name: Validate production registry configuration
+      - name: Install Nomad Pack
         run: |
-          missing=()
-          for name in \
-            APPLICATION_REGISTRY_DB_ID \
-            APPLICATION_REGISTRY_DB_NAME \
-            APPLICATION_REGISTRY_WORKER_NAME \
-            CHATGPT_SESSIONS_KV_ID \
-            CHATGPT_SESSION_SECRET \
-            CLOUDFLARE_ACCOUNT_ID \
-            CLOUDFLARE_ANALYTICS_API_TOKEN \
-            CLOUDFLARE_API_TOKEN \
-            CLOUDFLARE_ZONE_ID \
-            CV_WEB_HOST \
-            CV_OBJECTS_BUCKET_NAME \
-            CV_PUBLIC_WORKER_NAME \
-            CV_REVALIDATION_SECRET \
-            FACTS_R2_BUCKET \
-            REGISTRY_API_URL \
-            REGISTRY_API_TOKEN \
-            VITE_FACTS_R2_ACCESS_KEY_ID \
-            VITE_FACTS_R2_ACCOUNT_ID \
-            VITE_FACTS_R2_BUCKET \
-            VITE_FACTS_R2_SECRET_ACCESS_KEY
-          do
-            if [[ -z "${!name:-}" ]]; then
-              missing+=("$name")
-            fi
-          done
+          version=0.3.0
+          archive="nomad-pack_${version}_linux_amd64.zip"
+          curl -fsSL "https://releases.hashicorp.com/nomad-pack/${version}/${archive}" -o "$archive"
+          unzip -q "$archive" -d /tmp/nomad-pack
+          sudo install /tmp/nomad-pack/nomad-pack /usr/local/bin/nomad-pack
 
-          if (( ${#missing[@]} > 0 )); then
-            printf '::error title=Missing production registry configuration::Missing: %s\n' "${missing[*]}"
-            exit 1
-          fi
-
-      - name: Configure direct facts-read CORS
-        run: |
-          management_origin="${REGISTRY_API_URL%/}"
-          if [[ ! "$management_origin" =~ ^https://[^/?#]+$ ]]; then
-            echo '::error title=Invalid management origin::REGISTRY_API_URL must be an HTTPS origin without a path, query, or fragment.'
-            exit 1
-          fi
-
-          jq -n --arg origin "$management_origin" '{
-            rules: [{
-              allowed: {
-                origins: [$origin, "http://localhost:4300"],
-                methods: ["GET", "HEAD"],
-                headers: [
-                  "authorization",
-                  "content-type",
-                  "x-amz-content-sha256",
-                  "x-amz-date",
-                  "x-amz-security-token"
-                ]
-              },
-              exposeHeaders: ["cache-control", "content-length", "content-type", "etag"],
-              maxAgeSeconds: 3600
-            }]
-          }' > "$RUNNER_TEMP/facts-r2-cors.json"
-
-          node node_modules/wrangler/bin/wrangler.js r2 bucket cors set \
-            "$FACTS_R2_BUCKET" \
-            --file "$RUNNER_TEMP/facts-r2-cors.json" \
-            --force
-
-      - name: Build management application
-        run: |
-          if [[ "$CV_WEB_HOST" == *://* || "$CV_WEB_HOST" == */* ]]; then
-            echo '::error title=Invalid public CV hostname::CV_WEB_HOST must be a hostname without a scheme or path.'
-            exit 1
-          fi
-          export VITE_CV_PUBLIC_BASE_URL="https://${CV_WEB_HOST}/c"
-          ./node_modules/.bin/nx run application-registry-management:build --skip-nx-cache
-
-      - name: Build registry and PDF Workers
-        run: |
-          ./node_modules/.bin/nx run cv-pdf-worker:build --skip-nx-cache
-          ./node_modules/.bin/nx run application-registry-api:build --skip-nx-cache
-
-      - name: Generate production Wrangler configs
+      - name: Register disabled-by-default API service
         env:
-          APPLICATION_REGISTRY_COMPATIBILITY_DATE: ${{ vars.APPLICATION_REGISTRY_COMPATIBILITY_DATE }}
+          API_BFF_ENABLED: ${{ vars.CV_REGISTRY_BFF_ENABLED || 'false' }}
+          API_ENABLED: ${{ vars.CV_REGISTRY_NOMAD_ENABLED || 'false' }}
+          API_IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          API_SUBDOMAIN: ${{ vars.CV_REGISTRY_ORIGIN_SUBDOMAIN || 'registry-origin' }}
+          NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
+          NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
+          REGISTRY_PULL_TOKEN: ${{ secrets.REGISTRY_PULL_TOKEN }}
         run: |
-          bun apps/cv-pdf-worker/scripts/write-wrangler-config.ts apps/cv-pdf-worker/wrangler.deploy.jsonc
-          bun apps/application-registry-api/scripts/write-wrangler-config.ts apps/application-registry-api/wrangler.deploy.jsonc
+          nomad-pack run nomad/packs/application-registry-api \
+            --parser-v1 \
+            --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${API_IMAGE_DIGEST}" \
+            --var "docker_image_username=${{ github.repository_owner }}" \
+            --var "docker_image_password=${REGISTRY_PULL_TOKEN}" \
+            --var "enabled=${API_ENABLED}" \
+            --var "bff_enabled=${API_BFF_ENABLED}" \
+            --var "traefik_subdomain=${API_SUBDOMAIN}"
 
-      - name: Ensure PDF queues exist
+  deploy-listing-check-runner:
+    name: Publish and register listing-check runner
+    if: ${{ vars.CV_NOMAD_DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: ${{ github.repository_owner }}/cv-listing-check-runner
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push immutable runner image
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/application-registry-listing-check-runner/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Install Nomad Pack
         run: |
-          PDF_QUEUE="${CV_PDF_QUEUE_NAME:-cv-pdf-generation}"
-          PDF_DLQ="${CV_PDF_DLQ_NAME:-cv-pdf-generation-dead-letter}"
-          node node_modules/wrangler/bin/wrangler.js queues info "$PDF_QUEUE" >/dev/null 2>&1 || node node_modules/wrangler/bin/wrangler.js queues create "$PDF_QUEUE"
-          node node_modules/wrangler/bin/wrangler.js queues info "$PDF_DLQ" >/dev/null 2>&1 || node node_modules/wrangler/bin/wrangler.js queues create "$PDF_DLQ"
+          version=0.3.0
+          archive="nomad-pack_${version}_linux_amd64.zip"
+          curl -fsSL "https://releases.hashicorp.com/nomad-pack/${version}/${archive}" -o "$archive"
+          unzip -q "$archive" -d /tmp/nomad-pack
+          sudo install /tmp/nomad-pack/nomad-pack /usr/local/bin/nomad-pack
 
-      - name: Apply D1 migrations
-        run: node ../../node_modules/wrangler/bin/wrangler.js d1 migrations apply APPLICATION_REGISTRY_DB --remote --config wrangler.deploy.jsonc
-        working-directory: apps/application-registry-api
+      - name: Register disabled-by-default periodic job
+        env:
+          NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
+          NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
+          REGISTRY_PULL_TOKEN: ${{ secrets.REGISTRY_PULL_TOKEN }}
+          RUNNER_ENABLED: ${{ vars.CV_LISTING_CHECKS_ENABLED || 'false' }}
+          RUNNER_IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          nomad-pack run nomad/packs/application-registry-listing-check-runner \
+            --parser-v1 \
+            --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${RUNNER_IMAGE_DIGEST}" \
+            --var "docker_image_username=${{ github.repository_owner }}" \
+            --var "docker_image_password=${REGISTRY_PULL_TOKEN}" \
+            --var "enabled=${RUNNER_ENABLED}"
 
-      - name: Deploy PDF Queue Worker
-        run: node ../../node_modules/wrangler/bin/wrangler.js deploy --config wrangler.deploy.jsonc
-        working-directory: apps/cv-pdf-worker
+  deploy-self-hosted-pdf:
+    name: Publish and register self-hosted PDF pipeline
+    if: ${{ vars.CV_NOMAD_PDF_DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY: ghcr.io
+      DISPATCHER_IMAGE_NAME: ${{ github.repository_owner }}/cv-pdf-dispatcher
+      RUNNER_IMAGE_NAME: ${{ github.repository_owner }}/cv-pdf-runner
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
 
-      - name: Deploy registry Worker with bearer secret
-        run: bun scripts/deploy.ts wrangler.deploy.jsonc
-        working-directory: apps/application-registry-api
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push immutable dispatcher image
+        id: dispatcher-image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/application-registry-pdf-dispatcher/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.DISPATCHER_IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Build and push immutable Playwright runner image
+        id: runner-image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/cv-pdf-runner/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.RUNNER_IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Install Nomad Pack
+        run: |
+          version=0.3.0
+          archive="nomad-pack_${version}_linux_amd64.zip"
+          curl -fsSL "https://releases.hashicorp.com/nomad-pack/${version}/${archive}" -o "$archive"
+          unzip -q "$archive" -d /tmp/nomad-pack
+          sudo install /tmp/nomad-pack/nomad-pack /usr/local/bin/nomad-pack
+
+      - name: Register disabled-by-default PDF jobs
+        env:
+          DISPATCHER_ENABLED: ${{ vars.CV_PDF_DISPATCHER_ENABLED || 'false' }}
+          DISPATCHER_IMAGE_DIGEST: ${{ steps.dispatcher-image.outputs.digest }}
+          NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
+          NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
+          REGISTRY_PULL_TOKEN: ${{ secrets.REGISTRY_PULL_TOKEN }}
+          RUNNER_ENABLED: ${{ vars.CV_PDF_RUNNER_ENABLED || 'false' }}
+          RUNNER_IMAGE_DIGEST: ${{ steps.runner-image.outputs.digest }}
+        run: |
+          nomad-pack run nomad/packs/application-registry-pdf-dispatcher \
+            --parser-v1 \
+            --var "docker_image=${REGISTRY}/${DISPATCHER_IMAGE_NAME}@${DISPATCHER_IMAGE_DIGEST}" \
+            --var "docker_image_username=${{ github.repository_owner }}" \
+            --var "docker_image_password=${REGISTRY_PULL_TOKEN}" \
+            --var "enabled=${DISPATCHER_ENABLED}"
+
+          nomad-pack run nomad/packs/cv-pdf-runner \
+            --parser-v1 \
+            --var "docker_image=${REGISTRY}/${RUNNER_IMAGE_NAME}@${RUNNER_IMAGE_DIGEST}" \
+            --var "docker_image_username=${{ github.repository_owner }}" \
+            --var "docker_image_password=${REGISTRY_PULL_TOKEN}" \
+            --var "enabled=${RUNNER_ENABLED}"

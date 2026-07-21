@@ -1,11 +1,6 @@
-import { makeRegistryFactory } from '@cv/worker-test-kit/application-registry'
+import type { CreateApplicationRequest } from '@cv/application-registry-api-contract'
 
-const factory = makeRegistryFactory({
-  now: '2026-07-10T12:00:00.000Z',
-  seed: 7_100,
-})
-
-export const applicationInput = factory.application({
+export const applicationInput = {
   applicationStatus: 'not_started',
   appliedAt: null,
   company: 'Example Company',
@@ -27,4 +22,4 @@ export const applicationInput = factory.application({
   postingUrl: 'https://example.com/jobs/e2e-registry',
   role: 'Integration Engineer',
   targetStage: 'apply_next',
-})
+} satisfies CreateApplicationRequest

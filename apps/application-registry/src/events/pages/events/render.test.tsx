@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
+import { decodeListActivitiesSearchParams } from '@cv/application-registry-api-contract'
 import { act, cleanup, waitFor } from '@testing-library/react'
 import { NuqsAdapter } from 'nuqs/adapters/react-router/v7'
 import { BrowserRouter } from 'react-router'
@@ -58,24 +59,39 @@ afterEach(() => {
 })
 
 describe('ActivitiesPage', () => {
-  test('blocks requests when drizzle-query filters are malformed', async () => {
+  test('ignores obsolete JSON filter parameters', async () => {
     const fetchMock = mock(() => Promise.resolve(Response.json(emptyPage)))
     globalThis.fetch = fetchMock as unknown as typeof fetch
 
     const view = renderActivitiesPage('/activities?filters=not-json')
 
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
     expect(
-      await view.findByText('Invalid filters URL; the table request is blocked')
-    ).toBeTruthy()
-    await act(async () => undefined)
-    expect(fetchMock).not.toHaveBeenCalled()
+      view.queryByText('Invalid query URL; the table request is blocked')
+    ).toBeNull()
     expect(
       (
         view.getByRole('button', {
           name: 'Refresh activities',
         }) as HTMLButtonElement
       ).disabled
-    ).toBe(true)
+    ).toBe(false)
+  })
+
+  test('blocks requests when compact ordering is invalid', async () => {
+    const fetchMock = mock(() => Promise.resolve(Response.json(emptyPage)))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const view = renderActivitiesPage('/activities?sort=unknown:asc')
+
+    expect(
+      await view.findByText('Invalid query URL; the table request is blocked')
+    ).toBeTruthy()
+    await act(async () => undefined)
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(new URLSearchParams(window.location.search).get('sort')).toBe(
+      'unknown:asc'
+    )
   })
 
   test('forwards canonical drizzle-query filters unchanged', async () => {
@@ -96,29 +112,32 @@ describe('ActivitiesPage', () => {
         value: 'status_changed',
       },
     ]
-    const serialized = JSON.stringify(filters)
-
-    renderActivitiesPage(
-      `/activities?${new URLSearchParams({ filters: serialized }).toString()}`
-    )
+    renderActivitiesPage('/activities?filter=kind:eq:status_changed')
 
     await waitFor(() => expect(requests).toHaveLength(1))
     const requested = new URL(requests[0]?.url ?? '')
     expect(requested.pathname).toBe('/api/registry/activities')
-    expect(requested.searchParams.get('filters')).toBe(serialized)
-    expect(new URLSearchParams(window.location.search).get('filters')).toBe(
-      serialized
+    expect(
+      decodeListActivitiesSearchParams(requested.searchParams).filters
+    ).toEqual(filters)
+    expect(requested.searchParams.get('filter')).toBe('kind:eq:status_changed')
+    expect(new URLSearchParams(window.location.search).get('filter')).toBe(
+      'kind:eq:status_changed'
     )
   })
 
   test('renders backend-issued activity annotations', async () => {
-    globalThis.fetch = mock(() =>
-      Promise.resolve(Response.json({ ...emptyPage, items: [activity] }))
-    ) as unknown as typeof fetch
+    let requestUrl = ''
+    globalThis.fetch = mock((input: string | URL | Request) => {
+      requestUrl = String(input)
+      return Promise.resolve(Response.json({ ...emptyPage, items: [activity] }))
+    }) as unknown as typeof fetch
 
     const view = renderActivitiesPage('/activities')
 
     expect(await view.findByText('Example Company')).toBeTruthy()
+    expect(new URL(requestUrl).searchParams.has('sort')).toBe(false)
+    expect(new URLSearchParams(window.location.search).has('sort')).toBe(false)
     expect(view.getByText('Platform Engineer')).toBeTruthy()
     expect(view.getByText('Status changed')).toBeTruthy()
     expect(view.getByText('From: preparing · To: applied')).toBeTruthy()

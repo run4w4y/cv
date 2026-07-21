@@ -1,33 +1,51 @@
 import { describe, expect, test } from 'bun:test'
-import { Deferred, Effect, Exit, Fiber, Layer, SubscriptionRef } from 'effect'
+import {
+  Crypto,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  SubscriptionRef,
+} from 'effect'
 import * as WorkflowEngine from 'effect/unstable/workflow/WorkflowEngine'
 import {
   type PreparationWorkflowInput,
   PrepareApplicationWorkflow,
 } from '../domain'
 import { PreparationProgress, preparationProgressLayer } from '../progress'
-import { type PreparedStart, startReservedPreparations } from './start'
+import { cvGenerationGuidanceTestFixture } from '../test-support'
+import {
+  type PreparedStart,
+  startPreparation,
+  startPreparationBatch,
+  startReservedPreparations,
+} from './start'
 
 const workflowInput = (
   runId: string,
   url: string
 ): PreparationWorkflowInput => ({
   coverLetterPrompt: null,
+  cvGenerationGuidance: cvGenerationGuidanceTestFixture,
   kind: 'cv',
   locale: 'en',
-  modelId: 'model-1',
   runId,
   source: { _tag: 'CaptureUrl', url },
 })
 
 const prepare = Effect.fn('Test.prepareStartup')(function* (
-  payload: PreparationWorkflowInput
+  payload: PreparationWorkflowInput,
+  batchPosition = 0,
+  batchId = 'batch-1'
 ) {
   const executionId = yield* PrepareApplicationWorkflow.executionId(payload)
   return {
+    batchId,
+    batchPosition,
     executionId,
     payload,
-    result: { runId: payload.runId },
+    result: { batchId, runId: payload.runId },
   } satisfies PreparedStart
 })
 
@@ -36,7 +54,79 @@ const startupTestLayer = Layer.merge(
   WorkflowEngine.layerMemory
 )
 
+const makeCryptoLayer = () => {
+  let value = 0
+  return Layer.succeed(
+    Crypto.Crypto,
+    Crypto.make({
+      digest: (_algorithm, bytes) => Effect.succeed(bytes),
+      randomBytes: (size) => {
+        value += 1
+        return new Uint8Array(size).fill(value)
+      },
+    })
+  )
+}
+
+const startInput = (url: string) => ({
+  coverLetterPrompt: null,
+  cvGenerationGuidance: cvGenerationGuidanceTestFixture,
+  kind: 'cv' as const,
+  locale: 'en',
+  source: { _tag: 'CaptureUrl' as const, url },
+})
+
 describe('preparation batch startup', () => {
+  test('assigns a distinct batch to each single start and one shared batch to a batch start', async () => {
+    const observed = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const progress = yield* PreparationProgress
+          const memoryEngine = yield* WorkflowEngine.WorkflowEngine
+          const engine = WorkflowEngine.WorkflowEngine.of({
+            ...memoryEngine,
+            execute: (_workflow, options) =>
+              Effect.succeed(options.executionId),
+          })
+          const first = yield* startPreparation(
+            startInput('https://jobs.example.test/single-1')
+          ).pipe(Effect.provideService(WorkflowEngine.WorkflowEngine, engine))
+          const second = yield* startPreparation(
+            startInput('https://jobs.example.test/single-2')
+          ).pipe(Effect.provideService(WorkflowEngine.WorkflowEngine, engine))
+          const batch = yield* startPreparationBatch({
+            ...startInput('https://jobs.example.test/unused'),
+            urls: [
+              'https://jobs.example.test/batch-1',
+              'https://jobs.example.test/batch-2',
+            ],
+          }).pipe(Effect.provideService(WorkflowEngine.WorkflowEngine, engine))
+          return {
+            batch,
+            first,
+            runs: yield* SubscriptionRef.get(progress.runs),
+            second,
+          }
+        })
+      ).pipe(
+        Effect.provide([
+          preparationProgressLayer,
+          WorkflowEngine.layerMemory,
+          makeCryptoLayer(),
+        ])
+      )
+    )
+
+    expect(observed.first.batchId).not.toBe(observed.second.batchId)
+    expect(observed.first.batchId).not.toBe(observed.first.runId)
+    expect(observed.batch).toHaveLength(2)
+    expect(new Set(observed.batch.map(({ batchId }) => batchId)).size).toBe(1)
+    expect(new Set(observed.batch.map(({ runId }) => runId)).size).toBe(2)
+    expect(
+      observed.batch.map(({ runId }) => observed.runs.get(runId)?.batchPosition)
+    ).toEqual([0, 1])
+  })
+
   test('rejects the whole batch before invoking the workflow engine', async () => {
     const observed = await Effect.runPromise(
       Effect.scoped(
@@ -47,7 +137,11 @@ describe('preparation batch startup', () => {
             'run-existing',
             'https://jobs.example.test/existing'
           )
-          yield* progress.register(existing)
+          yield* progress.register({
+            batchId: 'batch-existing',
+            batchPosition: 0,
+            input: existing,
+          })
 
           const first = yield* prepare(
             workflowInput('run-new', 'https://jobs.example.test/new')
@@ -99,7 +193,8 @@ describe('preparation batch startup', () => {
             workflowInput('run-start-1', 'https://jobs.example.test/role-1')
           )
           const second = yield* prepare(
-            workflowInput('run-start-2', 'https://jobs.example.test/role-2')
+            workflowInput('run-start-2', 'https://jobs.example.test/role-2'),
+            1
           )
           const bothStarted = yield* Deferred.make<void>()
           const attempted: Array<string> = []
@@ -184,7 +279,8 @@ describe('preparation batch startup', () => {
               workflowInput(
                 `run-interrupted-${index}`,
                 `https://jobs.example.test/interrupted-${index}`
-              )
+              ),
+              index
             )
           )
           const startup = yield* startReservedPreparations(prepared).pipe(

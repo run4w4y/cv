@@ -109,6 +109,7 @@ describe('shared IR SQL rendering', () => {
       limit: 3,
       offset: undefined,
     })
+    expect(rendered.boundParameterCount).toBe(5)
   })
 
   test('does not request cursor projections for page pagination', () => {
@@ -138,5 +139,6 @@ describe('shared IR SQL rendering', () => {
       limit: 3,
       offset: 2,
     })
+    expect(rendered.boundParameterCount).toBe(3)
   })
 })

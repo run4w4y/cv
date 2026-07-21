@@ -1,20 +1,28 @@
-import { Effect, Layer, SubscriptionRef } from 'effect'
+import { Clock, Effect, Layer, SubscriptionRef } from 'effect'
 import type * as DurableDeferred from 'effect/unstable/workflow/DurableDeferred'
 
 import type {
   ContentRevisionResult,
   PreparationStage,
-  PreparationWorkflowInput,
   SavedCandidate,
 } from '../domain'
 import { PreparationWorkflowError } from '../domain'
-import type { CancellationClaim, PreparationRunStates } from './model'
+import type {
+  CancellationClaim,
+  PreparationRunReservation,
+  PreparationRunStates,
+} from './model'
 import { PreparationProgress } from './model'
 import {
   releasePreparationReservations,
   reservePreparationRuns,
 } from './reservations'
-import { updatePreparationRun } from './state'
+import {
+  advancePreparationStep,
+  completePreparationHistory,
+  finishPreparationStep,
+  updatePreparationRun,
+} from './state'
 
 export const preparationProgressLayer = Layer.effect(
   PreparationProgress,
@@ -22,11 +30,16 @@ export const preparationProgressLayer = Layer.effect(
     const runs = yield* SubscriptionRef.make<PreparationRunStates>(new Map())
 
     const reserveEntries = Effect.fn('PreparationProgress.reserveEntries')(
-      function* (inputs: ReadonlyArray<PreparationWorkflowInput>) {
+      function* (reservations: ReadonlyArray<PreparationRunReservation>) {
+        const createdAt = yield* Clock.currentTimeMillis
         const conflictMessage = yield* SubscriptionRef.modify(
           runs,
           (current) => {
-            const reserved = reservePreparationRuns(current, inputs)
+            const reserved = reservePreparationRuns(
+              current,
+              reservations,
+              createdAt
+            )
             return [reserved.conflict, reserved.runs] as const
           }
         )
@@ -41,12 +54,12 @@ export const preparationProgressLayer = Layer.effect(
     )
 
     const register = Effect.fn('PreparationProgress.register')(
-      (input: PreparationWorkflowInput) => reserveEntries([input])
+      (reservation: PreparationRunReservation) => reserveEntries([reservation])
     )
 
     const reserve = Effect.fn('PreparationProgress.reserve')(
-      (inputs: ReadonlyArray<PreparationWorkflowInput>) =>
-        reserveEntries(inputs)
+      (reservations: ReadonlyArray<PreparationRunReservation>) =>
+        reserveEntries(reservations)
     )
 
     const releaseReservations = Effect.fn(
@@ -59,10 +72,12 @@ export const preparationProgressLayer = Layer.effect(
 
     const setExecution = Effect.fn('PreparationProgress.setExecution')(
       function* (runId: string, executionId: string) {
+        const updatedAt = yield* Clock.currentTimeMillis
         yield* SubscriptionRef.update(runs, (current) =>
           updatePreparationRun(current, runId, (run) => ({
             ...run,
             executionId,
+            updatedAt,
           }))
         )
       }
@@ -74,6 +89,7 @@ export const preparationProgressLayer = Layer.effect(
       message: string,
       applicationId?: string
     ) {
+      const updatedAt = yield* Clock.currentTimeMillis
       yield* SubscriptionRef.update(runs, (current) =>
         updatePreparationRun(current, runId, (run) => {
           if (
@@ -92,6 +108,13 @@ export const preparationProgressLayer = Layer.effect(
             reviewToken: null,
             stage: nextStage,
             status: 'running',
+            stepHistory: advancePreparationStep(
+              run.stepHistory,
+              nextStage,
+              message,
+              updatedAt
+            ),
+            updatedAt,
           }
         })
       )
@@ -103,6 +126,8 @@ export const preparationProgressLayer = Layer.effect(
       candidate: SavedCandidate,
       reviewToken: DurableDeferred.Token
     ) {
+      const updatedAt = yield* Clock.currentTimeMillis
+      const message = 'Candidate saved. Human review is required.'
       yield* SubscriptionRef.update(runs, (current) =>
         updatePreparationRun(current, runId, (run) => {
           if (
@@ -117,10 +142,18 @@ export const preparationProgressLayer = Layer.effect(
             candidate,
             error: null,
             executionId: run.executionId,
-            message: 'Candidate saved. Human review is required.',
+            message,
             reviewToken,
             stage: 'review',
             status: 'awaiting_review',
+            stepHistory: advancePreparationStep(
+              run.stepHistory,
+              'review',
+              message,
+              updatedAt,
+              'waiting'
+            ),
+            updatedAt,
           }
         })
       )
@@ -139,6 +172,7 @@ export const preparationProgressLayer = Layer.effect(
             readonly status: 'rejected'
           }
     ) {
+      const updatedAt = yield* Clock.currentTimeMillis
       yield* SubscriptionRef.update(runs, (current) =>
         updatePreparationRun(current, runId, (run) =>
           run.status !== 'awaiting_review' && run.status !== 'review_submitted'
@@ -153,6 +187,12 @@ export const preparationProgressLayer = Layer.effect(
                 reviewToken: null,
                 stage: 'complete',
                 status: completion.status,
+                stepHistory: completePreparationHistory(
+                  run.stepHistory,
+                  completion.message,
+                  updatedAt
+                ),
+                updatedAt,
               }
         )
       )
@@ -160,6 +200,8 @@ export const preparationProgressLayer = Layer.effect(
 
     const reviewSubmitted = Effect.fn('PreparationProgress.reviewSubmitted')(
       function* (runId: string, token: DurableDeferred.Token) {
+        const updatedAt = yield* Clock.currentTimeMillis
+        const message = 'Human review decision submitted.'
         return yield* SubscriptionRef.modify(runs, (current) => {
           const run = current.get(runId)
           if (
@@ -172,9 +214,16 @@ export const preparationProgressLayer = Layer.effect(
           const next = new Map(current)
           next.set(runId, {
             ...run,
-            message: 'Human review decision submitted.',
+            message,
             reviewToken: null,
             status: 'review_submitted',
+            stepHistory: advancePreparationStep(
+              run.stepHistory,
+              'review',
+              message,
+              updatedAt
+            ),
+            updatedAt,
           })
           return [true, next] as const
         })
@@ -183,15 +232,25 @@ export const preparationProgressLayer = Layer.effect(
 
     const restoreReview = Effect.fn('PreparationProgress.restoreReview')(
       function* (runId: string, reviewToken: DurableDeferred.Token) {
+        const updatedAt = yield* Clock.currentTimeMillis
+        const message = 'Candidate saved. Human review is required.'
         yield* SubscriptionRef.update(runs, (current) =>
           updatePreparationRun(current, runId, (run) =>
             run.status !== 'review_submitted'
               ? run
               : {
                   ...run,
-                  message: 'Candidate saved. Human review is required.',
+                  message,
                   reviewToken,
                   status: 'awaiting_review',
+                  stepHistory: advancePreparationStep(
+                    run.stepHistory,
+                    'review',
+                    message,
+                    updatedAt,
+                    'waiting'
+                  ),
+                  updatedAt,
                 }
           )
         )
@@ -202,6 +261,7 @@ export const preparationProgressLayer = Layer.effect(
       runId: string,
       message: string
     ) {
+      const updatedAt = yield* Clock.currentTimeMillis
       yield* SubscriptionRef.update(runs, (current) =>
         updatePreparationRun(current, runId, (run) =>
           run.status === 'approved' ||
@@ -216,6 +276,14 @@ export const preparationProgressLayer = Layer.effect(
                   message: 'Preparation cancelled for this browser session.',
                   reviewToken: null,
                   status: 'cancelled',
+                  stepHistory: finishPreparationStep(
+                    run.stepHistory,
+                    run.stage,
+                    'Preparation cancelled for this browser session.',
+                    updatedAt,
+                    'cancelled'
+                  ),
+                  updatedAt,
                 }
               : {
                   ...run,
@@ -223,6 +291,14 @@ export const preparationProgressLayer = Layer.effect(
                   message: 'Preparation failed.',
                   reviewToken: null,
                   status: 'failed',
+                  stepHistory: finishPreparationStep(
+                    run.stepHistory,
+                    run.stage,
+                    message,
+                    updatedAt,
+                    'failed'
+                  ),
+                  updatedAt,
                 }
         )
       )
@@ -231,6 +307,8 @@ export const preparationProgressLayer = Layer.effect(
     const cancel = Effect.fn('PreparationProgress.cancel')(function* (
       runId: string
     ) {
+      const updatedAt = yield* Clock.currentTimeMillis
+      const message = 'Preparation cancelled for this browser session.'
       yield* SubscriptionRef.update(runs, (current) =>
         updatePreparationRun(current, runId, (run) =>
           run.status !== 'queued' &&
@@ -241,9 +319,17 @@ export const preparationProgressLayer = Layer.effect(
             : {
                 ...run,
                 error: null,
-                message: 'Preparation cancelled for this browser session.',
+                message,
                 reviewToken: null,
                 status: 'cancelled',
+                stepHistory: finishPreparationStep(
+                  run.stepHistory,
+                  run.stage,
+                  message,
+                  updatedAt,
+                  'cancelled'
+                ),
+                updatedAt,
               }
         )
       )
@@ -251,6 +337,7 @@ export const preparationProgressLayer = Layer.effect(
 
     const requestCancel = Effect.fn('PreparationProgress.requestCancel')(
       function* (runId: string, executionId: string) {
+        const updatedAt = yield* Clock.currentTimeMillis
         return yield* SubscriptionRef.modify(runs, (current) => {
           const run = current.get(runId)
           if (
@@ -269,6 +356,7 @@ export const preparationProgressLayer = Layer.effect(
             executionId,
             message: 'Cancelling preparation for this browser session.',
             status: 'cancelling',
+            updatedAt,
           })
           return [
             {
@@ -287,10 +375,11 @@ export const preparationProgressLayer = Layer.effect(
     const restoreCancellation = Effect.fn(
       'PreparationProgress.restoreCancellation'
     )(function* (runId: string, executionId: string, claim: CancellationClaim) {
+      const updatedAt = yield* Clock.currentTimeMillis
       yield* SubscriptionRef.update(runs, (current) =>
         updatePreparationRun(current, runId, (run) =>
           run.status === 'cancelling' && run.executionId === executionId
-            ? claim.previous
+            ? { ...claim.previous, updatedAt }
             : run
         )
       )

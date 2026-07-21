@@ -1,4 +1,8 @@
 import {
+  type CvGenerationGuidanceV1,
+  CvGenerationGuidanceV1Schema,
+} from '@cv/contracts/document'
+import {
   ContactFactsSectionV1Schema,
   ContactItemV1Schema,
   EducationEntryV1Schema,
@@ -62,6 +66,7 @@ const FactListSchema = <S extends Schema.Top>(schema: S, maxLength: number) =>
 
 export const FactsRepositoryConfigSourceSchema = Schema.Struct({
   factsDir: RelativePathSchema,
+  generationGuidance: RelativePathSchema,
   defaultLocale: LocaleSchema,
   locales: Schema.Array(LocaleSchema).pipe(Schema.check(Schema.isMinLength(1))),
 }).annotate({
@@ -71,6 +76,9 @@ export const FactsRepositoryConfigSourceSchema = Schema.Struct({
 
 export interface FactsRepositoryConfigSource
   extends Schema.Schema.Type<typeof FactsRepositoryConfigSourceSchema> {}
+
+export const CvGenerationGuidanceSourceSchema = CvGenerationGuidanceV1Schema
+export type CvGenerationGuidanceSource = CvGenerationGuidanceV1
 
 export const FactEvidenceSourceSchema = Schema.Struct({
   kind: Schema.Literals([

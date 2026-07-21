@@ -703,9 +703,6 @@ export type FactsCatalogueV1Encoded = Schema.Codec.Encoded<
   typeof FactsCatalogueV1Schema
 >
 
-export const FactsCatalogueSchema = FactsCatalogueV1Schema
-export type FactsCatalogue = Schema.Schema.Type<typeof FactsCatalogueSchema>
-
 export const factsSchemaRegistry = [
   {
     contractId: cvFactsV1ContractId,

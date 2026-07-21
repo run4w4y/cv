@@ -1,14 +1,23 @@
 import { Context, type Effect } from 'effect'
 
-import type { RegistryAnalyticsError, RegistryDatabaseError } from '../errors'
 import type {
-  CvAnalyticsDays,
+  RegistryAnalyticsError,
+  RegistryBadRequestError,
+  RegistryDatabaseError,
+} from '../errors'
+import type {
+  CvAnalyticsRangeInput,
   CvAnalyticsResult,
   CvAnalyticsTrafficAlias,
+  CvAnalyticsTrafficCapabilities,
   CvAnalyticsTrafficData,
 } from '../types'
 
 export interface CvAnalyticsTrafficSource {
+  readonly capabilities: () => Effect.Effect<
+    CvAnalyticsTrafficCapabilities,
+    RegistryAnalyticsError
+  >
   readonly read: (
     aliases: readonly CvAnalyticsTrafficAlias[],
     range: { readonly from: string; readonly to: string }
@@ -21,11 +30,11 @@ export const CvAnalyticsTrafficSource =
   )
 
 export interface CvAnalyticsService {
-  readonly read: (input: {
-    readonly days?: CvAnalyticsDays
-  }) => Effect.Effect<
+  readonly read: (
+    input: CvAnalyticsRangeInput
+  ) => Effect.Effect<
     CvAnalyticsResult,
-    RegistryAnalyticsError | RegistryDatabaseError
+    RegistryAnalyticsError | RegistryBadRequestError | RegistryDatabaseError
   >
 }
 

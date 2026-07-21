@@ -1,13 +1,9 @@
-import type { AiJsonGenerationRequest, AiProviderShape } from '@cv/ai-provider'
 import { CvDocumentV1Schema } from '@cv/contracts/document'
 import { Effect, Schema, Semaphore } from 'effect'
 
 import { coverLetterJsonSchema } from '../cover-letter/ai-schema'
 import { CoverLetterDocumentSchema } from '../cover-letter/contract'
-import {
-  cvDocumentV1JsonSchema,
-  cvDocumentV1ModelGuidance,
-} from '../cv/ai-schema'
+import { cvDocumentV1JsonSchema } from '../cv/ai-schema'
 import type {
   EvidencePlan,
   JobAnalysis,
@@ -22,13 +18,17 @@ import {
   preparationSourceUrl,
   SectionBriefSchema,
 } from '../domain'
-import { toAiJsonSchema } from '../generation/ai-schema'
+import { toGenerationJsonSchema } from '../generation/ai-schema'
 import {
   buildCoverLetterGenerationRequest,
   buildCvDraftGenerationRequest,
   factsForGeneration,
 } from '../generation/prompts'
-import { aiStageMetadata, formatted, stageError } from './shared'
+import type {
+  StructuredGenerationRequest,
+  StructuredGenerationShape,
+} from '../generation/service'
+import { formatted, generationStageMetadata, stageError } from './shared'
 import {
   validateCvProvenance,
   validateEvidencePlan,
@@ -44,21 +44,26 @@ export const preparationSectionIds = (
 
 export const makePreparationGenerationGateway = Effect.fn(
   'PreparationGateway.makeGenerationGateway'
-)(function* (ai: AiProviderShape, maximumConcurrentAiCalls = 2) {
-  const aiSemaphore = yield* Semaphore.make(maximumConcurrentAiCalls)
+)(function* (
+  generation: StructuredGenerationShape,
+  maximumConcurrentGenerationCalls = 2
+) {
+  const generationSemaphore = yield* Semaphore.make(
+    maximumConcurrentGenerationCalls
+  )
 
   const generate = Effect.fn('PreparationGateway.generate')(function* <Output>(
     stage: string,
     schema: Schema.Codec<Output, unknown, never, never>,
-    request: AiJsonGenerationRequest
+    request: StructuredGenerationRequest
   ) {
-    const result = yield* aiSemaphore
-      .withPermits(1)(ai.generateJson<Output>(request))
+    const result = yield* generationSemaphore
+      .withPermits(1)(generation.generate(request))
       .pipe(stageError(stage))
     const value = yield* Schema.decodeUnknownEffect(schema)(result.output).pipe(
       stageError(stage)
     )
-    return { metadata: aiStageMetadata(stage, result), value }
+    return { metadata: generationStageMetadata(stage, result), value }
   })
 
   const analyze = Effect.fn('PreparationGateway.analyze')(function* (
@@ -68,16 +73,13 @@ export const makePreparationGenerationGateway = Effect.fn(
     const generated = yield* generate('analysis', JobAnalysisSchema, {
       instructions:
         'Analyze one job posting. Extract only information supported by the posting; do not evaluate the candidate yet. Give every requirement a short stable ID unique within this response.',
-      modelId: input.modelId,
       prompt: [
         `Source URL: ${preparationSourceUrl(input.source)}`,
         `Requested locale: ${input.locale}`,
         'Captured job posting:',
         formatted(context.jobContext),
       ].join('\n\n'),
-      schema: toAiJsonSchema(JobAnalysisSchema),
-      schemaDescription: 'A structured analysis of the captured job posting.',
-      schemaName: 'job_analysis',
+      outputSchema: toGenerationJsonSchema(JobAnalysisSchema),
     })
     return {
       analysis: generated.value,
@@ -86,23 +88,20 @@ export const makePreparationGenerationGateway = Effect.fn(
   })
 
   const planEvidence = Effect.fn('PreparationGateway.planEvidence')(function* (
-    input: PreparationWorkflowInput,
+    _input: PreparationWorkflowInput,
     context: PreparationBootstrap,
     analysis: JobAnalysis
   ) {
     const generated = yield* generate('evidence', EvidencePlanSchema, {
       instructions:
         'Map job requirements only to explicitly supported reviewed fact IDs. An empty factIds list is preferable to an invented or weak match. Every requirement must appear either in matches or uncoveredRequirementIds.',
-      modelId: input.modelId,
       prompt: [
         'Structured job analysis:',
         formatted(analysis),
         'Trusted facts catalogue:',
         formatted(factsForGeneration(context.factsCatalogue)),
       ].join('\n\n'),
-      schema: toAiJsonSchema(EvidencePlanSchema),
-      schemaDescription: 'A requirement-to-reviewed-fact evidence plan.',
-      schemaName: 'job_evidence_plan',
+      outputSchema: toGenerationJsonSchema(EvidencePlanSchema),
     })
     const plan = yield* validateEvidencePlan(
       analysis,
@@ -125,7 +124,6 @@ export const makePreparationGenerationGateway = Effect.fn(
       {
         instructions:
           'Create a concise document-section brief. Reference only reviewed fact IDs from the supplied catalogue and return the requested sectionId exactly. Notes are planning instructions, not finished claims.',
-        modelId: input.modelId,
         prompt: [
           `Document kind: ${input.kind}`,
           `Requested section: ${sectionId}`,
@@ -136,9 +134,7 @@ export const makePreparationGenerationGateway = Effect.fn(
           'Trusted facts catalogue:',
           formatted(factsForGeneration(context.factsCatalogue)),
         ].join('\n\n'),
-        schema: toAiJsonSchema(SectionBriefSchema),
-        schemaDescription: `A planning brief for ${sectionId}.`,
-        schemaName: `section_brief_${sectionId}`,
+        outputSchema: toGenerationJsonSchema(SectionBriefSchema),
       }
     )
     const value = yield* validateSectionBrief(
@@ -157,27 +153,34 @@ export const makePreparationGenerationGateway = Effect.fn(
     plan: EvidencePlan,
     briefs: ReadonlyArray<SectionBrief>
   ) {
-    const baseRequest =
-      input.kind === 'cv'
-        ? buildCvDraftGenerationRequest({
+    const baseRequest = yield* input.kind === 'cv'
+      ? Effect.gen(function* () {
+          const guidance = input.cvGenerationGuidance
+          if (guidance === null) {
+            return yield* Effect.die(
+              'Decoded CV workflow input did not contain generation guidance.'
+            )
+          }
+          return buildCvDraftGenerationRequest({
             factsCatalogue: context.factsCatalogue,
-            guidance: cvDocumentV1ModelGuidance,
+            guidance,
             jobContext: context.jobContext,
             locale: input.locale,
-            modelId: input.modelId,
             schema: cvDocumentV1JsonSchema,
           })
-        : buildCoverLetterGenerationRequest({
+        })
+      : Effect.succeed(
+          buildCoverLetterGenerationRequest({
             factsCatalogue: context.factsCatalogue,
             jobContext: context.jobContext,
             locale: input.locale,
-            modelId: input.modelId,
             prompt:
               input.coverLetterPrompt ??
               'Write a concise, specific, professional cover letter.',
             schema: coverLetterJsonSchema,
           })
-    const request: AiJsonGenerationRequest = {
+        )
+    const request: StructuredGenerationRequest = {
       ...baseRequest,
       prompt: [
         baseRequest.prompt,

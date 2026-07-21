@@ -5,18 +5,29 @@ import {
   AlertTitle,
   Badge,
   Button,
+  buttonVariants,
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
+  cn,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from '@cv/internal-ui'
 import { RawJsonEditor, SchemaEditor } from '@cv/schema-editor/react'
-import { Ban, Check, CircleAlert, Save, Send, X } from 'lucide-react'
+import {
+  ArrowRight,
+  Ban,
+  Check,
+  CircleAlert,
+  Save,
+  Send,
+  X,
+} from 'lucide-react'
+import { Link } from 'react-router'
 
 import type { PreparationWorkspace } from '@/preparation/workspace/atoms'
 import type { CvPreparationActions } from './actions'
@@ -26,9 +37,13 @@ const issueSummary = (issues: ReadonlyArray<{ readonly message: string }>) =>
 
 export const CvEditorCard = ({
   actions,
+  presentation = 'preparation',
+  publicationHref,
   workspace,
 }: {
   readonly actions: CvPreparationActions
+  readonly presentation?: 'preparation' | 'review'
+  readonly publicationHref?: string
   readonly workspace: PreparationWorkspace
 }) => {
   const { editor, run } = workspace
@@ -149,21 +164,35 @@ export const CvEditorCard = ({
                 : 'Reject workflow candidate'}
             </Button>
           )}
-          <Button
-            variant="outline"
-            disabled={
-              actions.commandPending ||
-              actions.publicationExecuting ||
-              actions.approvedRevision === null ||
-              actions.publication === null ||
-              actions.publication.link.enabled
-            }
-            onClick={() => void actions.publish()}
-          >
-            <Send />
-            {actions.publishing ? 'Publishing…' : 'Publish CV'}
-          </Button>
-          {!actions.publicationExecuting ||
+          {presentation === 'review' ? (
+            actions.approvedRevision === null ||
+            publicationHref === undefined ? null : (
+              <Link
+                to={publicationHref}
+                className={cn(buttonVariants({ variant: 'default' }))}
+              >
+                Continue to publication
+                <ArrowRight />
+              </Link>
+            )
+          ) : (
+            <Button
+              variant="outline"
+              disabled={
+                actions.commandPending ||
+                actions.publicationExecuting ||
+                actions.approvedRevision === null ||
+                actions.publication === null ||
+                actions.publication.link.enabled
+              }
+              onClick={() => void actions.publish()}
+            >
+              <Send />
+              {actions.publishing ? 'Publishing…' : 'Publish CV'}
+            </Button>
+          )}
+          {presentation === 'review' ||
+          !actions.publicationExecuting ||
           actions.publicationRun === null ? null : (
             <Button
               variant="outline"

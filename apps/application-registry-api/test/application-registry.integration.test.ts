@@ -1,20 +1,33 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { afterEach, beforeEach, test } from 'node:test'
+import { after, afterEach, before, test } from 'node:test'
 import { Schema } from 'effect'
-
+import { registerApplicationRegistryE2eTests } from './application-registry.e2e.test'
 import { applicationInput } from './fixtures'
-import { RegistryWorkerHarness } from './support/registry-worker'
+import { RegistryApiHarness } from './support/registry-api'
 
-let harness: RegistryWorkerHarness
+let harness: RegistryApiHarness
 
-beforeEach(async () => {
-  harness = await RegistryWorkerHarness.make()
-})
+before(
+  async () => {
+    harness = await RegistryApiHarness.make()
+  },
+  { timeout: 120_000 }
+)
 
-afterEach(async () => {
-  await harness.dispose()
-})
+afterEach(
+  async () => {
+    await harness.reset()
+  },
+  { timeout: 30_000 }
+)
+
+after(
+  async () => {
+    await harness?.dispose()
+  },
+  { timeout: 60_000 }
+)
 
 const ErrorCodeSchema = Schema.Struct({ code: Schema.String })
 const jsonRequest = (
@@ -27,7 +40,7 @@ const jsonRequest = (
   method,
 })
 
-test('enforces authentication and drizzle-query codecs at the Worker boundary', async () => {
+test('enforces authentication and drizzle-query codecs at the HTTP boundary', async () => {
   const unauthorized = await fetch(
     new URL('/api/registry/applications', harness.url),
     { headers: { authorization: 'Bearer invalid-token' } }
@@ -45,30 +58,21 @@ test('enforces authentication and drizzle-query codecs at the Worker boundary', 
   )
   assert.equal(invalidPayload.status, 400)
 
-  for (const filters of [
-    [
-      {
-        type: 'condition',
-        field: 'notARegistryField',
-        operator: 'eq',
-        value: 'anything',
-      },
-    ],
-    [
-      {
-        type: 'condition',
-        field: 'company',
-        operator: 'dropTable',
-        value: 'anything',
-      },
-    ],
+  for (const filter of [
+    'notARegistryField:eq:anything',
+    'company:dropTable:anything',
   ]) {
-    const query = new URLSearchParams({ filters: JSON.stringify(filters) })
+    const query = new URLSearchParams({ filter })
     const response = await harness.fetchRegistry(
       `/api/registry/applications?${query.toString()}`
     )
     assert.equal(response.status, 400)
   }
+
+  const obsolete = await harness.fetchRegistry(
+    '/api/registry/applications?filters=whatever&orderBy=whatever'
+  )
+  assert.equal(obsolete.status, 200)
 })
 
 test('maps create, not-found, duplicate, and stale-update outcomes to HTTP', async () => {
@@ -209,3 +213,5 @@ test('uses raw blob bodies and content-addressed references for revisions', asyn
     'approved'
   )
 })
+
+registerApplicationRegistryE2eTests(() => harness)

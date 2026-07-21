@@ -155,6 +155,7 @@ export type ListingCheckRunCounts = Pick<
 
 export type PersistedListingCheck = ApplicationListingCheck & {
   readonly archiveApplication: boolean
+  readonly claimedLeaseToken?: string
   readonly closedCandidateAt: string | null
   readonly consecutiveClosedChecks: number
   readonly activityId: string | null
@@ -175,6 +176,11 @@ export type StartListingCheckRun = {
 export type ClaimedListingCheckSchedule = ApplicationListingCheckSchedule & {
   readonly leaseToken: string
   readonly leaseUntil: string
+}
+
+export type StartedScheduledListingCheckRun = {
+  readonly run: ListingCheckRun
+  readonly schedules: readonly ClaimedListingCheckSchedule[]
 }
 
 export type ListingCheckProjection = {

@@ -6,6 +6,7 @@ import {
   NotFoundError,
   ServiceUnavailableError,
 } from '@cv/application-registry-api-contract'
+import type { GeneratedArtifact } from '@cv/application-registry-entity'
 import {
   ActivitiesService,
   AnnotationsService,
@@ -24,8 +25,10 @@ import {
 } from '@cv/application-registry-service'
 import { Effect, Match } from 'effect'
 import { HttpApiBuilder } from 'effect/unstable/httpapi'
-import { invalidateCvCache } from '../../worker/cv-cache'
-import { dispatchPdfJob, pdfJobResponse } from '../../worker/pdf-queue'
+import {
+  type CvCacheInvalidation,
+  CvCacheInvalidator,
+} from '../../cache-invalidation'
 
 const toApiError = Match.type<ApplicationRegistryError>().pipe(
   Match.tag('RegistryBadRequestError', (error) =>
@@ -55,10 +58,18 @@ const toApiError = Match.type<ApplicationRegistryError>().pipe(
 const expose = <A>(effect: Effect.Effect<A, ApplicationRegistryError>) =>
   effect.pipe(Effect.mapError(toApiError))
 
+const pdfJobResponse = (artifact: GeneratedArtifact) => ({
+  errorCode: artifact.errorCode,
+  errorMessage: artifact.errorMessage,
+  jobId: artifact.id,
+  status: artifact.status,
+})
+
 const invalidatePublicationCache = (
-  invalidation: Parameters<typeof invalidateCvCache>[0]
+  invalidator: CvCacheInvalidator['Service'],
+  invalidation: CvCacheInvalidation
 ) =>
-  invalidateCvCache(invalidation).pipe(
+  invalidator.invalidate(invalidation).pipe(
     Effect.catch((error) =>
       Effect.logWarning('CV cache compatibility purge failed.', {
         message: error.message,
@@ -68,6 +79,7 @@ const invalidatePublicationCache = (
 
 const syncCvLinksForStatus = (
   cvPublications: CvPublicationsService,
+  invalidator: CvCacheInvalidator['Service'],
   applicationId: string,
   nextStatus: string
 ) =>
@@ -78,7 +90,7 @@ const syncCvLinksForStatus = (
       )
     : cvPublications.restoreAfterRejection(applicationId)
   ).pipe(
-    Effect.tap(() => invalidatePublicationCache({ all: true })),
+    Effect.tap(() => invalidatePublicationCache(invalidator, { all: true })),
     Effect.asVoid,
     Effect.catch((error) => Effect.logWarning(error.message))
   )
@@ -94,6 +106,7 @@ export const ApplicationsHandlersLayer = HttpApiBuilder.group(
       const compensations = yield* CompensationsService
       const cvAnalytics = yield* CvAnalyticsService
       const cvPublications = yield* CvPublicationsService
+      const cvCacheInvalidator = yield* CvCacheInvalidator
       const listingChecks = yield* ListingChecksService
 
       return handlers.handleAll({
@@ -113,8 +126,8 @@ export const ApplicationsHandlersLayer = HttpApiBuilder.group(
           expose(activities.listByApplication(params.id)),
         listApplicationAnnotations: ({ params }) =>
           expose(annotations.list(params.id)),
-        listApplicationCompensations: ({ params, query }) =>
-          expose(compensations.listByApplication(params.id, query.currency)),
+        listApplicationCompensations: ({ params }) =>
+          expose(compensations.listByApplication(params.id)),
         listApplicationFacets: () => expose(applications.facets()),
         listApplicationListingChecks: ({ params }) =>
           expose(listingChecks.listByApplication(params.id)),
@@ -135,6 +148,7 @@ export const ApplicationsHandlersLayer = HttpApiBuilder.group(
               })
               yield* syncCvLinksForStatus(
                 cvPublications,
+                cvCacheInvalidator,
                 updated.application.id,
                 updated.application.applicationStatus
               )
@@ -270,6 +284,7 @@ export const PublicationsHandlersLayer = HttpApiBuilder.group(
   (handlers) =>
     Effect.gen(function* () {
       const cvPublications = yield* CvPublicationsService
+      const cvCacheInvalidator = yield* CvCacheInvalidator
       const pdfArtifacts = yield* PdfArtifactsService
 
       return handlers.handleAll({
@@ -292,7 +307,9 @@ export const PublicationsHandlersLayer = HttpApiBuilder.group(
         stageCv: ({ params, payload }) =>
           expose(cvPublications.stage(params.id, params.entryId, payload)).pipe(
             Effect.tap((link) =>
-              invalidatePublicationCache({ token: link.token })
+              invalidatePublicationCache(cvCacheInvalidator, {
+                token: link.token,
+              })
             )
           ),
         readCurrentPdfArtifact: ({ params, query }) =>
@@ -308,28 +325,16 @@ export const PublicationsHandlersLayer = HttpApiBuilder.group(
             cvPublications.setAvailability(params.id, params.entryId, payload)
           ).pipe(
             Effect.tap((link) =>
-              invalidatePublicationCache({ token: link.token })
+              invalidatePublicationCache(cvCacheInvalidator, {
+                token: link.token,
+              })
             )
           ),
         startPdfJob: ({ params, payload }) =>
           expose(
-            Effect.gen(function* () {
-              const artifact = yield* pdfArtifacts.startJob(
-                params.id,
-                params.entryId,
-                payload
-              )
-              yield* dispatchPdfJob(artifact.id).pipe(
-                Effect.provideService(PdfArtifactsService, pdfArtifacts),
-                Effect.catch((error) =>
-                  Effect.logWarning('PdfQueue.immediate_dispatch_failed', {
-                    artifactId: artifact.id,
-                    message: error.message,
-                  })
-                )
-              )
-              return pdfJobResponse(artifact)
-            })
+            pdfArtifacts
+              .startJob(params.id, params.entryId, payload)
+              .pipe(Effect.map(pdfJobResponse))
           ),
       })
     })

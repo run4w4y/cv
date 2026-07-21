@@ -14,6 +14,8 @@ import {
 import { CvAnalyticsServiceLive } from './cv-analytics'
 
 const now = '2026-07-19T12:00:00.000Z'
+const dayMs = 24 * 60 * 60 * 1_000
+const providerCapabilities = () => Effect.succeed({ retentionMs: 31 * dayMs })
 
 const linkRecord = (
   id: string,
@@ -48,7 +50,8 @@ const live = (
   records: readonly CvAnalyticsLinkRecord[] = [
     linkRecord('link-a', 'Alpha', true),
     linkRecord('link-b', 'Beta', false),
-  ]
+  ],
+  capabilities: CvAnalyticsTrafficSource['capabilities'] = providerCapabilities
 ) =>
   CvAnalyticsServiceLive.pipe(
     Layer.provide(
@@ -56,7 +59,9 @@ const live = (
         listLinks: () => Effect.succeed(records),
       })
     ),
-    Layer.provide(Layer.succeed(CvAnalyticsTrafficSource, { read }))
+    Layer.provide(
+      Layer.succeed(CvAnalyticsTrafficSource, { capabilities, read })
+    )
   )
 
 describe('CvAnalyticsService', () => {
@@ -103,8 +108,12 @@ describe('CvAnalyticsService', () => {
       { key: 'link-b', path: '/c/secret-link-b' },
     ])
     expect(observedRange).toEqual({
-      from: '2026-07-12T12:00:00.000Z',
+      from: '2026-07-13T00:00:00.000Z',
       to: now,
+    })
+    expect(result.availability).toEqual({
+      from: '2026-06-19',
+      to: '2026-07-19',
     })
     expect(result.summary).toEqual({
       enabledLinks: 1,
@@ -129,7 +138,6 @@ describe('CvAnalyticsService', () => {
       { name: 'US', visits: 1 },
     ])
     expect(result.series).toEqual([
-      { at: '2026-07-12', pageViews: 0, visits: 0 },
       { at: '2026-07-13', pageViews: 0, visits: 0 },
       { at: '2026-07-14', pageViews: 0, visits: 0 },
       { at: '2026-07-15', pageViews: 0, visits: 0 },
@@ -149,6 +157,138 @@ describe('CvAnalyticsService', () => {
     ])
     expect(JSON.stringify(result)).not.toContain('secret-link')
     expect(JSON.stringify(result)).not.toContain('/c/')
+  })
+
+  test('uses inclusive UTC dates for a custom range', async () => {
+    let observedRange:
+      | { readonly from: string; readonly to: string }
+      | undefined
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(now))
+        return yield* CvAnalyticsService.use((service) =>
+          service.read({ from: '2026-07-17', to: '2026-07-19' })
+        )
+      }).pipe(
+        Effect.provide([
+          live((_aliases, range) => {
+            observedRange = range
+            return Effect.succeed({
+              generatedAt: now,
+              range: { ...range, granularity: 'day' as const },
+              records: [],
+            })
+          }),
+          TestClock.layer(),
+        ])
+      )
+    )
+
+    expect(observedRange).toEqual({
+      from: '2026-07-17T00:00:00.000Z',
+      to: now,
+    })
+    expect(result.series).toEqual([
+      { at: '2026-07-17', pageViews: 0, visits: 0 },
+      { at: '2026-07-18', pageViews: 0, visits: 0 },
+      { at: '2026-07-19', pageViews: 0, visits: 0 },
+    ])
+  })
+
+  test('accepts custom ranges longer than seven days when the provider retains them', async () => {
+    let observedRange:
+      | { readonly from: string; readonly to: string }
+      | undefined
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(now))
+        return yield* CvAnalyticsService.use((service) =>
+          service.read({ from: '2026-06-25', to: '2026-07-18' })
+        )
+      }).pipe(
+        Effect.provide([
+          live((_aliases, range) => {
+            observedRange = range
+            return Effect.succeed({
+              generatedAt: now,
+              range: { ...range, granularity: 'day' as const },
+              records: [],
+            })
+          }),
+          TestClock.layer(),
+        ])
+      )
+    )
+
+    expect(observedRange).toEqual({
+      from: '2026-06-25T00:00:00.000Z',
+      to: '2026-07-19T00:00:00.000Z',
+    })
+    expect(result.availability).toEqual({
+      from: '2026-06-19',
+      to: '2026-07-19',
+    })
+  })
+
+  test('rejects custom ranges older than provider retention', async () => {
+    const exit = await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(now))
+        return yield* Effect.exit(
+          CvAnalyticsService.use((service) =>
+            service.read({ from: '2026-06-18', to: '2026-07-18' })
+          )
+        )
+      }).pipe(
+        Effect.provide([
+          live(() =>
+            Effect.die('Traffic should not be read for an invalid range.')
+          ),
+          TestClock.layer(),
+        ])
+      )
+    )
+
+    expect(exit._tag).toBe('Failure')
+    expect(exit.toString()).toContain('RegistryBadRequestError')
+    expect(exit.toString()).toContain('2026-06-19')
+  })
+
+  test('rejects incomplete and mixed range modes in the service', async () => {
+    const exits = await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(now))
+        const service = yield* CvAnalyticsService
+        const incomplete = yield* Effect.exit(
+          service.read({ from: '2026-07-01' })
+        )
+        const mixed = yield* Effect.exit(
+          service.read({
+            days: 7,
+            from: '2026-07-01',
+            to: '2026-07-02',
+          })
+        )
+        return [incomplete, mixed]
+      }).pipe(
+        Effect.provide([
+          live(() =>
+            Effect.die('Traffic should not be read for an invalid range.')
+          ),
+          TestClock.layer(),
+        ])
+      )
+    )
+
+    expect(
+      exits.every(
+        (exit) =>
+          exit._tag === 'Failure' &&
+          exit.toString().includes('RegistryBadRequestError')
+      )
+    ).toBe(true)
   })
 
   test('preserves analytics-provider failures', async () => {

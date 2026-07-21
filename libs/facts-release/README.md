@@ -1,40 +1,26 @@
 # `@cv/facts-release`
 
-Deterministic compiler and publication boundary for reviewed CV facts.
+Deterministic compiler and bundle-verification boundary for reviewed CV facts.
 
-The compiler accepts the complete set of composer-validated single-locale
-`cv.facts.v1` catalogues, exact asset bytes with their precomputed digests, and
-immutable source/compiler provenance. It canonicalizes unordered release
-metadata, enforces the asset-to-source and content-type invariants, and emits
-content-addressed objects under `sha256/<digest>`. Publication accepts only the
-compiler-branded bundle and maps it onto immutable static R2 keys. All configured
-locales are published and activated as one atomic release.
+The compiler accepts composer-validated `cv.facts.v1` catalogues, required
+`cv.generation-guidance.v1`, exact asset bytes, and immutable source/compiler
+provenance. It emits a `cv.facts-release.v2` manifest whose release ID is
+`fr_<manifest-sha256>`, so identical inputs produce identical objects.
 
-The release manifest contains only facts-contract metadata, provenance, and
-object descriptors. The release ID is `fr_<manifest-sha256>`, so no manifest
-contains its own address and no clock participates in compilation. A UTC
-publication timestamp is not added later, so identical inputs produce the same
-release and pointer bytes.
-
-```ts
-import { compileFactsRelease, publishFactsRelease } from "@cv/facts-release";
-```
-
-`publishFactsRelease` uses an Effect `FactsReleasePublicationTarget`: it uploads
-the compiler-owned immutable objects and activates the release only after every
-upload succeeds by replacing `current.json` last. Network and R2 adapters remain
-outside this package.
+`compileFactsReleaseBundle` serializes the complete immutable object set into
+`cv.facts-bundle.v1`. `verifyFactsReleaseBundle` checks the strict schema,
+object hashes and lengths, addressed manifest, catalogue/guidance descriptors,
+assets, and exact key set before any storage write is possible.
 
 The static layout is `current.json`,
 `releases/<release-id>/manifest.json`,
 `releases/<release-id>/locales/<locale>.json`, and
-`assets/sha256/<digest>`. Release directories and assets are immutable;
-`current.json` is the sole mutable pointer.
+`releases/<release-id>/generation/cv.json`, plus
+`assets/sha256/<digest>`. Only the registry service may create immutable
+objects and compare-and-set `current.json`; this package has no network or R2
+publisher abstraction.
 
-This package imports the facts contract and deliberately never imports the CV
-document contract or application-registry packages.
-
-## Verification
+There is no older-manifest compatibility path.
 
 ```bash
 bunx nx run facts-release:typecheck

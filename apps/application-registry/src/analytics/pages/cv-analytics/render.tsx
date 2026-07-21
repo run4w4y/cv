@@ -17,6 +17,8 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  type DateRange,
+  DateRangePicker,
   Select,
   Skeleton,
   Table,
@@ -40,10 +42,15 @@ import {
 import * as React from 'react'
 import { Link } from 'react-router'
 
-import { formatDateTime, formatLabel } from '../../../lib/format'
+import { asyncResultErrorMessage } from '@/lib/async-result'
+import { formatLabel } from '../../../lib/format'
+import { HeaderActions } from '../../../shell/header-actions'
 import {
   type CvAnalyticsDays,
+  type CvAnalyticsRangeKey,
   cvAnalyticsAtom,
+  cvAnalyticsCustomRangeKey,
+  cvAnalyticsPresetRangeKey,
   refreshCvAnalytics,
 } from '../../data'
 
@@ -63,27 +70,33 @@ const formatAnalyticsDate = (value: string | null): string => {
   return Number.isNaN(date.getTime()) ? value : dateFormatter.format(date)
 }
 
+const fromAnalyticsDate = (value: string): Date => {
+  const [year, month, day] = value.split('-').map(Number)
+  return new Date(year ?? 0, (month ?? 1) - 1, day ?? 1)
+}
+
+const toAnalyticsDate = (date: Date): string => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const formatCustomRange = (range?: DateRange): string => {
+  if (!range?.from) return ''
+  const from = formatAnalyticsDate(toAnalyticsDate(range.from))
+  if (!range.to) return from
+  return `${from} – ${formatAnalyticsDate(toAnalyticsDate(range.to))}`
+}
+
 const rangeOptions = [
-  { label: 'Last 24 hours', value: '1' },
+  { label: 'Today', value: '1' },
   { label: 'Last 3 days', value: '3' },
   { label: 'Last 7 days', value: '7' },
+  { label: 'Custom range', value: 'custom' },
 ] as const
 
-const resultError = (
-  result: AsyncResult.AsyncResult<unknown, unknown>
-): string | undefined =>
-  AsyncResult.matchWithError(result, {
-    onDefect: (cause) =>
-      cause instanceof Error
-        ? cause.message
-        : 'CV analytics could not be loaded.',
-    onError: (cause) =>
-      cause instanceof Error
-        ? cause.message
-        : 'CV analytics could not be loaded.',
-    onInitial: () => undefined,
-    onSuccess: () => undefined,
-  })
+type AnalyticsRangeMode = CvAnalyticsDays | 'custom'
 
 const SummaryCard = ({
   description,
@@ -199,6 +212,7 @@ const AnalyticsContent = ({ data }: { readonly data: CvAnalyticsResponse }) => {
                 visits: point.visits,
               }))}
               emptyMessage="No CV traffic was recorded in this period."
+              emptyWhenAllZero
               series={[
                 {
                   area: true,
@@ -381,58 +395,91 @@ const AnalyticsContent = ({ data }: { readonly data: CvAnalyticsResponse }) => {
 }
 
 export const CvAnalyticsPage = () => {
-  const [days, setDays] = React.useState<CvAnalyticsDays>(7)
-  const analyticsResult = useAtomValue(cvAnalyticsAtom(days))
-  const [, refresh] = useAtom(refreshCvAnalytics, { mode: 'promise' })
+  const [rangeMode, setRangeMode] = React.useState<AnalyticsRangeMode>(7)
+  const [customRange, setCustomRange] = React.useState<DateRange>()
+  const [rangeKey, setRangeKey] = React.useState<CvAnalyticsRangeKey>(() =>
+    cvAnalyticsPresetRangeKey(7)
+  )
+  const analyticsResult = useAtomValue(cvAnalyticsAtom(rangeKey))
+  const [, refresh] = useAtom(refreshCvAnalytics, { mode: 'promiseExit' })
   const data = AsyncResult.getOrElse(analyticsResult, () => undefined)
-  const error = resultError(analyticsResult)
+  const error = asyncResultErrorMessage(
+    analyticsResult,
+    'CV analytics could not be loaded.'
+  )
   const loading = AsyncResult.isWaiting(analyticsResult)
+  const availableRange =
+    data === undefined
+      ? undefined
+      : {
+          earliest: fromAnalyticsDate(data.availability.from),
+          latest: fromAnalyticsDate(data.availability.to),
+        }
 
   return (
     <main className="min-h-0 flex-1 overflow-y-auto bg-background">
-      <div className="mx-auto grid w-full max-w-[100rem] gap-6 p-4 lg:p-8">
-        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
-          <div>
-            <p className="text-sm font-medium text-primary">CV analytics</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-              Published CV performance
-            </h1>
-            <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-              Connect traffic to the applications and published CVs already in
-              the registry.
-            </p>
-            {data === undefined ? null : (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Updated {formatDateTime(data.generatedAt)} ·{' '}
-                {formatDateTime(data.range.from)} to{' '}
-                {formatDateTime(data.range.to)}
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Select
-              ariaLabel="Analytics time range"
-              className="w-44"
-              options={rangeOptions}
-              value={String(days)}
-              onValueChange={(value) => {
-                if (value === '1' || value === '3' || value === '7') {
-                  setDays(Number(value) as CvAnalyticsDays)
-                }
-              }}
-            />
-            <Button
-              aria-label="Refresh CV analytics"
-              disabled={loading}
-              onClick={() => void refresh()}
-              variant="outline"
-            >
-              <RefreshCw className={loading ? 'animate-spin' : undefined} />
-              Refresh
-            </Button>
-          </div>
-        </div>
+      <HeaderActions>
+        <Select
+          ariaLabel="Analytics time range"
+          className="w-32 sm:w-40"
+          disabled={data === undefined}
+          options={rangeOptions}
+          value={String(rangeMode)}
+          onValueChange={(value) => {
+            if (value === 'custom') {
+              setRangeMode('custom')
+              if (customRange?.from && customRange.to) {
+                setRangeKey(
+                  cvAnalyticsCustomRangeKey(
+                    toAnalyticsDate(customRange.from),
+                    toAnalyticsDate(customRange.to)
+                  )
+                )
+              }
+              return
+            }
+            if (value === '1' || value === '3' || value === '7') {
+              const days = Number(value) as CvAnalyticsDays
+              setRangeMode(days)
+              setRangeKey(cvAnalyticsPresetRangeKey(days))
+            }
+          }}
+        />
+        {rangeMode === 'custom' && availableRange !== undefined ? (
+          <DateRangePicker
+            ariaLabel="Choose custom analytics range"
+            className="w-9 overflow-hidden px-2 sm:w-56 sm:px-3"
+            formatRange={formatCustomRange}
+            maxValue={availableRange.latest}
+            minValue={availableRange.earliest}
+            numberOfMonths={1}
+            onChange={(value) => {
+              setCustomRange(value)
+              if (!value?.from || !value.to) return
+              setRangeKey(
+                cvAnalyticsCustomRangeKey(
+                  toAnalyticsDate(value.from),
+                  toAnalyticsDate(value.to)
+                )
+              )
+            }}
+            placeholder="Choose dates"
+            value={customRange}
+          />
+        ) : null}
+        <Button
+          aria-label="Refresh CV analytics"
+          className="size-9 px-0 xl:w-auto xl:px-3"
+          disabled={loading}
+          onClick={() => void refresh()}
+          variant="outline"
+        >
+          <RefreshCw className={loading ? 'animate-spin' : undefined} />
+          <span className="hidden xl:inline">Refresh</span>
+        </Button>
+      </HeaderActions>
 
+      <div className="mx-auto grid w-full max-w-[100rem] gap-5 p-4 lg:p-8">
         {error !== undefined ? (
           <Alert variant="destructive">
             <AlertCircle />

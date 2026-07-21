@@ -95,7 +95,7 @@ jobs:
         run: ./node_modules/.bin/nx run cv:build --skip-nx-cache
 
   application-registry-build:
-    name: Build application registry Worker
+    name: Build application registry services
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -110,11 +110,20 @@ jobs:
       - name: Verify application registry migration drift
         run: ./node_modules/.bin/nx run application-registry-entity:migrations:check --skip-nx-cache
 
-      - name: Build application registry Worker
+      - name: Build self-hosted application registry API
         run: ./node_modules/.bin/nx run application-registry-api:build --skip-nx-cache
 
+      - name: Build listing-check runner
+        run: ./node_modules/.bin/nx run application-registry-listing-check-runner:build --skip-nx-cache
+
+      - name: Build PDF outbox dispatcher
+        run: ./node_modules/.bin/nx run application-registry-pdf-dispatcher:build --skip-nx-cache
+
+      - name: Build self-hosted PDF runner
+        run: ./node_modules/.bin/nx run cv-pdf-runner:build --skip-nx-cache
+
   application-registry-tests:
-    name: Test application registry Worker
+    name: Test application registry services
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -125,21 +134,24 @@ jobs:
 
       - name: Set up workspace runtime
         uses: ./.github/actions/setup-runtime
+
+      - name: Run PDF queue integration tests
+        run: ./node_modules/.bin/nx run application-registry-pdf-queue:test:integration --skip-nx-cache
+
+      - name: Run registry API system tests
+        run: ./node_modules/.bin/nx run application-registry-api:test:integration --skip-nx-cache
 
       - name: Run registry CRUD integration tests
         run: ./node_modules/.bin/nx run application-registry-crud:test:integration --skip-nx-cache
 
+      - name: Run registry D1-to-PostgreSQL migration integration tests
+        run: ./node_modules/.bin/nx run application-registry-migration:test:integration --skip-nx-cache
+
       - name: Run registry service integration tests
         run: ./node_modules/.bin/nx run application-registry-service:test:integration --skip-nx-cache
 
-      - name: Run registry API integration tests
-        run: ./node_modules/.bin/nx run application-registry-api:test:integration --skip-nx-cache
-
-      - name: Run built Worker end-to-end tests
-        run: ./node_modules/.bin/nx run application-registry-api:test:e2e --skip-nx-cache
-
-  cv-worker-tests:
-    name: Test built CV Worker
+  cv-e2e:
+    name: Test CV app in Chromium
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -150,16 +162,18 @@ jobs:
 
       - name: Set up workspace runtime
         uses: ./.github/actions/setup-runtime
+        with:
+          install-playwright: "true"
 
-      - name: Run built Worker integration tests
-        run: ./node_modules/.bin/nx run cv:test:worker --skip-nx-cache
+      - name: Run CV browser end-to-end tests
+        run: ./node_modules/.bin/nx run cv:test:e2e --skip-nx-cache
 
   deploy-cv:
     name: Deploy production CV
     needs:
       - quality
       - cv-build
-      - cv-worker-tests
+      - cv-e2e
       - deploy-application-registry
     if: >-
       ${{

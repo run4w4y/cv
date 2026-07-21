@@ -52,6 +52,9 @@ export const getNumericExtent = (
   }
 
   if (minimum === maximum) {
+    if (includeZero && minimum === 0) {
+      return { minimum: 0, maximum: 1 }
+    }
     const padding = Math.abs(minimum) * 0.1 || 1
     return { minimum: minimum - padding, maximum: maximum + padding }
   }

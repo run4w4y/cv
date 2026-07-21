@@ -1,4 +1,9 @@
-import type { PreparationRunState, PreparationWorkflowInput } from '../domain'
+import type {
+  PreparationRunState,
+  PreparationStage,
+  PreparationStepHistoryEntry,
+  PreparationWorkflowInput,
+} from '../domain'
 import { preparationSourceApplicationId, preparationSourceUrl } from '../domain'
 import type { PreparationRunStates } from './model'
 
@@ -48,3 +53,92 @@ export const updatePreparationRun = (
   next.set(runId, update(run))
   return next
 }
+
+const lastStepEntry = (
+  history: ReadonlyArray<PreparationStepHistoryEntry>
+): PreparationStepHistoryEntry | undefined => history.at(-1)
+
+const appendStepEntry = (
+  history: ReadonlyArray<PreparationStepHistoryEntry>,
+  entry: PreparationStepHistoryEntry
+): ReadonlyArray<PreparationStepHistoryEntry> => [...history, entry]
+
+const completeCurrentStep = (
+  history: ReadonlyArray<PreparationStepHistoryEntry>,
+  occurredAt: number,
+  message?: string
+): ReadonlyArray<PreparationStepHistoryEntry> => {
+  const current = lastStepEntry(history)
+  if (
+    current === undefined ||
+    current.status === 'completed' ||
+    current.status === 'failed' ||
+    current.status === 'cancelled'
+  ) {
+    return history
+  }
+  return appendStepEntry(history, {
+    ...current,
+    ...(message === undefined ? {} : { message }),
+    occurredAt,
+    status: 'completed',
+  })
+}
+
+export const startPreparationHistory = (
+  message: string,
+  occurredAt: number
+): ReadonlyArray<PreparationStepHistoryEntry> => [
+  {
+    message,
+    occurredAt,
+    stage: 'queued',
+    status: 'running',
+  },
+]
+
+export const advancePreparationStep = (
+  history: ReadonlyArray<PreparationStepHistoryEntry>,
+  stage: PreparationStage,
+  message: string,
+  occurredAt: number,
+  status: 'running' | 'waiting' = 'running'
+): ReadonlyArray<PreparationStepHistoryEntry> => {
+  const current = lastStepEntry(history)
+  const completed =
+    current === undefined || current.stage === stage
+      ? history
+      : completeCurrentStep(history, occurredAt)
+  return appendStepEntry(completed, {
+    message,
+    occurredAt,
+    stage,
+    status,
+  })
+}
+
+export const finishPreparationStep = (
+  history: ReadonlyArray<PreparationStepHistoryEntry>,
+  stage: PreparationStage,
+  message: string,
+  occurredAt: number,
+  status: 'failed' | 'cancelled'
+): ReadonlyArray<PreparationStepHistoryEntry> =>
+  appendStepEntry(history, {
+    message,
+    occurredAt,
+    stage,
+    status,
+  })
+
+export const completePreparationHistory = (
+  history: ReadonlyArray<PreparationStepHistoryEntry>,
+  message: string,
+  occurredAt: number
+): ReadonlyArray<PreparationStepHistoryEntry> =>
+  appendStepEntry(completeCurrentStep(history, occurredAt, message), {
+    message,
+    occurredAt,
+    stage: 'complete',
+    status: 'completed',
+  })

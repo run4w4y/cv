@@ -8,6 +8,7 @@ import { bindOrderingTerms } from '../ordering/resolve'
 import { explicitOrderBy } from '../ordering/sql-order'
 import type { PaginationPageInfo } from '../pagination/index'
 import type { QueryRequestIr } from '../query/ir'
+import { countBoundParameters } from './parameter-count'
 
 /** SQL produced for filtering against one bound table. */
 export type FilteringFragments = {
@@ -44,6 +45,8 @@ export type RenderedQuery<FieldName extends string, Kind extends string> = {
   readonly ordering: OrderingFragments<EffectiveOrderTerm<FieldName>, FieldName>
   readonly pagination: PaginationFragments<Kind>
   readonly where: SQL | undefined
+  /** Parameters introduced by package-owned predicates, ordering, and bounds. */
+  readonly boundParameterCount: number
 }
 
 /** @internal Lowers shared request IR to SQL for one concrete field binding. */
@@ -87,6 +90,16 @@ export const renderQuerySql = <
           }))
         )
 
+  const where = and(filtering.where, seekWhere)
+  const boundParameterCount =
+    countBoundParameters(
+      where,
+      ...orderBy,
+      ...cursorProjections.map(({ selection }) => selection)
+    ) +
+    1 +
+    (ir.pagination.offset === undefined ? 0 : 1)
+
   return {
     filtering,
     ordering: {
@@ -101,6 +114,7 @@ export const renderQuerySql = <
       limit: ir.pagination.limit,
       offset: ir.pagination.offset,
     },
-    where: and(filtering.where, seekWhere),
+    where,
+    boundParameterCount,
   }
 }

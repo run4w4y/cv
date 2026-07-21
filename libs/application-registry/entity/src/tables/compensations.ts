@@ -1,12 +1,12 @@
 import { sql } from 'drizzle-orm'
 import {
+  bigint,
   check,
   index,
-  integer,
+  pgTable,
   primaryKey,
-  sqliteTable,
   text,
-} from 'drizzle-orm/sqlite-core'
+} from 'drizzle-orm/pg-core'
 
 import {
   compensationKindValues,
@@ -14,8 +14,9 @@ import {
 } from '../model/values'
 import { applications } from './applications'
 import { sqlStringList } from './checks'
+import { utcTimestamp } from './columns'
 
-export const applicationCompensations = sqliteTable(
+export const applicationCompensations = pgTable(
   'application_compensations',
   {
     id: text('id').notNull(),
@@ -24,13 +25,13 @@ export const applicationCompensations = sqliteTable(
       .references(() => applications.id, { onDelete: 'cascade' }),
     kind: text('kind', { enum: compensationKindValues }).notNull(),
     currencyCode: text('currency_code').notNull(),
-    minimumMinor: integer('minimum_minor'),
-    maximumMinor: integer('maximum_minor'),
+    minimumMinor: bigint('minimum_minor', { mode: 'number' }),
+    maximumMinor: bigint('maximum_minor', { mode: 'number' }),
     period: text('period', { enum: compensationPeriodValues }).notNull(),
     rawText: text('raw_text'),
     source: text('source').notNull(),
-    createdAt: text('created_at').notNull(),
-    updatedAt: text('updated_at').notNull(),
+    createdAt: utcTimestamp('created_at').notNull(),
+    updatedAt: utcTimestamp('updated_at').notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.id] }),
@@ -45,7 +46,7 @@ export const applicationCompensations = sqliteTable(
     ),
     check(
       'application_compensations_currency_code_check',
-      sql`length(${table.currencyCode}) = 3 and ${table.currencyCode} glob '[A-Z][A-Z][A-Z]'`
+      sql`${table.currencyCode} ~ '^[A-Z]{3}$'`
     ),
     check(
       'application_compensations_period_check',
@@ -53,11 +54,11 @@ export const applicationCompensations = sqliteTable(
     ),
     check(
       'application_compensations_minimum_check',
-      sql`${table.minimumMinor} is null or ${table.minimumMinor} >= 0`
+      sql`${table.minimumMinor} is null or (${table.minimumMinor} between 0 and 9007199254740991)`
     ),
     check(
       'application_compensations_maximum_check',
-      sql`${table.maximumMinor} is null or ${table.maximumMinor} >= 0`
+      sql`${table.maximumMinor} is null or (${table.maximumMinor} between 0 and 9007199254740991)`
     ),
     check(
       'application_compensations_range_check',

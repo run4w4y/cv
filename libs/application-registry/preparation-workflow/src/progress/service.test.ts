@@ -1,16 +1,19 @@
 import { describe, expect, test } from 'bun:test'
 import { Effect, Exit, SubscriptionRef } from 'effect'
+import { TestClock } from 'effect/testing'
 import type * as DurableDeferred from 'effect/unstable/workflow/DurableDeferred'
 
 import type { PreparationWorkflowInput, SavedCandidate } from '../domain'
+import { preparationStepTimeline } from '../selectors'
+import { cvGenerationGuidanceTestFixture } from '../test-support'
 import { PreparationProgress } from './model'
 import { preparationProgressLayer } from './service'
 
 const input: PreparationWorkflowInput = {
   coverLetterPrompt: null,
+  cvGenerationGuidance: cvGenerationGuidanceTestFixture,
   kind: 'cv',
   locale: 'en',
-  modelId: 'model-1',
   runId: 'run-1',
   source: {
     _tag: 'ReviewedContext',
@@ -29,12 +32,18 @@ const candidate = {
 
 const token = 'review-token' as DurableDeferred.Token
 
+const reservation = (
+  value: PreparationWorkflowInput,
+  batchPosition = 0,
+  batchId = 'batch-1'
+) => ({ batchId, batchPosition, input: value })
+
 describe('preparation progress state machine', () => {
   test('rejects a conflicting batch without reserving its non-conflicting runs', async () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const progress = yield* PreparationProgress
-        yield* progress.register(input)
+        yield* progress.register(reservation(input))
 
         const first = {
           ...input,
@@ -46,7 +55,9 @@ describe('preparation progress state machine', () => {
           },
         }
         const conflict = { ...input, runId: 'run-3' }
-        const exit = yield* Effect.exit(progress.reserve([first, conflict]))
+        const exit = yield* Effect.exit(
+          progress.reserve([reservation(first), reservation(conflict, 1)])
+        )
         const runs = yield* SubscriptionRef.get(progress.runs)
         return { exit, runs }
       }).pipe(Effect.provide(preparationProgressLayer))
@@ -70,7 +81,9 @@ describe('preparation progress state machine', () => {
             url: 'https://jobs.example.test/other-role',
           },
         }
-        const exit = yield* Effect.exit(progress.reserve([first, second]))
+        const exit = yield* Effect.exit(
+          progress.reserve([reservation(first), reservation(second, 1)])
+        )
         return {
           exit,
           runs: yield* SubscriptionRef.get(progress.runs),
@@ -96,7 +109,7 @@ describe('preparation progress state machine', () => {
           runId: 'run-3',
           source: { ...input.source, applicationId: 'application-3' },
         }
-        yield* progress.reserve([first, second])
+        yield* progress.reserve([reservation(first), reservation(second, 1)])
 
         const anonymous = {
           ...input,
@@ -115,7 +128,9 @@ describe('preparation progress state machine', () => {
             url: anonymous.source.url,
           },
         }
-        const exit = yield* Effect.exit(progress.reserve([anonymous, explicit]))
+        const exit = yield* Effect.exit(
+          progress.reserve([reservation(anonymous), reservation(explicit, 1)])
+        )
         expect(Exit.isFailure(exit)).toBe(true)
         return yield* SubscriptionRef.get(progress.runs)
       }).pipe(Effect.provide(preparationProgressLayer))
@@ -140,7 +155,7 @@ describe('preparation progress state machine', () => {
             url: 'https://jobs.example.test/other-role',
           },
         }
-        yield* progress.reserve([failed, queued])
+        yield* progress.reserve([reservation(failed), reservation(queued, 1)])
         yield* progress.fail(failed.runId, 'startup failed')
         yield* progress.releaseReservations([failed.runId, queued.runId])
         return yield* SubscriptionRef.get(progress.runs)
@@ -155,7 +170,7 @@ describe('preparation progress state machine', () => {
     const run = await Effect.runPromise(
       Effect.gen(function* () {
         const progress = yield* PreparationProgress
-        yield* progress.register(input)
+        yield* progress.register(reservation(input))
         yield* progress.setExecution(input.runId, 'execution-1')
         yield* progress.stage(input.runId, 'analysis', 'Analyzing')
         yield* progress.reviewReady(
@@ -206,7 +221,7 @@ describe('preparation progress state machine', () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const progress = yield* PreparationProgress
-        yield* progress.register(input)
+        yield* progress.register(reservation(input))
         yield* progress.setExecution(input.runId, 'execution-1')
 
         const wrong = yield* progress.requestCancel(input.runId, 'wrong')
@@ -235,7 +250,7 @@ describe('preparation progress state machine', () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const progress = yield* PreparationProgress
-        yield* progress.register(input)
+        yield* progress.register(reservation(input))
 
         const claimed = yield* progress.requestCancel(
           input.runId,
@@ -255,7 +270,7 @@ describe('preparation progress state machine', () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const progress = yield* PreparationProgress
-        yield* progress.register(input)
+        yield* progress.register(reservation(input))
         yield* progress.setExecution(input.runId, 'execution-1')
         yield* progress.stage(input.runId, 'analysis', 'Analyzing')
         const claim = yield* progress.requestCancel(input.runId, 'execution-1')
@@ -286,7 +301,7 @@ describe('preparation progress state machine', () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const progress = yield* PreparationProgress
-        yield* progress.register(input)
+        yield* progress.register(reservation(input))
         yield* progress.setExecution(input.runId, 'execution-1')
         yield* progress.stage(input.runId, 'saving', 'Saving')
         yield* progress.reviewReady(
@@ -316,5 +331,82 @@ describe('preparation progress state machine', () => {
     expect(result.cancelling?.reviewToken).toBe(token)
     expect(result.restored?.status).toBe('awaiting_review')
     expect(result.restored?.reviewToken).toBe(token)
+  })
+
+  test('records timestamped stage history through the manual review gate', async () => {
+    const run = await Effect.runPromise(
+      Effect.gen(function* () {
+        const progress = yield* PreparationProgress
+        yield* TestClock.setTime(100)
+        yield* progress.register(reservation(input))
+        yield* TestClock.setTime(110)
+        yield* progress.setExecution(input.runId, 'execution-1')
+        yield* TestClock.setTime(200)
+        yield* progress.stage(
+          input.runId,
+          'application',
+          'Creating application'
+        )
+        yield* TestClock.setTime(300)
+        yield* progress.stage(input.runId, 'analysis', 'Analyzing role')
+        yield* TestClock.setTime(350)
+        yield* progress.stage(input.runId, 'analysis', 'Analyzing requirements')
+        yield* TestClock.setTime(400)
+        yield* progress.reviewReady(
+          input.runId,
+          'application-1',
+          candidate,
+          token
+        )
+        yield* TestClock.setTime(500)
+        yield* progress.reviewSubmitted(input.runId, token)
+        yield* TestClock.setTime(600)
+        yield* progress.complete(input.runId, {
+          message: 'Approved',
+          result: candidate.result,
+          status: 'approved',
+        })
+        return (yield* SubscriptionRef.get(progress.runs)).get(input.runId)
+      }).pipe(Effect.provide([preparationProgressLayer, TestClock.layer()]))
+    )
+
+    expect(run).toBeDefined()
+    if (run === undefined) return
+    expect(run).toMatchObject({
+      batchId: 'batch-1',
+      batchPosition: 0,
+      createdAt: 100,
+      stage: 'complete',
+      status: 'approved',
+      updatedAt: 600,
+    })
+    expect(
+      run.stepHistory.map(({ occurredAt, stage, status }) => ({
+        occurredAt,
+        stage,
+        status,
+      }))
+    ).toEqual([
+      { occurredAt: 100, stage: 'queued', status: 'running' },
+      { occurredAt: 200, stage: 'queued', status: 'completed' },
+      { occurredAt: 200, stage: 'application', status: 'running' },
+      { occurredAt: 300, stage: 'application', status: 'completed' },
+      { occurredAt: 300, stage: 'analysis', status: 'running' },
+      { occurredAt: 350, stage: 'analysis', status: 'running' },
+      { occurredAt: 400, stage: 'analysis', status: 'completed' },
+      { occurredAt: 400, stage: 'review', status: 'waiting' },
+      { occurredAt: 500, stage: 'review', status: 'running' },
+      { occurredAt: 600, stage: 'review', status: 'completed' },
+      { occurredAt: 600, stage: 'complete', status: 'completed' },
+    ])
+    expect(
+      preparationStepTimeline(run).find(({ stage }) => stage === 'review')
+    ).toEqual({
+      completedAt: 600,
+      message: 'Approved',
+      stage: 'review',
+      startedAt: 400,
+      status: 'completed',
+    })
   })
 })

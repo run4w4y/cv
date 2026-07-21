@@ -1,81 +1,97 @@
 import { applications } from '@cv/application-registry-entity'
 import { and, eq, sql } from 'drizzle-orm'
 import { Effect } from 'effect'
+
 import { databaseFailure, RegistryDatabaseError } from '../errors'
-import type {
-  RegistryConnections,
-  RegistryQueryDatabase,
-} from '../internal/connection'
+import type { RegistryDatabase, RegistryExecutor } from '../internal/connection'
 import type {
   ApplicationPatch,
   PersistApplicationOptions,
   PersistedApplication,
 } from '../types'
 import { findApplication } from './application-queries'
-import { applicationStatements } from './application-values'
-import { allocateRevision, currentRevision, runBatch } from './shared'
+import { persistApplicationAggregate } from './application-values'
+import { allocateRevision, runTransaction } from './shared'
 
 export const persistApplication = (
-  { batch }: RegistryConnections,
+  database: RegistryDatabase,
   input: PersistedApplication,
   options: PersistApplicationOptions
 ) =>
-  runBatch(batch, options.operation, [
-    allocateRevision(batch),
-    ...applicationStatements(batch, input),
-  ]).pipe(
-    Effect.flatMap((results) =>
-      (results[1]?.meta.changes ?? 0) > 0
-        ? Effect.void
-        : Effect.fail(
-            new RegistryDatabaseError({
-              cause: new Error(
-                `Posting ${input.postingUrlNormalized} is already registered.`
-              ),
-              message: `Failed to execute ${options.operation}`,
-            })
-          )
-    )
+  runTransaction(database, options.operation, (transaction) =>
+    Effect.gen(function* () {
+      const revision = yield* allocateRevision(transaction)
+      const inserted = yield* persistApplicationAggregate(
+        transaction,
+        input,
+        revision
+      )
+
+      if (!inserted) {
+        return yield* new RegistryDatabaseError({
+          cause: new Error(
+            `Posting ${input.postingUrlNormalized} is already registered.`
+          ),
+          message: `Failed to execute ${options.operation}`,
+        })
+      }
+    })
   )
 
 export const patchApplication = (
-  database: RegistryConnections,
+  database: RegistryDatabase,
   applicationId: string,
   request: ApplicationPatch,
   recordedAt: string
 ) => {
   const { expectedVersion, ...changes } = request
 
-  return runBatch(database.batch, 'application update', [
-    allocateRevision(database.batch),
-    database.batch
-      .update(applications)
-      .set({
-        ...changes,
-        updatedAt: recordedAt,
-        updatedRevision: currentRevision,
-        version: sql`${applications.version} + 1`,
-      })
-      .where(
-        and(
-          eq(applications.id, applicationId),
-          expectedVersion === undefined
-            ? undefined
-            : eq(applications.version, expectedVersion)
+  return runTransaction(database, 'application update', (transaction) =>
+    Effect.gen(function* () {
+      const current = yield* transaction
+        .select({ version: applications.version })
+        .from(applications)
+        .where(eq(applications.id, applicationId))
+        .for('update')
+        .limit(1)
+
+      const row = current.at(0)
+      if (
+        row === undefined ||
+        (expectedVersion !== undefined && row.version !== expectedVersion)
+      ) {
+        return undefined
+      }
+
+      const revision = yield* allocateRevision(transaction)
+      const updated = yield* transaction
+        .update(applications)
+        .set({
+          ...changes,
+          updatedAt: recordedAt,
+          updatedRevision: revision,
+          version: sql`${applications.version} + 1`,
+        })
+        .where(
+          and(
+            eq(applications.id, applicationId),
+            eq(applications.version, row.version)
+          )
         )
-      ),
-  ]).pipe(
-    Effect.map((results) => results.at(-1)?.meta.changes ?? 0),
-    Effect.flatMap((changes) =>
-      changes === 0
-        ? Effect.succeed(undefined)
-        : findApplication(database.query, eq(applications.id, applicationId))
-    )
+        .returning({ id: applications.id })
+
+      return updated.length === 0
+        ? undefined
+        : yield* findApplication(
+            transaction,
+            eq(applications.id, applicationId)
+          )
+    })
   )
 }
 
 export const removeApplication = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   applicationId: string,
   expectedVersion?: number
 ) =>

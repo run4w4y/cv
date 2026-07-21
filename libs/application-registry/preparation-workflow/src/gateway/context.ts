@@ -74,6 +74,7 @@ export const makePreparationContextGateway = (
 
     return {
       application,
+      cvGenerationGuidance: loaded.context.cvGenerationGuidance,
       entry: loaded.entry,
       factsCatalogue: loaded.context.factsCatalogue,
       factsReleaseId: loaded.context.factsReleaseId,

@@ -4,7 +4,6 @@ import type {
   ApplicationActivity,
   ApplicationCompensation,
   ApplicationNote,
-  FxRate,
   IdempotencyReceipt,
 } from '@cv/application-registry-entity'
 import type { RegistryActivityListItem } from '@cv/application-registry-entity/query'
@@ -82,15 +81,6 @@ export const applicationListRecord: ApplicationListRecord = {
   counts: { notes: 0 },
   labels: [],
   latestActivity: null,
-}
-
-export const fxRate: FxRate = {
-  baseCurrency: 'EUR',
-  fetchedAt: recordedAt,
-  observedAt: recordedAt,
-  provider: 'test',
-  quoteCurrency: 'USD',
-  rate: 1.1,
 }
 
 export const receipt = (

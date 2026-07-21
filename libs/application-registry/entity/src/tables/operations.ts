@@ -1,11 +1,12 @@
 import { sql } from 'drizzle-orm'
-import { check, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { check, pgTable, primaryKey, text } from 'drizzle-orm/pg-core'
 
 import { idempotencyScopeValues } from '../model/values'
 import { applications } from './applications'
 import { sqlStringList } from './checks'
+import { utcTimestamp } from './columns'
 
-export const idempotencyReceipts = sqliteTable(
+export const idempotencyReceipts = pgTable(
   'idempotency_receipts',
   {
     idempotencyKey: text('idempotency_key').notNull(),
@@ -15,7 +16,7 @@ export const idempotencyReceipts = sqliteTable(
       .notNull()
       .references(() => applications.id, { onDelete: 'cascade' }),
     resourceId: text('resource_id'),
-    createdAt: text('created_at').notNull(),
+    createdAt: utcTimestamp('created_at').notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.idempotencyKey] }),

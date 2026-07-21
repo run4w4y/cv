@@ -1,4 +1,3 @@
-import type { AiModel } from '@cv/ai-provider'
 import type {
   ContentRevisionResultResponse,
   PdfJobResponse,
@@ -14,6 +13,7 @@ import type {
   GeneratedArtifact,
   JobPostingSnapshot,
 } from '@cv/application-registry-entity'
+import type { CvGenerationGuidanceV1 } from '@cv/contracts/document'
 import type { FactsCatalogueV1 } from '@cv/contracts/facts'
 import { Schema } from 'effect'
 import type * as Effect from 'effect/Effect'
@@ -26,6 +26,7 @@ import type {
 } from './keys'
 
 export type PreparationContext = {
+  readonly cvGenerationGuidance: CvGenerationGuidanceV1
   readonly factsCatalogue: FactsCatalogueV1
   readonly factsRelease: {
     readonly id: string
@@ -53,6 +54,11 @@ export type PreparationBootstrap = {
   readonly context: PreparationContext
   readonly entry: ContentEntry
   readonly head: SavedContentRevision | null
+}
+
+export type ActiveCvGenerationGuidance = {
+  readonly factsReleaseId: string
+  readonly guidance: CvGenerationGuidanceV1
 }
 
 export type WorkflowBootstrapInput = {
@@ -152,16 +158,16 @@ export type PreparationRepositoryShape = {
   readonly approveRevision: (
     input: ApproveRevisionInput
   ) => Effect.Effect<ContentRevisionResultResponse, PreparationDataError>
-  readonly discoverModels: () => Effect.Effect<
-    ReadonlyArray<AiModel>,
-    PreparationDataError
-  >
   readonly createPreparationApplication: (
     postingUrl: string
   ) => Effect.Effect<Application, PreparationDataError>
   readonly loadBootstrap: (
     identity: PreparationIdentity
   ) => Effect.Effect<PreparationBootstrap, PreparationDataError>
+  readonly loadCvGenerationGuidance: () => Effect.Effect<
+    ActiveCvGenerationGuidance,
+    PreparationDataError
+  >
   readonly loadContentHead: (
     identity: ContentHeadIdentity
   ) => Effect.Effect<SavedContentRevision | null, PreparationDataError>

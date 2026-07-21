@@ -20,6 +20,8 @@ import type {
   FactsSectionModuleSource,
 } from './model'
 import {
+  type CvGenerationGuidanceSource,
+  CvGenerationGuidanceSourceSchema,
   type FactAssetRegistrySource,
   FactAssetRegistrySourceSchema,
   type FactEvidenceRegistrySource,
@@ -89,6 +91,12 @@ export const decodeFactEvidenceRegistry = Effect.fn(
   'FactsAuthoring.decodeEvidenceRegistry'
 )((input: unknown, path = 'facts/evidence.ts') =>
   decode(FactEvidenceRegistrySourceSchema, input, path)
+)
+
+export const decodeCvGenerationGuidance = Effect.fn(
+  'FactsAuthoring.decodeCvGenerationGuidance'
+)((input: unknown, path = 'generation/cv.ts') =>
+  decode(CvGenerationGuidanceSourceSchema, input, path)
 )
 
 const compileEvidence = (
@@ -492,7 +500,7 @@ export const composeDecodedFactsRepository = Effect.fn(
     FactsAuthoringCompositionError | FactsAuthoringValidationError
   > =>
     Effect.gen(function* () {
-      const { assets, config, evidence } = input
+      const { assets, config, evidence, generationGuidance } = input
       const decodedSections = yield* Effect.forEach(
         input.sections,
         decodeSection
@@ -554,7 +562,7 @@ export const composeDecodedFactsRepository = Effect.fn(
         { discard: true }
       )
 
-      return { assets, catalogues, config, evidence }
+      return { assets, catalogues, config, evidence, generationGuidance }
     })
 )
 
@@ -571,11 +579,17 @@ export const composeFactsRepository = Effect.fn(
       input.assets,
       `${config.factsDir}/assets.ts`
     )
+    const generationGuidance: CvGenerationGuidanceSource =
+      yield* decodeCvGenerationGuidance(
+        input.generationGuidance,
+        config.generationGuidance
+      )
     return yield* composeDecodedFactsRepository({
       ...input,
       assets,
       config,
       evidence,
+      generationGuidance,
     })
   })
 )

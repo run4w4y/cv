@@ -14,17 +14,10 @@ import type * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import type * as Atom from 'effect/unstable/reactivity/Atom'
 import * as AtomHttpApi from 'effect/unstable/reactivity/AtomHttpApi'
 
-const browserFetch: typeof globalThis.fetch = Object.assign(
-  (input: RequestInfo | URL, init?: RequestInit) =>
-    globalThis.fetch(input, init),
-  {
-    preconnect: (...args: Parameters<typeof globalThis.fetch.preconnect>) =>
-      globalThis.fetch.preconnect(...args),
-  }
-)
+import { hostFetch } from '@/host/desktop'
 
-export const browserHttpClientLayer = FetchHttpClient.layer.pipe(
-  Layer.provide(Layer.succeed(FetchHttpClient.Fetch, browserFetch))
+export const hostHttpClientLayer = FetchHttpClient.layer.pipe(
+  Layer.provide(Layer.succeed(FetchHttpClient.Fetch, hostFetch))
 )
 
 /**
@@ -38,7 +31,7 @@ export class RegistryClient extends AtomHttpApi.Service<RegistryClient>()(
   {
     api: ApplicationRegistryApi,
     baseUrl: '/',
-    httpClient: browserHttpClientLayer,
+    httpClient: hostHttpClientLayer,
   }
 ) {}
 
@@ -134,7 +127,7 @@ export const registryClientLayer = Layer.effect(
   HttpApiClient.make(ApplicationRegistryApi, {
     baseUrl: '/',
   })
-).pipe(Layer.provide(browserHttpClientLayer))
+).pipe(Layer.provide(hostHttpClientLayer))
 
 const endpointGroups = {
   addApplicationNote: 'applications',

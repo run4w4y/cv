@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import type { AiProviderShape } from '@cv/ai-provider'
+import { cvGenerationGuidanceTestFixture } from '@cv/application-preparation-workflow/test-support'
 import type { Application } from '@cv/application-registry-entity'
-import type { FactsReaderShape } from '@cv/facts-r2'
+import type { FactsReaderShape } from '@cv/facts-reader/reader'
 import { Effect } from 'effect'
 
 import type { RegistryClient } from '@/lib/registry-client'
@@ -30,23 +30,48 @@ const application: Application = {
   version: 2,
 }
 
-const unusedAi = {
-  discoverModels: () => Effect.succeed([]),
-} as unknown as AiProviderShape
-
 const unusedFacts = {
   read: () => Effect.die('Facts must not load before bootstrap prerequisites.'),
+  readActiveRelease: () =>
+    Effect.die('Facts must not load before bootstrap prerequisites.'),
+  readGenerationGuidance: () =>
+    Effect.die('Facts must not load before bootstrap prerequisites.'),
 } as unknown as FactsReaderShape
 
-const contextRepository = (registry: object) =>
+const contextRepository = (
+  registry: object,
+  facts: FactsReaderShape = unusedFacts
+) =>
   makePreparationContextRepository(
     registry as RegistryClient['Service'],
-    unusedFacts,
-    unusedAi,
+    facts,
     () => Effect.die('Content must not load before bootstrap prerequisites.')
   )
 
 describe('preparation repository', () => {
+  test('loads active CV guidance without reading a locale catalogue', async () => {
+    const facts = {
+      read: () => Effect.die('A catalogue must not be read for guidance.'),
+      readActiveRelease: () =>
+        Effect.die('Metadata must not be loaded separately for guidance.'),
+      readGenerationGuidance: () =>
+        Effect.succeed({
+          generationGuidance: cvGenerationGuidanceTestFixture,
+          releaseId: 'fr_release-1',
+        }),
+    } as unknown as FactsReaderShape
+    const repository = contextRepository({}, facts)
+
+    const result = await Effect.runPromise(
+      repository.loadCvGenerationGuidance()
+    )
+
+    expect(result).toEqual({
+      factsReleaseId: 'fr_release-1',
+      guidance: cvGenerationGuidanceTestFixture,
+    })
+  })
+
   test('does not read context after the preparation lifecycle transition fails', async () => {
     const calls: string[] = []
     const repository = contextRepository({

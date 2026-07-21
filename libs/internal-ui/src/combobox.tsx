@@ -218,8 +218,8 @@ const ComboboxPopup = ({
             className="h-10 min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
           />
         </div>
-        <ComboboxPrimitive.Empty className="px-3 py-6 text-center text-sm text-muted-foreground">
-          {emptyLabel}
+        <ComboboxPrimitive.Empty className="text-sm text-muted-foreground">
+          <span className="block px-3 py-6 text-center">{emptyLabel}</span>
         </ComboboxPrimitive.Empty>
         <ComboboxPrimitive.List className="max-h-72 overflow-y-auto p-1">
           {(option: ComboboxOption, index: number) => (

@@ -89,7 +89,7 @@ const applicationPreparationServiceLayer = Layer.effect(
 )
 
 export type ApplicationPreparationLayerOptions = {
-  readonly maximumConcurrentAiCalls?: number
+  readonly maximumConcurrentGenerationCalls?: number
   readonly maximumConcurrentJobs?: number
 }
 
@@ -97,7 +97,7 @@ export const applicationPreparationLayer = (
   options: ApplicationPreparationLayerOptions = {}
 ) => {
   const servicesLayer = Layer.mergeAll(
-    makePreparationGatewayLayer(options.maximumConcurrentAiCalls ?? 2),
+    makePreparationGatewayLayer(options.maximumConcurrentGenerationCalls ?? 2),
     preparationProgressLayer,
     makePreparationConcurrencyLayer(options.maximumConcurrentJobs ?? 3)
   )

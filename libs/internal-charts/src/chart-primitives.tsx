@@ -81,56 +81,62 @@ export const ChartDataTable = ({
   rows,
   visuallyHidden = true,
   ...props
-}: ChartDataTableProps) => (
-  <table
-    className={cn(
-      'w-full border-collapse text-sm',
-      visuallyHidden && 'sr-only',
-      className
-    )}
-    data-slot="chart-data-table"
-    {...props}
-  >
-    <caption>{caption}</caption>
-    <thead>
-      <tr>
-        {columns.map((column) => (
-          <th
-            className="p-2 text-left font-medium"
-            key={column.key}
-            scope="col"
-          >
-            {column.label}
-          </th>
-        ))}
-      </tr>
-    </thead>
-    <tbody>
-      {rows.map((row, rowIndex) => (
-        <tr
-          key={
-            typeof row.id === 'string'
-              ? row.id
-              : `${columns.map((column) => String(row[column.key])).join('|')}-${rowIndex}`
-          }
-        >
-          {columns.map((column, columnIndex) => {
-            const Component = columnIndex === 0 ? 'th' : 'td'
-            return (
-              <Component
-                className="border-t border-border p-2 text-left tabular-nums"
-                key={column.key}
-                {...(columnIndex === 0 ? { scope: 'row' as const } : {})}
-              >
-                {renderCell(column, row)}
-              </Component>
-            )
-          })}
+}: ChartDataTableProps) => {
+  const table = (
+    <table
+      className={cn('w-full border-collapse text-sm', className)}
+      data-slot="chart-data-table"
+      {...props}
+    >
+      <caption>{caption}</caption>
+      <thead>
+        <tr>
+          {columns.map((column) => (
+            <th
+              className="p-2 text-left font-medium"
+              key={column.key}
+              scope="col"
+            >
+              {column.label}
+            </th>
+          ))}
         </tr>
-      ))}
-    </tbody>
-  </table>
-)
+      </thead>
+      <tbody>
+        {rows.map((row, rowIndex) => (
+          <tr
+            key={
+              typeof row.id === 'string'
+                ? row.id
+                : `${columns.map((column) => String(row[column.key])).join('|')}-${rowIndex}`
+            }
+          >
+            {columns.map((column, columnIndex) => {
+              const Component = columnIndex === 0 ? 'th' : 'td'
+              return (
+                <Component
+                  className="border-t border-border p-2 text-left tabular-nums"
+                  key={column.key}
+                  {...(columnIndex === 0 ? { scope: 'row' as const } : {})}
+                >
+                  {renderCell(column, row)}
+                </Component>
+              )
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+
+  return visuallyHidden ? (
+    <div className="sr-only" data-slot="chart-data-table-wrapper">
+      {table}
+    </div>
+  ) : (
+    table
+  )
+}
 
 export interface ChartEmptyStateProps
   extends React.ComponentPropsWithoutRef<'div'> {

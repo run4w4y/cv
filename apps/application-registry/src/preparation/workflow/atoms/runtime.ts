@@ -1,4 +1,3 @@
-import { makeChatGptSubscriptionAiProviderLayer } from '@cv/ai-provider/live'
 import {
   ApplicationPreparation,
   applicationPreparationLayer,
@@ -7,15 +6,15 @@ import * as BrowserCrypto from '@effect/platform-browser/BrowserCrypto'
 import { Effect, Layer } from 'effect'
 import * as Atom from 'effect/unstable/reactivity/Atom'
 import * as WorkflowEngine from 'effect/unstable/workflow/WorkflowEngine'
-
+import { factsReaderBrowserLayer } from '@/facts/data/runtime'
+import { hostStructuredGenerationLayer } from '@/host/structured-generation'
 import { registryClientLayer } from '@/lib/registry-client'
 import { preparationRepositoryLayer } from '@/preparation/data/repository'
-import { factsReaderBrowserLayer } from '@/preparation/facts'
 import { preparationStoreLayer } from '../store'
 
 const browserAdaptersLayer = Layer.mergeAll(
   registryClientLayer,
-  makeChatGptSubscriptionAiProviderLayer({ basePath: '/api/chatgpt' }),
+  hostStructuredGenerationLayer(),
   factsReaderBrowserLayer,
   BrowserCrypto.layer
 )

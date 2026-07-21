@@ -15,14 +15,23 @@ const routePaths = (
   })
 
 describe('management route wiring', () => {
-  test('keeps registry screens and adds both preparation flows plus schema inspection', () => {
+  test('keeps registry screens and exposes the workflow hierarchy', () => {
     const paths = routePaths(registryRoutes)
 
     expect(paths).toContain('/applications')
     expect(paths).toContain('/applications/:applicationId')
     expect(paths).toContain('/applications/:applicationId/prepare')
     expect(paths).toContain('/applications/:applicationId/cover-letter')
-    expect(paths).toContain('/schema/cv-document')
+    expect(paths).toContain('/applications/:applicationId/publish')
+    expect(paths).toContain('/facts')
+    expect(paths).toContain('/workflows')
+    expect(paths).toContain('/workflows/new')
+    expect(paths).toContain('/workflows/:batchId')
+    expect(paths).toContain('/workflows/:batchId/jobs/:runId')
+    expect(paths).toContain('/workflows/:batchId/jobs/:runId/review')
+    expect(paths).toContain('/preparation/cv-guidance')
+    expect(paths).not.toContain('/preparation/batch')
+    expect(paths).not.toContain('/schema/cv-document')
     expect(paths).toContain('/activities')
   })
 })

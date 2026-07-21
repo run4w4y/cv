@@ -264,24 +264,27 @@ const make = Effect.gen(function* () {
 
           const token = existing?.token ?? newRegistryId().replaceAll('-', '')
           const resolvedPublicUrl = yield* publicUrl(input.publicBaseUrl, token)
-          if (
-            existing?.currentRevisionId === revision.id &&
-            existing.publicUrl === resolvedPublicUrl
-          ) {
-            return existing
-          }
           const now = yield* registryNow
-          yield* links.stage({
-            applicationId: application.id,
-            contentEntryId: entry.id,
-            createdAt: existing?.createdAt ?? now,
-            currentRevisionId: revision.id,
-            id: existing?.id ?? newRegistryId(),
-            previewToken: newRegistryId().replaceAll('-', ''),
-            publicUrl: resolvedPublicUrl,
-            token,
-            updatedAt: now,
-          })
+          const applied = yield* links.stage(
+            {
+              applicationId: application.id,
+              contentEntryId: entry.id,
+              createdAt: existing?.createdAt ?? now,
+              currentRevisionId: revision.id,
+              id: existing?.id ?? newRegistryId(),
+              previewToken: newRegistryId().replaceAll('-', ''),
+              publicUrl: resolvedPublicUrl,
+              token,
+              updatedAt: now,
+            },
+            input.expectedContentVersion
+          )
+          if (!applied) {
+            return yield* new RegistryConflictError({
+              message:
+                'The content entry or CV page changed while its draft revision was being staged.',
+            })
+          }
           const staged = yield* links.findByEntry(entry.id)
           if (!staged) {
             return yield* missingRegistryData(

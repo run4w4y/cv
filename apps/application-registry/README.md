@@ -15,7 +15,8 @@ conversion.
 Start the API and UI from the repository shell:
 
 ```bash
-bunx nx run application-registry-api:dev
+bunx nx run application-registry-api:build
+bun apps/application-registry-api/dist/main.js
 bunx nx run application-registry-management:dev
 ```
 
@@ -24,20 +25,30 @@ adds `REGISTRY_API_TOKEN` server-side. The token is never included in the
 browser bundle. A production host must provide the same authenticated reverse
 proxy path, or rewrite it to an equivalent same-origin backend-for-frontend.
 
-Reviewed facts are intentionally different: the app signs direct GET requests
-to the private facts bucket with `VITE_FACTS_R2_ACCOUNT_ID`,
-`VITE_FACTS_R2_BUCKET`, `VITE_FACTS_R2_ACCESS_KEY_ID`, and
-`VITE_FACTS_R2_SECRET_ACCESS_KEY`. That permanent credential is embedded in
-this owner-only application and is scoped to Object Read on that bucket only.
+Reviewed facts are loaded through the authenticated registry API and its
+private MinIO adapter. No permanent storage credential is embedded in the
+management application.
 The app verifies the current pointer, manifest, locale catalogue, media types,
 byte lengths, and SHA-256 digests before using the catalogue.
+
+## Web and desktop hosts
+
+The self-hosted web build keeps registry management, generic manual editing,
+preview, approval, publication, and PDF handling, but intentionally hides the
+batch entry point and disables every AI command. It contains no ChatGPT proxy
+client or authentication session.
+
+`apps/application-registry-desktop` builds this same source in desktop mode.
+It uses hash routing and a context-isolated Electron preload bridge. The main
+process injects the machine bearer token for registry and facts requests, and
+runs schema-constrained AI turns through the packaged Codex runtime.
 
 ## Application preparation workflows
 
 URL-driven CV and cover-letter preparation is orchestrated in the browser by
 Effect's unstable Workflow module. The application root owns session-scoped
 `WorkflowEngine.layerMemory` runtimes for document preparation and CV
-publication. The `/preparation/batch`
+publication. The `/workflows`
 screen can start several URLs at once; three workflow activities may execute
 concurrently and the shared AI provider admits at most two model calls at a
 time. Admission is capped at 25 unique URLs per batch. A batch reserves all of
@@ -93,9 +104,9 @@ through keyed atoms just like preparation runs.
 Only orchestration and transient progress are local to the browser. URL capture
 remains a server boundary because arbitrary job sites are not generally
 browser-readable through CORS; the capture service applies schema-based URL,
-redirect, size, and timeout boundaries. PDF rendering remains a private
-Cloudflare Queue consumer because it requires Browser Rendering, authoritative
-A4 measurement, and content-addressed R2 writes.
+redirect, size, and timeout boundaries. PDF rendering remains a private NATS
+JetStream consumer because it requires a real Chromium process, authoritative
+A4 measurement, and content-addressed MinIO writes.
 
 The memory engines are intentional first backends. Runs and pending review
 tokens do not survive refresh, HMR, tab closure/eviction, runtime disposal, or

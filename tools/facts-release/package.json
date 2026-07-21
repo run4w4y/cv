@@ -1,22 +1,21 @@
 {
-  "name": "@cv/facts-release-publisher",
-  "version": "0.1.0",
+  "name": "@cv/facts-toolchain",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "bin": {
-    "publish-facts": "./src/main.ts"
+    "cv-facts": "./src/cli.ts"
   },
   "exports": {
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@cv/application-registry-api-contract": "workspace:*",
     "@cv/facts-authoring": "workspace:*",
     "@cv/facts-release": "workspace:*",
-    "@cv/facts-r2": "workspace:*",
     "@effect/platform-bun": "4.0.0-beta.99",
     "effect": "4.0.0-beta.99",
-    "es-toolkit": "^1.43.0",
-    "vite": "^8.1.3"
+    "es-toolkit": "^1.43.0"
   },
   "devDependencies": {
     "bun-types": "1.3.13"

@@ -1,6 +1,7 @@
 export {
   composeDecodedFactsRepository,
   composeFactsRepository,
+  decodeCvGenerationGuidance,
   decodeFactAssetRegistry,
   decodeFactEvidenceRegistry,
   decodeFactsRepositoryConfig,
@@ -11,6 +12,8 @@ export type * from './model'
 export {
   type ContactSectionSource,
   ContactSectionSourceSchema,
+  type CvGenerationGuidanceSource,
+  CvGenerationGuidanceSourceSchema,
   type EducationEntrySource,
   EducationEntrySourceSchema,
   type EducationSectionSource,

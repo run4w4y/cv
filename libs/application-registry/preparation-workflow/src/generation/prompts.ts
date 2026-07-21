@@ -1,13 +1,15 @@
-import type { AiJsonGenerationRequest, AiJsonSchema } from '@cv/ai-provider'
+import type { CvGenerationGuidanceV1 } from '@cv/contracts/document'
 import type { FactsCatalogueV1 } from '@cv/contracts/facts'
+import type { JsonSchema } from 'effect/JsonSchema'
+
+import type { StructuredGenerationRequest } from './service'
 
 export type CvDraftGenerationInput = {
   readonly factsCatalogue: FactsCatalogueV1
-  readonly guidance: unknown
+  readonly guidance: CvGenerationGuidanceV1
   readonly jobContext: unknown
   readonly locale: string
-  readonly modelId: string
-  readonly schema: AiJsonSchema
+  readonly schema: JsonSchema
 }
 
 const formatted = (value: unknown): string => JSON.stringify(value, null, 2)
@@ -132,13 +134,12 @@ export const reviewedFactIdsForGeneration = (
 
 export const buildCvDraftGenerationRequest = (
   input: CvDraftGenerationInput
-): AiJsonGenerationRequest => ({
-  instructions:
-    'Build one truthful tailored CV document. Treat the document schema, schema guidance, and embedded facts tailoring guidance as authoritative. Use job context only for relevance and use the trusted facts catalogue as the sole source of factual claims.',
-  modelId: input.modelId,
+): StructuredGenerationRequest => ({
+  instructions: input.guidance.instruction,
+  outputSchema: input.schema,
   prompt: [
     `Requested locale: ${input.locale}`,
-    'Schema generation guidance:',
+    'CV generation guidance:',
     formatted(input.guidance),
     'Current job posting snapshot:',
     formatted(input.jobContext),
@@ -146,27 +147,22 @@ export const buildCvDraftGenerationRequest = (
     formatted(factsForGeneration(input.factsCatalogue)),
     'Return one document accepted by the supplied JSON Schema. Keep it concise enough for a one-page CV.',
   ].join('\n\n'),
-  schema: input.schema,
-  schemaDescription:
-    'A truthful, one-page CV tailored to the supplied job from trusted facts.',
-  schemaName: 'tailored_cv_document',
 })
 
 export type CoverLetterGenerationInput = {
   readonly factsCatalogue: FactsCatalogueV1
   readonly jobContext: unknown
   readonly locale: string
-  readonly modelId: string
   readonly prompt: string
-  readonly schema: AiJsonSchema
+  readonly schema: JsonSchema
 }
 
 export const buildCoverLetterGenerationRequest = (
   input: CoverLetterGenerationInput
-): AiJsonGenerationRequest => ({
+): StructuredGenerationRequest => ({
   instructions:
     'Write a truthful cover letter. The trusted facts catalogue is the sole source of personal claims; obey embedded section, entry, and fact tailoring guidance, and use the job context only to tailor relevance.',
-  modelId: input.modelId,
+  outputSchema: input.schema,
   prompt: [
     `Requested locale: ${input.locale}`,
     'User-authored cover-letter instructions:',
@@ -177,7 +173,4 @@ export const buildCoverLetterGenerationRequest = (
     formatted(factsForGeneration(input.factsCatalogue)),
     'Return only a document accepted by the supplied JSON Schema.',
   ].join('\n\n'),
-  schema: input.schema,
-  schemaDescription: 'A tailored cover-letter document.',
-  schemaName: 'cover_letter_document',
 })

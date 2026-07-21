@@ -1,5 +1,7 @@
-import type { ApplicationCompensationResponseItem } from '@cv/application-registry-api-contract'
-import type { Application } from '@cv/application-registry-entity'
+import type {
+  Application,
+  ApplicationCompensation as ApplicationCompensationValue,
+} from '@cv/application-registry-entity'
 import {
   Alert,
   AlertDescription,
@@ -27,7 +29,10 @@ import { AnnualCompensation } from '../../components/annual-compensation'
 import { CurrencyCombobox } from '../../components/currency-combobox'
 import { ListingAvailabilityReviewDialog } from '../../components/listing-availability-review'
 import { StatusBadge } from '../../components/status-badge'
-import type { CompensationDisplayCurrency } from '../../model/currency'
+import type {
+  CompensationDisplayCurrency,
+  CompensationFxRateTable,
+} from '../../model/currency'
 
 const Detail = ({
   label,
@@ -161,14 +166,18 @@ export const ApplicationCompensation = ({
   onCurrencyChange,
   compensations,
   error,
+  conversionError,
+  rateTable,
 }: {
   readonly currency: CompensationDisplayCurrency
   readonly onCurrencyChange: (currency: CompensationDisplayCurrency) => void
-  readonly compensations?: readonly ApplicationCompensationResponseItem[]
+  readonly compensations?: readonly ApplicationCompensationValue[]
   readonly error?: string
+  readonly conversionError?: string
+  readonly rateTable?: CompensationFxRateTable
 }) => {
   const annual = compensations?.filter(
-    ({ original }) => original.period === 'year'
+    (compensation) => compensation.period === 'year'
   )
   return (
     <Card className="mt-4">
@@ -187,8 +196,16 @@ export const ApplicationCompensation = ({
         <p className="mt-2 text-xs text-muted-foreground">
           {currency === 'original'
             ? 'Showing the original stored values.'
-            : `Showing converted ${currency} values using the registry FX rate.`}
+            : `Showing converted ${currency} values using client-side Frankfurter rates.`}
         </p>
+        {conversionError !== undefined ? (
+          <Alert className="mt-4">
+            <AlertTitle>Currency conversion unavailable</AlertTitle>
+            <AlertDescription>
+              {conversionError} Original compensation values remain visible.
+            </AlertDescription>
+          </Alert>
+        ) : null}
         {error !== undefined ? (
           <Alert variant="destructive" className="mt-4">
             <AlertTitle>Could not load compensation</AlertTitle>
@@ -205,11 +222,7 @@ export const ApplicationCompensation = ({
           </p>
         ) : (
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {annual.map(({ conversion, original }) => {
-              const visible =
-                currency === 'original' || conversion === null
-                  ? original
-                  : conversion
+            {annual.map((original) => {
               return (
                 <div
                   key={original.id}
@@ -220,10 +233,12 @@ export const ApplicationCompensation = ({
                   </Badge>
                   <AnnualCompensation
                     value={{
-                      currencyCode: visible.currencyCode,
-                      minimumMinor: visible.minimumMinor,
-                      maximumMinor: visible.maximumMinor,
+                      currencyCode: original.currencyCode,
+                      minimumMinor: original.minimumMinor,
+                      maximumMinor: original.maximumMinor,
                     }}
+                    displayCurrency={currency}
+                    rateTable={rateTable}
                   />
                 </div>
               )

@@ -3,18 +3,19 @@ import {
   check,
   index,
   integer,
+  pgTable,
   primaryKey,
-  sqliteTable,
   text,
   uniqueIndex,
-} from 'drizzle-orm/sqlite-core'
+} from 'drizzle-orm/pg-core'
 
 import { artifactKindValues, artifactStatusValues } from '../model/content'
 import { sqlStringList } from './checks'
+import { utcTimestamp } from './columns'
 import { contentRevisions } from './content'
 import { cvLinks } from './cv-links'
 
-export const generatedArtifacts = sqliteTable(
+export const generatedArtifacts = pgTable(
   'generated_artifacts',
   {
     id: text('id').notNull(),
@@ -36,9 +37,9 @@ export const generatedArtifacts = sqliteTable(
     mediaType: text('media_type'),
     errorCode: text('error_code'),
     errorMessage: text('error_message'),
-    generatedAt: text('generated_at'),
-    createdAt: text('created_at').notNull(),
-    updatedAt: text('updated_at').notNull(),
+    generatedAt: utcTimestamp('generated_at'),
+    createdAt: utcTimestamp('created_at').notNull(),
+    updatedAt: utcTimestamp('updated_at').notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.id] }),

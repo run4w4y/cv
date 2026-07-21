@@ -34,6 +34,7 @@ import { RegistryContentServicesLive } from './layers'
 type MemoryState = {
   applicationStatus: ApplicationStatus
   allowLinkAvailabilityRepair: boolean
+  beforeLinkStage?: () => void
   beforeFailedArtifactDisable?: () => void
   readonly artifacts: Map<string, GeneratedArtifact>
   readonly entries: Map<string, ContentEntry>
@@ -253,11 +254,39 @@ const makeMemoryCrudLayer = () => {
       Effect.succeed(
         [...state.links.values()].find((link) => link.token === token)
       ),
-    stage: (input: PersistedCvLink) =>
+    stage: (input: PersistedCvLink, expectedContentVersion: number) =>
       Effect.sync(() => {
+        const beforeStage = state.beforeLinkStage
+        state.beforeLinkStage = undefined
+        beforeStage?.()
+
+        const entry = state.entries.get(input.contentEntryId)
+        if (
+          !entry ||
+          entry.applicationId !== input.applicationId ||
+          entry.version !== expectedContentVersion
+        ) {
+          return false
+        }
+
         const existing = [...state.links.values()].find(
           ({ contentEntryId }) => contentEntryId === input.contentEntryId
         )
+        if (
+          existing !== undefined &&
+          (existing.applicationId !== input.applicationId ||
+            existing.id !== input.id ||
+            existing.token !== input.token)
+        ) {
+          return false
+        }
+        if (
+          existing?.applicationId === input.applicationId &&
+          existing.currentRevisionId === input.currentRevisionId &&
+          existing.publicUrl === input.publicUrl
+        ) {
+          return true
+        }
         if (existing) {
           state.links.set(existing.id, {
             ...existing,
@@ -281,6 +310,7 @@ const makeMemoryCrudLayer = () => {
             version: 1,
           })
         }
+        return true
       }),
     setEnabled: (
       id,
@@ -682,6 +712,121 @@ describe('content domain services', () => {
     expect(new TextDecoder().decode(result.resolved.bytes)).toBe(
       '{"revision":2}'
     )
+  })
+
+  test('reports a conflict when content changes after the staging preflight', async () => {
+    const { run, state } = makeHarness()
+    const conflict = await run(
+      Effect.gen(function* () {
+        const content = yield* ContentEntriesService
+        const publications = yield* CvPublicationsService
+        const entry = yield* content.ensure(application.id, {
+          kind: 'cv',
+          locale: 'en',
+        })
+        const appended = yield* content.appendRevision(
+          application.id,
+          entry.id,
+          appendInput(
+            new TextEncoder().encode('{"revision":"stale-stage"}'),
+            entry.version,
+            'stale-stage-revision'
+          )
+        )
+        const approved = yield* content.approveRevision(
+          application.id,
+          entry.id,
+          {
+            expectedVersion: appended.entry.version,
+            revisionId: appended.revision.id,
+          }
+        )
+
+        yield* Effect.sync(() => {
+          state.beforeLinkStage = () => {
+            const current = state.entries.get(entry.id)
+            if (current !== undefined) {
+              state.entries.set(entry.id, {
+                ...current,
+                version: current.version + 1,
+              })
+            }
+          }
+        })
+
+        return yield* Effect.flip(
+          publications.stage(application.id, entry.id, {
+            expectedContentVersion: approved.entry.version,
+            publicBaseUrl: 'https://cv.example.test/cv',
+            revisionId: appended.revision.id,
+          })
+        )
+      })
+    )
+
+    expect(conflict._tag).toBe('RegistryConflictError')
+    expect(state.links.size).toBe(0)
+  })
+
+  test('does not overwrite the identity of a link created during staging', async () => {
+    const { run, state } = makeHarness()
+    const conflict = await run(
+      Effect.gen(function* () {
+        const content = yield* ContentEntriesService
+        const publications = yield* CvPublicationsService
+        const entry = yield* content.ensure(application.id, {
+          kind: 'cv',
+          locale: 'en',
+        })
+        const appended = yield* content.appendRevision(
+          application.id,
+          entry.id,
+          appendInput(
+            new TextEncoder().encode('{"revision":"competing-stage"}'),
+            entry.version,
+            'competing-stage-revision'
+          )
+        )
+
+        yield* Effect.sync(() => {
+          state.beforeLinkStage = () => {
+            state.links.set('competing-link', {
+              applicationId: application.id,
+              contentEntryId: entry.id,
+              createdAt: '2026-07-17T12:00:00.000Z',
+              currentRevisionId: appended.revision.id,
+              disabledAt: '2026-07-17T12:00:00.000Z',
+              disabledReason: 'draft_revision',
+              enabled: false,
+              id: 'competing-link',
+              previewToken: 'competing-preview-token',
+              publicationVersion: 1,
+              publicUrl: 'https://cv.example.test/cv/competing-public-token',
+              token: 'competing-public-token',
+              updatedAt: '2026-07-17T12:00:00.000Z',
+              version: 1,
+            })
+          }
+        })
+
+        return yield* Effect.flip(
+          publications.stage(application.id, entry.id, {
+            expectedContentVersion: appended.entry.version,
+            publicBaseUrl: 'https://cv.example.test/cv',
+            revisionId: appended.revision.id,
+          })
+        )
+      })
+    )
+
+    expect(conflict._tag).toBe('RegistryConflictError')
+    expect([...state.links.values()]).toEqual([
+      expect.objectContaining({
+        id: 'competing-link',
+        publicUrl: 'https://cv.example.test/cv/competing-public-token',
+        token: 'competing-public-token',
+      }),
+    ])
   })
 
   test('fails closed on rejected applications and restores only after the pending PDF is ready', async () => {

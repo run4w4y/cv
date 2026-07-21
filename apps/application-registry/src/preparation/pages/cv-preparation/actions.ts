@@ -55,7 +55,7 @@ export const useCvPreparationActions = ({
     approve: () => execute(editor.approve),
     approvedRevision: publication.approvedRevision,
     approving: editor.approving,
-    authenticated: preparation.authenticated,
+    codexAvailable: preparation.codexAvailable,
     canApprove: editor.canApprove,
     cancelPublishing: () => execute(publication.cancelPublishing),
     cancellingPublication: publication.cancellingPublication,
@@ -75,6 +75,10 @@ export const useCvPreparationActions = ({
         : null) ??
       publication.queryError,
     generate: () => execute(preparation.generate),
+    baseGuidance: preparation.baseGuidance,
+    cvGenerationGuidance: preparation.cvGenerationGuidance,
+    factsReleaseId: preparation.factsReleaseId,
+    guidanceValid: preparation.guidanceValid,
     generatePdf: () => execute(publication.generatePdf),
     generatingPdf: publication.generatingPdf,
     publication: publication.publication,
@@ -90,8 +94,6 @@ export const useCvPreparationActions = ({
     reviewPending: editor.reviewPending,
     save: () => execute(editor.save),
     saving: editor.saving,
-    selectModel: preparation.selectModel,
-    selectedModel: preparation.selectedModel,
     setPublicationAvailability: (enabled: boolean) =>
       execute(() => publication.setPublicationAvailability(enabled)),
     startPending: preparation.startPending,

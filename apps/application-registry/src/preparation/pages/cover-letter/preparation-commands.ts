@@ -1,16 +1,14 @@
 import type { PreparationRun } from '@cv/application-preparation-workflow/domain'
-import { useAtom, useAtomSet, useAtomValue } from '@effect/atom-react'
-import { Cause } from 'effect'
+import { useAtom, useAtomSet } from '@effect/atom-react'
+import { Exit } from 'effect'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import * as Atom from 'effect/unstable/reactivity/Atom'
 
-import { chatGptAuthenticatedAtom } from '@/preparation/auth/atoms'
+import { isDesktopHost } from '@/host/desktop'
+import { firstAsyncResultErrorMessage } from '@/lib/async-result'
 import { preparationCommandGateKey } from '@/preparation/command-gate'
 import type { PreparationEditorIdentity } from '@/preparation/editor'
-import {
-  coverLetterPromptAtom,
-  selectedPreparationModelAtom,
-} from '@/preparation/forms/atoms'
+import { coverLetterPromptAtom } from '@/preparation/forms/atoms'
 import { keyedCommandFamily } from '@/preparation/keyed-command'
 import { refreshJobSnapshotCommandAtom } from '@/preparation/snapshot-command'
 import { makeStartPreparationAtom } from '@/preparation/workflow/atoms'
@@ -42,15 +40,14 @@ export const useCoverLetterPreparationCommands = ({
   const commandKey = preparationCommandGateKey(identity)
   const startCommandAtom = startPreparationFamily(commandKey)
   const refreshCommandAtom = refreshJobSnapshotCommandAtom(identity)
-  const authenticated = useAtomValue(chatGptAuthenticatedAtom)
-  const [selectedModel, selectModel] = useAtom(selectedPreparationModelAtom)
+  const codexAvailable = isDesktopHost()
   const [prompt, setPrompt] = useAtom(coverLetterPromptAtom(commandKey))
   const [startResult, startPreparation] = useAtom(startCommandAtom, {
-    mode: 'promise',
+    mode: 'promiseExit',
   })
   const [refreshResult, requestJobSnapshotRefresh] = useAtom(
     refreshCommandAtom,
-    { mode: 'promise' }
+    { mode: 'promiseExit' }
   )
   const resetStartResult = useAtomSet(startCommandAtom)
   const resetRefreshResult = useAtomSet(refreshCommandAtom)
@@ -65,32 +62,27 @@ export const useCoverLetterPreparationCommands = ({
   const generate = async () => {
     if (
       workspace === null ||
-      !authenticated ||
-      selectedModel === null ||
+      !codexAvailable ||
       prompt.trim().length === 0 ||
       workflowOpen ||
       mutationPending
     ) {
       return
     }
-    try {
-      const result = await startPreparation({
-        coverLetterPrompt: prompt,
-        kind: 'cover_letter',
-        locale: identity.locale,
-        modelId: selectedModel,
-        source: {
-          _tag: 'ReviewedContext',
-          applicationId: identity.applicationId,
-          factsReleaseId: workspace.bootstrap.context.factsReleaseId,
-          jobSnapshotId: workspace.bootstrap.context.jobSnapshot.id,
-          url: workspace.bootstrap.context.jobSnapshot.requestedUrl,
-        },
-      })
-      onRunStarted(result.runId)
-    } catch {
-      // The keyed command atom retains the typed failure rendered by the page.
-    }
+    const exit = await startPreparation({
+      coverLetterPrompt: prompt,
+      cvGenerationGuidance: null,
+      kind: 'cover_letter',
+      locale: identity.locale,
+      source: {
+        _tag: 'ReviewedContext',
+        applicationId: identity.applicationId,
+        factsReleaseId: workspace.bootstrap.context.factsReleaseId,
+        jobSnapshotId: workspace.bootstrap.context.jobSnapshot.id,
+        url: workspace.bootstrap.context.jobSnapshot.requestedUrl,
+      },
+    })
+    if (Exit.isSuccess(exit)) onRunStarted(exit.value.runId)
   }
 
   const refreshJobSnapshot = async () => {
@@ -101,11 +93,7 @@ export const useCoverLetterPreparationCommands = ({
     ) {
       return
     }
-    try {
-      await requestJobSnapshotRefresh(identity.applicationId)
-    } catch {
-      // The keyed command atom retains the typed failure rendered by the page.
-    }
+    await requestJobSnapshotRefresh(identity.applicationId)
   }
 
   const reset = () => {
@@ -114,22 +102,23 @@ export const useCoverLetterPreparationCommands = ({
   }
 
   return {
-    authenticated,
-    error: AsyncResult.isFailure(startResult)
-      ? (Cause.prettyErrors(startResult.cause)[0]?.message ??
-        'The cover-letter preparation Workflow could not start.')
-      : AsyncResult.isFailure(refreshResult)
-        ? (Cause.prettyErrors(refreshResult.cause)[0]?.message ??
-          'The job posting could not be refreshed.')
-        : null,
+    codexAvailable,
+    error: firstAsyncResultErrorMessage([
+      {
+        fallback: 'The cover-letter preparation Workflow could not start.',
+        result: startResult,
+      },
+      {
+        fallback: 'The job posting could not be refreshed.',
+        result: refreshResult,
+      },
+    ]),
     generate,
     mutationPending,
     prompt,
     refreshJobSnapshot,
     refreshPending,
     reset,
-    selectModel,
-    selectedModel,
     setPrompt,
     startPending,
     workflowExecuting,

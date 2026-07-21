@@ -1,4 +1,10 @@
-import { createBrowserRouter, Navigate, type RouteObject } from 'react-router'
+import {
+  createBrowserRouter,
+  createHashRouter,
+  Navigate,
+  type RouteObject,
+} from 'react-router'
+import { isDesktopHost } from './host/desktop'
 import { AppShell } from './shell/app-shell'
 import { RouteErrorPage } from './shell/route-error-page'
 
@@ -19,8 +25,28 @@ export const registryRoutes: RouteObject[] = [
         lazy: () => import('./analytics/pages/cv-analytics'),
       },
       {
-        path: 'preparation/batch',
-        lazy: () => import('./preparation/pages/batch-preparation'),
+        path: 'facts',
+        lazy: () => import('./facts/pages/facts'),
+      },
+      {
+        path: 'workflows',
+        lazy: () => import('./preparation/pages/workflows-dashboard'),
+      },
+      {
+        path: 'workflows/new',
+        lazy: () => import('./preparation/pages/new-workflow'),
+      },
+      {
+        path: 'workflows/:batchId',
+        lazy: () => import('./preparation/pages/workflow-batch'),
+      },
+      {
+        path: 'workflows/:batchId/jobs/:runId',
+        lazy: () => import('./preparation/pages/workflow-job'),
+      },
+      {
+        path: 'workflows/:batchId/jobs/:runId/review',
+        lazy: () => import('./preparation/pages/workflow-review'),
       },
       {
         path: 'applications/:applicationId',
@@ -35,11 +61,17 @@ export const registryRoutes: RouteObject[] = [
         lazy: () => import('./preparation/pages/cover-letter'),
       },
       {
-        path: 'schema/cv-document',
-        lazy: () => import('./preparation/pages/schema-inspector'),
+        path: 'applications/:applicationId/publish',
+        lazy: () => import('./preparation/pages/cv-publication'),
+      },
+      {
+        path: 'preparation/cv-guidance',
+        lazy: () => import('./preparation/pages/cv-guidance'),
       },
     ],
   },
 ]
 
-export const router = createBrowserRouter(registryRoutes)
+export const router = isDesktopHost()
+  ? createHashRouter(registryRoutes)
+  : createBrowserRouter(registryRoutes)

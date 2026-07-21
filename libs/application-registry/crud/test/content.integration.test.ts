@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict'
 import { after, afterEach, before, test } from 'node:test'
-import { RegistryMiniflareHarness } from '@cv/worker-test-kit/application-registry'
 import { Effect } from 'effect'
 
 import {
@@ -16,8 +15,9 @@ import {
   type PersistedPdfGenerationOutbox,
 } from '../src'
 import { makeRegistryCrudLive } from '../src/live'
+import { RegistryPostgresHarness } from './postgres-harness'
 
-let harness: RegistryMiniflareHarness
+let harness: RegistryPostgresHarness
 
 const recordedAt = '2026-07-17T12:00:00.000Z'
 
@@ -115,9 +115,7 @@ const runCrud = <A, E>(
   >
 ) =>
   Effect.runPromise(
-    program.pipe(
-      Effect.provide(makeRegistryCrudLive(Effect.succeed(harness.database)))
-    )
+    program.pipe(Effect.provide(makeRegistryCrudLive(harness.database)))
   )
 
 const seedApplication = Effect.gen(function* () {
@@ -128,9 +126,7 @@ const seedApplication = Effect.gen(function* () {
 })
 
 before(async () => {
-  harness = await RegistryMiniflareHarness.make({
-    databaseBinding: 'APPLICATION_REGISTRY_DB',
-  })
+  harness = await RegistryPostgresHarness.make()
 })
 
 afterEach(async () => {
@@ -195,17 +191,20 @@ test('keeps content history linear and preserves page identity while staging rev
         recordedAt
       )
 
-      yield* links.stage({
-        applicationId: application.applicationId,
-        contentEntryId: 'content-entry-1',
-        createdAt: recordedAt,
-        currentRevisionId: 'content-revision-1',
-        id: 'cv-link-1',
-        previewToken: 'preview-token-1',
-        publicUrl: 'https://cv.example.test/cv/public-token-1',
-        token: 'public-token-1',
-        updatedAt: recordedAt,
-      })
+      yield* links.stage(
+        {
+          applicationId: application.applicationId,
+          contentEntryId: 'content-entry-1',
+          createdAt: recordedAt,
+          currentRevisionId: 'content-revision-1',
+          id: 'cv-link-1',
+          previewToken: 'preview-token-1',
+          publicUrl: 'https://cv.example.test/cv/public-token-1',
+          token: 'public-token-1',
+          updatedAt: recordedAt,
+        },
+        3
+      )
 
       const second = yield* content.appendRevision(
         revision('content-revision-2', 2, 'content-revision-1'),
@@ -218,17 +217,51 @@ test('keeps content history linear and preserves page identity while staging rev
         4,
         '2026-07-17T13:01:00.000Z'
       )
-      yield* links.stage({
-        applicationId: application.applicationId,
-        contentEntryId: 'content-entry-1',
-        createdAt: '2026-07-17T13:02:00.000Z',
-        currentRevisionId: 'content-revision-2',
-        id: 'replacement-link-id',
-        previewToken: 'preview-token-2',
-        publicUrl: 'https://cv.example.test/cv/replacement-token',
-        token: 'replacement-token',
-        updatedAt: '2026-07-17T13:02:00.000Z',
-      })
+      const staleStage = yield* links.stage(
+        {
+          applicationId: application.applicationId,
+          contentEntryId: 'content-entry-1',
+          createdAt: '2026-07-17T13:02:00.000Z',
+          currentRevisionId: 'content-revision-2',
+          id: 'replacement-link-id',
+          previewToken: 'stale-preview-token',
+          publicUrl: 'https://cv.example.test/cv/stale-token',
+          token: 'stale-token',
+          updatedAt: '2026-07-17T13:02:00.000Z',
+        },
+        4
+      )
+      const linkAfterStaleStage = yield* links.findByEntry('content-entry-1')
+      const identityConflictStage = yield* links.stage(
+        {
+          applicationId: application.applicationId,
+          contentEntryId: 'content-entry-1',
+          createdAt: '2026-07-17T13:02:00.000Z',
+          currentRevisionId: 'content-revision-2',
+          id: 'replacement-link-id',
+          previewToken: 'preview-token-2',
+          publicUrl: 'https://cv.example.test/cv/replacement-token',
+          token: 'replacement-token',
+          updatedAt: '2026-07-17T13:02:00.000Z',
+        },
+        5
+      )
+      const linkAfterIdentityConflict =
+        yield* links.findByEntry('content-entry-1')
+      const secondStage = yield* links.stage(
+        {
+          applicationId: application.applicationId,
+          contentEntryId: 'content-entry-1',
+          createdAt: recordedAt,
+          currentRevisionId: 'content-revision-2',
+          id: 'cv-link-1',
+          previewToken: 'preview-token-2',
+          publicUrl: 'https://cv.example.test/cv/public-token-1',
+          token: 'public-token-1',
+          updatedAt: '2026-07-17T13:02:00.000Z',
+        },
+        5
+      )
 
       const stagedLink = yield* links.findByEntry('content-entry-1')
       const initiallyEnabled = yield* links.setEnabled(
@@ -283,14 +316,19 @@ test('keeps content history linear and preserves page identity while staging rev
         enabled,
         entry: yield* content.findEntry('content-entry-1'),
         first,
+        identityConflictStage,
         initiallyEnabled,
         latestSnapshot: yield* snapshots.latest(application.applicationId),
         link: yield* links.findByEntry('content-entry-1'),
+        linkAfterIdentityConflict,
+        linkAfterStaleStage,
         manualNotRestored,
         revisions: yield* content.listRevisions('content-entry-1'),
         restored,
         second,
+        secondStage,
         stale,
+        staleStage,
       }
     })
   )
@@ -325,6 +363,25 @@ test('keeps content history linear and preserves page identity while staging rev
   ])
   assert.equal(result.second, true)
   assert.equal(result.approvedSecond, true)
+  assert.equal(result.staleStage, false)
+  assert.equal(result.identityConflictStage, false)
+  assert.equal(result.secondStage, true)
+  assert.equal(
+    result.linkAfterStaleStage?.currentRevisionId,
+    'content-revision-1'
+  )
+  assert.equal(result.linkAfterStaleStage?.previewToken, 'preview-token-1')
+  assert.equal(result.linkAfterStaleStage?.publicationVersion, 1)
+  assert.equal(result.linkAfterIdentityConflict?.id, 'cv-link-1')
+  assert.equal(result.linkAfterIdentityConflict?.token, 'public-token-1')
+  assert.equal(
+    result.linkAfterIdentityConflict?.publicUrl,
+    'https://cv.example.test/cv/public-token-1'
+  )
+  assert.equal(
+    result.linkAfterIdentityConflict?.currentRevisionId,
+    'content-revision-1'
+  )
   assert.equal(result.initiallyEnabled, true)
   assert.equal(result.entry?.headRevisionId, 'content-revision-2')
   assert.equal(result.entry?.approvedRevisionId, 'content-revision-2')
@@ -344,7 +401,7 @@ test('keeps content history linear and preserves page identity while staging rev
   assert.equal(result.link?.token, 'public-token-1')
   assert.equal(
     result.link?.publicUrl,
-    'https://cv.example.test/cv/replacement-token'
+    'https://cv.example.test/cv/public-token-1'
   )
   assert.equal(result.link?.currentRevisionId, 'content-revision-2')
   assert.equal(result.link?.previewToken, 'preview-token-2')
@@ -403,20 +460,31 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
         3,
         recordedAt
       )
-      yield* links.stage({
-        applicationId: application.applicationId,
-        contentEntryId: 'content-entry-1',
-        createdAt: recordedAt,
-        currentRevisionId: 'content-revision-2',
-        id: 'cv-link-1',
-        previewToken: 'preview-token-1',
-        publicUrl: 'https://cv.example.test/cv/public-token-1',
-        token: 'public-token-1',
-        updatedAt: recordedAt,
-      })
+      yield* links.stage(
+        {
+          applicationId: application.applicationId,
+          contentEntryId: 'content-entry-1',
+          createdAt: recordedAt,
+          currentRevisionId: 'content-revision-2',
+          id: 'cv-link-1',
+          previewToken: 'preview-token-1',
+          publicUrl: 'https://cv.example.test/cv/public-token-1',
+          token: 'public-token-1',
+          updatedAt: recordedAt,
+        },
+        4
+      )
+      const initiallyEnabled = yield* links.setEnabled(
+        'cv-link-1',
+        1,
+        1,
+        true,
+        null,
+        recordedAt
+      )
 
       const firstArtifact = artifact()
-      yield* artifacts.persistPending(firstArtifact, outbox(firstArtifact), 1)
+      yield* artifacts.persistPending(firstArtifact, outbox(firstArtifact), 2)
       const failed = yield* artifacts.markFailed(
         'pdf-artifact-1',
         'render_failed',
@@ -427,12 +495,12 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
         id: 'pdf-artifact-2',
         requestId: 'request-2',
       })
-      yield* artifacts.persistPending(retryArtifact, outbox(retryArtifact), 1)
+      yield* artifacts.persistPending(retryArtifact, outbox(retryArtifact), 2)
       const duplicate = artifact({
         id: 'pdf-artifact-duplicate',
         requestId: 'request-2',
       })
-      yield* artifacts.persistPending(duplicate, outbox(duplicate), 1)
+      yield* artifacts.persistPending(duplicate, outbox(duplicate), 2)
       const pendingDispatch = yield* artifacts.findPendingDispatch(
         retryArtifact.id
       )
@@ -528,6 +596,7 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
         published,
         pendingDispatch,
         ready,
+        initiallyEnabled,
         dispatched,
         linkAfterStaleFailure,
         retryByRequest: yield* artifacts.findByRequestId('request-2'),
@@ -539,6 +608,7 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
   )
 
   assert.equal(result.ready, true)
+  assert.equal(result.initiallyEnabled, true)
   assert.equal(result.failed, true)
   assert.equal(result.disabled, true)
   assert.equal(result.enabled, true)
@@ -625,17 +695,20 @@ test('deleting an application cascades through its complete prepared CV graph', 
         2,
         recordedAt
       )
-      yield* links.stage({
-        applicationId: application.applicationId,
-        contentEntryId: 'content-entry-1',
-        createdAt: recordedAt,
-        currentRevisionId: 'content-revision-1',
-        id: 'cv-link-1',
-        previewToken: 'preview-token-1',
-        publicUrl: 'https://cv.example.test/c/public-token-1',
-        token: 'public-token-1',
-        updatedAt: recordedAt,
-      })
+      yield* links.stage(
+        {
+          applicationId: application.applicationId,
+          contentEntryId: 'content-entry-1',
+          createdAt: recordedAt,
+          currentRevisionId: 'content-revision-1',
+          id: 'cv-link-1',
+          previewToken: 'preview-token-1',
+          publicUrl: 'https://cv.example.test/c/public-token-1',
+          token: 'public-token-1',
+          updatedAt: recordedAt,
+        },
+        3
+      )
       const pendingArtifact = artifact({
         contentRevisionId: 'content-revision-1',
       })
@@ -652,19 +725,19 @@ test('deleting an application cascades through its complete prepared CV graph', 
   assert.equal(removed, true)
 
   const ownedRows = await harness.query<{ count: number; relation: string }>(
-    `select 'job_posting_snapshots' as relation, count(*) as count
-       from job_posting_snapshots where application_id = ?1
+    `select 'job_posting_snapshots' as relation, count(*)::int as count
+       from job_posting_snapshots where application_id = $1
      union all
-     select 'content_entries', count(*)
-       from content_entries where application_id = ?1
+     select 'content_entries', count(*)::int
+       from content_entries where application_id = $1
      union all
-     select 'content_revisions', count(*)
+     select 'content_revisions', count(*)::int
        from content_revisions where content_entry_id = 'content-entry-1'
      union all
-     select 'cv_links', count(*)
-       from cv_links where application_id = ?1
+     select 'cv_links', count(*)::int
+       from cv_links where application_id = $1
      union all
-     select 'generated_artifacts', count(*)
+     select 'generated_artifacts', count(*)::int
        from generated_artifacts where id = 'pdf-artifact-1'`,
     [application.applicationId]
   )
@@ -681,7 +754,7 @@ test('deleting an application cascades through its complete prepared CV graph', 
   )
 
   const outboxRows = await harness.query<{ count: number }>(
-    `select count(*) as count
+    `select count(*)::int as count
        from pdf_generation_outbox where artifact_id = 'pdf-artifact-1'`
   )
   assert.deepEqual(outboxRows, [{ count: 0 }])

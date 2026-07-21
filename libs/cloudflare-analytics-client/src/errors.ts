@@ -81,7 +81,6 @@ export class RangeValidationError extends Schema.TaggedErrorClass<RangeValidatio
   'CloudflareAnalytics.RangeValidationError',
   {
     from: Schema.String,
-    maxDays: Schema.Number,
     message: Schema.String,
     to: Schema.String,
   }

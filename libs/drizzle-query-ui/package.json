@@ -10,6 +10,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./search-params": {
+      "types": "./dist/search-params.d.ts",
+      "default": "./dist/search-params.js"
     }
   },
   "dependencies": {

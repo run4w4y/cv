@@ -2,12 +2,12 @@ import { describe, expect, test } from 'bun:test'
 import { Option, Schema } from 'effect'
 import {
   CvDocumentV1Schema,
-  CvPersonV1Schema,
+  CvGenerationGuidanceV1Schema,
   cvDocumentSchemaRegistry,
   cvDocumentV1ContractId,
   cvDocumentV1Version,
+  cvGenerationGuidanceFieldTargetValues,
   getCvDocumentContract,
-  getGenerationGuidance,
 } from './index'
 
 const validDocument = {
@@ -119,17 +119,6 @@ describe('cv.document.v1', () => {
     ).toThrow('Duplicate item identifier')
   })
 
-  test('exposes model guidance through Effect annotations', () => {
-    const guidance = getGenerationGuidance(CvPersonV1Schema.fields.summary)
-
-    expect(Option.isSome(guidance)).toBeTrue()
-    if (Option.isSome(guidance)) {
-      expect(guidance.value.sources).toContain('trusted-facts')
-      expect(guidance.value.sources).toContain('job-context')
-      expect(guidance.value.maxWords).toBe(90)
-    }
-  })
-
   test('registers the immutable contract ID and version', () => {
     expect(cvDocumentSchemaRegistry).toHaveLength(1)
     expect(cvDocumentSchemaRegistry[0]?.version).toBe(cvDocumentV1Version)
@@ -139,18 +128,46 @@ describe('cv.document.v1', () => {
     expect(Option.isNone(getCvDocumentContract('cv.document.v999'))).toBe(true)
   })
 
-  test('produces strict JSON Schema with optional guidance metadata', () => {
-    const jsonSchema = Schema.toJsonSchemaDocument(CvDocumentV1Schema, {
-      includeAnnotationKey: (key) => key === 'generationGuidance',
-    })
+  test('produces strict structural JSON Schema without generation prose', () => {
+    const jsonSchema = Schema.toJsonSchemaDocument(CvDocumentV1Schema)
     const serialized = JSON.stringify(jsonSchema)
 
     expect(jsonSchema.dialect).toBe('draft-2020-12')
     expect(serialized).toContain('"additionalProperties":false')
     expect(serialized).toContain('"cv.document.v1"')
-    expect(serialized).toContain('"generationGuidance"')
-    expect(serialized).toContain('Tailor the headline')
-    expect(serialized).toContain('Write a compact opening')
+    expect(serialized).not.toContain('generationGuidance')
     expect(serialized).toContain('"maxItems":10')
+  })
+
+  test('requires complete, unique field guidance coverage', () => {
+    const guidance = {
+      $schema: 'cv.generation-guidance.v1',
+      documentContract: 'cv.document.v1',
+      fields: cvGenerationGuidanceFieldTargetValues.map((target) => ({
+        instruction: `Write ${target} from reviewed facts.`,
+        sources: ['trusted-facts'],
+        target,
+      })),
+      instruction: 'Produce a truthful CV.',
+      label: 'Reviewed CV guidance',
+      rules: ['Do not invent claims.'],
+      sources: ['trusted-facts', 'job-context'],
+    }
+
+    expect(
+      Schema.decodeUnknownSync(CvGenerationGuidanceV1Schema)(guidance).fields
+    ).toHaveLength(cvGenerationGuidanceFieldTargetValues.length)
+    expect(() =>
+      Schema.decodeUnknownSync(CvGenerationGuidanceV1Schema)({
+        ...guidance,
+        fields: guidance.fields.slice(1),
+      })
+    ).toThrow('Missing CV generation guidance target')
+    expect(() =>
+      Schema.decodeUnknownSync(CvGenerationGuidanceV1Schema)({
+        ...guidance,
+        fields: [...guidance.fields, guidance.fields[0]],
+      })
+    ).toThrow('Duplicate CV generation guidance target')
   })
 })

@@ -37,6 +37,7 @@ import {
 } from '../domain'
 import { PreparationGateway, type PreparationGatewayService } from '../gateway'
 import { PreparationProgress, preparationProgressLayer } from '../progress'
+import { cvGenerationGuidanceTestFixture } from '../test-support'
 import {
   PreparationConcurrency,
   preparationConcurrencyLayer,
@@ -134,6 +135,7 @@ const factsCatalogue: FactsCatalogueV1 = {
 
 const bootstrap: PreparationBootstrap = {
   application,
+  cvGenerationGuidance: cvGenerationGuidanceTestFixture,
   entry,
   factsCatalogue,
   factsReleaseId: 'facts-release-1',
@@ -141,9 +143,8 @@ const bootstrap: PreparationBootstrap = {
   jobSnapshot,
 }
 
-const aiMetadata = {
-  finishReason: 'stop',
-  modelId: 'model-1',
+const generationMetadata = {
+  executor: 'codex-local',
   stage: 'test',
   usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
 }
@@ -157,7 +158,7 @@ const savedCandidate: SavedCandidate = {
       body: 'I build reliable platforms.',
       locale: 'en',
     },
-    metadata: [aiMetadata],
+    metadata: [generationMetadata],
   },
   result: {
     entry: { ...entry, headRevisionId: revision.id, version: 2 },
@@ -167,9 +168,9 @@ const savedCandidate: SavedCandidate = {
 
 const input: PreparationWorkflowInput = {
   coverLetterPrompt: null,
+  cvGenerationGuidance: null,
   kind: 'cover_letter',
   locale: 'en',
-  modelId: 'model-1',
   runId: 'run-1',
   source: {
     _tag: 'ReviewedContext',
@@ -179,6 +180,12 @@ const input: PreparationWorkflowInput = {
     url: application.postingUrl,
   },
 }
+
+const reservation = (value: PreparationWorkflowInput) => ({
+  batchId: `batch-${value.runId}`,
+  batchPosition: 0,
+  input: value,
+})
 
 const fakeGateway: PreparationGatewayService = {
   analyze: () =>
@@ -194,7 +201,7 @@ const fakeGateway: PreparationGatewayService = {
         role: application.role,
         summary: 'Platform role',
       },
-      metadata: { ...aiMetadata, stage: 'analysis' },
+      metadata: { ...generationMetadata, stage: 'analysis' },
     }),
   bootstrap: () => Effect.succeed(bootstrap),
   brief: (_input, _context, _analysis, _plan, sectionId) =>
@@ -205,14 +212,14 @@ const fakeGateway: PreparationGatewayService = {
         objective: 'Show platform experience.',
         sectionId,
       },
-      metadata: { ...aiMetadata, stage: `brief:${sectionId}` },
+      metadata: { ...generationMetadata, stage: `brief:${sectionId}` },
     }),
   compose: () => Effect.succeed(savedCandidate.candidate),
   enrichApplication: () => Effect.succeed(application),
   ensureApplication: () => Effect.succeed(application),
   planEvidence: () =>
     Effect.succeed({
-      metadata: { ...aiMetadata, stage: 'evidence' },
+      metadata: { ...generationMetadata, stage: 'evidence' },
       plan: {
         matches: [
           {
@@ -290,7 +297,7 @@ describe('in-memory application preparation workflow', () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const progress = yield* PreparationProgress
-        yield* progress.register(input)
+        yield* progress.register(reservation(input))
         const expectedExecutionId =
           yield* PrepareApplicationWorkflow.executionId(input)
         yield* progress.setExecution(input.runId, expectedExecutionId)
@@ -347,6 +354,17 @@ describe('in-memory application preparation workflow', () => {
     expect(result.run.candidate.result.entry.approvedRevisionId).toBe(
       revision.id
     )
+    const validation = result.run.stepHistory.find(
+      ({ stage, status }) => stage === 'validation' && status === 'running'
+    )
+    const saving = result.run.stepHistory.find(
+      ({ stage, status }) => stage === 'saving' && status === 'running'
+    )
+    expect(validation).toBeDefined()
+    expect(saving).toBeDefined()
+    expect(validation?.occurredAt).toBeLessThanOrEqual(
+      saving?.occurredAt ?? Number.NEGATIVE_INFINITY
+    )
     expect(calls).toEqual({ approve: 1, compose: 1, ensure: 1, save: 1 })
   })
 
@@ -355,7 +373,7 @@ describe('in-memory application preparation workflow', () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const progress = yield* PreparationProgress
-        yield* progress.register(rejectedInput)
+        yield* progress.register(reservation(rejectedInput))
         yield* progress.setExecution(
           rejectedInput.runId,
           yield* PrepareApplicationWorkflow.executionId(rejectedInput)
@@ -424,7 +442,7 @@ describe('in-memory application preparation workflow', () => {
       Effect.gen(function* () {
         const engine = yield* WorkflowEngine.WorkflowEngine
         const progress = yield* PreparationProgress
-        yield* progress.register(queuedInput)
+        yield* progress.register(reservation(queuedInput))
         const expectedExecutionId =
           yield* PrepareApplicationWorkflow.executionId(queuedInput)
         yield* progress.setExecution(queuedInput.runId, expectedExecutionId)
@@ -468,7 +486,7 @@ describe('in-memory application preparation workflow', () => {
     const run = await Effect.runPromise(
       Effect.gen(function* () {
         const progress = yield* PreparationProgress
-        yield* progress.register(activeInput)
+        yield* progress.register(reservation(activeInput))
         const executionId =
           yield* PrepareApplicationWorkflow.executionId(activeInput)
         yield* progress.setExecution(activeInput.runId, executionId)
@@ -492,7 +510,7 @@ describe('in-memory application preparation workflow', () => {
     const observed = await Effect.runPromise(
       Effect.gen(function* () {
         const progress = yield* PreparationProgress
-        yield* progress.register(suspendedInput)
+        yield* progress.register(reservation(suspendedInput))
         const executionId =
           yield* PrepareApplicationWorkflow.executionId(suspendedInput)
         yield* progress.setExecution(suspendedInput.runId, executionId)
@@ -537,7 +555,7 @@ describe('in-memory application preparation workflow', () => {
     const observed = await Effect.runPromise(
       Effect.gen(function* () {
         const progress = yield* PreparationProgress
-        yield* progress.register(reviewInput)
+        yield* progress.register(reservation(reviewInput))
         const executionId =
           yield* PrepareApplicationWorkflow.executionId(reviewInput)
         yield* progress.setExecution(reviewInput.runId, executionId)
@@ -607,7 +625,7 @@ describe('in-memory application preparation workflow', () => {
     const observed = await Effect.runPromise(
       Effect.gen(function* () {
         const progress = yield* PreparationProgress
-        yield* progress.register(reviewInput)
+        yield* progress.register(reservation(reviewInput))
         const executionId =
           yield* PrepareApplicationWorkflow.executionId(reviewInput)
         yield* progress.setExecution(reviewInput.runId, executionId)
@@ -658,7 +676,7 @@ describe('in-memory application preparation workflow', () => {
     const failedRun = await Effect.runPromise(
       Effect.gen(function* () {
         const progress = yield* PreparationProgress
-        yield* progress.register(defectiveInput)
+        yield* progress.register(reservation(defectiveInput))
         yield* progress.setExecution(
           defectiveInput.runId,
           yield* PrepareApplicationWorkflow.executionId(defectiveInput)

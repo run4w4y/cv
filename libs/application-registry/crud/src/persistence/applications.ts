@@ -7,10 +7,6 @@ export {
   listApplications,
 } from './application-queries'
 export {
-  applicationStatements,
-  replacementStatements,
-} from './application-values'
-export {
   patchApplication,
   persistApplication,
   removeApplication,

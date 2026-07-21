@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { alias, SQLiteDialect } from 'drizzle-orm/sqlite-core'
+import { alias, PgDialect } from 'drizzle-orm/pg-core'
 
 import { applications } from '../tables/applications'
 import { applicationListQuery } from './applications'
 
-const dialect = new SQLiteDialect()
+const dialect = new PgDialect()
 const referenceTime = '2026-07-12T12:00:00.000Z'
 
 const renderWhere = (
@@ -126,6 +126,39 @@ describe('application list query definition', () => {
     expect(rendered.params).toContain(referenceTime)
   })
 
+  test('keeps user-facing text filters case-insensitive on PostgreSQL', () => {
+    const rendered = renderWhere({
+      filters: [
+        {
+          type: 'condition',
+          field: 'location',
+          operator: 'contains',
+          value: 'REMOTE',
+        },
+        {
+          type: 'condition',
+          field: 'postingUrl',
+          operator: 'contains',
+          value: 'EXAMPLE.TEST',
+        },
+        {
+          type: 'condition',
+          field: 'role',
+          operator: 'contains',
+          value: 'PLATFORM',
+        },
+      ],
+      pagination: { size: 25 },
+    })
+
+    expect(rendered.sql.match(/ ilike /gu)).toHaveLength(3)
+    expect(rendered.params).toEqual([
+      '%REMOTE%',
+      '%EXAMPLE.TEST%',
+      '%PLATFORM%',
+    ])
+  })
+
   test('binds only request-owned values for full-text matching', () => {
     const rendered = renderWhere({
       filters: [
@@ -160,7 +193,7 @@ describe('application list query definition', () => {
       pagination: { size: 25 },
     })
 
-    expect(rendered.sql).toContain('between ? and ?')
+    expect(rendered.sql).toContain('between $1 and $2')
     expect(rendered.params).toContain(from)
     expect(rendered.params).toContain(to)
   })

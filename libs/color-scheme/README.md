@@ -11,6 +11,7 @@ for app controls.
 - `@cv/color-scheme`: framework-neutral core and DOM helpers.
 - `@cv/color-scheme/astro`: compiled Astro boot/runtime scripts.
 - `@cv/color-scheme/react`: React hook for color-scheme controls.
+- `@cv/color-scheme/script`: framework-neutral pre-paint boot script.
 
 ## Verification
 

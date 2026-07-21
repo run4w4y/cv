@@ -4,12 +4,15 @@ import {
   ContentRevisionSchema,
   JobPostingSnapshotSchema,
 } from '@cv/application-registry-entity'
-import { CvDocumentV1Schema } from '@cv/contracts/document'
+import {
+  CvDocumentV1Schema,
+  CvGenerationGuidanceV1Schema,
+} from '@cv/contracts/document'
 import { FactsCatalogueV1Schema } from '@cv/contracts/facts'
 import { Schema } from 'effect'
 
 import { CoverLetterDocumentSchema } from '../cover-letter/contract'
-import { AiStageMetadataSchema } from './generation'
+import { GenerationStageMetadataSchema } from './generation'
 import type { DocumentKind } from './input'
 
 export const ContentRevisionResultSchema = Schema.Struct({
@@ -21,6 +24,7 @@ export interface ContentRevisionResult
 
 export const PreparationBootstrapSchema = Schema.Struct({
   application: ApplicationSchema,
+  cvGenerationGuidance: CvGenerationGuidanceV1Schema,
   entry: ContentEntrySchema,
   factsCatalogue: FactsCatalogueV1Schema,
   factsReleaseId: Schema.NonEmptyString,
@@ -33,11 +37,11 @@ export interface PreparationBootstrap
 export const GeneratedCandidateSchema = Schema.TaggedUnion({
   Cv: {
     document: CvDocumentV1Schema,
-    metadata: Schema.Array(AiStageMetadataSchema),
+    metadata: Schema.Array(GenerationStageMetadataSchema),
   },
   CoverLetter: {
     document: CoverLetterDocumentSchema,
-    metadata: Schema.Array(AiStageMetadataSchema),
+    metadata: Schema.Array(GenerationStageMetadataSchema),
   },
 })
 export type GeneratedCandidate = typeof GeneratedCandidateSchema.Type

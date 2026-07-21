@@ -8,7 +8,6 @@ import {
   ApplicationWritableSchema,
   ContentRevisionSchema,
   CvLinkSchema,
-  FxRateInputSchema,
   normalizeApplicationPostingUrl,
 } from './index'
 import { applicationActivityKindValues } from './model/values'
@@ -109,34 +108,6 @@ describe('application registry database schemas', () => {
 
     expect(activity.kind).toBe('application_created')
     expect(applicationActivityKindValues).not.toContain('submitted' as never)
-  })
-
-  test('applies domain checks that SQLite metadata cannot express', () => {
-    expect(() =>
-      Schema.decodeUnknownSync(FxRateInputSchema)({
-        baseCurrency: 'USD',
-        quoteCurrency: 'JPY',
-        rate: 0,
-        provider: 'fixture',
-        observedAt: '2026-07-10T00:00:00.000Z',
-        fetchedAt: '2026-07-10T12:00:00.000Z',
-      })
-    ).toThrow()
-  })
-
-  test('rejects non-ISO-shaped currency codes', () => {
-    const decode = Schema.decodeUnknownSync(FxRateInputSchema)
-
-    expect(() =>
-      decode({
-        baseCurrency: 'usd',
-        quoteCurrency: 'JPY',
-        rate: 150,
-        provider: 'fixture',
-        observedAt: '2026-07-10T00:00:00.000Z',
-        fetchedAt: '2026-07-10T12:00:00.000Z',
-      })
-    ).toThrow()
   })
 
   test('normalizes empty fragments and tracking parameters from identity URLs', () => {

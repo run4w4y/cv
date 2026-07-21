@@ -1,56 +1,28 @@
-# Facts release publisher
+# Facts toolchain
 
-Compiles a checked-out `cv-content` facts source into deterministic,
-content-addressed objects with `@cv/facts-release`, publishes the exact bytes to
-the private `cv-facts` R2 bucket, and replaces `current.json` only after every
-immutable release object has been uploaded.
+`cv-facts` is the public, versioned compiler used by `run4w4y/cv-content`.
+It loads the authored TypeScript checkout without a sibling repository, checks
+the complete locale structure, and builds a deterministic
+`cv.facts-bundle.v1` file containing the immutable release objects.
 
-The source checkout is a human-authored TypeScript repository. Its
-`facts.config.ts` is the source of truth for `defaultLocale`, `factsDir`, and the
-complete locale list. For every configured locale, the publisher loads root
-`section.ts` files and `section/index.ts` entrypoints. An index may import any
-number of entry modules from its directory; those imports are not treated as
-standalone sections. Locale trees must have the same semantic section, entry,
-workstream, contribution, and fact structure. Authors do not maintain internal
-catalogue IDs; composition derives them from normalized structural paths.
-Technology arrays are locale-invariant and must match the default locale
-exactly.
-
-Optional shared registries live at `<factsDir>/evidence.ts` and
-`<factsDir>/assets.ts`. Reviewed binary assets live in `<factsDir>/assets/`; the
-publisher computes their digests from the bytes instead of asking authors to
-maintain hashes. Vite is used only to evaluate these TypeScript modules. There
-is no MDX/component runtime and no authored catalogue JSON.
-
-Portable `virtual:facts` authoring types are generated from the code-owned
-schema in this repository:
+The production command verifies that bundle locally, negotiates the registry's
+publication contracts, registers the immutable objects, and activates the
+release with compare-and-set. It never receives MinIO credentials. The registry
+API is the only writer to the facts bucket.
 
 ```sh
-bunx nx run facts-types:generate
+cv-facts check --content-root .
+cv-facts build --content-root . --source-commit "$GITHUB_SHA" --output facts.bundle.json
+FACTS_PUBLISH_TOKEN=... cv-facts publish \
+  --bundle facts.bundle.json \
+  --registry-url https://applications.example.com
 ```
 
-Required environment variables:
+Tags named `facts-toolchain-v<package-version>` run the release workflow. The
+GitHub Release contains a deterministic Linux archive with the self-contained
+binary, canonical `virtual:facts` declaration, contract metadata, checksum, and
+GitHub build-provenance attestation. `cv-content` pins and verifies that public
+artifact through `facts-toolchain.lock.json`.
 
-- `FACTS_CONTENT_ROOT`
-- `FACTS_SOURCE_COMMIT`
-- `FACTS_COMPILER_COMMIT`
-- `FACTS_R2_ACCOUNT_ID`
-- `FACTS_R2_BUCKET`
-- `FACTS_R2_ACCESS_KEY_ID`
-- `FACTS_R2_SECRET_ACCESS_KEY`
-
-Optional variables select the repositories: `FACTS_SOURCE_REPOSITORY` and
-`FACTS_COMPILER_REPOSITORY`. Both commits must be full lowercase 40- or
-64-character hexadecimal IDs.
-
-The production repository-dispatch workflow also verifies that the requested
-source commit is still `run4w4y/cv-content`'s authoritative `main` head
-immediately before invoking the publisher. This prevents an older queued push
-or a historical manual request from superseding the reviewed main release.
-
-The command logs release hashes, counts, and pointer state only. It never logs
-S3 credentials, catalogue content, or asset bytes.
-
-```sh
-bunx nx run facts-release-publisher:publish
-```
+The bundle and command output contain hashes and counts; commands do not print
+catalogue text, asset bytes, or the publication token.

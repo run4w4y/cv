@@ -42,7 +42,7 @@ variable "grafana_connector_token" {
 
 variable "registry_api_url" {
   type        = string
-  description = "Public base URL for the application registry Worker."
+  description = "Public base URL for the self-hosted application registry API."
 
   validation {
     condition     = can(regex("^https://", var.registry_api_url))

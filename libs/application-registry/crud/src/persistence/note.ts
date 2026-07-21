@@ -5,59 +5,76 @@ import {
   idempotencyReceipts,
 } from '@cv/application-registry-entity'
 import { eq, sql } from 'drizzle-orm'
-import type { BatchItem } from 'drizzle-orm/batch'
+import { Effect } from 'effect'
 
-import type { RegistryConnections } from '../internal/connection'
+import { RegistryDatabaseError } from '../errors'
+import type { RegistryDatabase } from '../internal/connection'
 import type { PersistedNote } from '../types'
-import { allocateRevision, currentRevision, runBatch } from './shared'
+import { allocateRevision, runTransaction } from './shared'
 
 export const persistNote = (
-  database: RegistryConnections,
+  database: RegistryDatabase,
   applicationId: string,
   input: PersistedNote
-) => {
-  const statements = [
-    allocateRevision(database.batch),
-    database.batch
-      .update(applications)
-      .set({
-        updatedAt: input.recordedAt,
-        updatedRevision: currentRevision,
-        version: sql`${applications.version} + 1`,
+) =>
+  runTransaction(database, 'application note', (transaction) =>
+    Effect.gen(function* () {
+      const current = yield* transaction
+        .select({ id: applications.id })
+        .from(applications)
+        .where(eq(applications.id, applicationId))
+        .for('update')
+        .limit(1)
+
+      if (current.length === 0) {
+        return yield* new RegistryDatabaseError({
+          cause: new Error(`Application ${applicationId} does not exist.`),
+          message: 'Failed to execute application note',
+        })
+      }
+
+      yield* transaction.insert(idempotencyReceipts).values({
+        applicationId,
+        createdAt: input.recordedAt,
+        idempotencyKey: input.idempotencyKey,
+        requestHash: input.requestHash,
+        resourceId: input.noteId,
+        scope: 'application_note',
       })
-      .where(eq(applications.id, applicationId)),
-    database.batch.insert(applicationNotes).values({
-      id: input.noteId,
-      applicationId,
-      kind: input.kind,
-      body: input.body,
-      source: input.source,
-      createdAt: input.recordedAt,
-      updatedAt: input.recordedAt,
-    }),
-    database.batch.insert(applicationActivities).values({
-      id: input.activityId,
-      applicationId,
-      kind: 'note_added',
-      actor: 'user',
-      source: 'management',
-      revision: currentRevision,
-      occurredAt: input.recordedAt,
-      payload: {
-        noteId: input.noteId,
+
+      const revision = yield* allocateRevision(transaction)
+      yield* transaction
+        .update(applications)
+        .set({
+          updatedAt: input.recordedAt,
+          updatedRevision: revision,
+          version: sql`${applications.version} + 1`,
+        })
+        .where(eq(applications.id, applicationId))
+
+      yield* transaction.insert(applicationNotes).values({
+        applicationId,
+        body: input.body,
+        createdAt: input.recordedAt,
+        id: input.noteId,
         kind: input.kind,
         source: input.source,
-      },
-    }),
-    database.batch.insert(idempotencyReceipts).values({
-      idempotencyKey: input.idempotencyKey,
-      requestHash: input.requestHash,
-      scope: 'application_note',
-      applicationId,
-      resourceId: input.noteId,
-      createdAt: input.recordedAt,
-    }),
-  ] satisfies [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]
+        updatedAt: input.recordedAt,
+      })
 
-  return runBatch(database.batch, 'application note', statements)
-}
+      yield* transaction.insert(applicationActivities).values({
+        actor: 'user',
+        applicationId,
+        id: input.activityId,
+        kind: 'note_added',
+        occurredAt: input.recordedAt,
+        payload: {
+          kind: input.kind,
+          noteId: input.noteId,
+          source: input.source,
+        },
+        revision,
+        source: 'management',
+      })
+    })
+  )

@@ -4,278 +4,122 @@ import {
   applicationLabels,
   applications,
   idempotencyReceipts,
-  registrySequence,
 } from '@cv/application-registry-entity'
-import { and, eq, exists, inArray, sql } from 'drizzle-orm'
-import type { BatchItem } from 'drizzle-orm/batch'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import { Effect } from 'effect'
 import { uniq } from 'es-toolkit'
 
-import type { RegistryConnections } from '../internal/connection'
+import type { RegistryDatabase } from '../internal/connection'
 import type { PersistedManagedApplicationUpdate } from '../types'
-import { currentRevision, runBatch } from './shared'
+import { allocateRevision, runTransaction } from './shared'
 
-const applicationHasVersion = (
-  database: RegistryConnections['batch'],
-  applicationId: string,
-  expectedVersion: number
-) =>
-  exists(
-    database
-      .select({ id: applications.id })
-      .from(applications)
-      .where(
-        and(
-          eq(applications.id, applicationId),
-          eq(applications.version, expectedVersion)
-        )
-      )
-  )
-
-const allocateManagedUpdateRevision = (
-  database: RegistryConnections['batch'],
-  applicationId: string,
-  expectedVersion: number
-) =>
-  database
-    .insert(registrySequence)
-    .select(
-      database
-        .select({
-          id: sql<number>`1`.as('id'),
-          revision: sql<number>`1`.as('revision'),
-        })
-        .from(sql`(select 1)`)
-        .where(applicationHasVersion(database, applicationId, expectedVersion))
-    )
-    .onConflictDoUpdate({
-      target: registrySequence.id,
-      set: { revision: sql`${registrySequence.revision} + 1` },
-    })
-
-const receiptMatches = (
-  database: RegistryConnections['batch'],
-  applicationId: string,
-  input: PersistedManagedApplicationUpdate
-) =>
-  exists(
-    database
-      .select({ idempotencyKey: idempotencyReceipts.idempotencyKey })
-      .from(idempotencyReceipts)
-      .where(
-        and(
-          eq(idempotencyReceipts.applicationId, applicationId),
-          eq(idempotencyReceipts.scope, 'application_update'),
-          eq(idempotencyReceipts.idempotencyKey, input.idempotencyKey),
-          eq(idempotencyReceipts.requestHash, input.requestHash)
-        )
-      )
-  )
-
-const activityInsert = (
-  database: RegistryConnections['batch'],
-  applicationId: string,
-  input: PersistedManagedApplicationUpdate
-) => {
-  const activity = input.activity
-  return database.insert(applicationActivities).select(
-    database
-      .select({
-        id: sql<string>`${activity.activityId}`.as('id'),
-        applicationId: applications.id,
-        kind: sql`${activity.kind}`.as('kind'),
-        actor: sql`${activity.actor}`.as('actor'),
-        source: sql`${activity.source}`.as('source'),
-        revision: currentRevision.as('revision'),
-        occurredAt: sql<string>`${activity.occurredAt}`.as('occurred_at'),
-        payload: sql`${JSON.stringify(activity.payload)}`.as('payload'),
-      })
-      .from(applications)
-      .where(
-        and(
-          eq(applications.id, applicationId),
-          eq(applications.version, input.expectedVersion)
-        )
-      )
-  )
-}
-
-const receiptInsert = (
-  database: RegistryConnections['batch'],
-  applicationId: string,
-  input: PersistedManagedApplicationUpdate
-) =>
-  database.insert(idempotencyReceipts).select(
-    database
-      .select({
-        idempotencyKey: sql<string>`${input.idempotencyKey}`.as(
-          'idempotency_key'
-        ),
-        requestHash: sql<string>`${input.requestHash}`.as('request_hash'),
-        scope: sql<'application_update'>`'application_update'`.as('scope'),
-        applicationId: applications.id,
-        resourceId: sql<string>`${input.activity.activityId}`.as('resource_id'),
-        createdAt: sql<string>`${input.recordedAt}`.as('created_at'),
-      })
-      .from(applications)
-      .where(
-        and(
-          eq(applications.id, applicationId),
-          eq(applications.version, input.expectedVersion)
-        )
-      )
-  )
-
-const labelStatements = (
-  database: RegistryConnections['batch'],
-  applicationId: string,
-  input: PersistedManagedApplicationUpdate
-): readonly BatchItem<'sqlite'>[] => {
-  if (input.labels === undefined) return []
-
-  const normalized = uniq(
-    input.labels.map((label) => label.trim()).filter(Boolean)
-  ).sort()
-  const allowed = and(
-    applicationHasVersion(database, applicationId, input.expectedVersion),
-    receiptMatches(database, applicationId, input)
-  )
-
-  return [
-    database
-      .delete(applicationLabels)
-      .where(and(eq(applicationLabels.applicationId, applicationId), allowed)),
-    ...normalized.map((label) =>
-      database.insert(applicationLabels).select(
-        database
-          .select({
-            applicationId: applications.id,
-            label: sql<string>`${label}`.as('label'),
-            createdAt: sql<string>`${input.recordedAt}`.as('created_at'),
-          })
-          .from(applications)
-          .where(
-            and(
-              eq(applications.id, applicationId),
-              eq(applications.version, input.expectedVersion),
-              receiptMatches(database, applicationId, input)
-            )
-          )
-      )
-    ),
-  ]
-}
-
-const compensationStatements = (
-  database: RegistryConnections['batch'],
-  applicationId: string,
-  input: PersistedManagedApplicationUpdate
-): readonly BatchItem<'sqlite'>[] => {
-  const annual = input.annualCompensation
-  if (annual === undefined) return []
-
-  const allowed = and(
-    applicationHasVersion(database, applicationId, input.expectedVersion),
-    receiptMatches(database, applicationId, input)
-  )
-  const statements: BatchItem<'sqlite'>[] = []
-
-  statements.push(
-    database
-      .delete(applicationCompensations)
-      .where(
-        and(
-          eq(applicationCompensations.applicationId, applicationId),
-          eq(applicationCompensations.period, 'year'),
-          inArray(applicationCompensations.kind, [
-            'base_salary',
-            'total_compensation',
-          ]),
-          allowed
-        )
-      )
-  )
-
-  const replacement = annual.replacement
-  if (replacement !== null) {
-    statements.push(
-      database.insert(applicationCompensations).select(
-        database
-          .select({
-            applicationId: applications.id,
-            createdAt: sql<string>`${input.recordedAt}`.as('created_at'),
-            currencyCode: sql<string>`${replacement.currencyCode}`.as(
-              'currency_code'
-            ),
-            id: sql<string>`${replacement.id}`.as('id'),
-            kind: sql`${replacement.kind}`.as('kind'),
-            maximumMinor: sql<number | null>`${replacement.maximumMinor}`.as(
-              'maximum_minor'
-            ),
-            minimumMinor: sql<number | null>`${replacement.minimumMinor}`.as(
-              'minimum_minor'
-            ),
-            period: sql<'year'>`'year'`.as('period'),
-            rawText: sql<string | null>`${replacement.rawText}`.as('raw_text'),
-            source: sql<string>`${replacement.source}`.as('source'),
-            updatedAt: sql<string>`${input.recordedAt}`.as('updated_at'),
-          })
-          .from(applications)
-          .where(
-            and(
-              eq(applications.id, applicationId),
-              eq(applications.version, input.expectedVersion),
-              receiptMatches(database, applicationId, input)
-            )
-          )
-      )
-    )
-  }
-
-  return statements
-}
+const normalizedLabels = (labels: readonly string[]) =>
+  uniq(labels.map((label) => label.trim()).filter(Boolean)).sort()
 
 export const updateManagedApplication = (
-  database: RegistryConnections,
+  database: RegistryDatabase,
   applicationId: string,
   input: PersistedManagedApplicationUpdate
-) => {
-  const statements = [
-    allocateManagedUpdateRevision(
-      database.batch,
-      applicationId,
-      input.expectedVersion
-    ),
-    activityInsert(database.batch, applicationId, input),
-    receiptInsert(database.batch, applicationId, input),
-    ...labelStatements(database.batch, applicationId, input),
-    ...compensationStatements(database.batch, applicationId, input),
-    database.batch
-      .update(applications)
-      .set({
-        ...input.patch,
-        ...(input.postingIdentity === undefined
-          ? {}
-          : {
-              postingFingerprint: input.postingIdentity.fingerprint,
-              postingUrlNormalized: input.postingIdentity.normalizedUrl,
-            }),
-        updatedAt: input.recordedAt,
-        updatedRevision: currentRevision,
-        version: sql`${applications.version} + 1`,
-      })
-      .where(
-        and(
-          eq(applications.id, applicationId),
-          eq(applications.version, input.expectedVersion),
-          receiptMatches(database.batch, applicationId, input)
-        )
-      ),
-  ] satisfies [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]
+) =>
+  runTransaction(database, 'managed application update', (transaction) =>
+    Effect.gen(function* () {
+      const current = yield* transaction
+        .select({ version: applications.version })
+        .from(applications)
+        .where(eq(applications.id, applicationId))
+        .for('update')
+        .limit(1)
 
-  return runBatch(
-    database.batch,
-    'managed application update',
-    statements
-  ).pipe(Effect.map((results) => (results.at(-1)?.meta.changes ?? 0) > 0))
-}
+      const row = current.at(0)
+      if (row === undefined || row.version !== input.expectedVersion) {
+        return false
+      }
+
+      yield* transaction.insert(idempotencyReceipts).values({
+        applicationId,
+        createdAt: input.recordedAt,
+        idempotencyKey: input.idempotencyKey,
+        requestHash: input.requestHash,
+        resourceId: input.activity.activityId,
+        scope: 'application_update',
+      })
+
+      const revision = yield* allocateRevision(transaction)
+
+      yield* transaction.insert(applicationActivities).values({
+        actor: input.activity.actor,
+        applicationId,
+        id: input.activity.activityId,
+        kind: input.activity.kind,
+        occurredAt: input.activity.occurredAt,
+        payload: input.activity.payload,
+        revision,
+        source: input.activity.source,
+      })
+
+      if (input.labels !== undefined) {
+        yield* transaction
+          .delete(applicationLabels)
+          .where(eq(applicationLabels.applicationId, applicationId))
+
+        const labels = normalizedLabels(input.labels).map((label) => ({
+          applicationId,
+          createdAt: input.recordedAt,
+          label,
+        }))
+        if (labels.length > 0) {
+          yield* transaction.insert(applicationLabels).values(labels)
+        }
+      }
+
+      if (input.annualCompensation !== undefined) {
+        yield* transaction
+          .delete(applicationCompensations)
+          .where(
+            and(
+              eq(applicationCompensations.applicationId, applicationId),
+              eq(applicationCompensations.period, 'year'),
+              inArray(applicationCompensations.kind, [
+                'base_salary',
+                'total_compensation',
+              ])
+            )
+          )
+
+        const replacement = input.annualCompensation.replacement
+        if (replacement !== null) {
+          yield* transaction.insert(applicationCompensations).values({
+            ...replacement,
+            applicationId,
+            createdAt: input.recordedAt,
+            period: 'year',
+            updatedAt: input.recordedAt,
+          })
+        }
+      }
+
+      const updated = yield* transaction
+        .update(applications)
+        .set({
+          ...input.patch,
+          ...(input.postingIdentity === undefined
+            ? {}
+            : {
+                postingFingerprint: input.postingIdentity.fingerprint,
+                postingUrlNormalized: input.postingIdentity.normalizedUrl,
+              }),
+          updatedAt: input.recordedAt,
+          updatedRevision: revision,
+          version: sql`${applications.version} + 1`,
+        })
+        .where(
+          and(
+            eq(applications.id, applicationId),
+            eq(applications.version, row.version)
+          )
+        )
+        .returning({ id: applications.id })
+
+      return updated.length > 0
+    })
+  )

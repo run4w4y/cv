@@ -3,11 +3,12 @@ import {
   check,
   index,
   integer,
+  jsonb,
+  pgTable,
   primaryKey,
-  sqliteTable,
   text,
   uniqueIndex,
-} from 'drizzle-orm/sqlite-core'
+} from 'drizzle-orm/pg-core'
 
 import type { ListingCheckEvidence } from '../model/listing-checks'
 import {
@@ -21,8 +22,9 @@ import {
 } from '../model/values'
 import { applications } from './applications'
 import { sqlStringList } from './checks'
+import { utcTimestamp } from './columns'
 
-export const listingCheckRuns = sqliteTable(
+export const listingCheckRuns = pgTable(
   'listing_check_runs',
   {
     id: text('id').notNull(),
@@ -35,8 +37,11 @@ export const listingCheckRuns = sqliteTable(
     closedCount: integer('closed_count').notNull().default(0),
     reviewCount: integer('review_count').notNull().default(0),
     errorCount: integer('error_count').notNull().default(0),
-    startedAt: text('started_at').notNull(),
-    completedAt: text('completed_at'),
+    startedAt: utcTimestamp('started_at').notNull(),
+    completedAt: utcTimestamp('completed_at'),
+    failedAt: utcTimestamp('failed_at'),
+    failureCode: text('failure_code'),
+    failureMessage: text('failure_message'),
   },
   (table) => [
     primaryKey({ columns: [table.id] }),
@@ -57,21 +62,25 @@ export const listingCheckRuns = sqliteTable(
       'listing_check_runs_counts_check',
       sql`${table.selectedCount} >= 0 and ${table.checkedCount} >= 0 and ${table.openCount} >= 0 and ${table.closedCount} >= 0 and ${table.reviewCount} >= 0 and ${table.errorCount} >= 0`
     ),
+    check(
+      'listing_check_runs_terminal_state_check',
+      sql`(${table.state} = 'running' and ${table.completedAt} is null and ${table.failedAt} is null and ${table.failureCode} is null and ${table.failureMessage} is null) or (${table.state} = 'completed' and ${table.completedAt} is not null and ${table.failedAt} is null and ${table.failureCode} is null and ${table.failureMessage} is null) or (${table.state} = 'failed' and ${table.completedAt} is null and ${table.failedAt} is not null and ${table.failureCode} is not null and ${table.failureMessage} is not null)`
+    ),
   ]
 )
 
-export const applicationListingCheckSchedules = sqliteTable(
+export const applicationListingCheckSchedules = pgTable(
   'application_listing_check_schedules',
   {
     applicationId: text('application_id')
       .notNull()
       .references(() => applications.id, { onDelete: 'cascade' }),
-    dueAt: text('due_at').notNull(),
+    dueAt: utcTimestamp('due_at').notNull(),
     leaseToken: text('lease_token'),
-    leaseUntil: text('lease_until'),
+    leaseUntil: utcTimestamp('lease_until'),
     attemptCount: integer('attempt_count').notNull().default(0),
     lastError: text('last_error'),
-    updatedAt: text('updated_at').notNull(),
+    updatedAt: utcTimestamp('updated_at').notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.applicationId] }),
@@ -86,7 +95,7 @@ export const applicationListingCheckSchedules = sqliteTable(
   ]
 )
 
-export const applicationListingChecks = sqliteTable(
+export const applicationListingChecks = pgTable(
   'application_listing_checks',
   {
     id: text('id').notNull(),
@@ -111,14 +120,14 @@ export const applicationListingChecks = sqliteTable(
       enum: listingCheckReasonValues,
     }).notNull(),
     httpStatus: integer('http_status'),
-    evidence: text('evidence', { mode: 'json' })
+    evidence: jsonb('evidence')
       .$type<readonly ListingCheckEvidence[]>()
       .notNull(),
     contentHash: text('content_hash'),
     checkerVersion: text('checker_version').notNull(),
-    checkedAt: text('checked_at').notNull(),
-    receivedAt: text('received_at').notNull(),
-    nextCheckAt: text('next_check_at').notNull(),
+    checkedAt: utcTimestamp('checked_at').notNull(),
+    receivedAt: utcTimestamp('received_at').notNull(),
+    nextCheckAt: utcTimestamp('next_check_at').notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.id] }),
@@ -150,10 +159,6 @@ export const applicationListingChecks = sqliteTable(
     check(
       'application_listing_checks_http_status_check',
       sql`${table.httpStatus} is null or (${table.httpStatus} >= 100 and ${table.httpStatus} <= 599)`
-    ),
-    check(
-      'application_listing_checks_evidence_json_check',
-      sql`json_valid(${table.evidence})`
     ),
   ]
 )

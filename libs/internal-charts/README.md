@@ -14,14 +14,9 @@ Import the chart token contract after the internal UI theme:
 ```
 
 ```tsx
-import { TimelineChart } from '@cv/internal-charts'
+import { TimelineChart } from "@cv/internal-charts";
 
-<TimelineChart
-  ariaLabel="CV views over time"
-  data={dailyViews}
-  description="Daily views for the selected period."
-  series={[{ dataKey: 'views', label: 'Views', area: true }]}
-/>
+<TimelineChart ariaLabel="CV views over time" data={dailyViews} description="Daily views for the selected period." series={[{ dataKey: "views", label: "Views", area: true }]} />;
 ```
 
 Every chart renders an SVG title and description, keyboard-focusable data

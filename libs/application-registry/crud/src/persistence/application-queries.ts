@@ -11,17 +11,16 @@ import {
   type RegistryDatabaseError,
   type RegistryQueryTooComplexError,
 } from '../errors'
-import type { RegistryQueryDatabase } from '../internal/connection'
+import type { RegistryExecutor } from '../internal/connection'
 import type {
   ApplicationFacets,
   ApplicationListPage,
   ApplicationListRecord,
   ApplicationListResolution,
 } from '../types'
-import { enforceD1ParameterBudget } from './query-budget'
 
 export const findApplication = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   condition: SQL | undefined
 ) =>
   database
@@ -35,17 +34,17 @@ export const findApplication = (
     )
 
 export const findApplicationByIdentifier = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   identifier: string
 ) => findApplication(database, eq(applications.id, identifier))
 
 export const findApplicationByPostingFingerprint = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   fingerprint: string
 ) => findApplication(database, eq(applications.postingFingerprint, fingerprint))
 
 export const findApplicationsByPostingUrl = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   postingUrlNormalized: string
 ) =>
   database
@@ -60,7 +59,7 @@ export const findApplicationsByPostingUrl = (
     )
 
 export const listApplications = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   resolved: ApplicationListResolution
 ): Effect.Effect<
   ApplicationListPage,
@@ -90,7 +89,6 @@ export const listApplications = (
       },
     })
 
-    yield* enforceD1ParameterBudget(query, 'Application list query')
     const rows = yield* query.pipe(
       Effect.mapError(databaseFailure('Failed to list applications'))
     )
@@ -113,7 +111,7 @@ export const listApplications = (
   })
 
 export const listApplicationFacets = (
-  database: RegistryQueryDatabase
+  database: RegistryExecutor
 ): Effect.Effect<ApplicationFacets, RegistryDatabaseError> =>
   Effect.gen(function* () {
     const companies = yield* database

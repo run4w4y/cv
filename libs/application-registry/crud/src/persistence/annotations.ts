@@ -2,23 +2,16 @@ import {
   applicationLabels,
   applicationNotes,
   applications,
-  registrySequence,
 } from '@cv/application-registry-entity'
-import { and, asc, eq, exists, sql } from 'drizzle-orm'
-import type { BatchItem } from 'drizzle-orm/batch'
+import { asc, eq, sql } from 'drizzle-orm'
 import { Effect } from 'effect'
 import { uniq } from 'es-toolkit'
-import { databaseFailure } from '../errors'
-import type {
-  RegistryConnections,
-  RegistryQueryDatabase,
-} from '../internal/connection'
-import { allocateRevision, currentRevision, runBatch } from './shared'
 
-export const listLabels = (
-  database: RegistryQueryDatabase,
-  applicationId: string
-) =>
+import { databaseFailure } from '../errors'
+import type { RegistryDatabase, RegistryExecutor } from '../internal/connection'
+import { allocateRevision, runTransaction } from './shared'
+
+export const listLabels = (database: RegistryExecutor, applicationId: string) =>
   database
     .select()
     .from(applicationLabels)
@@ -26,10 +19,7 @@ export const listLabels = (
     .orderBy(asc(applicationLabels.label))
     .pipe(Effect.mapError(databaseFailure('Failed to list application labels')))
 
-export const listNotes = (
-  database: RegistryQueryDatabase,
-  applicationId: string
-) =>
+export const listNotes = (database: RegistryExecutor, applicationId: string) =>
   database
     .select()
     .from(applicationNotes)
@@ -37,7 +27,7 @@ export const listNotes = (
     .orderBy(asc(applicationNotes.createdAt), asc(applicationNotes.id))
     .pipe(Effect.mapError(databaseFailure('Failed to list application notes')))
 
-export const findNote = (database: RegistryQueryDatabase, noteId: string) =>
+export const findNote = (database: RegistryExecutor, noteId: string) =>
   database
     .select()
     .from(applicationNotes)
@@ -49,7 +39,7 @@ export const findNote = (database: RegistryQueryDatabase, noteId: string) =>
     )
 
 export const replaceLabels = (
-  database: RegistryConnections,
+  database: RegistryDatabase,
   applicationId: string,
   labels: readonly string[],
   recordedAt: string,
@@ -58,94 +48,52 @@ export const replaceLabels = (
   const normalized = uniq(
     labels.map((label) => label.trim()).filter(Boolean)
   ).sort()
-  const hasExpectedVersion =
-    expectedVersion === undefined
-      ? undefined
-      : exists(
-          database.batch
-            .select({ id: applications.id })
-            .from(applications)
-            .where(
-              and(
-                eq(applications.id, applicationId),
-                eq(applications.version, expectedVersion)
-              )
-            )
-        )
-  const allocate =
-    expectedVersion === undefined
-      ? allocateRevision(database.batch)
-      : database.batch
-          .insert(registrySequence)
-          .select(
-            database.batch
-              .select({
-                id: sql<number>`1`.as('id'),
-                revision: sql<number>`1`.as('revision'),
-              })
-              .from(sql`(select 1)`)
-              .where(hasExpectedVersion)
-          )
-          .onConflictDoUpdate({
-            target: registrySequence.id,
-            set: { revision: sql`${registrySequence.revision} + 1` },
-          })
-  const labelInserts = normalized.map((label) =>
-    expectedVersion === undefined
-      ? database.batch.insert(applicationLabels).values({
-          applicationId,
-          label,
-          createdAt: recordedAt,
-        })
-      : database.batch.insert(applicationLabels).select(
-          database.batch
-            .select({
-              applicationId: applications.id,
-              label: sql<string>`${label}`.as('label'),
-              createdAt: sql<string>`${recordedAt}`.as('created_at'),
-            })
-            .from(applications)
-            .where(
-              and(
-                eq(applications.id, applicationId),
-                eq(applications.version, expectedVersion)
-              )
-            )
-        )
-  )
-  const statements: [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]] = [
-    allocate,
-    database.batch
-      .delete(applicationLabels)
-      .where(
-        and(
-          eq(applicationLabels.applicationId, applicationId),
-          hasExpectedVersion
-        )
-      ),
-    ...labelInserts,
-    database.batch
-      .update(applications)
-      .set({
-        updatedAt: recordedAt,
-        updatedRevision: currentRevision,
-        version: sql`${applications.version} + 1`,
-      })
-      .where(
-        and(
-          eq(applications.id, applicationId),
-          expectedVersion === undefined
-            ? undefined
-            : eq(applications.version, expectedVersion)
-        )
-      ),
-  ]
 
-  return runBatch(database.batch, 'label replacement', statements).pipe(
-    Effect.flatMap((results) =>
-      (results.at(-1)?.meta.changes ?? 0) === 0
-        ? Effect.succeed(undefined)
-        : listLabels(database.query, applicationId)
-    )
+  return runTransaction(database, 'label replacement', (transaction) =>
+    Effect.gen(function* () {
+      const current = yield* transaction
+        .select({ version: applications.version })
+        .from(applications)
+        .where(eq(applications.id, applicationId))
+        .for('update')
+        .limit(1)
+
+      const row = current.at(0)
+      if (
+        row === undefined ||
+        (expectedVersion !== undefined && row.version !== expectedVersion)
+      ) {
+        return undefined
+      }
+
+      const revision = yield* allocateRevision(transaction)
+      yield* transaction
+        .delete(applicationLabels)
+        .where(eq(applicationLabels.applicationId, applicationId))
+
+      if (normalized.length > 0) {
+        yield* transaction.insert(applicationLabels).values(
+          normalized.map((label) => ({
+            applicationId,
+            createdAt: recordedAt,
+            label,
+          }))
+        )
+      }
+
+      const updated = yield* transaction
+        .update(applications)
+        .set({
+          updatedAt: recordedAt,
+          updatedRevision: revision,
+          version: sql`${applications.version} + 1`,
+        })
+        .where(eq(applications.id, applicationId))
+        .returning({ id: applications.id })
+
+      return updated.length === 0
+        ? undefined
+        : yield* listLabels(transaction, applicationId)
+    })
   )
 }

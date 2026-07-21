@@ -1,117 +1,56 @@
 import { describe, expect, test } from 'bun:test'
-import type { CvDocumentV1 } from '@cv/contracts/document'
 import { renderToStaticMarkup } from 'react-dom/server'
 
+import { completeCvDocument as document } from '@/fixtures/complete'
 import { CvDocumentRenderer } from './cv-document'
+import { cvRendererLabelsForLocale } from './labels'
+import { PdfCvRenderer } from './pdf/pdf-cv'
+import { cvWebPresentation } from './presentation'
+import { WebCvRenderer } from './web/web-cv'
 
-const document: CvDocumentV1 = {
-  $schema: 'cv.document.v1',
-  locale: 'en',
-  direction: 'ltr',
-  person: {
-    name: 'Ada Lovelace',
-    headline: 'Software engineer',
-    location: 'London, UK',
-    summary: 'Builds reliable systems from reviewed evidence.',
-    contacts: [
-      {
-        kind: 'email',
-        label: 'Email',
-        value: 'ada@example.com',
-        href: 'mailto:ada@example.com',
-      },
-      {
-        kind: 'github',
-        label: 'GitHub',
-        value: 'github.com/ada',
-        href: 'https://github.com/ada',
-      },
-    ],
-  },
-  experience: [
-    {
-      id: 'experience.engine',
-      company: 'Analytical Engines',
-      role: 'Engineer',
-      period: '2022–present',
-      location: 'Remote',
-      summary: 'Owns deterministic computation systems.',
-      highlights: ['Improved correctness', 'Improved correctness'],
-      technologies: ['TypeScript', 'Effect'],
-    },
-  ],
-  projects: [
-    {
-      id: 'project.notes',
-      name: 'Notes',
-      summary: 'A technical publication project.',
-      highlights: ['Published reviewed explanations'],
-      technologies: ['Markdown'],
-      links: [
-        {
-          kind: 'website',
-          label: 'Read',
-          value: 'example.com/notes',
-          href: 'https://example.com/notes',
-        },
-      ],
-    },
-  ],
-  skills: [
-    {
-      id: 'skills.platform',
-      label: 'Platform',
-      items: ['TypeScript', 'Cloudflare Workers'],
-    },
-  ],
-  education: [
-    {
-      id: 'education.mathematics',
-      institution: 'University of London',
-      qualification: 'Mathematics',
-      period: '1830–1835',
-      details: ['Independent study'],
-    },
-  ],
-  additionalSections: [
-    {
-      id: 'additional.languages',
-      title: 'Languages',
-      items: [
-        {
-          id: 'language.english',
-          title: 'English',
-          text: 'Native proficiency',
-        },
-      ],
-    },
-  ],
-}
-
-describe('CvDocumentRenderer', () => {
-  test('renders deterministic semantic markup from the v1 document', () => {
+describe('CV renderers', () => {
+  test('renders independent deterministic web and PDF trees', () => {
     const first = renderToStaticMarkup(
-      <CvDocumentRenderer document={document} />
+      <CvDocumentRenderer
+        document={document}
+        publicUrl="https://example.com/c/cv"
+      />
     )
     const second = renderToStaticMarkup(
-      <CvDocumentRenderer document={document} />
+      <CvDocumentRenderer
+        document={document}
+        publicUrl="https://example.com/c/cv"
+      />
     )
 
     expect(second).toBe(first)
-    expect(first).toContain('<article aria-labelledby="cv-document-title"')
-    expect(first).toContain('dir="ltr" lang="en"')
-    expect(first).toContain('<h1 class="cv2-name"')
-    expect(first).toContain('<address aria-label="Contact information"')
-    expect(first).toContain('<section aria-labelledby="cv-document-experience"')
-    expect(first).toContain('<section aria-labelledby="cv-document-projects"')
-    expect(first).toContain('<section aria-labelledby="cv-document-skills"')
-    expect(first).toContain('<section aria-labelledby="cv-document-education"')
+    expect(first).toContain('data-cv-web-document="true"')
+    expect(first).toContain('data-cv-pdf-document="true"')
+    expect(first.match(/data-cv-document="true"/gu)).toHaveLength(1)
+    expect(first).toContain('id="cv-web-title"')
+    expect(first).toContain('id="cv-document-title"')
+    expect(first).toContain('data-cv-renderer-mode="print"')
     expect(first).not.toContain('<style')
   })
 
-  test('omits empty sections', () => {
+  test('derives ordered navigation only from non-empty document sections', () => {
+    const labels = cvRendererLabelsForLocale(document.locale)
+    const presentation = cvWebPresentation(
+      { ...document, projects: [], education: [], additionalSections: [] },
+      labels
+    )
+
+    expect(
+      presentation.sections.map(({ id, index }) => ({ id, index }))
+    ).toEqual([
+      { id: 'cv-web-experience', index: '01' },
+      { id: 'cv-web-skills', index: '02' },
+    ])
+  })
+
+  test('omits empty sections from the website', () => {
     const markup = renderToStaticMarkup(
-      <CvDocumentRenderer
+      <WebCvRenderer
         document={{
           ...document,
           experience: [],
@@ -123,35 +62,36 @@ describe('CvDocumentRenderer', () => {
       />
     )
 
-    expect(markup).not.toContain('id="cv-document-experience"')
-    expect(markup).not.toContain('id="cv-document-projects"')
-    expect(markup).not.toContain('id="cv-document-skills"')
-    expect(markup).not.toContain('id="cv-document-education"')
+    expect(markup).not.toContain('id="cv-web-experience"')
+    expect(markup).not.toContain('id="cv-web-projects"')
+    expect(markup).not.toContain('id="cv-web-skills"')
+    expect(markup).not.toContain('id="cv-web-education"')
   })
 
-  test('selects presentation labels from the document locale', () => {
+  test('selects website presentation labels from the document locale', () => {
     const markup = renderToStaticMarkup(
-      <CvDocumentRenderer document={{ ...document, locale: 'ru' }} />
+      <WebCvRenderer document={{ ...document, locale: 'ru' }} />
     )
 
     expect(markup).toContain('>Опыт</h2>')
-    expect(markup).toContain('>О себе</h2>')
     expect(markup).toContain('aria-label="Контактная информация"')
+    expect(markup).toContain('aria-label="Разделы резюме"')
   })
 
-  test('integrates the exact publication URL into the A4 preview', () => {
+  test('integrates the exact publication URL into the dedicated A4 preview', () => {
     const publicUrl = 'https://cv.example.com/c/stable-token'
     const markup = renderToStaticMarkup(
-      <CvDocumentRenderer
-        document={document}
-        mode="print-preview"
-        publicUrl={publicUrl}
-      />
+      <PdfCvRenderer document={document} publicUrl={publicUrl} />
     )
 
     expect(markup).toContain('data-cv-renderer-mode="print-preview"')
     expect(markup).toContain('data-cv-print-only="true"')
     expect(markup).toContain(`data-cv-public-url="${publicUrl}"`)
     expect(markup).toContain(`href="${publicUrl}"`)
+    expect(markup).toContain('cv2-header-with-publication')
+    expect(markup.indexOf('data-cv-print-only="true"')).toBeLessThan(
+      markup.indexOf('</header>')
+    )
+    expect(markup).not.toContain('data-cv-web-document')
   })
 })

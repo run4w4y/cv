@@ -11,6 +11,10 @@ import { ExternalLink, FolderOpen, Pencil, Tag } from 'lucide-react'
 import { Link } from 'react-router'
 
 import { formatDateTime, formatLabel } from '../../../lib/format'
+import type {
+  CompensationDisplayCurrency,
+  CompensationFxRateTable,
+} from '../../model/currency'
 import { AnnualCompensation } from '../annual-compensation'
 import { ListingAvailabilityReviewDialog } from '../listing-availability-review'
 import { StatusBadge } from '../status-badge'
@@ -30,12 +34,16 @@ const EmptyValue = () => <span className="text-muted-foreground">—</span>
 
 export type ApplicationColumnsOptions = {
   readonly availableLabels: readonly string[]
+  readonly compensationDisplayCurrency: CompensationDisplayCurrency
+  readonly compensationFxRateTable?: CompensationFxRateTable
   readonly editingRowId?: string
   readonly onBeginEditing: (application: ApplicationListItem) => void
 }
 
 export const createApplicationColumns = ({
   availableLabels,
+  compensationDisplayCurrency,
+  compensationFxRateTable,
   editingRowId,
   onBeginEditing,
 }: ApplicationColumnsOptions): readonly ColumnDef<ApplicationListItem>[] => [
@@ -146,7 +154,11 @@ export const createApplicationColumns = ({
       editingRowId === row.original.id ? (
         <CompensationEditor />
       ) : (
-        <AnnualCompensation value={row.original.annualCompensation} />
+        <AnnualCompensation
+          value={row.original.annualCompensation}
+          displayCurrency={compensationDisplayCurrency}
+          rateTable={compensationFxRateTable}
+        />
       ),
   },
   {

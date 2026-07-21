@@ -9,10 +9,25 @@ import { Schema } from 'effect'
 
 export const CvAnalyticsDaysSchema = Schema.Literals([1, 3, 7])
 
+const CvAnalyticsDateSchema = Schema.String.pipe(
+  Schema.check(Schema.isPattern(/^\d{4}-\d{2}-\d{2}$/u)),
+  Schema.check(
+    Schema.makeFilter((value: string) => {
+      const timestamp = Date.parse(`${value}T00:00:00.000Z`)
+      return Number.isFinite(timestamp) &&
+        new Date(timestamp).toISOString().slice(0, 10) === value
+        ? true
+        : 'Analytics dates must be valid calendar dates.'
+    })
+  )
+)
+
 export const CvAnalyticsQuerySchema = Schema.Struct({
   days: Schema.optional(
     Schema.NumberFromString.pipe(Schema.decodeTo(CvAnalyticsDaysSchema))
   ),
+  from: Schema.optional(CvAnalyticsDateSchema),
+  to: Schema.optional(CvAnalyticsDateSchema),
 })
 
 export type CvAnalyticsQuery = Schema.Schema.Type<typeof CvAnalyticsQuerySchema>
@@ -25,10 +40,6 @@ export const CvAnalyticsTotalsSchema = Schema.Struct({
   pageViews: NonNegativeInteger,
   visits: NonNegativeInteger,
 })
-
-const CvAnalyticsDateSchema = Schema.String.pipe(
-  Schema.check(Schema.isPattern(/^\d{4}-\d{2}-\d{2}$/u))
-)
 
 export const CvAnalyticsSeriesPointSchema = Schema.Struct({
   at: CvAnalyticsDateSchema,
@@ -68,6 +79,10 @@ export const CvAnalyticsItemSchema = Schema.Struct({
 })
 
 export const CvAnalyticsResponseSchema = Schema.Struct({
+  availability: Schema.Struct({
+    from: CvAnalyticsDateSchema,
+    to: CvAnalyticsDateSchema,
+  }),
   countries: Schema.Array(CvAnalyticsCountrySchema),
   generatedAt: UtcIsoTimestampSchema,
   items: Schema.Array(CvAnalyticsItemSchema),

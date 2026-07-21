@@ -7,10 +7,11 @@ import {
   cvDocumentV1Version,
 } from '@cv/contracts/document'
 import { useAtom, useAtomSet } from '@effect/atom-react'
-import { Cause } from 'effect'
+import { Exit } from 'effect'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import * as Atom from 'effect/unstable/reactivity/Atom'
 
+import { firstAsyncResultErrorMessage } from '@/lib/async-result'
 import { preparationCommandGateKey } from '@/preparation/command-gate'
 import {
   makeAppendPreparationRevisionAtom,
@@ -51,13 +52,13 @@ export const useCvEditorCommands = (workspace: PreparationWorkspace) => {
   const recordSave = useAtomSet(recordPreparationSaveAtom)
   const releaseDetached = useAtomSet(releaseDetachedPreparationWorkflowAtom)
   const [saveResult, appendRevision] = useAtom(appendRevisionCommandAtom, {
-    mode: 'promise',
+    mode: 'promiseExit',
   })
   const [approveResult, approveRevision] = useAtom(approveRevisionCommandAtom, {
-    mode: 'promise',
+    mode: 'promiseExit',
   })
   const [reviewResult, submitReview] = useAtom(submitReviewCommandAtom, {
-    mode: 'promise',
+    mode: 'promiseExit',
   })
   const resetSaveResult = useAtomSet(appendRevisionCommandAtom)
   const resetApproveResult = useAtomSet(approveRevisionCommandAtom)
@@ -90,26 +91,23 @@ export const useCvEditorCommands = (workspace: PreparationWorkspace) => {
       return
     }
     const base = editor.baseRevision
-    try {
-      const result = await appendRevision({
-        applicationId: identity.applicationId,
-        contractId: cvDocumentV1ContractId,
-        contractVersion: String(cvDocumentV1Version),
-        entry: base?.entry ?? bootstrap.entry,
-        factsReleaseId:
-          base?.revision.factsReleaseId ?? bootstrap.context.factsReleaseId,
-        jobSnapshotId:
-          base?.revision.jobSnapshotId ?? bootstrap.context.jobSnapshot.id,
-        source: 'human',
-        value: editor.validation.value,
-      })
-      recordSave({
-        identity,
-        revision: { ...result, value: editor.validation.value },
-      })
-    } catch {
-      // The command atom retains the typed failure rendered by the page.
-    }
+    const exit = await appendRevision({
+      applicationId: identity.applicationId,
+      contractId: cvDocumentV1ContractId,
+      contractVersion: String(cvDocumentV1Version),
+      entry: base?.entry ?? bootstrap.entry,
+      factsReleaseId:
+        base?.revision.factsReleaseId ?? bootstrap.context.factsReleaseId,
+      jobSnapshotId:
+        base?.revision.jobSnapshotId ?? bootstrap.context.jobSnapshot.id,
+      source: 'human',
+      value: editor.validation.value,
+    })
+    if (Exit.isFailure(exit)) return
+    recordSave({
+      identity,
+      revision: { ...exit.value, value: editor.validation.value },
+    })
   }
 
   const approve = async () => {
@@ -122,42 +120,35 @@ export const useCvEditorCommands = (workspace: PreparationWorkspace) => {
     ) {
       return
     }
-    try {
-      if (
-        editor.approvalMode === 'workflow' &&
-        run?.status === 'awaiting_review'
-      ) {
-        await submitReview({
-          decision: ReviewDecisionSchema.cases.Approved.make({
-            revisionId: base.revision.id,
-          }),
-          runId: run.runId,
-        })
-        return
-      }
-      const result = await approveRevision({
-        applicationId: identity.applicationId,
-        entry: base.entry,
-        revisionId: base.revision.id,
+    if (
+      editor.approvalMode === 'workflow' &&
+      run?.status === 'awaiting_review'
+    ) {
+      await submitReview({
+        decision: ReviewDecisionSchema.cases.Approved.make({
+          revisionId: base.revision.id,
+        }),
+        runId: run.runId,
       })
-      recordSave({ identity, revision: { ...result, value: base.value } })
-    } catch {
-      // The command atom retains the typed failure rendered by the page.
+      return
     }
+    const exit = await approveRevision({
+      applicationId: identity.applicationId,
+      entry: base.entry,
+      revisionId: base.revision.id,
+    })
+    if (Exit.isFailure(exit)) return
+    recordSave({ identity, revision: { ...exit.value, value: base.value } })
   }
 
   const reject = async () => {
     if (mutationPending || run?.status !== 'awaiting_review') return
-    try {
-      await submitReview({
-        decision: ReviewDecisionSchema.cases.Rejected.make({
-          reason: 'Rejected during human CV review.',
-        }),
-        runId: run.runId,
-      })
-    } catch {
-      // The command atom retains the typed failure rendered by the page.
-    }
+    await submitReview({
+      decision: ReviewDecisionSchema.cases.Rejected.make({
+        reason: 'Rejected during human CV review.',
+      }),
+      runId: run.runId,
+    })
   }
 
   const releaseDetachedCandidate = () => {
@@ -191,16 +182,20 @@ export const useCvEditorCommands = (workspace: PreparationWorkspace) => {
     canApprove: editor.canApprove && workflowReviewBound,
     changeDraft,
     document: validCvEditorDocument(editor),
-    error: AsyncResult.isFailure(saveResult)
-      ? (Cause.prettyErrors(saveResult.cause)[0]?.message ??
-        'The CV revision could not be saved.')
-      : AsyncResult.isFailure(approveResult)
-        ? (Cause.prettyErrors(approveResult.cause)[0]?.message ??
-          'The CV revision could not be approved.')
-        : AsyncResult.isFailure(reviewResult)
-          ? (Cause.prettyErrors(reviewResult.cause)[0]?.message ??
-            'The Workflow review could not be recorded.')
-          : null,
+    error: firstAsyncResultErrorMessage([
+      {
+        fallback: 'The CV revision could not be saved.',
+        result: saveResult,
+      },
+      {
+        fallback: 'The CV revision could not be approved.',
+        result: approveResult,
+      },
+      {
+        fallback: 'The Workflow review could not be recorded.',
+        result: reviewResult,
+      },
+    ]),
     mutationPending,
     reject,
     releaseDetachedCandidate,

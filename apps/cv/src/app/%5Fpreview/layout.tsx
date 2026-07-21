@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 
+import { CvHtmlDocument } from '@/app/cv-html-document'
 import '../global.css'
 import '@/document/renderer/styles.css'
 
@@ -8,9 +9,5 @@ export default function PreviewLayout({
 }: {
   readonly children: ReactNode
 }) {
-  return (
-    <html lang="en">
-      <body>{children}</body>
-    </html>
-  )
+  return <CvHtmlDocument>{children}</CvHtmlDocument>
 }

@@ -3,16 +3,17 @@ import {
   check,
   index,
   integer,
+  pgTable,
   primaryKey,
-  sqliteTable,
   text,
-} from 'drizzle-orm/sqlite-core'
+} from 'drizzle-orm/pg-core'
 
 import { jobSnapshotStatusValues } from '../model/content'
 import { applications } from './applications'
 import { sqlStringList } from './checks'
+import { utcTimestamp } from './columns'
 
-export const jobPostingSnapshots = sqliteTable(
+export const jobPostingSnapshots = pgTable(
   'job_posting_snapshots',
   {
     id: text('id').notNull(),
@@ -22,7 +23,7 @@ export const jobPostingSnapshots = sqliteTable(
     requestedUrl: text('requested_url').notNull(),
     finalUrl: text('final_url'),
     status: text('status', { enum: jobSnapshotStatusValues }).notNull(),
-    fetchedAt: text('fetched_at').notNull(),
+    fetchedAt: utcTimestamp('fetched_at').notNull(),
     fetcherVersion: text('fetcher_version').notNull(),
     rawObjectKey: text('raw_object_key'),
     rawSha256: text('raw_sha256'),

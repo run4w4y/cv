@@ -15,9 +15,3 @@ export const coverLetterPromptAtom = Atom.family((_identity: string) =>
 export const jobContextOverrideAtom = Atom.family((_applicationId: string) =>
   Atom.make<string | null>(null)
 )
-
-/** Browser-session model selection shared by every preparation surface. */
-export const selectedPreparationModelAtom = Atom.make<string | null>(null).pipe(
-  Atom.keepAlive,
-  Atom.withLabel('preparation/forms/selected-model')
-)

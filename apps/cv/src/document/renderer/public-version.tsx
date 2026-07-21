@@ -21,12 +21,6 @@ export const PublicVersion = ({
     </a>
     <figcaption>
       <strong className="cv2-publication-label">{labels.publicVersion}</strong>
-      <span className="cv2-publication-instructions">
-        {labels.publicVersionInstructions}
-      </span>
-      <a className="cv2-publication-url" href={publicUrl}>
-        {publicUrl}
-      </a>
     </figcaption>
   </figure>
 )

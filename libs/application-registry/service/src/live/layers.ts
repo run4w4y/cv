@@ -8,7 +8,10 @@ import { CvAnalyticsServiceLive } from './cv-analytics'
 import { CvPublicationsServiceLive } from './cv-publications'
 import { JobPostingCaptureServiceLive } from './job-posting-capture'
 import { JobPostingSnapshotsServiceLive } from './job-posting-snapshots'
-import { ListingChecksServiceLive } from './listing-checks'
+import {
+  ListingChecksServiceLive,
+  ScheduledListingChecksRunnerLive,
+} from './listing-checks'
 import { OpaqueObjectsServiceLive } from './opaque-objects'
 import { PdfArtifactsServiceLive } from './pdf-artifacts'
 
@@ -34,3 +37,5 @@ export const RegistryServicesLive = Layer.merge(
   RegistryCoreServicesLive,
   JobPostingCaptureServiceLive.pipe(Layer.provide(RegistryCoreServicesLive))
 )
+
+export { ScheduledListingChecksRunnerLive }

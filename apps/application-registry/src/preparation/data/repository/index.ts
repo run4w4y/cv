@@ -1,5 +1,4 @@
-import { AiProvider } from '@cv/ai-provider'
-import { FactsReader } from '@cv/facts-r2'
+import { FactsReader } from '@cv/facts-reader/reader'
 import { Context, Crypto, Effect, Layer } from 'effect'
 
 import { RegistryClient } from '@/lib/registry-client'
@@ -27,14 +26,12 @@ export const preparationRepositoryLayer = Layer.effect(
   Effect.gen(function* () {
     const registry = yield* RegistryClient
     const facts = yield* FactsReader
-    const ai = yield* AiProvider
     const crypto = yield* Crypto.Crypto
 
     const content = makePreparationContentRepository(registry, crypto)
     const context = makePreparationContextRepository(
       registry,
       facts,
-      ai,
       content.loadContentHead
     )
     const application = makePreparationApplicationRepository(registry)

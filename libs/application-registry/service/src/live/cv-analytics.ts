@@ -1,6 +1,7 @@
 import { CvAnalyticsCrud } from '@cv/application-registry-crud'
 import { Effect, Layer } from 'effect'
 
+import { RegistryBadRequestError } from '../errors'
 import { registryNow } from '../internal/shared'
 import {
   CvAnalyticsService,
@@ -10,13 +11,16 @@ import {
 import type {
   CvAnalyticsCountry,
   CvAnalyticsItem,
+  CvAnalyticsRangeInput,
   CvAnalyticsSeriesPoint,
   CvAnalyticsTotals,
+  CvAnalyticsTrafficCapabilities,
   CvAnalyticsTrafficData,
 } from '../types'
 
 const emptyTotals = (): CvAnalyticsTotals => ({ pageViews: 0, visits: 0 })
 const dayMs = 24 * 60 * 60 * 1000
+const defaultRangeDays = 7
 
 const addTotals = (
   target: CvAnalyticsTotals,
@@ -107,10 +111,122 @@ const mergeCountries = (
   return sortedCountries(Object.fromEntries(totals))
 }
 
-const requestedRange = (now: string, days: number) => ({
-  from: new Date(Date.parse(now) - days * 24 * 60 * 60 * 1000).toISOString(),
-  to: now,
-})
+const utcDayStart = (timestamp: number) => {
+  const date = new Date(timestamp)
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+}
+
+const utcDayCeiling = (timestamp: number) => {
+  const start = utcDayStart(timestamp)
+  return start === timestamp ? start : start + dayMs
+}
+
+const formatAnalyticsDate = (timestamp: number) =>
+  new Date(timestamp).toISOString().slice(0, 10)
+
+const parseAnalyticsDate = (value: string) => {
+  const timestamp = Date.parse(`${value}T00:00:00.000Z`)
+  return Number.isFinite(timestamp) &&
+    new Date(timestamp).toISOString().slice(0, 10) === value
+    ? timestamp
+    : undefined
+}
+
+const invalidRange = (message: string) =>
+  Effect.fail(new RegistryBadRequestError({ message }))
+
+const requestedRange = (
+  now: string,
+  input: CvAnalyticsRangeInput,
+  capabilities: CvAnalyticsTrafficCapabilities
+): Effect.Effect<
+  {
+    readonly availability: { readonly from: string; readonly to: string }
+    readonly range: { readonly from: string; readonly to: string }
+  },
+  RegistryBadRequestError
+> =>
+  Effect.suspend(() => {
+    const nowTimestamp = Date.parse(now)
+    if (!Number.isFinite(nowTimestamp)) {
+      return invalidRange('The analytics clock is invalid.')
+    }
+
+    const hasFrom = input.from !== undefined
+    const hasTo = input.to !== undefined
+    if (hasFrom !== hasTo) {
+      return invalidRange(
+        'A custom analytics range requires both a start and an end date.'
+      )
+    }
+    if (input.days !== undefined && hasFrom) {
+      return invalidRange(
+        'Choose either a preset or a custom analytics range, not both.'
+      )
+    }
+
+    const today = utcDayStart(nowTimestamp)
+    const earliest = utcDayCeiling(nowTimestamp - capabilities.retentionMs)
+    if (earliest > today) {
+      return invalidRange(
+        'The analytics provider does not expose a complete UTC calendar day.'
+      )
+    }
+    const availability = {
+      from: formatAnalyticsDate(earliest),
+      to: formatAnalyticsDate(today),
+    }
+
+    if (!hasFrom || input.from === undefined || input.to === undefined) {
+      const availableDays = (today - earliest) / dayMs + 1
+      const days = input.days ?? Math.min(defaultRangeDays, availableDays)
+      const from = today - (days - 1) * dayMs
+      if (from < earliest) {
+        return invalidRange(
+          `Analytics are available from ${availability.from} through ${availability.to}.`
+        )
+      }
+      return Effect.succeed({
+        availability,
+        range: {
+          from: new Date(from).toISOString(),
+          to: now,
+        },
+      })
+    }
+
+    const from = parseAnalyticsDate(input.from)
+    const to = parseAnalyticsDate(input.to)
+    if (from === undefined || to === undefined) {
+      return invalidRange('Analytics ranges must use valid calendar dates.')
+    }
+    if (to < from) {
+      return invalidRange(
+        'The analytics range end must not be before its start.'
+      )
+    }
+    if (from < earliest) {
+      return invalidRange(
+        `Analytics are available from ${availability.from} through ${availability.to}.`
+      )
+    }
+    if (to > today) {
+      return invalidRange('The analytics range cannot include future dates.')
+    }
+
+    const effectiveTo = Math.min(to + dayMs, nowTimestamp)
+    if (effectiveTo <= from) {
+      return invalidRange('The analytics range must begin before now.')
+    }
+
+    return Effect.succeed({
+      availability,
+      range: {
+        from: new Date(from).toISOString(),
+        to: new Date(effectiveTo).toISOString(),
+      },
+    })
+  })
 
 const emptyTraffic = (
   generatedAt: string,
@@ -127,9 +243,11 @@ const make = Effect.gen(function* () {
 
   return {
     read: Effect.fn('CvAnalyticsService.read')(function* (input) {
-      const links = yield* analytics.listLinks()
       const now = yield* registryNow
-      const range = requestedRange(now, input.days ?? 7)
+      const capabilities = yield* trafficSource.capabilities()
+      const requested = yield* requestedRange(now, input, capabilities)
+      const { availability, range } = requested
+      const links = yield* analytics.listLinks()
       const traffic =
         links.length === 0
           ? emptyTraffic(now, range)
@@ -187,6 +305,7 @@ const make = Effect.gen(function* () {
       ).length
 
       return {
+        availability,
         countries: mergeCountries(
           traffic.records.map((record) => record.countries)
         ),

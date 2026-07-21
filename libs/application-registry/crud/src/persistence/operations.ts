@@ -2,10 +2,10 @@ import { idempotencyReceipts } from '@cv/application-registry-entity'
 import { eq } from 'drizzle-orm'
 import { Effect } from 'effect'
 import { databaseFailure } from '../errors'
-import type { RegistryQueryDatabase } from '../internal/connection'
+import type { RegistryExecutor } from '../internal/connection'
 
 export const findIdempotencyReceipt = (
-  database: RegistryQueryDatabase,
+  database: RegistryExecutor,
   idempotencyKey: string
 ) =>
   database

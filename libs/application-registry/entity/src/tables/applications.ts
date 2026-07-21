@@ -3,11 +3,11 @@ import {
   check,
   index,
   integer,
+  pgTable,
   primaryKey,
-  sqliteTable,
   text,
   uniqueIndex,
-} from 'drizzle-orm/sqlite-core'
+} from 'drizzle-orm/pg-core'
 
 import {
   applicationStatusValues,
@@ -18,8 +18,9 @@ import {
   targetStageValues,
 } from '../model/values'
 import { sqlStringList } from './checks'
+import { utcTimestamp } from './columns'
 
-export const applications = sqliteTable(
+export const applications = pgTable(
   'applications',
   {
     id: text('id').notNull(),
@@ -40,8 +41,8 @@ export const applications = sqliteTable(
     personalPriority: text('personal_priority', {
       enum: personalPriorityValues,
     }),
-    followUpAt: text('follow_up_at'),
-    appliedAt: text('applied_at'),
+    followUpAt: utcTimestamp('follow_up_at'),
+    appliedAt: utcTimestamp('applied_at'),
     listingAvailability: text('listing_availability', {
       enum: listingAvailabilityValues,
     })
@@ -53,15 +54,15 @@ export const applications = sqliteTable(
     listingReasonCode: text('listing_reason_code', {
       enum: listingCheckReasonValues,
     }),
-    listingCheckedAt: text('listing_checked_at'),
-    listingClosedCandidateAt: text('listing_closed_candidate_at'),
+    listingCheckedAt: utcTimestamp('listing_checked_at'),
+    listingClosedCandidateAt: utcTimestamp('listing_closed_candidate_at'),
     listingConsecutiveClosedChecks: integer('listing_consecutive_closed_checks')
       .notNull()
       .default(0),
     version: integer('version').notNull().default(1),
     updatedRevision: integer('updated_revision').notNull(),
-    createdAt: text('created_at').notNull(),
-    updatedAt: text('updated_at').notNull(),
+    createdAt: utcTimestamp('created_at').notNull(),
+    updatedAt: utcTimestamp('updated_at').notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.id] }),

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import type { AiJsonSchema } from '@cv/ai-provider'
 import type { FactsCatalogueV1 } from '@cv/contracts/facts'
+import type { JsonSchema } from 'effect/JsonSchema'
+import { cvGenerationGuidanceTestFixture } from '../test-support'
 import {
   buildCoverLetterGenerationRequest,
   buildCvDraftGenerationRequest,
@@ -12,7 +13,7 @@ const arbitrarySchema = {
   additionalProperties: false,
   properties: { completelyDynamic: { type: 'string' } },
   required: ['completelyDynamic'],
-} satisfies AiJsonSchema
+} satisfies JsonSchema
 
 const facts = {
   $schema: 'cv.facts.v1',
@@ -154,19 +155,18 @@ describe('preparation request construction', () => {
     expect(projected).not.toContain('https://private-link.example.test')
   })
 
-  test('passes arbitrary schema, complete context, and generic guidance to CV generation', () => {
+  test('passes arbitrary schema, complete context, and content-owned guidance to CV generation', () => {
     const job = { requirements: ['something unusual'] }
-    const guidance = { paths: [{ pointer: '/completelyDynamic' }] }
+    const guidance = cvGenerationGuidanceTestFixture
     const request = buildCvDraftGenerationRequest({
       factsCatalogue: facts,
       guidance,
       jobContext: job,
       locale: 'en',
-      modelId: 'model-1',
       schema: arbitrarySchema,
     })
 
-    expect(request.schema).toBe(arbitrarySchema)
+    expect(request.outputSchema).toBe(arbitrarySchema)
     expect(request.prompt).toContain('Verified fact.')
     expect(request.prompt).toContain('Preserve every metric.')
     expect(request.prompt).not.toContain('Private audit locator')
@@ -179,7 +179,6 @@ describe('preparation request construction', () => {
       factsCatalogue: facts,
       jobContext: 'posting text',
       locale: 'en',
-      modelId: 'model-2',
       prompt: 'Prefer a direct opening.',
       schema: arbitrarySchema,
     })
@@ -187,6 +186,6 @@ describe('preparation request construction', () => {
     expect(request.prompt).toContain('Prefer a direct opening.')
     expect(request.prompt).toContain('Verified fact.')
     expect(request.prompt).not.toContain('Private audit locator')
-    expect(request.schema).toBe(arbitrarySchema)
+    expect(request.outputSchema).toBe(arbitrarySchema)
   })
 })

@@ -77,30 +77,29 @@ export const SectionBriefSchema = Schema.Struct({
 export interface SectionBrief
   extends Schema.Schema.Type<typeof SectionBriefSchema> {}
 
-export const AiUsageSchema = Schema.Struct({
+export const GenerationUsageSchema = Schema.Struct({
   inputTokens: Schema.NullOr(Schema.Number),
   outputTokens: Schema.NullOr(Schema.Number),
   totalTokens: Schema.NullOr(Schema.Number),
 })
 
-export const AiStageMetadataSchema = Schema.Struct({
-  finishReason: Schema.NonEmptyString,
-  modelId: Schema.NonEmptyString,
+export const GenerationStageMetadataSchema = Schema.Struct({
+  executor: Schema.NonEmptyString,
   stage: Schema.NonEmptyString,
-  usage: AiUsageSchema,
+  usage: GenerationUsageSchema,
 })
-export interface AiStageMetadata
-  extends Schema.Schema.Type<typeof AiStageMetadataSchema> {}
+export interface GenerationStageMetadata
+  extends Schema.Schema.Type<typeof GenerationStageMetadataSchema> {}
 
 export const JobAnalysisResultSchema = Schema.Struct({
   analysis: JobAnalysisSchema,
-  metadata: AiStageMetadataSchema,
+  metadata: GenerationStageMetadataSchema,
 })
 export interface JobAnalysisResult
   extends Schema.Schema.Type<typeof JobAnalysisResultSchema> {}
 
 export const EvidencePlanResultSchema = Schema.Struct({
-  metadata: AiStageMetadataSchema,
+  metadata: GenerationStageMetadataSchema,
   plan: EvidencePlanSchema,
 })
 export interface EvidencePlanResult
@@ -108,7 +107,7 @@ export interface EvidencePlanResult
 
 export const SectionBriefResultSchema = Schema.Struct({
   brief: SectionBriefSchema,
-  metadata: AiStageMetadataSchema,
+  metadata: GenerationStageMetadataSchema,
 })
 export interface SectionBriefResult
   extends Schema.Schema.Type<typeof SectionBriefResultSchema> {}

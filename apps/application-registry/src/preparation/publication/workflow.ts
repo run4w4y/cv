@@ -3,7 +3,16 @@ import {
   PdfJobResponseSchema,
 } from '@cv/application-registry-api-contract'
 import { pdfGenerationFailedDisableReason } from '@cv/application-registry-entity'
-import { Cause, Effect, Exit, Option, Schedule } from 'effect'
+import {
+  Cause,
+  Effect,
+  Exit,
+  Match,
+  Option,
+  Predicate,
+  Schedule,
+  Schema,
+} from 'effect'
 import * as Reactivity from 'effect/unstable/reactivity/Reactivity'
 import * as Activity from 'effect/unstable/workflow/Activity'
 import * as Workflow from 'effect/unstable/workflow/Workflow'
@@ -24,18 +33,25 @@ const stopActivityInterruptRetries = Schedule.recurs(0).pipe(
 )
 
 const messageFromUnknown = (cause: unknown): string =>
-  Cause.prettyErrors(Cause.fail(cause))[0]?.message ?? String(cause)
+  Match.value(cause).pipe(
+    Match.when(Predicate.isError, (error) => error.message),
+    Match.orElse(String)
+  )
 
 const publicationError = (
   stage: CvPublicationStage,
   cause: unknown
 ): CvPublicationWorkflowError =>
-  cause instanceof CvPublicationWorkflowError
-    ? cause
-    : new CvPublicationWorkflowError({
-        message: messageFromUnknown(cause),
-        stage,
-      })
+  Match.value(cause).pipe(
+    Match.when(Schema.is(CvPublicationWorkflowError), (error) => error),
+    Match.orElse(
+      (cause) =>
+        new CvPublicationWorkflowError({
+          message: messageFromUnknown(cause),
+          stage,
+        })
+    )
+  )
 
 const mapRepositoryError = (stage: CvPublicationStage) =>
   Effect.mapError((cause: unknown) => publicationError(stage, cause))

@@ -11,10 +11,10 @@ import {
   CardTitle,
 } from '@cv/internal-ui'
 import { useAtom } from '@effect/atom-react'
-import { Cause } from 'effect'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import { Ban, CircleAlert, ExternalLink } from 'lucide-react'
 import { Link } from 'react-router'
+import { asyncResultErrorMessage } from '@/lib/async-result'
 import { cancelPreparationRunAtom } from '@/preparation/workflow/atoms'
 
 const reviewPath = (run: PreparationRun): string | null => {
@@ -34,13 +34,14 @@ export const PreparationRunCard = ({
   readonly run: PreparationRun
 }) => {
   const [cancelResult, cancel] = useAtom(cancelPreparationRunAtom(run.runId), {
-    mode: 'promise',
+    mode: 'promiseExit',
   })
   const cancelling = AsyncResult.isWaiting(cancelResult)
-  const cancelError = AsyncResult.isFailure(cancelResult)
-    ? (Cause.prettyErrors(cancelResult.cause)[0]?.message ??
-      'The preparation workflow could not be cancelled.')
-    : null
+  const cancelError =
+    asyncResultErrorMessage(
+      cancelResult,
+      'The preparation workflow could not be cancelled.'
+    ) ?? null
   const path = reviewPath(run)
   const totalTokens =
     run.candidate?.candidate.metadata.reduce(
@@ -65,7 +66,7 @@ export const PreparationRunCard = ({
           <span>Stage: {run.stage}</span>
           {run.candidate === null ? null : (
             <span>
-              {run.candidate.candidate.metadata.length} AI calls ·{' '}
+              {run.candidate.candidate.metadata.length} Codex calls ·{' '}
               {totalTokens.toLocaleString()} tokens
             </span>
           )}
@@ -99,7 +100,7 @@ export const PreparationRunCard = ({
               variant="outline"
               disabled={cancelling}
               onClick={() => {
-                void cancel({ runId: run.runId }).catch(() => undefined)
+                void cancel({ runId: run.runId })
               }}
             >
               <Ban />

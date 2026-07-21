@@ -9,11 +9,18 @@ import {
   asCvPublicationLoadResult,
   loadCvPreview,
   loadCvPublication,
+  makeHttpCvPublicResolver,
 } from '@/lib/publication'
 
 export const loadCvPublicationForToken = cache(async (token: string) => {
+  const fixtures = await fixturePublications()
+  if (fixtures) return fixtures.loadCvFixturePublication(token)
+
   const { env } = await getCloudflareContext({ async: true })
-  return loadCvPublication(env.CV_PUBLIC_RESOLVER, token).pipe(
+  return loadCvPublication(
+    makeHttpCvPublicResolver(env.CV_PUBLIC_RESOLVER_URL),
+    token
+  ).pipe(
     asCvPublicationLoadResult,
     Effect.provide(BrowserCrypto.layer),
     Effect.runPromise
@@ -22,11 +29,25 @@ export const loadCvPublicationForToken = cache(async (token: string) => {
 
 export const loadCvPreviewForToken = cache(
   async (token: string, previewToken: string) => {
+    const fixtures = await fixturePublications()
+    if (fixtures) return fixtures.loadCvFixturePreview(token, previewToken)
+
     const { env } = await getCloudflareContext({ async: true })
-    return loadCvPreview(env.CV_PUBLIC_RESOLVER, token, previewToken).pipe(
+    return loadCvPreview(
+      makeHttpCvPublicResolver(env.CV_PUBLIC_RESOLVER_URL),
+      token,
+      previewToken
+    ).pipe(
       asCvPublicationLoadResult,
       Effect.provide(BrowserCrypto.layer),
       Effect.runPromise
     )
   }
 )
+
+const fixturePublications = async () => {
+  if (process.env.NODE_ENV !== 'development') return null
+
+  const fixtures = await import('./fixture-publications')
+  return fixtures.isCvFixtureModeEnabled() ? fixtures : null
+}

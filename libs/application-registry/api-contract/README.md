@@ -2,15 +2,15 @@
 
 This package is the sole HTTP contract for the application registry. It defines
 one unversioned Effect `HttpApi`, generates its OpenAPI document, and supplies
-the schemas used by the Worker, browser management app, and CLI client. There
+the schemas used by the Bun API, browser management app, and CLI client. There
 is no parallel legacy API.
 
 The public health endpoint is `GET /health`. Registry resources live under
 `/api/registry` and require bearer authentication. Browser callers reach those
-paths through the same-origin BFF. Direct clients use the Worker's
+paths through the same-origin BFF. Direct clients use the service's
 `/machine/api/registry` transport, which validates the explicitly supplied
 bearer credential and strips `/machine` before invoking this contract. Missing
-machine credentials are never replaced with the Worker's configured token.
+machine credentials are never replaced with the server's configured token.
 
 The contract is grouped internally by responsibility while remaining one API:
 
@@ -41,9 +41,12 @@ uploads bytes and `GET` returns bytes. Snapshot and revision JSON bodies contain
 only `{ sha256, mediaType }` references, avoiding base64 expansion and keeping
 content metadata separate from transport.
 
-Facts releases are not registry HTTP resources. Consumers read the private
-static R2 publication directly; the registry contract carries an optional
-facts release ID only as content-revision provenance.
+The typed `factsPublication` group accepts a strict binary release bundle under
+`/machine/api/registry/facts`, registers immutable objects, and activates with
+an expected-current compare-and-set. It uses a dedicated publication bearer
+credential. Browser reads remain behind the authenticated, read-only
+same-origin object proxy, and the registry contract carries a facts release ID
+as content-revision provenance.
 
 Mutations that can be retried take `idempotency-key` in the HTTP header. The
 payload contains domain data and optimistic `expectedVersion` values; it does

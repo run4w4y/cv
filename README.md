@@ -1,162 +1,108 @@
 # CV workspace
 
-Personal application-registry and tailored-CV system deployed on Cloudflare.
-The management app prepares one reviewed CV per application from a versioned
-facts release and an immutable job-posting snapshot. The public app renders an
-approved document at a stable, revocable `/c/:token` URL and preserves the PDF
-generated from that exact URL.
+Personal application-registry and tailored-CV system. Stateful services run on
+the Nomad/Consul/Vault cluster; Cloudflare remains the DNS, Tunnel, Access,
+analytics, CDN, and public-CV edge.
 
-The former static/encrypted profile implementation is frozen in its existing
-Cloudflare Pages deployment. It is no longer built or deployed by this
-repository. The `cv-public` Worker overlays only `/c/*`, so legacy Pages routes
-continue to run unchanged.
+The frozen legacy profile remains on its existing Cloudflare Pages deployment.
+The `cv-public` Worker overlays only `/c/*`, so the Pages deployment and all
+other routes remain untouched.
 
 ## Runtime surfaces
 
-- `apps/application-registry-api` is the Cloudflare Worker composition root. It
-  owns the authenticated registry API, management SPA/BFF, Login with ChatGPT
-  proxy, D1 binding, private R2 binding, and the PDF-generation Queue producer.
-- `apps/cv-pdf-worker` consumes PDF-generation jobs, owns Browser Rendering,
-  and completes or fails the corresponding PDF artifact in D1/R2.
-- `apps/application-registry` is the browser management application. It owns
-  the schema-aware drafting/editing experience while treating the imported
-  Effect schema generically.
-- `apps/cv` is the Next.js App Router/OpenNext Worker. It owns the CV renderer,
-  accepts only `/c/:token`, resolves an enabled publication through a named
-  Worker service binding, validates the code-owned document contract, and
-  renders the page as a React Server Component.
+- `apps/application-registry-api` is the single Bun API/BFF service. It uses
+  PostgreSQL, MinIO, and Cloudflare GraphQL analytics and exposes the public
+  publication resolver consumed by `cv-public` over the Tunnel.
+- `apps/application-registry-listing-check-runner` is a one-shot Effect/Bun
+  program started by a periodic Nomad job.
+- `apps/application-registry-pdf-dispatcher` claims PostgreSQL outbox rows and
+  publishes PDF work to NATS JetStream.
+- `apps/cv-pdf-runner` consumes one durable JetStream delivery at a time,
+  renders with Playwright/Chromium, stores the PDF in MinIO, and updates
+  PostgreSQL.
+- `apps/application-registry` is the shared management React application;
+  `apps/application-registry-desktop` is its Electron/Codex host.
+- `apps/cv` is the retained Next.js/OpenNext Cloudflare Worker for `/c/*`.
 
-## Important boundaries
+PostgreSQL and MinIO schemas, users, buckets, credentials, NATS, shared Consul
+intentions, Vault secrets, and global sidecar defaults belong to the adjacent
+`~/infrastructure` repository. This repository owns each CV application image,
+its Nomad Pack, project-specific Cloudflare policy, and release workflow.
 
-- `@cv/contracts` is the single package containing the code-owned document,
-  facts, and opaque-delivery contracts. The registry backend imports only the
-  delivery boundary and never inspects CV or facts fields.
-- `@cv/schema-editor` walks Effect schema ASTs at runtime. It has no CV-specific
-  field knowledge.
-- `@cv/application-registry-artifact-store` stores immutable, content-addressed
-  bytes in private R2. D1 stores identities, relationships, state, hashes, and
-  byte lengths—not CV content fields.
-- `@cv/facts-authoring` owns the config, section, evidence, and asset authoring
-  schemas. `facts.config.ts` in `cv-content` owns the locale list; generated
-  portable types keep that repository typechecked without moving the schema out
-  of this repository.
-- `@cv/facts-release` deterministically compiles and verifies every configured
-  locale as one atomic facts release. `tools/facts-release` loads the sectioned
-  TypeScript source and publishes immutable static objects plus `current.json`
-  to a dedicated private R2 bucket.
-- `@cv/facts-r2` signs direct S3 requests with Effect-native services. The
-  private management app has a bucket-scoped Object Read credential; the
-  publisher has a separate Object Read & Write credential. No Worker, registry
-  API, database table, or project hostname sits in the facts read path.
-- `@cv/ai-provider` exposes a provider-neutral interface. Its live adapter uses
-  Login with ChatGPT and the signed-in user's existing ChatGPT subscription;
-  this workspace has no API-key or separately billed OpenAI API path.
-- The renderer belongs to `apps/cv`. Management previews it through the app's
-  isolated iframe route, and the PDF worker renders the actual public URL. The
-  final public URL is also the exact QR target embedded in the PDF.
-- `@cv/cloudflare-analytics-client` retains the framework-neutral Cloudflare
-  GraphQL analytics query and sanitization boundary without owning a deployed
-  runtime.
+## Storage and messaging
 
-## Tailored application flow
+- PostgreSQL is the sole registry database. Its Drizzle history starts from one
+  clean baseline in `libs/application-registry/entity/drizzle`.
+- MinIO is the sole object store for reviewed facts, source artifacts, and
+  generated PDFs.
+- NATS JetStream is the durable PDF work queue; PostgreSQL remains the
+  transactional outbox and source of job state.
+- `tools/application-registry-migration` is the intentionally temporary,
+  one-time D1-export importer. Remove it and the final Terraform `removed`
+  block after the production import has been verified.
 
-1. Add an application in `not_started` state.
-2. Start preparation. The Worker captures the application's posting URL into an
-   immutable snapshot, or records a failed capture that can be refreshed.
-3. The browser loads the current reviewed facts release directly from private
-   R2, verifies its manifest and requested locale, and sends facts, posting
-   context, the current document schema, and code-owned authoring guidance to
-   the selected ChatGPT-subscription model.
-4. Validate and save the opaque draft, edit it through the generic schema
-   editor, and preview it through the CV application's isolated iframe route.
-5. Approve the selected revision and create/reuse the stable public token.
-6. Atomically create a pending artifact and PDF outbox row, dispatch the job to
-   Cloudflare Queues, render the exact public URL, and persist the PDF in R2.
-   Management polls the artifact-backed job until it becomes ready or failed.
-7. A rejection disables the application's public link with the system reason
-   `application_rejected`; reopening restores only links disabled for that
-   reason whose latest artifact for the exact revision, publication version,
-   and public URL is a ready PDF. Pending or failed retries keep the page
-   private, and manual and PDF-failure disables remain in force.
-
-Cover letters use a separate content entry and prompt flow, but reference the
-same persisted posting snapshot. AI interaction state is browser-owned and is
-cleared when a flow finishes; it is not stored as a backend conversation.
+There is no R2 importer because the retired R2 buckets contain no application
+data.
 
 ## Local development
 
-Enter the repository's zsh/direnv/Nix shell, install workspaces, and apply the
-local D1 migrations:
+Enter the repository's zsh/direnv/Nix shell and install the workspaces:
 
 ```sh
 bun install
-bunx nx run application-registry-api:migrations:apply:local
 ```
 
-Run the registry Worker and public Worker in separate shells so Wrangler can
-resolve the named service binding:
+Run the Bun registry and the public CV renderer in separate shells:
 
 ```sh
-bunx nx run application-registry-api:dev
-bunx nx run cv-pdf-worker:dev
-bunx nx run cv:dev
+bun x nx run application-registry-api:build
+bun apps/application-registry-api/dist/main.js
+bun x nx run cv:dev
 ```
 
-The management SPA is built into and served by the registry Worker. Browser
-requests use `/api/registry/*`; the Access-protected same-origin BFF injects
-the token server-side. CLI, Grafana, and automation use the distinct
-`/machine/api/registry/*` transport and must send
-`Authorization: Bearer <REGISTRY_API_TOKEN>` themselves. The machine namespace
-never injects a missing credential.
-Production additionally puts the browser-facing Worker routes behind
-Cloudflare Access for the configured owner email.
+The API reads its PostgreSQL, MinIO, registry-token, analytics, and server
+configuration from the variables documented in
+`apps/application-registry-api/README.md`. The CV Worker reads the API origin
+from `CV_PUBLIC_RESOLVER_URL`.
 
-Useful checks:
+For a self-contained public-renderer preview:
+
+```sh
+bun x nx run cv:dev:fixture
+```
+
+## Tests
+
+`@cv/test-infrastructure` supplies pinned PostgreSQL, MinIO, and NATS
+Testcontainers. Infrastructure-backed suites run with Node's test runner; the
+registry system suite launches the production Bun bundle and shares one
+PostgreSQL/MinIO pair across its API scenarios.
 
 ```sh
 bun run quality:biome
-bunx nx run-many -t typecheck test:unit --parallel=6
-bunx nx run application-registry-api:test:integration
-bunx nx run application-registry-api:test:e2e
-bunx nx run cv:test:worker
-bunx nx run cv:build
+bun x nx run-many -t typecheck test:unit --parallel=6
+bun x nx run application-registry-api:test:integration
+bun x nx run application-registry-pdf-queue:test:integration
+bun x nx run application-registry-crud:test:integration
+bun x nx run cv:test:e2e
 ```
 
-## Deployment and legacy coexistence
+## Deployment
 
-The first deployment order is:
+The safe cutover order is:
 
-1. bootstrap the durable resources, build the management assets, ensure both
-   PDF queues exist, and deploy their private `cv-pdf-worker` consumer;
-2. obtain explicit approval for the production D1 cutover, then follow the
-   canonical quiesce procedure: snapshot the registry Worker's cron schedule,
-   replace it with an empty schedule, verify it is empty, wait 30 minutes
-   without using the old management UI, and take a fresh permission-restricted
-   full D1 backup with a recorded SHA-256 checksum. Apply migrations only after
-   every one of those gates passes;
-3. deploy `cv-application-registry` without its `CV_APP` invalidation binding
-   or a public hostname;
-4. deploy `cv-public`, whose resolver binding targets the registry's
-   `CvPublicResolver` entrypoint;
-5. redeploy `cv-application-registry` with its normal `CV_APP` binding to the
-   now-existing public Worker;
-6. apply Terraform, which configures the personal management Access policy
-   before enabling the registry hostname, then attaches only
-   `CV_WEB_HOST/c/*` to `cv-public`;
-7. publish a facts release from the facts-only `cv-content` repository; its
-   immutable objects are uploaded before `current.json` changes.
+1. apply the shared infrastructure changes from `~/infrastructure` and verify
+   PostgreSQL, MinIO, NATS, Vault credentials, and reduced sidecar allocations;
+2. deploy the disabled Nomad API, listing-check runner, PDF dispatcher, and PDF
+   runner from this repository, then verify them on the Tunnel origin;
+3. freeze writes to D1, export it once, import and validate PostgreSQL with
+   `tools/application-registry-migration`;
+4. enable the API/BFF and background jobs, configure the public Worker with
+   `CV_PUBLIC_RESOLVER_URL`, and apply the Cloudflare Access and `/c/*` route
+   overlay changes;
+5. remove the old registry Worker deployment, the temporary D1 importer, and
+   the D1 state-transition block after the cutover is accepted.
 
-Only step 3 sets
-`APPLICATION_REGISTRY_CV_APP_BINDING_ENABLED=false`; the default is `true` for
-CI and every steady-state deployment. See the canonical
-[`terraform/README.md`](terraform/README.md#first-production-deployment) sequence
-for the exact cutover, backup, migration, and bootstrap commands.
-
-The old Pages resources use Terraform `removed` blocks with `destroy = false`.
-Keep them through the first successful production apply; the deployed Pages
-project and hostname remain live but unmanaged afterward. See
-`apps/cv/README.md`, `apps/application-registry-api/README.md`, and
-`terraform/README.md` for operational detail.
-
-Remote deployment requires Cloudflare, Infisical, and Terraform Cloud
-credentials. Local builds and Miniflare integration tests do not.
+Cloudflare DNS, Tunnel, Access, the public Worker, the frozen Pages site, and
+analytics intentionally remain. See `terraform/README.md` and the READMEs under
+`nomad/packs` for the concrete deployment contracts.

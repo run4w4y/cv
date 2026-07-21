@@ -1,24 +1,19 @@
 import { sql } from 'drizzle-orm'
-import {
-  check,
-  index,
-  primaryKey,
-  sqliteTable,
-  text,
-} from 'drizzle-orm/sqlite-core'
+import { check, index, pgTable, primaryKey, text } from 'drizzle-orm/pg-core'
 
 import { applicationNoteKindValues } from '../model/values'
 import { applications } from './applications'
 import { sqlStringList } from './checks'
+import { utcTimestamp } from './columns'
 
-export const applicationLabels = sqliteTable(
+export const applicationLabels = pgTable(
   'application_labels',
   {
     applicationId: text('application_id')
       .notNull()
       .references(() => applications.id, { onDelete: 'cascade' }),
     label: text('label').notNull(),
-    createdAt: text('created_at').notNull(),
+    createdAt: utcTimestamp('created_at').notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.applicationId, table.label] }),
@@ -26,7 +21,7 @@ export const applicationLabels = sqliteTable(
   ]
 )
 
-export const applicationNotes = sqliteTable(
+export const applicationNotes = pgTable(
   'application_notes',
   {
     id: text('id').notNull(),
@@ -36,8 +31,8 @@ export const applicationNotes = sqliteTable(
     kind: text('kind', { enum: applicationNoteKindValues }).notNull(),
     body: text('body').notNull(),
     source: text('source'),
-    createdAt: text('created_at').notNull(),
-    updatedAt: text('updated_at').notNull(),
+    createdAt: utcTimestamp('created_at').notNull(),
+    updatedAt: utcTimestamp('updated_at').notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.id] }),

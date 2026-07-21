@@ -20,8 +20,8 @@ export type QueryParamsRequest<
 
 /** Encoded HTTP query fields produced by a query-parameter codec. */
 export type EncodedQueryParams<Extras extends QueryParamsExtras> = {
-  readonly filters?: string
-  readonly orderBy?: string
+  readonly filter?: string
+  readonly sort?: string
   readonly after?: string
   readonly page?: string
   readonly size?: string

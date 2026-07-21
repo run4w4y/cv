@@ -9,12 +9,12 @@ import {
   Field,
   FieldDescription,
   FieldLabel,
+  Select,
   Textarea,
 } from '@cv/internal-ui'
 import { RefreshCw, Sparkles } from 'lucide-react'
 
-import { ChatGptAccess } from '@/preparation/components/chatgpt-access'
-import { ModelSelector } from '@/preparation/components/model-selector'
+import { LocalCodex } from '@/preparation/components/local-codex'
 import type {
   CoverLetterPageController,
   CoverLetterWorkspace,
@@ -45,7 +45,7 @@ export const CoverLetterGenerationSettings = ({
 
   return (
     <div className="grid gap-4 xl:grid-cols-2">
-      <ChatGptAccess />
+      <LocalCodex />
       <Card>
         <CardHeader>
           <CardTitle>Generation settings</CardTitle>
@@ -81,29 +81,24 @@ export const CoverLetterGenerationSettings = ({
                 : 'Refresh job posting'}
             </Button>
           </div>
-          <Field>
+          <Field className="max-w-48">
             <FieldLabel htmlFor="cover-letter-locale">Facts locale</FieldLabel>
-            <select
+            <Select
               id="cover-letter-locale"
-              className="h-9 max-w-48 rounded-md border border-input bg-background px-3 text-sm"
+              className="w-full"
               value={page.locale}
-              disabled={page.actionPending}
-              onChange={(event) => page.changeLocale(event.currentTarget.value)}
-            >
-              {workspace.bootstrap.context.factsRelease.locales.map(
-                (availableLocale) => (
-                  <option key={availableLocale} value={availableLocale}>
-                    {availableLocale}
-                  </option>
-                )
+              options={workspace.bootstrap.context.factsRelease.locales.map(
+                (availableLocale) => ({
+                  label: availableLocale,
+                  value: availableLocale,
+                })
               )}
-            </select>
+              disabled={page.actionPending}
+              onValueChange={(value) => {
+                if (value !== null) page.changeLocale(value)
+              }}
+            />
           </Field>
-          <ModelSelector
-            authenticated={page.authenticated}
-            value={page.selectedModel}
-            onChange={page.selectModel}
-          />
           <Field>
             <FieldLabel htmlFor="cover-letter-prompt">
               Writing instructions
@@ -124,8 +119,7 @@ export const CoverLetterGenerationSettings = ({
             disabled={
               page.actionPending ||
               page.workflowOpen ||
-              !page.authenticated ||
-              page.selectedModel === null ||
+              !page.codexAvailable ||
               page.prompt.trim().length === 0
             }
             onClick={() => void page.generate()}

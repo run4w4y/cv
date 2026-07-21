@@ -42,7 +42,6 @@ export const DonutChart = ({
   showLegend = true,
   valueFormat = formatChartValue,
 }: DonutChartProps) => {
-  const titleId = useId()
   const descriptionId = useId()
   const total = data.reduce(
     (sum, item) =>
@@ -102,13 +101,12 @@ export const DonutChart = ({
       <div className="grid place-items-center">
         <svg
           aria-describedby={descriptionId}
-          aria-labelledby={titleId}
+          aria-label={ariaLabel}
           className="col-start-1 row-start-1 h-auto w-full max-w-64 overflow-visible"
           preserveAspectRatio="xMidYMid meet"
           role="img"
           viewBox={`0 0 ${SIZE} ${SIZE}`}
         >
-          <title id={titleId}>{ariaLabel}</title>
           <desc id={descriptionId}>{description}</desc>
           <circle
             cx={CENTER}

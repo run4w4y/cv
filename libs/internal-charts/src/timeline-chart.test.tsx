@@ -24,8 +24,9 @@ describe('TimelineChart', () => {
     )
 
     expect(markup).toContain('data-slot="timeline-chart"')
-    expect(markup).toContain('<title')
-    expect(markup).toContain('CV traffic')
+    expect(markup).toContain('data-slot="chart-scroll-area"')
+    expect(markup).toContain('aria-label="CV traffic"')
+    expect(markup).not.toContain('<title id=')
     expect(markup).toContain('Views, Jul 16: 4')
     expect(markup).toContain('data-slot="chart-data-table"')
     expect(markup).toContain('<caption>CV traffic</caption>')
@@ -40,6 +41,25 @@ describe('TimelineChart', () => {
       />
     )
 
+    expect(markup).toContain('data-slot="chart-empty-state"')
+    expect(markup).not.toContain('<svg')
+  })
+
+  test('can treat an all-zero series as an empty traffic period', () => {
+    const markup = renderToStaticMarkup(
+      <TimelineChart
+        ariaLabel="Empty traffic"
+        data={[
+          { date: '2026-07-17', views: 0 },
+          { date: '2026-07-18', views: 0 },
+        ]}
+        emptyMessage="No traffic in this period."
+        emptyWhenAllZero
+        series={[{ dataKey: 'views', label: 'Views' }]}
+      />
+    )
+
+    expect(markup).toContain('No traffic in this period.')
     expect(markup).toContain('data-slot="chart-empty-state"')
     expect(markup).not.toContain('<svg')
   })

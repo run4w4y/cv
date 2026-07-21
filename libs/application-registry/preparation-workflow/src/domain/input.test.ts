@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { Effect, Schema } from 'effect'
-
+import { cvGenerationGuidanceTestFixture } from '../test-support'
 import {
   canonicalPreparationUrl,
   maximumCoverLetterPromptLength,
@@ -29,9 +29,9 @@ describe('preparation workflow inputs', () => {
       Effect.runPromise(
         Schema.decodeUnknownEffect(PreparationWorkflowInputSchema)({
           coverLetterPrompt: null,
+          cvGenerationGuidance: cvGenerationGuidanceTestFixture,
           kind: 'cv',
           locale: 'x',
-          modelId: 'model-1',
           runId: 'run-1',
           source: {
             _tag: 'CaptureUrl',
@@ -66,9 +66,9 @@ describe('preparation workflow inputs', () => {
       Effect.runPromise(
         Schema.decodeUnknownEffect(PreparationWorkflowInputSchema)({
           coverLetterPrompt: 'x'.repeat(maximumCoverLetterPromptLength + 1),
+          cvGenerationGuidance: null,
           kind: 'cover_letter',
           locale: 'en',
-          modelId: 'model-1',
           runId: 'run-prompt-limit',
           source: {
             _tag: 'CaptureUrl',
@@ -84,15 +84,46 @@ describe('preparation workflow inputs', () => {
       Effect.runPromise(
         Schema.decodeUnknownEffect(PreparationWorkflowInputSchema)({
           coverLetterPrompt: null,
+          cvGenerationGuidance: cvGenerationGuidanceTestFixture,
           kind: 'cv',
           locale: 'en',
-          modelId: 'model-1',
           runId: 'run-reviewed',
           source: {
             _tag: 'ReviewedContext',
             applicationId: 'application-1',
             url: 'https://jobs.example.test/role',
           },
+        })
+      )
+    ).rejects.toBeDefined()
+  })
+
+  test('requires CV guidance only for CV runs', async () => {
+    const common = {
+      coverLetterPrompt: null,
+      locale: 'en',
+      runId: 'run-guidance',
+      source: {
+        _tag: 'CaptureUrl',
+        url: 'https://jobs.example.test/role',
+      },
+    }
+
+    await expect(
+      Effect.runPromise(
+        Schema.decodeUnknownEffect(PreparationWorkflowInputSchema)({
+          ...common,
+          cvGenerationGuidance: null,
+          kind: 'cv',
+        })
+      )
+    ).rejects.toBeDefined()
+    await expect(
+      Effect.runPromise(
+        Schema.decodeUnknownEffect(PreparationWorkflowInputSchema)({
+          ...common,
+          cvGenerationGuidance: cvGenerationGuidanceTestFixture,
+          kind: 'cover_letter',
         })
       )
     ).rejects.toBeDefined()

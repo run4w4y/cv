@@ -16,6 +16,8 @@ describe('DonutChart', () => {
     )
 
     expect(markup).toContain('data-slot="donut-chart"')
+    expect(markup).toContain('aria-label="Link outcomes"')
+    expect(markup).not.toContain('<title id=')
     expect(markup).toContain('aria-label="Viewed: 15, 75.0%"')
     expect(markup).toContain('>20</span>')
     expect(markup).toContain('data-slot="chart-legend"')
