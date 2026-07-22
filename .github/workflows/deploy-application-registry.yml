@@ -50,7 +50,7 @@ jobs:
       - name: Register registry API service
         env:
           API_BFF_ENABLED: ${{ vars.CV_REGISTRY_BFF_ENABLED || 'false' }}
-          API_ENABLED: ${{ vars.CV_REGISTRY_NOMAD_ENABLED || 'false' }}
+          API_ENABLED: "true"
           API_IMAGE_DIGEST: ${{ inputs.api_image_digest }}
           API_SUBDOMAIN: ${{ vars.CV_REGISTRY_ORIGIN_SUBDOMAIN || 'registry-origin' }}
           NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
