@@ -27,18 +27,6 @@ variable "docker_image" {
   type        = string
 }
 
-variable "docker_image_username" {
-  description = "Optional registry username"
-  type        = string
-  default     = null
-}
-
-variable "docker_image_password" {
-  description = "Optional registry password"
-  type        = string
-  default     = null
-}
-
 variable "listing_check_batch_size" {
   description = "Maximum listings checked by one periodic child"
   type        = number

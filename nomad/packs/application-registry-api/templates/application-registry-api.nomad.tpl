@@ -77,13 +77,6 @@ job [[ .my.job_name | quote ]] {
       config {
         image = [[ .my.docker_image | quote ]]
         ports = ["http"]
-
-        [[ if and (empty .my.docker_image_username | not) (empty .my.docker_image_password | not) ]]
-        auth {
-          username = [[ .my.docker_image_username | quote ]]
-          password = [[ .my.docker_image_password | quote ]]
-        }
-        [[ end ]]
       }
 
       env {

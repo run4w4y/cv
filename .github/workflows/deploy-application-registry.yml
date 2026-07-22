@@ -56,13 +56,10 @@ jobs:
           API_SUBDOMAIN: ${{ vars.CV_REGISTRY_ORIGIN_SUBDOMAIN || 'registry-origin' }}
           NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
           NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
-          REGISTRY_PULL_TOKEN: ${{ secrets.REGISTRY_PULL_TOKEN }}
         run: |
           nomad-pack run nomad/packs/application-registry-api \
             --parser-v1 \
             --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${API_IMAGE_DIGEST}" \
-            --var "docker_image_username=${{ github.repository_owner }}" \
-            --var "docker_image_password=${REGISTRY_PULL_TOKEN}" \
             --var "enabled=${API_ENABLED}" \
             --var "bff_enabled=${API_BFF_ENABLED}" \
             --var "traefik_subdomain=${API_SUBDOMAIN}"
@@ -92,15 +89,12 @@ jobs:
         env:
           NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
           NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
-          REGISTRY_PULL_TOKEN: ${{ secrets.REGISTRY_PULL_TOKEN }}
           RUNNER_ENABLED: ${{ vars.CV_LISTING_CHECKS_ENABLED || 'false' }}
           RUNNER_IMAGE_DIGEST: ${{ inputs.listing_check_runner_image_digest }}
         run: |
           nomad-pack run nomad/packs/application-registry-listing-check-runner \
             --parser-v1 \
             --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${RUNNER_IMAGE_DIGEST}" \
-            --var "docker_image_username=${{ github.repository_owner }}" \
-            --var "docker_image_password=${REGISTRY_PULL_TOKEN}" \
             --var "enabled=${RUNNER_ENABLED}"
 
   deploy-self-hosted-pdf:
@@ -128,13 +122,10 @@ jobs:
         env:
           NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
           NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
-          REGISTRY_PULL_TOKEN: ${{ secrets.REGISTRY_PULL_TOKEN }}
           WORKER_ENABLED: ${{ vars.CV_PDF_WORKER_ENABLED || 'false' }}
           WORKER_IMAGE_DIGEST: ${{ inputs.pdf_worker_image_digest }}
         run: |
           nomad-pack run nomad/packs/application-registry-pdf-worker \
             --parser-v1 \
             --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${WORKER_IMAGE_DIGEST}" \
-            --var "docker_image_username=${{ github.repository_owner }}" \
-            --var "docker_image_password=${REGISTRY_PULL_TOKEN}" \
             --var "enabled=${WORKER_ENABLED}"

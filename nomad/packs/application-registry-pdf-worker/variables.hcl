@@ -21,18 +21,6 @@ variable "docker_image" {
   type        = string
 }
 
-variable "docker_image_username" {
-  description = "Optional registry username"
-  type        = string
-  default     = null
-}
-
-variable "docker_image_password" {
-  description = "Optional registry password"
-  type        = string
-  default     = null
-}
-
 variable "resources" {
   description = "Playwright worker resources"
   type = object({
