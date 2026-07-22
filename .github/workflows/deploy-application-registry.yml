@@ -1,7 +1,6 @@
 name: Deploy Application Registry
 
 permissions:
-  actions: read
   contents: read
 
 on:
