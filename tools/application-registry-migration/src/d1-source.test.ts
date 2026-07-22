@@ -45,10 +45,18 @@ describe('D1 source contract', () => {
     const withoutRetiredRates = supportedD1TableInventory.filter(
       (table) => table !== 'fx_rates'
     )
-    const rejectedMissing = await Effect.runPromiseExit(
+    const rejectedMissingRates = await Effect.runPromiseExit(
       validateD1TableInventory(withoutRetiredRates)
     )
-    expect(Exit.isFailure(rejectedMissing)).toBe(true)
+    expect(Exit.isFailure(rejectedMissingRates)).toBe(true)
+
+    const withoutRetiredOutbox = supportedD1TableInventory.filter(
+      (table) => table !== 'pdf_generation_outbox'
+    )
+    const rejectedMissingOutbox = await Effect.runPromiseExit(
+      validateD1TableInventory(withoutRetiredOutbox)
+    )
+    expect(Exit.isFailure(rejectedMissingOutbox)).toBe(true)
 
     const rejectedUnknown = await Effect.runPromiseExit(
       validateD1TableInventory([

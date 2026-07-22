@@ -258,7 +258,7 @@ const makeSnapshot = (
   sha256 = 'd'.repeat(64)
 ): D1SourceSnapshot => ({
   diagnostics: {
-    retiredTableRows: { fx_rates: 0 },
+    retiredTableRows: { fx_rates: 0, pdf_generation_outbox: 0 },
     runningListingCheckRuns: 0,
   },
   migrations: [],

@@ -6,14 +6,16 @@ and copies its final tables into an empty PostgreSQL database.
 
 The source contract is deliberately exact. The export must contain the complete
 15-migration history deployed to the live D1 database and precisely the final
-registry tables, `d1_migrations`, and the retired `fx_rates` table. Unknown,
-missing, or renamed migrations and tables are rejected. Migration 16 is not
-supported because it was never deployed.
+registry tables, `d1_migrations`, and the retired `fx_rates` and
+`pdf_generation_outbox` tables. Unknown, missing, or renamed migrations and
+tables are rejected. Migration 16 is not supported because it was never
+deployed.
 
-Create the source artifact after stopping registry writes:
+Create the source artifact once. The deployed D1 registry is already
+write-inactive, so no separate write-freeze step is required:
 
 ```bash
-bunx wrangler d1 export APPLICATION_REGISTRY_DB --remote --output .cv-work/application-registry/d1-export.sql
+bunx wrangler d1 export "$APPLICATION_REGISTRY_DB_NAME" --remote --output .cv-work/application-registry/d1-export.sql
 sha256sum .cv-work/application-registry/d1-export.sql
 ```
 
@@ -64,14 +66,14 @@ D1 timestamps must already use the registry's exact millisecond UTC ISO format.
 JSON with duplicate object keys, unsafe integers, or numbers that JavaScript
 cannot round-trip exactly is rejected before PostgreSQL is contacted.
 
-Every result reports `sourceDiagnostics`. `fx_rates` is intentionally not
-imported, so its discarded row count is reported under
-`retiredTableRows.fx_rates`. Historical listing-check runs still marked
-`running` are preserved verbatim and their count is reported under
+Every result reports `sourceDiagnostics`. `fx_rates` and
+`pdf_generation_outbox` are intentionally not imported, so their discarded row
+counts are reported under `retiredTableRows`. Historical listing-check runs
+still marked `running` are preserved verbatim and their count is reported under
 `runningListingCheckRuns`; review and acknowledge that count in the cutover
 record rather than silently rewriting history.
 
 Use `--validate-only` to validate the D1 export without connecting to
-PostgreSQL. Run it against the final frozen export before the write invocation,
+PostgreSQL. Run it against the checksummed export before the write invocation,
 retain the command output with the cutover record, and securely remove the
 export after rollback is no longer required.

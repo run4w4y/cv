@@ -19,7 +19,10 @@ export interface D1SourceSnapshot {
 }
 
 export interface D1SourceDiagnostics {
-  readonly retiredTableRows: Readonly<{ fx_rates: number }>
+  readonly retiredTableRows: Readonly<{
+    fx_rates: number
+    pdf_generation_outbox: number
+  }>
   readonly runningListingCheckRuns: number
 }
 
@@ -43,13 +46,15 @@ export const supportedD1MigrationHistory = [
 ] as const
 
 /**
- * Complete non-SQLite-internal source inventory. `fx_rates` is deliberately
- * retained here so retiring it is explicit and observable rather than silent.
+ * Complete non-SQLite-internal source inventory. Retired tables are
+ * deliberately retained here so discarding them is explicit and observable
+ * rather than silent.
  */
 export const supportedD1TableInventory = [
   ...registryTables.map(({ name }) => name),
   'd1_migrations',
   'fx_rates',
+  'pdf_generation_outbox',
 ].toSorted()
 
 const quoteIdentifier = (value: string): string =>
@@ -219,6 +224,11 @@ const readSourceDiagnostics = (
       const fxRates = database
         .query<{ count: number }, []>('select count(*) as count from fx_rates')
         .get()?.count
+      const pdfGenerationOutbox = database
+        .query<{ count: number }, []>(
+          'select count(*) as count from pdf_generation_outbox'
+        )
+        .get()?.count
       const runningListingCheckRuns = database
         .query<{ count: number }, []>(
           "select count(*) as count from listing_check_runs where state = 'running'"
@@ -226,12 +236,16 @@ const readSourceDiagnostics = (
         .get()?.count
       if (
         typeof fxRates !== 'number' ||
+        typeof pdfGenerationOutbox !== 'number' ||
         typeof runningListingCheckRuns !== 'number'
       ) {
         throw new Error('D1 diagnostic counts were not numeric.')
       }
       return {
-        retiredTableRows: { fx_rates: fxRates },
+        retiredTableRows: {
+          fx_rates: fxRates,
+          pdf_generation_outbox: pdfGenerationOutbox,
+        },
         runningListingCheckRuns,
       }
     },
