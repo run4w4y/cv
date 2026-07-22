@@ -28,6 +28,7 @@ export const preparationStoreLayer = Layer.effect(
                   .stageCv({
                     applicationId: input.applicationId,
                     entry: result.entry,
+                    operationId: result.revision.operationId,
                     publicBaseUrl: publicCvBaseUrl(),
                     revisionId: result.revision.id,
                   })
@@ -44,6 +45,7 @@ export const preparationStoreLayer = Layer.effect(
                   .stageCv({
                     applicationId: input.applicationId,
                     entry: result.entry,
+                    operationId: result.revision.operationId,
                     publicBaseUrl: publicCvBaseUrl(),
                     revisionId: result.revision.id,
                   })

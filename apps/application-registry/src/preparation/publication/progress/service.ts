@@ -1,4 +1,3 @@
-import type { CvLink } from '@cv/application-registry-entity'
 import { Effect, Layer, SubscriptionRef } from 'effect'
 
 import type {
@@ -90,38 +89,18 @@ export const cvPublicationProgressLayer = Layer.effect(
       )
     })
 
-    const startingPdf = Effect.fn('CvPublicationProgress.startingPdf')(
-      function* (runId: string, link: CvLink) {
-        yield* SubscriptionRef.update(runs, (current) =>
-          updatePublicationRun(current, runId, (run) =>
-            run._tag !== 'PublishingLink'
-              ? run
-              : {
-                  ...publicationRunIdentity(run),
-                  _tag: 'StartingPdf',
-                  link,
-                  message:
-                    'Preparing the public CV and starting PDF generation.',
-                }
-          )
-        )
-      }
-    )
-
     const complete = Effect.fn('CvPublicationProgress.complete')(function* (
       result: CvPublicationWorkflowResult
     ) {
       yield* SubscriptionRef.update(runs, (current) =>
         updatePublicationRun(current, result.runId, (run) =>
-          run._tag !== 'StartingPdf'
+          run._tag !== 'PublishingLink'
             ? run
             : {
                 ...publicationRunIdentity(run),
                 _tag: 'Published',
                 message:
-                  result.job === null
-                    ? 'PDF generation still needs to be started before the CV is shareable.'
-                    : 'PDF generation has started; the CV is shareable when it is ready.',
+                  'The CV is published and PDF generation has been requested.',
                 result,
               }
         )
@@ -223,7 +202,6 @@ export const cvPublicationProgressLayer = Layer.effect(
       reserve,
       restoreCancellation,
       runs,
-      startingPdf,
     })
   })
 )

@@ -4,6 +4,8 @@ import { ConfigProvider, Effect, Redacted } from 'effect'
 import { readRunnerConfiguration } from './config'
 
 const required = {
+  NATS_PASSWORD: 'nats-secret',
+  NATS_USER: 'cv',
   POSTGRES_DATABASE: 'cv_registry',
   POSTGRES_HOST: '127.0.0.1',
   POSTGRES_PASSWORD: 'secret',
@@ -27,6 +29,7 @@ describe('listing-check runner configuration', () => {
     expect(configuration.limit).toBe(5)
     expect(configuration.maxConnections).toBe(4)
     expect(configuration.mode).toBe('archive_eligible')
+    expect(configuration.nats.server).toBe('nats://127.0.0.1:4222')
     expect(configuration.postgres.port).toBe(5432)
     expect(Redacted.value(configuration.postgres.password)).toBe('secret')
   })

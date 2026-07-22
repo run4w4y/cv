@@ -12,7 +12,6 @@ import {
   type PersistedApplication,
   type PersistedContentRevision,
   type PersistedGeneratedArtifact,
-  type PersistedPdfGenerationOutbox,
 } from '../src'
 import { makeRegistryCrudLive } from '../src/live'
 import { RegistryPostgresHarness } from './postgres-harness'
@@ -85,21 +84,6 @@ const artifact = (
   updatedAt: recordedAt,
   requestId: 'request-1',
   ...overrides,
-})
-
-const outbox = (
-  value: PersistedGeneratedArtifact
-): PersistedPdfGenerationOutbox => ({
-  applicationId: application.applicationId,
-  artifactId: value.id,
-  attempts: 0,
-  contentEntryId: 'content-entry-1',
-  createdAt: value.createdAt,
-  dispatchedAt: null,
-  lastAttemptAt: null,
-  lastError: null,
-  messageVersion: 1,
-  updatedAt: value.updatedAt,
 })
 
 const runCrud = <A, E>(
@@ -484,7 +468,7 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
       )
 
       const firstArtifact = artifact()
-      yield* artifacts.persistPending(firstArtifact, outbox(firstArtifact), 2)
+      yield* artifacts.persistPending(firstArtifact, 2)
       const failed = yield* artifacts.markFailed(
         'pdf-artifact-1',
         'render_failed',
@@ -495,28 +479,12 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
         id: 'pdf-artifact-2',
         requestId: 'request-2',
       })
-      yield* artifacts.persistPending(retryArtifact, outbox(retryArtifact), 2)
+      yield* artifacts.persistPending(retryArtifact, 2)
       const duplicate = artifact({
         id: 'pdf-artifact-duplicate',
         requestId: 'request-2',
       })
-      yield* artifacts.persistPending(duplicate, outbox(duplicate), 2)
-      const pendingDispatch = yield* artifacts.findPendingDispatch(
-        retryArtifact.id
-      )
-      yield* artifacts.markDispatchFailed(
-        retryArtifact.id,
-        'Queue temporarily unavailable.',
-        '2026-07-17T15:30:00.000Z'
-      )
-      const failedDispatch = yield* artifacts.findPendingDispatch(
-        retryArtifact.id
-      )
-      yield* artifacts.markDispatched(
-        retryArtifact.id,
-        '2026-07-17T15:31:00.000Z'
-      )
-      const dispatched = yield* artifacts.findPendingDispatch(retryArtifact.id)
+      yield* artifacts.persistPending(duplicate, 2)
       const ready = yield* artifacts.markReady({
         ...retryArtifact,
         byteLength: 8_192,
@@ -560,18 +528,13 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
         requestId: 'request-stale-start',
         updatedAt: '2026-07-17T18:00:00.000Z',
       })
-      yield* artifacts.persistPending(
-        staleStartArtifact,
-        outbox(staleStartArtifact),
-        1
-      )
+      yield* artifacts.persistPending(staleStartArtifact, 1)
 
       return {
         disabled,
         disabledLink,
         enabled,
         failed,
-        failedDispatch,
         fallback: yield* artifacts.findReadyForPublication(
           'cv-link-1',
           'content-revision-2',
@@ -594,10 +557,8 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
           'https://cv.example.test/cv/public-token-1'
         ),
         published,
-        pendingDispatch,
         ready,
         initiallyEnabled,
-        dispatched,
         linkAfterStaleFailure,
         retryByRequest: yield* artifacts.findByRequestId('request-2'),
         restoredLink,
@@ -615,14 +576,6 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
   assert.equal(result.staleFailureDisable, false)
   assert.equal(result.linkAfterStaleFailure?.enabled, true)
   assert.equal(result.staleStart, undefined)
-  assert.equal(result.pendingDispatch?.artifactId, 'pdf-artifact-2')
-  assert.equal(result.pendingDispatch?.attempts, 0)
-  assert.equal(result.failedDispatch?.attempts, 1)
-  assert.equal(
-    result.failedDispatch?.lastError,
-    'Queue temporarily unavailable.'
-  )
-  assert.equal(result.dispatched, undefined)
   assert.equal(result.missingNewRenderer, undefined)
   assert.equal(result.fallback?.id, 'pdf-artifact-2')
   assert.equal(
@@ -712,11 +665,7 @@ test('deleting an application cascades through its complete prepared CV graph', 
       const pendingArtifact = artifact({
         contentRevisionId: 'content-revision-1',
       })
-      yield* artifacts.persistPending(
-        pendingArtifact,
-        outbox(pendingArtifact),
-        1
-      )
+      yield* artifacts.persistPending(pendingArtifact, 1)
 
       return yield* applications.remove(application.applicationId)
     })
@@ -752,10 +701,4 @@ test('deleting an application cascades through its complete prepared CV graph', 
       'generated_artifacts',
     ].map((relation) => ({ count: 0, relation }))
   )
-
-  const outboxRows = await harness.query<{ count: number }>(
-    `select count(*)::int as count
-       from pdf_generation_outbox where artifact_id = 'pdf-artifact-1'`
-  )
-  assert.deepEqual(outboxRows, [{ count: 0 }])
 })

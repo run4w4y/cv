@@ -4,7 +4,6 @@ import type {
   CvLink,
   GeneratedArtifact,
   JobPostingSnapshot,
-  PdfGenerationOutbox,
 } from '@cv/application-registry-entity'
 import { Context, type Effect } from 'effect'
 
@@ -15,7 +14,6 @@ import type {
   PersistedCvLink,
   PersistedGeneratedArtifact,
   PersistedJobPostingSnapshot,
-  PersistedPdfGenerationOutbox,
 } from '../types'
 
 export interface JobPostingSnapshotsCrud {
@@ -118,9 +116,6 @@ export interface ArtifactsCrud {
   readonly findByRequestId: (
     requestId: string
   ) => Effect.Effect<GeneratedArtifact | undefined, RegistryDatabaseError>
-  readonly findPendingDispatch: (
-    artifactId: string
-  ) => Effect.Effect<PdfGenerationOutbox | undefined, RegistryDatabaseError>
   readonly findCurrentForPublication: (
     cvLinkId: string,
     contentRevisionId: string,
@@ -141,26 +136,13 @@ export interface ArtifactsCrud {
     errorMessage: string,
     updatedAt: string
   ) => Effect.Effect<boolean, RegistryDatabaseError>
-  readonly markDispatchFailed: (
-    artifactId: string,
-    message: string,
-    attemptedAt: string
-  ) => Effect.Effect<boolean, RegistryDatabaseError>
-  readonly markDispatched: (
-    artifactId: string,
-    dispatchedAt: string
-  ) => Effect.Effect<boolean, RegistryDatabaseError>
   readonly markReady: (
     artifact: PersistedGeneratedArtifact
   ) => Effect.Effect<boolean, RegistryDatabaseError>
   readonly persistPending: (
     artifact: PersistedGeneratedArtifact,
-    outbox: PersistedPdfGenerationOutbox,
     expectedLinkVersion: number
   ) => Effect.Effect<void, RegistryDatabaseError>
-  readonly pendingDispatches: (
-    limit: number
-  ) => Effect.Effect<readonly PdfGenerationOutbox[], RegistryDatabaseError>
 }
 export const ArtifactsCrud = Context.Service<ArtifactsCrud>(
   '@cv/application-registry-crud/ArtifactsCrud'

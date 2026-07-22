@@ -13,6 +13,8 @@ const required = {
   MINIO_FACTS_BUCKET: 'cv-facts',
   MINIO_OBJECTS_BUCKET: 'cv-objects',
   MINIO_SECRET_ACCESS_KEY: 'minio-secret',
+  NATS_PASSWORD: 'nats-password',
+  NATS_USER: 'cv',
   POSTGRES_DATABASE: 'cv_registry',
   POSTGRES_HOST: '127.0.0.1',
   POSTGRES_PASSWORD: 'postgres-secret',
@@ -38,6 +40,7 @@ describe('application registry API server configuration', () => {
     expect(configuration.http.host).toBe('0.0.0.0')
     expect(configuration.http.port).toBe(3000)
     expect(configuration.minio.forcePathStyle).toBe(true)
+    expect(configuration.nats.server).toBe('nats://127.0.0.1:4222')
     expect(configuration.postgres.maxConnections).toBe(6)
     expect(Redacted.value(configuration.postgres.password)).toBe(
       'postgres-secret'

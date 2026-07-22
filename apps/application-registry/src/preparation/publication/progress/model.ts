@@ -1,4 +1,3 @@
-import type { CvLink } from '@cv/application-registry-entity'
 import { Context, type Effect, type SubscriptionRef } from 'effect'
 
 import type {
@@ -40,7 +39,6 @@ export type CvPublicationProgressService = {
     claim: CvPublicationCancellationClaim
   ) => Effect.Effect<void>
   readonly runs: SubscriptionRef.SubscriptionRef<CvPublicationRuns>
-  readonly startingPdf: (runId: string, link: CvLink) => Effect.Effect<void>
 }
 
 export class CvPublicationProgress extends Context.Service<

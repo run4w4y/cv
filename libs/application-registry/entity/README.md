@@ -11,7 +11,7 @@ normalized URL and fingerprint columns support lookup and deduplication; there
 are no public job keys, source IDs, or identity aliases.
 Related tables cover labels, notes, backend-issued activities, compensation,
 listing checks, opaque content revisions, publications, PDF
-artifacts, an outbox, and idempotency receipts.
+artifacts and idempotency receipts.
 
 `content_revisions.facts_release_id` is provenance text, not a foreign key:
 facts releases live as immutable static objects in the private object store and

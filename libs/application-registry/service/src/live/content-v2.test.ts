@@ -19,6 +19,10 @@ import {
   type JobPostingSnapshot,
   pdfGenerationFailedDisableReason,
 } from '@cv/application-registry-entity'
+import {
+  RegistryEventPublisherNoop,
+  RegistryEventSchema,
+} from '@cv/application-registry-events'
 import { Effect, Layer } from 'effect'
 
 import { application } from '../../test/support/fixtures'
@@ -30,6 +34,33 @@ import {
   PdfArtifactsService,
 } from '../services'
 import { RegistryContentServicesLive } from './layers'
+
+const ensurePdfAttempt = (
+  applicationId: string,
+  contentEntryId: string,
+  input: {
+    readonly eventId: string
+    readonly expectedPublicationVersion: number
+  }
+) =>
+  Effect.gen(function* () {
+    const publications = yield* CvPublicationsService
+    const pdfs = yield* PdfArtifactsService
+    const link = yield* publications.findByEntry(applicationId, contentEntryId)
+    return yield* pdfs.ensureAttempt(
+      RegistryEventSchema.cases.PdfGenerationRequested.make({
+        applicationId,
+        contentEntryId,
+        contentRevisionId: link.currentRevisionId,
+        correlationId: input.eventId,
+        cvLinkId: link.id,
+        eventId: input.eventId,
+        occurredAt: link.updatedAt,
+        publicationVersion: input.expectedPublicationVersion,
+        version: 1,
+      })
+    )
+  })
 
 type MemoryState = {
   applicationStatus: ApplicationStatus
@@ -349,7 +380,6 @@ const makeMemoryCrudLayer = () => {
           (artifact) => artifact.requestId === requestId
         )
       ),
-    findPendingDispatch: () => Effect.succeed(undefined),
     findCurrentForPublication: (
       cvLinkId,
       revisionId,
@@ -402,8 +432,6 @@ const makeMemoryCrudLayer = () => {
         })
         return true
       }),
-    markDispatchFailed: () => Effect.succeed(true),
-    markDispatched: () => Effect.succeed(true),
     markReady: (artifact: PersistedGeneratedArtifact) =>
       Effect.sync(() => {
         const existing = state.artifacts.get(artifact.id)
@@ -422,7 +450,6 @@ const makeMemoryCrudLayer = () => {
       }),
     persistPending: (
       artifact: PersistedGeneratedArtifact,
-      _outbox,
       expectedLinkVersion
     ) =>
       Effect.sync(() => {
@@ -440,7 +467,6 @@ const makeMemoryCrudLayer = () => {
           state.artifacts.set(artifact.id, artifact)
         }
       }),
-    pendingDispatches: () => Effect.succeed([]),
   }
 
   const layer = Layer.mergeAll(
@@ -465,7 +491,8 @@ const makeHarness = () => {
   const memory = makeMemoryCrudLayer()
   const live = RegistryContentServicesLive.pipe(
     Layer.provide(memory.layer),
-    Layer.provide(makeInMemoryArtifactStoreLayer())
+    Layer.provide(makeInMemoryArtifactStoreLayer()),
+    Layer.provide(RegistryEventPublisherNoop)
   )
   const run = <A, E>(
     effect: Effect.Effect<
@@ -608,6 +635,7 @@ describe('content domain services', () => {
           }
         )
         const firstLink = yield* publications.stage(application.id, entry.id, {
+          operationId: crypto.randomUUID(),
           expectedContentVersion: firstApproval.entry.version,
           publicBaseUrl: 'https://cv.example.test/cv',
           revisionId: first.revision.id,
@@ -616,6 +644,7 @@ describe('content domain services', () => {
           state.applicationStatus = 'rejected'
         })
         yield* publications.setAvailability(application.id, entry.id, {
+          operationId: crypto.randomUUID(),
           enabled: false,
           expectedPublicationVersion: firstLink.publicationVersion,
           reason: 'application_rejected',
@@ -631,6 +660,7 @@ describe('content domain services', () => {
           application.id,
           entry.id,
           {
+            operationId: crypto.randomUUID(),
             enabled: true,
             expectedPublicationVersion: firstLink.publicationVersion,
           }
@@ -654,6 +684,7 @@ describe('content domain services', () => {
           }
         )
         const secondLink = yield* publications.stage(application.id, entry.id, {
+          operationId: crypto.randomUUID(),
           expectedContentVersion: secondApproval.entry.version,
           publicBaseUrl: 'https://cv.example.test/cv',
           revisionId: second.revision.id,
@@ -672,6 +703,7 @@ describe('content domain services', () => {
           application.id,
           entry.id,
           {
+            operationId: crypto.randomUUID(),
             enabled: true,
             expectedPublicationVersion: secondLink.publicationVersion,
           }
@@ -756,6 +788,7 @@ describe('content domain services', () => {
 
         return yield* Effect.flip(
           publications.stage(application.id, entry.id, {
+            operationId: crypto.randomUUID(),
             expectedContentVersion: approved.entry.version,
             publicBaseUrl: 'https://cv.example.test/cv',
             revisionId: appended.revision.id,
@@ -811,6 +844,7 @@ describe('content domain services', () => {
 
         return yield* Effect.flip(
           publications.stage(application.id, entry.id, {
+            operationId: crypto.randomUUID(),
             expectedContentVersion: appended.entry.version,
             publicBaseUrl: 'https://cv.example.test/cv',
             revisionId: appended.revision.id,
@@ -858,6 +892,7 @@ describe('content domain services', () => {
           }
         )
         const staged = yield* publications.stage(application.id, entry.id, {
+          operationId: crypto.randomUUID(),
           expectedContentVersion: approved.entry.version,
           publicBaseUrl: 'https://cv.example.test/c',
           revisionId: revision.revision.id,
@@ -866,13 +901,14 @@ describe('content domain services', () => {
           application.id,
           entry.id,
           {
+            operationId: crypto.randomUUID(),
             enabled: true,
             expectedPublicationVersion: staged.publicationVersion,
           }
         )
-        const pending = yield* pdfs.startJob(application.id, entry.id, {
+        const pending = yield* ensurePdfAttempt(application.id, entry.id, {
           expectedPublicationVersion: staged.publicationVersion,
-          requestId: 'rejected-pending-request',
+          eventId: 'rejected-pending-request',
         })
         state.applicationStatus = 'rejected'
         state.allowLinkAvailabilityRepair = false
@@ -981,18 +1017,20 @@ describe('content domain services', () => {
           }
         )
         const staged = yield* publications.stage(application.id, entry.id, {
+          operationId: crypto.randomUUID(),
           expectedContentVersion: approved.entry.version,
           publicBaseUrl: 'https://cv.example.test/c',
           revisionId: revision.revision.id,
         })
         yield* publications.setAvailability(application.id, entry.id, {
+          operationId: crypto.randomUUID(),
           enabled: true,
           expectedPublicationVersion: staged.publicationVersion,
         })
 
-        const firstAttempt = yield* pdfs.startJob(application.id, entry.id, {
+        const firstAttempt = yield* ensurePdfAttempt(application.id, entry.id, {
           expectedPublicationVersion: staged.publicationVersion,
-          requestId: 'rejected-ready-request',
+          eventId: 'rejected-ready-request',
         })
         const ready = yield* pdfs.complete(
           application.id,
@@ -1000,9 +1038,9 @@ describe('content domain services', () => {
           'renderer-v1',
           new TextEncoder().encode('%PDF older ready artifact')
         )
-        const retry = yield* pdfs.startJob(application.id, entry.id, {
+        const retry = yield* ensurePdfAttempt(application.id, entry.id, {
           expectedPublicationVersion: staged.publicationVersion,
-          requestId: 'rejected-failed-request',
+          eventId: 'rejected-failed-request',
         })
 
         state.applicationStatus = 'rejected'
@@ -1070,27 +1108,29 @@ describe('content domain services', () => {
           }
         )
         const link = yield* publications.stage(application.id, entry.id, {
+          operationId: crypto.randomUUID(),
           expectedContentVersion: approval.entry.version,
           publicBaseUrl: 'https://cv.example.test/cv/',
           revisionId: draft.revision.id,
         })
         const disabledStart = yield* Effect.flip(
-          pdfs.startJob(application.id, entry.id, {
+          ensurePdfAttempt(application.id, entry.id, {
             expectedPublicationVersion: link.publicationVersion,
-            requestId: 'request-disabled',
+            eventId: 'request-disabled',
           })
         )
         const activeLink = yield* publications.setAvailability(
           application.id,
           entry.id,
           {
+            operationId: crypto.randomUUID(),
             enabled: true,
             expectedPublicationVersion: link.publicationVersion,
           }
         )
-        const pending = yield* pdfs.startJob(application.id, entry.id, {
+        const pending = yield* ensurePdfAttempt(application.id, entry.id, {
           expectedPublicationVersion: link.publicationVersion,
-          requestId: 'request-1',
+          eventId: 'request-1',
         })
         const ready = yield* pdfs.complete(
           application.id,
@@ -1121,6 +1161,7 @@ describe('content domain services', () => {
           application.id,
           entry.id,
           {
+            operationId: crypto.randomUUID(),
             enabled: false,
             expectedPublicationVersion: link.publicationVersion,
             reason: 'manual test',
@@ -1135,6 +1176,7 @@ describe('content domain services', () => {
           application.id,
           entry.id,
           {
+            operationId: crypto.randomUUID(),
             enabled: true,
             expectedPublicationVersion: link.publicationVersion,
           }
@@ -1161,6 +1203,7 @@ describe('content domain services', () => {
           application.id,
           entry.id,
           {
+            operationId: crypto.randomUUID(),
             enabled: false,
             expectedPublicationVersion: link.publicationVersion,
             reason: 'application_rejected',
@@ -1257,18 +1300,20 @@ describe('content domain services', () => {
           }
         )
         const staged = yield* publications.stage(application.id, entry.id, {
+          operationId: crypto.randomUUID(),
           expectedContentVersion: approval.entry.version,
           publicBaseUrl: 'https://cv.example.test/c/',
           revisionId: draft.revision.id,
         })
         yield* publications.setAvailability(application.id, entry.id, {
+          operationId: crypto.randomUUID(),
           enabled: true,
           expectedPublicationVersion: staged.publicationVersion,
         })
 
-        const olderAttempt = yield* pdfs.startJob(application.id, entry.id, {
+        const olderAttempt = yield* ensurePdfAttempt(application.id, entry.id, {
           expectedPublicationVersion: staged.publicationVersion,
-          requestId: 'request-older-failure',
+          eventId: 'request-older-failure',
         })
         const olderFailure = yield* pdfs.fail(
           application.id,
@@ -1281,13 +1326,14 @@ describe('content domain services', () => {
           entry.id
         )
         yield* publications.setAvailability(application.id, entry.id, {
+          operationId: crypto.randomUUID(),
           enabled: true,
           expectedPublicationVersion: staged.publicationVersion,
         })
 
-        const newerAttempt = yield* pdfs.startJob(application.id, entry.id, {
+        const newerAttempt = yield* ensurePdfAttempt(application.id, entry.id, {
           expectedPublicationVersion: staged.publicationVersion,
-          requestId: 'request-newer-success',
+          eventId: 'request-newer-success',
         })
         const newerReady = yield* pdfs.complete(
           application.id,
@@ -1344,7 +1390,6 @@ describe('content domain services', () => {
       Effect.gen(function* () {
         const content = yield* ContentEntriesService
         const publications = yield* CvPublicationsService
-        const pdfs = yield* PdfArtifactsService
         const entry = yield* content.ensure(application.id, {
           kind: 'cv',
           locale: 'en',
@@ -1367,17 +1412,19 @@ describe('content domain services', () => {
           }
         )
         const staged = yield* publications.stage(application.id, entry.id, {
+          operationId: crypto.randomUUID(),
           expectedContentVersion: approval.entry.version,
           publicBaseUrl: 'https://cv.example.test/c/',
           revisionId: draft.revision.id,
         })
         yield* publications.setAvailability(application.id, entry.id, {
+          operationId: crypto.randomUUID(),
           enabled: true,
           expectedPublicationVersion: staged.publicationVersion,
         })
-        const olderAttempt = yield* pdfs.startJob(application.id, entry.id, {
+        const olderAttempt = yield* ensurePdfAttempt(application.id, entry.id, {
           expectedPublicationVersion: staged.publicationVersion,
-          requestId: 'request-interleaved-older',
+          eventId: 'request-interleaved-older',
         })
         return { entry, olderAttempt }
       })
@@ -1449,6 +1496,7 @@ describe('content domain services', () => {
           }
         )
         const firstLink = yield* publications.stage(application.id, entry.id, {
+          operationId: crypto.randomUUID(),
           expectedContentVersion: approval.entry.version,
           publicBaseUrl: 'https://cv.example.test/c/',
           revisionId: draft.revision.id,
@@ -1457,14 +1505,19 @@ describe('content domain services', () => {
           application.id,
           entry.id,
           {
+            operationId: crypto.randomUUID(),
             enabled: true,
             expectedPublicationVersion: firstLink.publicationVersion,
           }
         )
-        const failedAttempt = yield* pdfs.startJob(application.id, entry.id, {
-          expectedPublicationVersion: firstLink.publicationVersion,
-          requestId: 'request-failed',
-        })
+        const failedAttempt = yield* ensurePdfAttempt(
+          application.id,
+          entry.id,
+          {
+            expectedPublicationVersion: firstLink.publicationVersion,
+            eventId: 'request-failed',
+          }
+        )
         const failed = yield* pdfs.fail(
           application.id,
           failedAttempt.id,
@@ -1485,17 +1538,18 @@ describe('content domain services', () => {
           application.id,
           entry.id,
           {
+            operationId: crypto.randomUUID(),
             enabled: true,
             expectedPublicationVersion: firstLink.publicationVersion,
           }
         )
-        const failedReplay = yield* pdfs.startJob(application.id, entry.id, {
+        const failedReplay = yield* ensurePdfAttempt(application.id, entry.id, {
           expectedPublicationVersion: firstLink.publicationVersion,
-          requestId: 'request-failed',
+          eventId: 'request-failed',
         })
-        const retryAttempt = yield* pdfs.startJob(application.id, entry.id, {
+        const retryAttempt = yield* ensurePdfAttempt(application.id, entry.id, {
           expectedPublicationVersion: firstLink.publicationVersion,
-          requestId: 'request-retry',
+          eventId: 'request-retry',
         })
         const firstReady = yield* pdfs.complete(
           application.id,
@@ -1503,12 +1557,13 @@ describe('content domain services', () => {
           'renderer-v1',
           firstPdf
         )
-        const staleAttempt = yield* pdfs.startJob(application.id, entry.id, {
+        const staleAttempt = yield* ensurePdfAttempt(application.id, entry.id, {
           expectedPublicationVersion: firstLink.publicationVersion,
-          requestId: 'request-stale',
+          eventId: 'request-stale',
         })
 
         const secondLink = yield* publications.stage(application.id, entry.id, {
+          operationId: crypto.randomUUID(),
           expectedContentVersion: approval.entry.version,
           publicBaseUrl: 'https://new-cv.example.test/c/',
           revisionId: draft.revision.id,
@@ -1517,6 +1572,7 @@ describe('content domain services', () => {
           application.id,
           entry.id,
           {
+            operationId: crypto.randomUUID(),
             enabled: true,
             expectedPublicationVersion: secondLink.publicationVersion,
           }
@@ -1542,18 +1598,19 @@ describe('content domain services', () => {
           application.id,
           entry.id
         )
-        const changedUrlAttempt = yield* pdfs.startJob(
+        const changedUrlAttempt = yield* ensurePdfAttempt(
           application.id,
           entry.id,
           {
             expectedPublicationVersion: secondLink.publicationVersion,
-            requestId: 'request-changed-url',
+            eventId: 'request-changed-url',
           }
         )
         const manuallyDisabled = yield* publications.setAvailability(
           application.id,
           entry.id,
           {
+            operationId: crypto.randomUUID(),
             enabled: false,
             expectedPublicationVersion: secondLink.publicationVersion,
             reason: 'manual test',
@@ -1570,12 +1627,13 @@ describe('content domain services', () => {
           entry.id
         )
         yield* publications.setAvailability(application.id, entry.id, {
+          operationId: crypto.randomUUID(),
           enabled: true,
           expectedPublicationVersion: secondLink.publicationVersion,
         })
-        const finalAttempt = yield* pdfs.startJob(application.id, entry.id, {
+        const finalAttempt = yield* ensurePdfAttempt(application.id, entry.id, {
           expectedPublicationVersion: secondLink.publicationVersion,
-          requestId: 'request-changed-url-final',
+          eventId: 'request-changed-url-final',
         })
         const secondReady = yield* pdfs.complete(
           application.id,

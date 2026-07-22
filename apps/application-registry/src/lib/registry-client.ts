@@ -146,7 +146,6 @@ const endpointGroups = {
   getJobPostingSnapshotPayload: 'content',
   getLatestJobPostingSnapshot: 'content',
   getListingCheckRun: 'automation',
-  getPdfJob: 'publications',
   listActivities: 'applications',
   listApplicationActivities: 'applications',
   listApplicationAnnotations: 'applications',
@@ -163,7 +162,7 @@ const endpointGroups = {
   readCurrentPdfArtifact: 'publications',
   resolveApplicationListingAvailability: 'applications',
   setCvLinkAvailability: 'publications',
-  startPdfJob: 'publications',
+  requestPdfGeneration: 'publications',
   submitListingCheckFindings: 'automation',
   updateApplication: 'applications',
 } as const satisfies Record<RegistryEndpointIdentifier, keyof RegistryGroups>

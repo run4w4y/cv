@@ -1,7 +1,7 @@
 # Application Registry PDF Processing
 
 Environment-independent Effect services and workflow logic for PDF generation.
-The NATS JetStream/Playwright runner supplies persistence and browser adapters
+The NATS JetStream/Playwright worker supplies persistence and browser adapters
 without duplicating job validation, layout checks, retry policy, or failure
 mapping.
 

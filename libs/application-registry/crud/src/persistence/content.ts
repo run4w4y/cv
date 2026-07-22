@@ -4,7 +4,6 @@ import {
   cvLinks,
   generatedArtifacts,
   jobPostingSnapshots,
-  pdfGenerationOutbox,
 } from '@cv/application-registry-entity'
 import { and, asc, desc, eq, exists, gt, notExists, or, sql } from 'drizzle-orm'
 import { Effect } from 'effect'
@@ -17,7 +16,6 @@ import type {
   PersistedCvLink,
   PersistedGeneratedArtifact,
   PersistedJobPostingSnapshot,
-  PersistedPdfGenerationOutbox,
 } from '../types'
 import { runTransaction } from './shared'
 
@@ -636,7 +634,6 @@ export const findCurrentArtifactForPublication = (
 export const persistPendingArtifact = (
   database: RegistryDatabase,
   artifact: PersistedGeneratedArtifact,
-  outbox: PersistedPdfGenerationOutbox,
   expectedLinkVersion: number
 ) =>
   runTransaction(database, 'PDF job creation', (transaction) =>
@@ -669,105 +666,13 @@ export const persistPendingArtifact = (
         .from(generatedArtifacts)
         .where(eq(generatedArtifacts.requestId, artifact.requestId))
         .limit(1)
-      const storedArtifact = storedArtifacts.at(0)
-
-      if (storedArtifact === undefined) {
+      if (storedArtifacts.length === 0) {
         return yield* Effect.fail(
           new Error('The pending PDF artifact was not persisted.')
         )
       }
-
-      yield* transaction
-        .insert(pdfGenerationOutbox)
-        .values({ ...outbox, artifactId: storedArtifact.id })
-        .onConflictDoNothing({ target: pdfGenerationOutbox.artifactId })
     })
   )
-
-export const findPendingPdfDispatch = (
-  database: RegistryExecutor,
-  artifactId: string
-) =>
-  database
-    .select()
-    .from(pdfGenerationOutbox)
-    .where(
-      and(
-        eq(pdfGenerationOutbox.artifactId, artifactId),
-        sql`${pdfGenerationOutbox.dispatchedAt} is null`
-      )
-    )
-    .limit(1)
-    .pipe(
-      Effect.map(first),
-      Effect.mapError(databaseFailure('Failed to load pending PDF dispatch'))
-    )
-
-export const listPendingPdfDispatches = (
-  database: RegistryExecutor,
-  limit: number
-) =>
-  database
-    .select()
-    .from(pdfGenerationOutbox)
-    .where(sql`${pdfGenerationOutbox.dispatchedAt} is null`)
-    .orderBy(asc(pdfGenerationOutbox.createdAt))
-    .limit(limit)
-    .pipe(
-      Effect.mapError(databaseFailure('Failed to list pending PDF dispatches'))
-    )
-
-export const markPdfDispatchFailed = (
-  database: RegistryExecutor,
-  artifactId: string,
-  message: string,
-  attemptedAt: string
-) =>
-  database
-    .update(pdfGenerationOutbox)
-    .set({
-      attempts: sql`${pdfGenerationOutbox.attempts} + 1`,
-      lastAttemptAt: attemptedAt,
-      lastError: message,
-      updatedAt: attemptedAt,
-    })
-    .where(
-      and(
-        eq(pdfGenerationOutbox.artifactId, artifactId),
-        sql`${pdfGenerationOutbox.dispatchedAt} is null`
-      )
-    )
-    .returning({ artifactId: pdfGenerationOutbox.artifactId })
-    .pipe(
-      Effect.map((rows) => rows.length > 0),
-      Effect.mapError(databaseFailure('Failed to record PDF dispatch failure'))
-    )
-
-export const markPdfDispatched = (
-  database: RegistryExecutor,
-  artifactId: string,
-  dispatchedAt: string
-) =>
-  database
-    .update(pdfGenerationOutbox)
-    .set({
-      attempts: sql`${pdfGenerationOutbox.attempts} + 1`,
-      dispatchedAt,
-      lastAttemptAt: dispatchedAt,
-      lastError: null,
-      updatedAt: dispatchedAt,
-    })
-    .where(
-      and(
-        eq(pdfGenerationOutbox.artifactId, artifactId),
-        sql`${pdfGenerationOutbox.dispatchedAt} is null`
-      )
-    )
-    .returning({ artifactId: pdfGenerationOutbox.artifactId })
-    .pipe(
-      Effect.map((rows) => rows.length > 0),
-      Effect.mapError(databaseFailure('Failed to mark PDF dispatch complete'))
-    )
 
 export const markArtifactReady = (
   database: RegistryExecutor,

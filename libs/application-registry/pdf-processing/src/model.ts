@@ -3,7 +3,7 @@ import { Schema } from 'effect'
 export const PdfPermanentFailureCodeSchema = Schema.Literals([
   'cv_page_layout_invalid',
   'cv_page_overflow',
-  'pdf_job_invalid',
+  'pdf_generation_invalid',
   'pdf_publication_changed',
   'pdf_public_page_unavailable',
   'pdf_retry_exhausted',
@@ -16,8 +16,8 @@ export const PdfTransientFailureCodeSchema = Schema.Literals([
 ])
 export type PdfTransientFailureCode = typeof PdfTransientFailureCodeSchema.Type
 
-export class PdfJobPermanentError extends Schema.TaggedErrorClass<PdfJobPermanentError>()(
-  'PdfJobPermanentError',
+export class PdfGenerationPermanentError extends Schema.TaggedErrorClass<PdfGenerationPermanentError>()(
+  'PdfGenerationPermanentError',
   {
     cause: Schema.Defect(),
     code: PdfPermanentFailureCodeSchema,
@@ -25,8 +25,8 @@ export class PdfJobPermanentError extends Schema.TaggedErrorClass<PdfJobPermanen
   }
 ) {}
 
-export class PdfJobTransientError extends Schema.TaggedErrorClass<PdfJobTransientError>()(
-  'PdfJobTransientError',
+export class PdfGenerationTransientError extends Schema.TaggedErrorClass<PdfGenerationTransientError>()(
+  'PdfGenerationTransientError',
   {
     cause: Schema.Defect(),
     code: PdfTransientFailureCodeSchema,

@@ -20,7 +20,6 @@ import type {
   ListingCheckRun,
   ListingCheckTarget,
   ListingObservation,
-  PdfGenerationOutbox,
 } from '@cv/application-registry-entity'
 import type {
   ActivityListQueryRequest,
@@ -331,6 +330,7 @@ export type ApproveContentRevisionInput = {
 
 export type StageCvInput = {
   readonly expectedContentVersion: number
+  readonly operationId: string
   readonly publicBaseUrl: string
   readonly revisionId: string
 }
@@ -345,22 +345,21 @@ export type ResolvedCvPublication = {
 export type SetCvLinkAvailabilityInput = {
   readonly enabled: boolean
   readonly expectedPublicationVersion: number
+  readonly operationId: string
   readonly reason?: string
 }
 
-export type StartPdfJobInput = {
+export type RequestPdfGenerationInput = {
   readonly expectedPublicationVersion: number
-  readonly requestId: string
+  readonly operationId: string
 }
 
-export type PdfArtifactJob = {
+export type PdfGenerationAttempt = {
   readonly artifact: GeneratedArtifact
   readonly entry: ContentEntry
   readonly link: CvLink
   readonly revision: ContentRevision
 }
-
-export type PdfGenerationDispatch = PdfGenerationOutbox
 
 export type ReadyPdfArtifact = {
   readonly artifact: GeneratedArtifact

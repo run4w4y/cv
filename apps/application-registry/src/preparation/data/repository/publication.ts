@@ -6,10 +6,9 @@ import type { PublicationIdentity } from '../keys'
 import type {
   CvPageState,
   ReadCurrentPdfInput,
-  ReadPdfJobInput,
+  RequestPdfGenerationInput,
   SetPublicationAvailabilityInput,
   StageCvInput,
-  StartPdfGenerationInput,
 } from '../types'
 import { dataError } from './shared'
 
@@ -75,6 +74,7 @@ export const makePreparationPublicationRepository = (
     (input: StageCvInput) =>
       registry.publications
         .stageCv({
+          headers: { 'idempotency-key': input.operationId },
           params: {
             entryId: input.entry.id,
             id: input.applicationId,
@@ -93,6 +93,7 @@ export const makePreparationPublicationRepository = (
   )((input: SetPublicationAvailabilityInput) =>
     registry.publications
       .setCvLinkAvailability({
+        headers: { 'idempotency-key': input.operationId },
         params: {
           entryId: input.entryId,
           id: input.applicationId,
@@ -102,31 +103,19 @@ export const makePreparationPublicationRepository = (
       .pipe(dataError('set-publication-availability'))
   )
 
-  const startPdfGeneration = Effect.fn(
-    'PreparationRepository.startPdfGeneration'
-  )((input: StartPdfGenerationInput) =>
+  const requestPdfGeneration = Effect.fn(
+    'PreparationRepository.requestPdfGeneration'
+  )((input: RequestPdfGenerationInput) =>
     registry.publications
-      .startPdfJob({
+      .requestPdfGeneration({
+        headers: { 'idempotency-key': input.operationId },
         params: {
           entryId: input.entryId,
           id: input.applicationId,
         },
         payload: input.input,
       })
-      .pipe(dataError('start-pdf-generation'))
-  )
-
-  const readPdfJob = Effect.fn('PreparationRepository.readPdfJob')(
-    (input: ReadPdfJobInput) =>
-      registry.publications
-        .getPdfJob({
-          params: {
-            entryId: input.entryId,
-            id: input.applicationId,
-            jobId: input.jobId,
-          },
-        })
-        .pipe(dataError('read-pdf-job'))
+      .pipe(dataError('request-pdf-generation'))
   )
 
   const readCurrentPdf = Effect.fn('PreparationRepository.readCurrentPdf')(
@@ -160,9 +149,8 @@ export const makePreparationPublicationRepository = (
   return {
     loadCvPageState,
     readCurrentPdf,
-    readPdfJob,
+    requestPdfGeneration,
     setPublicationAvailability,
-    startPdfGeneration,
     stageCv,
   }
 }

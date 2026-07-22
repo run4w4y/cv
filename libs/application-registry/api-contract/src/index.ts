@@ -27,9 +27,9 @@ export {
   UnauthorizedError,
   UnauthorizedErrorSchema,
 } from './errors'
+export * from './event-commands'
 export * from './facts-publication'
 export { applicationRegistryOpenApi } from './openapi'
-export * from './pdf-jobs'
 export * from './schemas'
 export {
   applicationRegistryApiPrefix,

@@ -1,20 +1,23 @@
 import type { GeneratedArtifact } from '@cv/application-registry-entity'
+import type { PdfGenerationTriggerEvent } from '@cv/application-registry-events'
 import { Context, type Effect } from 'effect'
 
 import type { ApplicationRegistryError } from '../errors'
 import type {
-  PdfArtifactJob,
-  PdfGenerationDispatch,
+  PdfGenerationAttempt,
   ReadyPdfArtifact,
-  StartPdfJobInput,
+  RequestPdfGenerationInput,
 } from '../types'
 
 export interface PdfArtifactsService {
-  readonly startJob: (
+  readonly ensureAttempt: (
+    event: PdfGenerationTriggerEvent
+  ) => Effect.Effect<GeneratedArtifact, ApplicationRegistryError>
+  readonly requestGeneration: (
     applicationIdentifier: string,
     entryId: string,
-    input: StartPdfJobInput
-  ) => Effect.Effect<GeneratedArtifact, ApplicationRegistryError>
+    input: RequestPdfGenerationInput
+  ) => Effect.Effect<{ readonly eventId: string }, ApplicationRegistryError>
   readonly complete: (
     applicationIdentifier: string,
     artifactId: string,
@@ -27,17 +30,11 @@ export interface PdfArtifactsService {
     errorCode: string,
     errorMessage: string
   ) => Effect.Effect<GeneratedArtifact, ApplicationRegistryError>
-  readonly findJob: (
+  readonly findAttempt: (
     applicationIdentifier: string,
     entryId: string,
     artifactId: string
-  ) => Effect.Effect<PdfArtifactJob, ApplicationRegistryError>
-  readonly findPendingDispatch: (
-    artifactId: string
-  ) => Effect.Effect<
-    PdfGenerationDispatch | undefined,
-    ApplicationRegistryError
-  >
+  ) => Effect.Effect<PdfGenerationAttempt, ApplicationRegistryError>
   readonly findCurrent: (
     applicationIdentifier: string,
     entryId: string,
@@ -48,16 +45,6 @@ export interface PdfArtifactsService {
     entryId: string,
     rendererVersion?: string
   ) => Effect.Effect<ReadyPdfArtifact, ApplicationRegistryError>
-  readonly markDispatchFailed: (
-    artifactId: string,
-    message: string
-  ) => Effect.Effect<void, ApplicationRegistryError>
-  readonly markDispatched: (
-    artifactId: string
-  ) => Effect.Effect<void, ApplicationRegistryError>
-  readonly pendingDispatches: (
-    limit: number
-  ) => Effect.Effect<readonly PdfGenerationDispatch[], ApplicationRegistryError>
 }
 
 export const PdfArtifactsService = Context.Service<PdfArtifactsService>(

@@ -1,0 +1,40 @@
+{
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "name": "application-registry-events-nats",
+  "projectType": "library",
+  "sourceRoot": "libs/application-registry/events-nats/src",
+  "tags": [
+    "scope:application-registry",
+    "type:data-access",
+    "visibility:private"
+  ],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/application-registry/events-nats/src/index.ts",
+        "outputPath": "libs/application-registry/events-nats/dist",
+        "rootDir": "libs/application-registry/events-nats/src",
+        "tsConfig": "libs/application-registry/events-nats/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "outputs": [],
+      "options": {
+        "color": true,
+        "command": "node --import tsx --test libs/application-registry/events-nats/test/jetstream.integration.test.ts"
+      }
+    },
+    "typecheck": {},
+    "format": {},
+    "format:check": {}
+  }
+}

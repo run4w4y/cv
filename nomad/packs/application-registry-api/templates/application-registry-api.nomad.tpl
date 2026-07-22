@@ -51,6 +51,11 @@ job [[ .my.job_name | quote ]] {
               destination_name = "minio-api"
               local_bind_port  = 9000
             }
+
+            upstreams {
+              destination_name = "nats"
+              local_bind_port  = 4222
+            }
           }
         }
 
@@ -84,12 +89,25 @@ job [[ .my.job_name | quote ]] {
       env {
         MINIO_ENDPOINT            = "http://127.0.0.1:9000"
         MINIO_FORCE_PATH_STYLE    = "true"
+        NATS_SERVER               = "nats://127.0.0.1:4222"
         POSTGRES_HOST             = "127.0.0.1"
         POSTGRES_MAX_CONNECTIONS  = [[ .my.postgres_max_connections | quote ]]
         POSTGRES_PORT             = "5432"
         REGISTRY_BFF_ENABLED      = [[ .my.bff_enabled | quote ]]
         SERVER_HOST               = "0.0.0.0"
         SERVER_PORT               = "3000"
+      }
+
+      template {
+        data = <<EOH
+{{ with secret "secret/data/cv-registry/nats-credentials" -}}
+NATS_PASSWORD={{ .Data.data.password }}
+NATS_USER={{ .Data.data.username }}
+{{- end }}
+EOH
+        destination = "secrets/nats.env"
+        env         = true
+        change_mode = "restart"
       }
 
       template {

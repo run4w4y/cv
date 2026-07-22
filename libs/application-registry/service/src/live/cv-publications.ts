@@ -10,6 +10,10 @@ import type {
   ContentEntry,
   CvLink,
 } from '@cv/application-registry-entity'
+import {
+  RegistryEventPublisher,
+  RegistryEventSchema,
+} from '@cv/application-registry-events'
 import { Effect, Layer } from 'effect'
 
 import {
@@ -72,6 +76,26 @@ const make = Effect.gen(function* () {
   const content = yield* ContentCrud
   const links = yield* CvLinksCrud
   const store = yield* ArtifactStore
+  const events = yield* RegistryEventPublisher
+
+  const publishAvailabilityChanged = Effect.fn(
+    'CvPublicationsService.publishAvailabilityChanged'
+  )((link: CvLink, operationId: string) =>
+    events.publish(
+      RegistryEventSchema.cases.CvPublicationAvailabilityChanged.make({
+        applicationId: link.applicationId,
+        contentEntryId: link.contentEntryId,
+        contentRevisionId: link.currentRevisionId,
+        correlationId: operationId,
+        cvLinkId: link.id,
+        enabled: link.enabled,
+        eventId: `cv-publication-availability-changed:${operationId}`,
+        occurredAt: link.updatedAt,
+        publicationVersion: link.publicationVersion,
+        version: 1,
+      })
+    )
+  )
 
   const reconcileLinkForApplicationStatus = Effect.fn(
     'CvPublicationsService.reconcileLinkForApplicationStatus'
@@ -235,6 +259,10 @@ const make = Effect.gen(function* () {
     stage: Effect.fn('CvPublicationsService.stage')(
       (applicationIdentifier: string, entryId: string, input: StageCvInput) =>
         Effect.gen(function* () {
+          const operationId = yield* requireNonEmpty(
+            input.operationId,
+            'CV staging operation ID'
+          )
           const application = yield* findApplicationForContent(
             applications,
             applicationIdentifier
@@ -301,6 +329,19 @@ const make = Effect.gen(function* () {
                 'The CV page changed while its draft revision was being staged.',
             })
           }
+          yield* events.publish(
+            RegistryEventSchema.cases.CvPublicationStaged.make({
+              applicationId: staged.applicationId,
+              contentEntryId: staged.contentEntryId,
+              contentRevisionId: staged.currentRevisionId,
+              correlationId: operationId,
+              cvLinkId: staged.id,
+              eventId: `cv-publication-staged:${operationId}`,
+              occurredAt: staged.updatedAt,
+              publicationVersion: staged.publicationVersion,
+              version: 1,
+            })
+          )
           return staged
         })
     ),
@@ -379,7 +420,14 @@ const make = Effect.gen(function* () {
               message: `Public CV publication version ${link.publicationVersion} does not match expected version ${input.expectedPublicationVersion}.`,
             })
           }
-          if (link.enabled === input.enabled) return link
+          const operationId = yield* requireNonEmpty(
+            input.operationId,
+            'CV availability operation ID'
+          )
+          if (link.enabled === input.enabled) {
+            yield* publishAvailabilityChanged(link, operationId)
+            return link
+          }
 
           if (input.enabled) {
             if (entry.approvedRevisionId !== link.currentRevisionId) {
@@ -411,7 +459,7 @@ const make = Effect.gen(function* () {
                 'The public CV link changed while its availability was being updated.',
             })
           }
-          return yield* links
+          const stored = yield* links
             .findByEntry(entry.id)
             .pipe(
               Effect.flatMap((stored) =>
@@ -424,6 +472,8 @@ const make = Effect.gen(function* () {
                     )
               )
             )
+          yield* publishAvailabilityChanged(stored, operationId)
+          return stored
         })
     ),
   } satisfies CvPublicationsServiceShape

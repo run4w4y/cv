@@ -1,8 +1,8 @@
 import type {
   ContentRevisionResultResponse,
-  PdfJobResponse,
+  RegistryEventAcceptedResponse,
+  RequestPdfGenerationRequest,
   SetCvLinkAvailabilityRequest,
-  StartPdfJobRequest,
 } from '@cv/application-registry-api-contract'
 import type {
   Application,
@@ -127,6 +127,7 @@ export type ApproveRevisionInput = {
 export type StageCvInput = {
   readonly applicationId: string
   readonly entry: ContentEntry
+  readonly operationId: string
   readonly publicBaseUrl: string
   readonly revisionId: string
 }
@@ -135,18 +136,14 @@ export type SetPublicationAvailabilityInput = {
   readonly applicationId: string
   readonly entryId: string
   readonly input: SetCvLinkAvailabilityRequest
+  readonly operationId: string
 }
 
-export type StartPdfGenerationInput = {
+export type RequestPdfGenerationInput = {
   readonly applicationId: string
   readonly entryId: string
-  readonly input: StartPdfJobRequest
-}
-
-export type ReadPdfJobInput = {
-  readonly applicationId: string
-  readonly entryId: string
-  readonly jobId: string
+  readonly input: RequestPdfGenerationRequest
+  readonly operationId: string
 }
 
 export type ReadCurrentPdfInput = PublicationIdentity
@@ -198,18 +195,15 @@ export type PreparationRepositoryShape = {
   readonly readCurrentPdf: (
     input: ReadCurrentPdfInput
   ) => Effect.Effect<ReadyPdfArtifact, PreparationDataError>
-  readonly readPdfJob: (
-    input: ReadPdfJobInput
-  ) => Effect.Effect<PdfJobResponse, PreparationDataError>
   readonly refreshSnapshot: (
     applicationId: string
   ) => Effect.Effect<JobPostingSnapshot, PreparationDataError>
   readonly setPublicationAvailability: (
     input: SetPublicationAvailabilityInput
   ) => Effect.Effect<CvLink, PreparationDataError>
-  readonly startPdfGeneration: (
-    input: StartPdfGenerationInput
-  ) => Effect.Effect<PdfJobResponse, PreparationDataError>
+  readonly requestPdfGeneration: (
+    input: RequestPdfGenerationInput
+  ) => Effect.Effect<RegistryEventAcceptedResponse, PreparationDataError>
   readonly startPreparation: (
     applicationId: string
   ) => Effect.Effect<Application, PreparationDataError>

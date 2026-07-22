@@ -39,7 +39,7 @@ export const postgresClientLayer = (
 
 /** SHA-256 of the complete PostgreSQL `public` baseline catalog contract. */
 export const expectedTargetBaselineFingerprint =
-  '39277ef44f3bfd82106d7be3baaa9f87138deac49e7cbd6a54c34d5bdb3f1512'
+  '341a7a8a2d723ff6ff043fd6d4b1f5b34919e830173bc032e19c939d0b6c9d62'
 
 export const targetCatalogFingerprint = (
   signatures: readonly string[]

@@ -7,7 +7,6 @@ import { applicationCompensations } from './tables/compensations'
 import { contentEntries, contentRevisions } from './tables/content'
 import { cvLinks } from './tables/cv-links'
 import { jobPostingSnapshots } from './tables/job-posting-snapshots'
-import { pdfGenerationOutbox } from './tables/pdf-generation-outbox'
 
 const relationalTables = {
   applicationCompensations,
@@ -20,7 +19,6 @@ const relationalTables = {
   cvLinks,
   generatedArtifacts,
   jobPostingSnapshots,
-  pdfGenerationOutbox,
 }
 
 /** Drizzle relation graph used by application-registry relational queries. */
@@ -55,10 +53,6 @@ export const applicationRegistryRelations = defineRelations(
       jobPostingSnapshots: relation.many.jobPostingSnapshots({
         from: relation.applications.id,
         to: relation.jobPostingSnapshots.applicationId,
-      }),
-      pdfGenerationOutbox: relation.many.pdfGenerationOutbox({
-        from: relation.applications.id,
-        to: relation.pdfGenerationOutbox.applicationId,
       }),
     },
     applicationCompensations: {
@@ -103,10 +97,6 @@ export const applicationRegistryRelations = defineRelations(
         from: relation.contentEntries.id,
         to: relation.cvLinks.contentEntryId,
         optional: true,
-      }),
-      pdfGenerationOutbox: relation.many.pdfGenerationOutbox({
-        from: relation.contentEntries.id,
-        to: relation.pdfGenerationOutbox.contentEntryId,
       }),
     },
     contentRevisions: {
@@ -155,28 +145,6 @@ export const applicationRegistryRelations = defineRelations(
       contentRevision: relation.one.contentRevisions({
         from: relation.generatedArtifacts.contentRevisionId,
         to: relation.contentRevisions.id,
-        optional: false,
-      }),
-      outbox: relation.one.pdfGenerationOutbox({
-        from: relation.generatedArtifacts.id,
-        to: relation.pdfGenerationOutbox.artifactId,
-        optional: true,
-      }),
-    },
-    pdfGenerationOutbox: {
-      application: relation.one.applications({
-        from: relation.pdfGenerationOutbox.applicationId,
-        to: relation.applications.id,
-        optional: false,
-      }),
-      artifact: relation.one.generatedArtifacts({
-        from: relation.pdfGenerationOutbox.artifactId,
-        to: relation.generatedArtifacts.id,
-        optional: false,
-      }),
-      contentEntry: relation.one.contentEntries({
-        from: relation.pdfGenerationOutbox.contentEntryId,
-        to: relation.contentEntries.id,
         optional: false,
       }),
     },

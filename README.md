@@ -15,19 +15,18 @@ other routes remain untouched.
   publication resolver consumed by `cv-public` over the Tunnel.
 - `apps/application-registry-listing-check-runner` is a one-shot Effect/Bun
   program started by a periodic Nomad job.
-- `apps/application-registry-pdf-dispatcher` claims PostgreSQL outbox rows and
-  publishes PDF work to NATS JetStream.
-- `apps/cv-pdf-runner` consumes one durable JetStream delivery at a time,
-  renders with Playwright/Chromium, stores the PDF in MinIO, and updates
-  PostgreSQL.
+- `apps/application-registry-pdf-worker` consumes publication and PDF-request
+  events one at a time, renders with Playwright/Chromium, stores the PDF in
+  MinIO, updates PostgreSQL, and emits completion or failure events.
 - `apps/application-registry` is the shared management React application;
   `apps/application-registry-desktop` is its Electron/Codex host.
 - `apps/cv` is the retained Next.js/OpenNext Cloudflare Worker for `/c/*`.
 
-PostgreSQL and MinIO schemas, users, buckets, credentials, NATS, shared Consul
-intentions, Vault secrets, and global sidecar defaults belong to the adjacent
-`~/infrastructure` repository. This repository owns each CV application image,
-its Nomad Pack, project-specific Cloudflare policy, and release workflow.
+PostgreSQL and MinIO users and buckets, the NATS server and authorization,
+shared Consul intentions, Vault secrets, and global sidecar defaults belong to
+the adjacent `~/infrastructure` repository. This repository owns the database
+migrations and JetStream application topology alongside each CV application
+image, its Nomad Pack, project-specific Cloudflare policy, and release workflow.
 
 ## Storage and messaging
 
@@ -35,8 +34,10 @@ its Nomad Pack, project-specific Cloudflare policy, and release workflow.
   clean baseline in `libs/application-registry/entity/drizzle`.
 - MinIO is the sole object store for reviewed facts, source artifacts, and
   generated PDFs.
-- NATS JetStream is the durable PDF work queue; PostgreSQL remains the
-  transactional outbox and source of job state.
+- NATS JetStream is the durable fan-out transport for versioned registry domain
+  events. Its `REGISTRY_EVENTS` stream and `registry-pdf-worker` consumer are
+  Terraform-managed; runtime applications only publish or bind. PostgreSQL
+  remains the source of application and artifact state.
 - `tools/application-registry-migration` is the intentionally temporary,
   one-time D1-export importer. Remove it and the final Terraform `removed`
   block after the production import has been verified.
@@ -82,7 +83,7 @@ PostgreSQL/MinIO pair across its API scenarios.
 bun run quality:biome
 bun x nx run-many -t typecheck test:unit --parallel=6
 bun x nx run application-registry-api:test:integration
-bun x nx run application-registry-pdf-queue:test:integration
+bun x nx run application-registry-events-nats:test:integration
 bun x nx run application-registry-crud:test:integration
 bun x nx run cv:test:e2e
 ```
@@ -93,14 +94,15 @@ The safe cutover order is:
 
 1. apply the shared infrastructure changes from `~/infrastructure` and verify
    PostgreSQL, MinIO, NATS, Vault credentials, and reduced sidecar allocations;
-2. deploy the disabled Nomad API, listing-check runner, PDF dispatcher, and PDF
-   runner from this repository, then verify them on the Tunnel origin;
-3. freeze writes to D1, export it once, import and validate PostgreSQL with
+2. apply `terraform/live/prod/jetstream` after the NATS service is healthy;
+3. deploy the disabled Nomad API, listing-check runner, and PDF event worker
+   from this repository, then verify them on the Tunnel origin;
+4. freeze writes to D1, export it once, import and validate PostgreSQL with
    `tools/application-registry-migration`;
-4. enable the API/BFF and background jobs, configure the public Worker with
+5. enable the API/BFF and background jobs, configure the public Worker with
    `CV_PUBLIC_RESOLVER_URL`, and apply the Cloudflare Access and `/c/*` route
    overlay changes;
-5. remove the old registry Worker deployment, the temporary D1 importer, and
+6. remove the old registry Worker deployment, the temporary D1 importer, and
    the D1 state-transition block after the cutover is accepted.
 
 Cloudflare DNS, Tunnel, Access, the public Worker, the frozen Pages site, and

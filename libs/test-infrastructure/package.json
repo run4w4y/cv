@@ -28,6 +28,8 @@
     }
   },
   "dependencies": {
+    "@nats-io/jetstream": "3.4.0",
+    "@nats-io/transport-node": "3.4.0",
     "@testcontainers/postgresql": "11.14.0",
     "testcontainers": "11.14.0"
   }

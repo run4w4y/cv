@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { CompensationsCrud } from '@cv/application-registry-crud'
+import { RegistryEventPublisherNoop } from '@cv/application-registry-events'
 import { Effect, Layer } from 'effect'
 import { application, compensation } from '../../test/support/fixtures'
 import {
@@ -20,7 +21,8 @@ const live = (
         listByApplication: () => Effect.succeed(compensations),
         ...overrides,
       })
-    )
+    ),
+    Layer.provide(RegistryEventPublisherNoop)
   )
 
 describe('CompensationsService', () => {

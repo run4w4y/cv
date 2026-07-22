@@ -13,7 +13,7 @@ import {
 } from '../src/live'
 
 const migrationUrl = new URL(
-  '../../entity/drizzle/20260721013933_useful_harrier/migration.sql',
+  '../../entity/drizzle/20260721150524_registry_baseline/migration.sql',
   import.meta.url
 )
 
@@ -32,7 +32,6 @@ const tableNames = [
   'idempotency_receipts',
   'job_posting_snapshots',
   'listing_check_runs',
-  'pdf_generation_outbox',
   'registry_sequence',
 ] as const
 

@@ -1,8 +1,4 @@
-import {
-  CvLinkResponseSchema,
-  PdfJobResponseSchema,
-} from '@cv/application-registry-api-contract'
-import { pdfGenerationFailedDisableReason } from '@cv/application-registry-entity'
+import { CvLinkResponseSchema } from '@cv/application-registry-api-contract'
 import {
   Cause,
   Effect,
@@ -15,7 +11,6 @@ import {
 } from 'effect'
 import * as Reactivity from 'effect/unstable/reactivity/Reactivity'
 import * as Activity from 'effect/unstable/workflow/Activity'
-import * as Workflow from 'effect/unstable/workflow/Workflow'
 
 import { publicationMutationReactivityKeys } from '../data/keys'
 import { PreparationRepository } from '../data/repository'
@@ -76,59 +71,19 @@ const executeCvPublication = Effect.fn('PublishCv.run')(
         .setPublicationAvailability({
           applicationId: input.applicationId,
           entryId: input.entry.id,
+          operationId: input.runId,
           input: {
             enabled: true,
             expectedPublicationVersion: input.expectedPublicationVersion,
           },
         })
         .pipe(mapRepositoryError('enable-page')),
-    }).pipe(
-      Workflow.withCompensation((enabledLink) =>
-        repository
-          .setPublicationAvailability({
-            applicationId: input.applicationId,
-            entryId: input.entry.id,
-            input: {
-              enabled: false,
-              expectedPublicationVersion: enabledLink.publicationVersion,
-              reason: pdfGenerationFailedDisableReason,
-            },
-          })
-          .pipe(
-            Effect.asVoid,
-            Effect.ignoreCause({
-              log: 'Warn',
-              message:
-                'Could not disable the CV publication after PDF generation failed to start.',
-            })
-          )
-      )
-    )
-
-    yield* progress.startingPdf(input.runId, link)
-    const started = yield* Activity.make({
-      name: 'start-pdf-generation',
-      success: PdfJobResponseSchema,
-      error: CvPublicationWorkflowError,
-      interruptRetryPolicy: stopActivityInterruptRetries,
-      execute: repository
-        .startPdfGeneration({
-          applicationId: input.applicationId,
-          entryId: input.entry.id,
-          input: {
-            expectedPublicationVersion: link.publicationVersion,
-            requestId: input.runId,
-          },
-        })
-        .pipe(mapRepositoryError('start-pdf')),
     })
 
     const result = {
       applicationId: input.applicationId,
       entryId: input.entry.id,
-      job: started,
       link,
-      pdfStartError: null,
       runId: input.runId,
     } satisfies CvPublicationWorkflowResult
     yield* progress.complete(result)

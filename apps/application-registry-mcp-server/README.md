@@ -28,8 +28,8 @@ The process requires two machine-client environment variables:
   prefix.
 - `REGISTRY_API_TOKEN`: bearer token for the registry machine API.
 
-The server sends mutations directly to the registry. It does not keep a local
-durable outbox, so callers receive transport failures immediately.
+The server sends mutations directly to the registry and reports transport
+failures to the caller immediately.
 
 Build the server and configure an MCP client to run the bundle over stdio:
 

@@ -249,20 +249,6 @@ const fixtureRows = {
       updated_at: recordedAt,
     },
   ],
-  pdf_generation_outbox: [
-    {
-      artifact_id: 'artifact-1',
-      application_id: 'application-1',
-      content_entry_id: 'content-entry-1',
-      message_version: 1,
-      attempts: 0,
-      created_at: recordedAt,
-      updated_at: recordedAt,
-      last_attempt_at: null,
-      last_error: null,
-      dispatched_at: null,
-    },
-  ],
 } satisfies Record<RegistryTableName, readonly RegistryRow[]>
 
 const makeSnapshot = (
@@ -380,7 +366,7 @@ class PostgresImportHarness {
 let harness: PostgresImportHarness
 
 before(async () => {
-  assert.equal(registryTables.length, 16)
+  assert.equal(registryTables.length, 15)
   harness = await PostgresImportHarness.make()
 })
 
@@ -466,8 +452,8 @@ test('rejects a partially occupied target without filling missing tables', async
 
 test('rolls back every earlier table when a late constraint fails', async () => {
   const rows = new Map(makeSnapshot().rows)
-  rows.set('pdf_generation_outbox', [
-    { ...fixtureRows.pdf_generation_outbox[0], attempts: -1 },
+  rows.set('generated_artifacts', [
+    { ...fixtureRows.generated_artifacts[0], publication_version: -1 },
   ])
   const invalidSnapshot = makeSnapshot(rows, 'e'.repeat(64))
 

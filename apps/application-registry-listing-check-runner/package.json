@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@cv/application-registry-crud": "workspace:*",
+    "@cv/application-registry-events-nats": "workspace:*",
     "@cv/application-registry-listing-check": "workspace:*",
     "@cv/application-registry-service": "workspace:*",
     "@effect/platform-bun": "4.0.0-beta.99",

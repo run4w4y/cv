@@ -437,29 +437,6 @@ const validateUnconstrainedRelationships = (rows: NormalizedRegistry) =>
           )
         }
       }
-
-      for (const outbox of rowsFor(rows, 'pdf_generation_outbox')) {
-        const artifact = rowsFor(rows, 'generated_artifacts').find(
-          (candidate) => candidate.id === outbox.artifact_id
-        )
-        if (artifact === undefined) {
-          throw new Error(
-            `PDF outbox artifact ${outbox.artifact_id} is missing.`
-          )
-        }
-        const link = links.get(
-          requiredString(artifact, 'cv_link_id', 'generated_artifacts')
-        )
-        if (
-          link === undefined ||
-          outbox.application_id !== link.application_id ||
-          outbox.content_entry_id !== link.content_entry_id
-        ) {
-          throw new Error(
-            `PDF outbox artifact ${outbox.artifact_id} is inconsistent.`
-          )
-        }
-      }
     },
     catch: migrationError(
       'validate D1 relationships',

@@ -1,16 +1,14 @@
 import {
   ContentEntryResponseSchema,
   CvLinkResponseSchema,
-  PdfJobResponseSchema,
 } from '@cv/application-registry-api-contract'
-import type { ContentEntry, CvLink } from '@cv/application-registry-entity'
+import type { ContentEntry } from '@cv/application-registry-entity'
 import { Schema } from 'effect'
 import * as Workflow from 'effect/unstable/workflow/Workflow'
 
 export const CvPublicationStageSchema = Schema.Literals([
   'input',
   'enable-page',
-  'start-pdf',
 ])
 export type CvPublicationStage = typeof CvPublicationStageSchema.Type
 
@@ -51,9 +49,7 @@ export interface CvPublicationWorkflowInput
 export const CvPublicationWorkflowResultSchema = Schema.Struct({
   applicationId: Schema.NonEmptyString,
   entryId: Schema.NonEmptyString,
-  job: Schema.NullOr(PdfJobResponseSchema),
   link: CvLinkResponseSchema,
-  pdfStartError: Schema.NullOr(Schema.NonEmptyString),
   runId: Schema.NonEmptyString,
 })
 export interface CvPublicationWorkflowResult
@@ -94,11 +90,6 @@ export type ActiveCvPublicationRun =
     })
   | (RunBase & {
       readonly _tag: 'PublishingLink'
-      readonly message: string
-    })
-  | (RunBase & {
-      readonly _tag: 'StartingPdf'
-      readonly link: CvLink
       readonly message: string
     })
 

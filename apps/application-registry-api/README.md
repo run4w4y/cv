@@ -9,6 +9,7 @@ Runtime dependencies:
 
 - PostgreSQL through `POSTGRES_*`;
 - path-style S3/MinIO through `MINIO_*`;
+- NATS JetStream through `NATS_*`;
 - Cloudflare GraphQL analytics through `CLOUDFLARE_*`;
 - registry and facts-publication bearer credentials;
 - optional HTTP cache invalidation through the paired `CV_REVALIDATION_URL`
@@ -22,9 +23,9 @@ service binding remains.
 `REGISTRY_BFF_ENABLED` defaults to `false`. Enable it only after Cloudflare
 Access protects the management hostname.
 
-PDF requests are committed to the PostgreSQL outbox. The dedicated dispatcher
-publishes pending requests to NATS JetStream; the API does not perform an
-immediate queue dispatch.
+Mutation services publish versioned domain events directly to NATS JetStream.
+Enabling a CV publication emits the event consumed by the PDF worker; explicit
+regeneration requests use the same event transport.
 
 Build and verify:
 
@@ -36,5 +37,5 @@ bunx nx run application-registry-api:build
 docker build -f apps/application-registry-api/Dockerfile .
 ```
 
-Integration tests start isolated PostgreSQL and MinIO containers through
+Integration tests start isolated PostgreSQL, MinIO, and NATS containers through
 `@cv/test-infrastructure`; no external test services or Miniflare are required.

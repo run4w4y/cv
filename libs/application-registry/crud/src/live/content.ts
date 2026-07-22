@@ -19,14 +19,10 @@ import {
   findCvLinksByApplication,
   findJobPostingSnapshot,
   findLatestJobPostingSnapshot,
-  findPendingPdfDispatch,
   findReadyArtifactForPublication,
   listContentRevisions,
-  listPendingPdfDispatches,
   markArtifactFailed,
   markArtifactReady,
-  markPdfDispatched,
-  markPdfDispatchFailed,
   persistJobPostingSnapshot,
   persistPendingArtifact,
   setCvLinkEnabled,
@@ -129,8 +125,6 @@ export const makeContentCrudLive = (database: RegistryDatabase) =>
       find: (id) => findArtifact(database, id),
       findByRequestId: (requestId) =>
         findArtifactByRequestId(database, requestId),
-      findPendingDispatch: (artifactId) =>
-        findPendingPdfDispatch(database, artifactId),
       findCurrentForPublication: (
         cvLinkId,
         contentRevisionId,
@@ -163,13 +157,8 @@ export const makeContentCrudLive = (database: RegistryDatabase) =>
         ),
       markFailed: (id, errorCode, errorMessage, updatedAt) =>
         markArtifactFailed(database, id, errorCode, errorMessage, updatedAt),
-      markDispatchFailed: (artifactId, message, attemptedAt) =>
-        markPdfDispatchFailed(database, artifactId, message, attemptedAt),
-      markDispatched: (artifactId, dispatchedAt) =>
-        markPdfDispatched(database, artifactId, dispatchedAt),
       markReady: (artifact) => markArtifactReady(database, artifact),
-      persistPending: (artifact, outbox, expectedLinkVersion) =>
-        persistPendingArtifact(database, artifact, outbox, expectedLinkVersion),
-      pendingDispatches: (limit) => listPendingPdfDispatches(database, limit),
+      persistPending: (artifact, expectedLinkVersion) =>
+        persistPendingArtifact(database, artifact, expectedLinkVersion),
     })
   )

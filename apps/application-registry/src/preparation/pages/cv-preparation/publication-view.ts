@@ -6,7 +6,6 @@ import type { CvPublicationRun } from '@/preparation/publication'
 const activePublicationTags = new Set<CvPublicationRun['_tag']>([
   'Queued',
   'PublishingLink',
-  'StartingPdf',
   'Cancelling',
 ])
 

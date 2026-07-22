@@ -1,11 +1,14 @@
-import type { PdfGenerationRequested } from '@cv/application-registry-api-contract'
+import type { PdfGenerationTriggerEvent } from '@cv/application-registry-events'
 import type {
   ApplicationRegistryError,
-  PdfArtifactJob,
+  PdfGenerationAttempt,
 } from '@cv/application-registry-service'
 import { Context, type Effect, Match } from 'effect'
 
-import { PdfJobPermanentError, PdfJobTransientError } from './model'
+import {
+  PdfGenerationPermanentError,
+  PdfGenerationTransientError,
+} from './model'
 
 export interface PdfArtifactPersistenceShape {
   readonly complete: (
@@ -14,8 +17,8 @@ export interface PdfArtifactPersistenceShape {
     rendererVersion: string,
     bytes: Uint8Array
   ) => Effect.Effect<
-    PdfArtifactJob['artifact'],
-    PdfJobPermanentError | PdfJobTransientError
+    PdfGenerationAttempt['artifact'],
+    PdfGenerationPermanentError | PdfGenerationTransientError
   >
   readonly fail: (
     applicationId: string,
@@ -23,14 +26,14 @@ export interface PdfArtifactPersistenceShape {
     errorCode: string,
     errorMessage: string
   ) => Effect.Effect<
-    PdfArtifactJob['artifact'],
-    PdfJobPermanentError | PdfJobTransientError
+    PdfGenerationAttempt['artifact'],
+    PdfGenerationPermanentError | PdfGenerationTransientError
   >
-  readonly load: (
-    request: PdfGenerationRequested
+  readonly ensure: (
+    request: PdfGenerationTriggerEvent
   ) => Effect.Effect<
-    PdfArtifactJob,
-    PdfJobPermanentError | PdfJobTransientError
+    PdfGenerationAttempt,
+    PdfGenerationPermanentError | PdfGenerationTransientError
   >
 }
 
@@ -44,7 +47,7 @@ export interface PdfRendererShape {
     renderUrl: string
   ) => Effect.Effect<
     { readonly bytes: Uint8Array; readonly rendererVersion: string },
-    PdfJobPermanentError | PdfJobTransientError
+    PdfGenerationPermanentError | PdfGenerationTransientError
   >
 }
 
@@ -57,20 +60,20 @@ const permanentPersistenceError = (
   operation: string,
   cause: ApplicationRegistryError
 ) =>
-  new PdfJobPermanentError({
+  new PdfGenerationPermanentError({
     cause,
-    code: 'pdf_job_invalid',
-    message: `PDF job operation "${operation}" was rejected: ${cause.message}`,
+    code: 'pdf_generation_invalid',
+    message: `PDF generation operation "${operation}" was rejected: ${cause.message}`,
   })
 
 const transientPersistenceError = (
   operation: string,
   cause: ApplicationRegistryError
 ) =>
-  new PdfJobTransientError({
+  new PdfGenerationTransientError({
     cause,
     code: 'pdf_persistence_failed',
-    message: `PDF job operation "${operation}" failed: ${cause.message}`,
+    message: `PDF generation operation "${operation}" failed: ${cause.message}`,
   })
 
 export const mapPdfPersistenceError = (operation: string) =>
@@ -85,6 +88,8 @@ export const mapPdfPersistenceError = (operation: string) =>
       RegistryConflictError: (cause) =>
         permanentPersistenceError(operation, cause),
       RegistryDatabaseError: (cause) =>
+        transientPersistenceError(operation, cause),
+      RegistryEventPublishError: (cause) =>
         transientPersistenceError(operation, cause),
       RegistryNotFoundError: (cause) =>
         permanentPersistenceError(operation, cause),

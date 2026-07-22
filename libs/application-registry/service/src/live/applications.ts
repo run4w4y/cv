@@ -8,6 +8,10 @@ import {
 } from '@cv/application-registry-crud'
 import { normalizeApplicationPostingUrl } from '@cv/application-registry-entity'
 import { applicationListQuery } from '@cv/application-registry-entity/query'
+import {
+  RegistryEventPublisher,
+  RegistryEventSchema,
+} from '@cv/application-registry-events'
 import { Effect, Layer } from 'effect'
 
 import {
@@ -69,6 +73,7 @@ const make = Effect.gen(function* () {
   const annotations = yield* AnnotationsCrud
   const compensations = yield* CompensationsCrud
   const idempotency = yield* IdempotencyCrud
+  const events = yield* RegistryEventPublisher
 
   const find = Effect.fn('ApplicationsService.find')((identifier: string) =>
     applications
@@ -166,7 +171,17 @@ const make = Effect.gen(function* () {
                     )
               )
             )
-          return yield* find(applicationId)
+          const created = yield* find(applicationId)
+          yield* events.publish(
+            RegistryEventSchema.cases.ApplicationCreated.make({
+              applicationId: created.id,
+              correlationId: created.id,
+              eventId: `application-created:${created.id}`,
+              occurredAt: created.createdAt,
+              version: 1,
+            })
+          )
+          return created
         })
     ),
     facets: Effect.fn('ApplicationsService.facets')(() =>
@@ -216,8 +231,31 @@ const make = Effect.gen(function* () {
               request,
             }),
           }
+          const eventChangedFields = Object.entries(request)
+            .filter(
+              ([field, value]) =>
+                value !== undefined &&
+                field !== 'expectedVersion' &&
+                field !== 'idempotencyKey'
+            )
+            .map(([field]) => field)
           const replay = yield* findValidatedIdempotency(idempotency, identity)
-          if (replay) return yield* managedResult(application.id)
+          if (replay) {
+            const result = yield* managedResult(application.id)
+            yield* events.publish(
+              RegistryEventSchema.cases.ApplicationUpdated.make({
+                applicationId: application.id,
+                applicationVersion: result.application.version,
+                changedFields: eventChangedFields,
+                correlationId: request.idempotencyKey,
+                eventId: `application-updated:${request.idempotencyKey}`,
+                occurredAt: result.application.updatedAt,
+                status: result.application.applicationStatus,
+                version: 1,
+              })
+            )
+            return result
+          }
 
           if (request.expectedVersion !== application.version) {
             return yield* new RegistryConflictError({
@@ -353,7 +391,20 @@ const make = Effect.gen(function* () {
             }
           }
 
-          return yield* managedResult(application.id)
+          const result = yield* managedResult(application.id)
+          yield* events.publish(
+            RegistryEventSchema.cases.ApplicationUpdated.make({
+              applicationId: application.id,
+              applicationVersion: result.application.version,
+              changedFields: eventChangedFields,
+              correlationId: request.idempotencyKey,
+              eventId: `application-updated:${request.idempotencyKey}`,
+              occurredAt: result.application.updatedAt,
+              status: result.application.applicationStatus,
+              version: 1,
+            })
+          )
+          return result
         })
     ),
     remove: Effect.fn('ApplicationsService.remove')(
@@ -377,6 +428,16 @@ const make = Effect.gen(function* () {
               message: 'The application changed while it was being removed.',
             })
           }
+          const occurredAt = yield* registryNow
+          yield* events.publish(
+            RegistryEventSchema.cases.ApplicationRemoved.make({
+              applicationId: application.id,
+              correlationId: application.id,
+              eventId: `application-removed:${application.id}`,
+              occurredAt,
+              version: 1,
+            })
+          )
         })
     ),
   } satisfies ApplicationsServiceShape

@@ -6,7 +6,6 @@ import {
   NotFoundError,
   ServiceUnavailableError,
 } from '@cv/application-registry-api-contract'
-import type { GeneratedArtifact } from '@cv/application-registry-entity'
 import {
   ActivitiesService,
   AnnotationsService,
@@ -52,18 +51,14 @@ const toApiError = Match.type<ApplicationRegistryError>().pipe(
   Match.tag('RegistryAnalyticsError', (error) =>
     ServiceUnavailableError.make({ message: error.message })
   ),
+  Match.tag('RegistryEventPublishError', (error) =>
+    ServiceUnavailableError.make({ message: error.message })
+  ),
   Match.exhaustive
 )
 
 const expose = <A>(effect: Effect.Effect<A, ApplicationRegistryError>) =>
   effect.pipe(Effect.mapError(toApiError))
-
-const pdfJobResponse = (artifact: GeneratedArtifact) => ({
-  errorCode: artifact.errorCode,
-  errorMessage: artifact.errorMessage,
-  jobId: artifact.id,
-  status: artifact.status,
-})
 
 const invalidatePublicationCache = (
   invalidator: CvCacheInvalidator['Service'],
@@ -298,14 +293,13 @@ export const PublicationsHandlersLayer = HttpApiBuilder.group(
           ),
         getCvLink: ({ params }) =>
           expose(cvPublications.findByEntry(params.id, params.entryId)),
-        getPdfJob: ({ params }) =>
+        stageCv: ({ headers, params, payload }) =>
           expose(
-            pdfArtifacts
-              .findJob(params.id, params.entryId, params.jobId)
-              .pipe(Effect.map(({ artifact }) => pdfJobResponse(artifact)))
-          ),
-        stageCv: ({ params, payload }) =>
-          expose(cvPublications.stage(params.id, params.entryId, payload)).pipe(
+            cvPublications.stage(params.id, params.entryId, {
+              ...payload,
+              operationId: headers['idempotency-key'],
+            })
+          ).pipe(
             Effect.tap((link) =>
               invalidatePublicationCache(cvCacheInvalidator, {
                 token: link.token,
@@ -320,9 +314,12 @@ export const PublicationsHandlersLayer = HttpApiBuilder.group(
               query.rendererVersion
             )
           ).pipe(Effect.map(({ bytes }) => bytes)),
-        setCvLinkAvailability: ({ params, payload }) =>
+        setCvLinkAvailability: ({ headers, params, payload }) =>
           expose(
-            cvPublications.setAvailability(params.id, params.entryId, payload)
+            cvPublications.setAvailability(params.id, params.entryId, {
+              ...payload,
+              operationId: headers['idempotency-key'],
+            })
           ).pipe(
             Effect.tap((link) =>
               invalidatePublicationCache(cvCacheInvalidator, {
@@ -330,11 +327,12 @@ export const PublicationsHandlersLayer = HttpApiBuilder.group(
               })
             )
           ),
-        startPdfJob: ({ params, payload }) =>
+        requestPdfGeneration: ({ headers, params, payload }) =>
           expose(
-            pdfArtifacts
-              .startJob(params.id, params.entryId, payload)
-              .pipe(Effect.map(pdfJobResponse))
+            pdfArtifacts.requestGeneration(params.id, params.entryId, {
+              ...payload,
+              operationId: headers['idempotency-key'],
+            })
           ),
       })
     })

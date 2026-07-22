@@ -59,9 +59,7 @@ const publishedRun = (link: CvLink): CvPublicationRun => ({
   result: {
     applicationId: link.applicationId,
     entryId: link.contentEntryId,
-    job: null,
     link,
-    pdfStartError: 'PDF Queue unavailable.',
     runId: 'run-1',
   },
   runId: 'run-1',

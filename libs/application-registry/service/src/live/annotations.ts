@@ -4,6 +4,10 @@ import {
   IdempotencyCrud,
   type PersistedNote,
 } from '@cv/application-registry-crud'
+import {
+  RegistryEventPublisher,
+  RegistryEventSchema,
+} from '@cv/application-registry-events'
 import { Effect, Layer } from 'effect'
 
 import { operationRequestSignature } from '../internal/operation-request-signature'
@@ -28,6 +32,23 @@ const make = Effect.gen(function* () {
   const annotations = yield* AnnotationsCrud
   const applications = yield* ApplicationsCrud
   const idempotency = yield* IdempotencyCrud
+  const events = yield* RegistryEventPublisher
+
+  const publishNoteAdded = (
+    applicationId: string,
+    operationId: string,
+    note: { readonly createdAt: string; readonly id: string }
+  ) =>
+    events.publish(
+      RegistryEventSchema.cases.ApplicationNoteAdded.make({
+        applicationId,
+        correlationId: operationId,
+        eventId: `application-note-added:${operationId}`,
+        noteId: note.id,
+        occurredAt: note.createdAt,
+        version: 1,
+      })
+    )
 
   return {
     addNote: Effect.fn('AnnotationsService.addNote')(
@@ -53,6 +74,11 @@ const make = Effect.gen(function* () {
             const note = yield* annotations
               .findNote(noteId)
               .pipe(Effect.flatMap((value) => requireNote(value, noteId)))
+            yield* publishNoteAdded(
+              application.id,
+              request.idempotencyKey,
+              note
+            )
             return { note, replayed: true }
           }
 
@@ -88,6 +114,8 @@ const make = Effect.gen(function* () {
           const note = yield* annotations
             .findNote(storedNoteId)
             .pipe(Effect.flatMap((value) => requireNote(value, storedNoteId)))
+
+          yield* publishNoteAdded(application.id, request.idempotencyKey, note)
 
           return { note, replayed }
         })

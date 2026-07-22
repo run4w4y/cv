@@ -10,6 +10,7 @@
     "@cv/application-registry-artifact-store": "workspace:*",
     "@cv/application-registry-crud": "workspace:*",
     "@cv/application-registry-entity": "workspace:*",
+    "@cv/application-registry-events-nats": "workspace:*",
     "@cv/application-registry-service": "workspace:*",
     "@cv/cloudflare-analytics-client": "workspace:*",
     "@cv/effect-http-auth": "workspace:*",

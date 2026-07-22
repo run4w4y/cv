@@ -33,6 +33,11 @@ job [[ .my.job_name | quote ]] {
               destination_name = "postgres"
               local_bind_port  = 5432
             }
+
+            upstreams {
+              destination_name = "nats"
+              local_bind_port  = 4222
+            }
           }
         }
 
@@ -65,6 +70,7 @@ job [[ .my.job_name | quote ]] {
       env {
         LISTING_CHECK_BATCH_SIZE = [[ .my.listing_check_batch_size | quote ]]
         LISTING_CHECK_MODE       = [[ .my.listing_check_mode | quote ]]
+        NATS_SERVER              = "nats://127.0.0.1:4222"
         POSTGRES_HOST            = "127.0.0.1"
         POSTGRES_MAX_CONNECTIONS = "4"
         POSTGRES_PORT            = "5432"
@@ -79,6 +85,18 @@ POSTGRES_USER={{ .Data.data.username }}
 {{- end }}
 EOH
         destination = "secrets/postgres.env"
+        env         = true
+        change_mode = "noop"
+      }
+
+      template {
+        data = <<EOH
+{{ with secret "secret/data/cv-listing-checker/nats-credentials" -}}
+NATS_PASSWORD={{ .Data.data.password }}
+NATS_USER={{ .Data.data.username }}
+{{- end }}
+EOH
+        destination = "secrets/nats.env"
         env         = true
         change_mode = "noop"
       }

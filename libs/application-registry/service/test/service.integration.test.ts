@@ -5,6 +5,10 @@ import {
   makeRegistryCrudLive,
   type RegistryDatabaseShape,
 } from '@cv/application-registry-crud/live'
+import {
+  RegistryEventPublisherNoop,
+  RegistryEventSchema,
+} from '@cv/application-registry-events'
 import { ListingAvailabilityChecker } from '@cv/application-registry-listing-check'
 import { Effect, Layer, ManagedRuntime, Result } from 'effect'
 
@@ -67,6 +71,7 @@ const makeRegistryServiceTestRuntime = (database: RegistryDatabaseShape) =>
     RegistryServicesLive.pipe(
       Layer.provide(makeRegistryCrudLive(database)),
       Layer.provide(makeInMemoryArtifactStoreLayer()),
+      Layer.provide(RegistryEventPublisherNoop),
       Layer.provide(FakeCvAnalyticsTrafficSourceLive)
     )
   )
@@ -88,7 +93,8 @@ const makeScheduledRunnerTestRuntime = (database: RegistryDatabaseShape) =>
   ManagedRuntime.make(
     ScheduledListingChecksRunnerLive.pipe(
       Layer.provide(makeRegistryCrudLive(database)),
-      Layer.provide(FakeListingAvailabilityCheckerLive)
+      Layer.provide(FakeListingAvailabilityCheckerLive),
+      Layer.provide(RegistryEventPublisherNoop)
     )
   )
 
@@ -367,18 +373,29 @@ test('restores a rejection-disabled publication only after its current PDF is re
         }
       )
       const staged = yield* publications.stage(application.id, entry.id, {
+        operationId: crypto.randomUUID(),
         expectedContentVersion: approved.entry.version,
         publicBaseUrl: 'https://cv.example.test/c',
         revisionId: appended.revision.id,
       })
       yield* publications.setAvailability(application.id, entry.id, {
+        operationId: crypto.randomUUID(),
         enabled: true,
         expectedPublicationVersion: staged.publicationVersion,
       })
-      const pending = yield* pdfs.startJob(application.id, entry.id, {
-        expectedPublicationVersion: staged.publicationVersion,
-        requestId: 'publication-restore-pdf',
-      })
+      const pending = yield* pdfs.ensureAttempt(
+        RegistryEventSchema.cases.PdfGenerationRequested.make({
+          applicationId: application.id,
+          contentEntryId: entry.id,
+          contentRevisionId: staged.currentRevisionId,
+          correlationId: 'publication-restore-pdf',
+          cvLinkId: staged.id,
+          eventId: 'publication-restore-pdf',
+          occurredAt: staged.updatedAt,
+          publicationVersion: staged.publicationVersion,
+          version: 1,
+        })
+      )
 
       const rejected = yield* applications.update(application.id, {
         applicationStatus: 'rejected',

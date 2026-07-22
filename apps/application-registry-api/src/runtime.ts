@@ -2,12 +2,16 @@ import type { S3Client } from '@aws-sdk/client-s3'
 import { ApplicationRegistryApi } from '@cv/application-registry-api-contract'
 import { makeS3ArtifactStoreLayer } from '@cv/application-registry-artifact-store/live'
 import { RegistryCrudLive } from '@cv/application-registry-crud/live'
+import {
+  makeNatsRegistryEventPublisherLayer,
+  makeRegistryEventPublisherConfiguration,
+} from '@cv/application-registry-events-nats'
 import { RegistryAnalyticsError } from '@cv/application-registry-service'
 import { RegistryServicesLive } from '@cv/application-registry-service/live'
 import { CloudflareAnalytics } from '@cv/cloudflare-analytics-client'
 import { BunServices } from '@effect/platform-bun'
 import { PgClient } from '@effect/sql-pg'
-import { Effect, Layer } from 'effect'
+import { Effect, Layer, Redacted } from 'effect'
 import { HttpRouter, HttpServer } from 'effect/unstable/http'
 import * as FetchHttpClient from 'effect/unstable/http/FetchHttpClient'
 import { HttpApiBuilder } from 'effect/unstable/httpapi'
@@ -89,12 +93,24 @@ export const makeRegistryServicesLayer = (
   const analytics = CloudflareCvAnalyticsTrafficLive.pipe(
     Layer.provide(makeCloudflareClientLayer(configuration))
   )
+  const events = makeNatsRegistryEventPublisherLayer(
+    makeRegistryEventPublisherConfiguration({
+      nats: {
+        clientName: 'application-registry-api',
+        maxReconnectAttempts: -1,
+        password: Redacted.value(configuration.nats.password),
+        server: configuration.nats.server,
+        username: configuration.nats.username,
+      },
+    })
+  )
 
   return Layer.merge(
     RegistryServicesLive.pipe(
       Layer.provide(analytics),
       Layer.provide(artifacts),
-      Layer.provide(crud)
+      Layer.provide(crud),
+      Layer.provide(events)
     ),
     factsRegistryLayer(
       makeS3FactsStorageLayer(s3, configuration.minio.factsBucket)

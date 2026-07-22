@@ -17,8 +17,8 @@ import type {
   ManualJobContextInput,
   PreparationRepositoryShape,
   ReadCurrentPdfInput,
+  RequestPdfGenerationInput,
   SetPublicationAvailabilityInput,
-  StartPdfGenerationInput,
 } from './types'
 
 const stageCvRevision = (
@@ -31,6 +31,7 @@ const stageCvRevision = (
         .stageCv({
           applicationId,
           entry: result.entry,
+          operationId: result.revision.operationId,
           publicBaseUrl: publicCvBaseUrl(),
           revisionId: result.revision.id,
         })
@@ -138,17 +139,17 @@ export const makeSetPublicationAvailabilityAtom = () =>
     setPublicationAvailability
   )
 
-const startPdfGeneration = (input: StartPdfGenerationInput) =>
+const requestPdfGeneration = (input: RequestPdfGenerationInput) =>
   PreparationRepository.use((repository) =>
-    repository.startPdfGeneration(input)
+    repository.requestPdfGeneration(input)
   ).pipe(
     invalidateAfter(
       publicationMutationReactivityKeys(input.applicationId, input.entryId)
     )
   )
 
-export const makeStartPdfGenerationAtom = () =>
-  preparationDataRuntime.fn<StartPdfGenerationInput>()(startPdfGeneration)
+export const makeRequestPdfGenerationAtom = () =>
+  preparationDataRuntime.fn<RequestPdfGenerationInput>()(requestPdfGeneration)
 
 const refreshCvPage = (input: PublicationIdentity) =>
   Reactivity.invalidate(

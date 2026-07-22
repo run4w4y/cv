@@ -4,7 +4,6 @@ import type { CvPublicationRuns } from './model'
 const activeTags = new Set<CvPublicationRun['_tag']>([
   'Queued',
   'PublishingLink',
-  'StartingPdf',
 ])
 
 export const isActivePublicationRun = (

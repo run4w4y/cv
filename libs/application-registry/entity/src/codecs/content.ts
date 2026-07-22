@@ -14,7 +14,6 @@ import { generatedArtifacts } from '../tables/artifacts'
 import { contentEntries, contentRevisions } from '../tables/content'
 import { cvLinks } from '../tables/cv-links'
 import { jobPostingSnapshots } from '../tables/job-posting-snapshots'
-import { pdfGenerationOutbox } from '../tables/pdf-generation-outbox'
 
 const NonNegativeIntegerSchema = Schema.Int.pipe(
   Schema.check(Schema.isGreaterThanOrEqualTo(0))
@@ -70,16 +69,3 @@ export const GeneratedArtifactSchema = createSelectSchema(generatedArtifacts, {
   updatedAt: () => UtcIsoTimestampSchema,
 })
 export type GeneratedArtifact = typeof generatedArtifacts.$inferSelect
-
-export const PdfGenerationOutboxSchema = createSelectSchema(
-  pdfGenerationOutbox,
-  {
-    attempts: () => NonNegativeIntegerSchema,
-    createdAt: () => UtcIsoTimestampSchema,
-    dispatchedAt: () => Schema.NullOr(UtcIsoTimestampSchema),
-    lastAttemptAt: () => Schema.NullOr(UtcIsoTimestampSchema),
-    messageVersion: () => PositiveIntegerSchema,
-    updatedAt: () => UtcIsoTimestampSchema,
-  }
-)
-export type PdfGenerationOutbox = typeof pdfGenerationOutbox.$inferSelect

@@ -19,7 +19,6 @@ import type {
   ListingCheckReason,
   ListingCheckRun,
   ListingCheckRunTrigger,
-  PdfGenerationOutbox,
   UtcIsoTimestamp,
 } from '@cv/application-registry-entity'
 import type {
@@ -231,7 +230,5 @@ export type CvAnalyticsLinkRecord = {
 }
 
 export type PersistedGeneratedArtifact = GeneratedArtifact
-
-export type PersistedPdfGenerationOutbox = PdfGenerationOutbox
 
 export type PersistedJobPostingSnapshot = JobPostingSnapshot

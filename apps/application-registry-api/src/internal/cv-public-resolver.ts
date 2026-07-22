@@ -74,6 +74,7 @@ const resolutionErrorResponse = Match.type<ApplicationRegistryError>().pipe(
     RegistryBadRequestError: internalError,
     RegistryConflictError: internalError,
     RegistryDatabaseError: internalError,
+    RegistryEventPublishError: internalError,
     RegistryNotFoundError: notFound,
     RegistryQueryTooComplexError: internalError,
   }),

@@ -8,8 +8,8 @@ import { preparationCommandGateKey } from '@/preparation/command-gate'
 import {
   makeReadCurrentPdfAtom,
   makeRefreshCvPageAtom,
+  makeRequestPdfGenerationAtom,
   makeSetPublicationAvailabilityAtom,
-  makeStartPdfGenerationAtom,
 } from '@/preparation/data'
 import { keyedCommandFamily } from '@/preparation/keyed-command'
 import {
@@ -45,7 +45,7 @@ const publicationAvailabilityFamily = keyedCommandFamily(
 )
 const generatePdfFamily = keyedCommandFamily(
   'preparation/cv/command/generate-pdf',
-  makeStartPdfGenerationAtom
+  makeRequestPdfGenerationAtom
 )
 const refreshPageFamily = keyedCommandFamily(
   'preparation/cv/command/refresh-page',
@@ -81,7 +81,7 @@ export const useCvPublicationCommands = (workspace: PreparationWorkspace) => {
     availabilityCommandAtom,
     { mode: 'promiseExit' }
   )
-  const [generatePdfResult, startPdfGeneration] = useAtom(
+  const [generatePdfResult, requestPdfGeneration] = useAtom(
     generatePdfCommandAtom,
     { mode: 'promiseExit' }
   )
@@ -183,6 +183,7 @@ export const useCvPublicationCommands = (workspace: PreparationWorkspace) => {
     await setAvailability({
       applicationId: identity.applicationId,
       entryId: page.link.contentEntryId,
+      operationId: crypto.randomUUID(),
       input: {
         enabled,
         expectedPublicationVersion: page.link.publicationVersion,
@@ -203,13 +204,14 @@ export const useCvPublicationCommands = (workspace: PreparationWorkspace) => {
     ) {
       return
     }
-    await startPdfGeneration({
+    const operationId = crypto.randomUUID()
+    await requestPdfGeneration({
       applicationId: identity.applicationId,
       entryId: page.link.contentEntryId,
       input: {
         expectedPublicationVersion: page.link.publicationVersion,
-        requestId: crypto.randomUUID(),
       },
+      operationId,
     })
   }
 
@@ -278,11 +280,7 @@ export const useCvPublicationCommands = (workspace: PreparationWorkspace) => {
     ]),
     reset,
     runError:
-      publicationRun?._tag === 'Failed'
-        ? publicationRun.error.message
-        : publicationRun?._tag === 'Published'
-          ? publicationRun.result.pdfStartError
-          : null,
+      publicationRun?._tag === 'Failed' ? publicationRun.error.message : null,
     setPublicationAvailability,
   } as const
 }

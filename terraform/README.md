@@ -1,9 +1,41 @@
 # CV project infrastructure
 
-This directory owns only project-specific Infisical and Cloudflare policy.
-Cluster-wide DNS/Tunnel configuration, Nomad, Consul, Vault, PostgreSQL, MinIO,
-and NATS belong to `~/infrastructure`; CV application jobs and packs belong to
-this repository under `nomad/`.
+This directory owns project-specific Infisical and Cloudflare policy plus the
+application registry's JetStream topology. Cluster-wide DNS/Tunnel
+configuration, Nomad, Consul, Vault, PostgreSQL, MinIO, and the NATS server and
+authorization belong to `~/infrastructure`; CV application jobs and packs
+belong to this repository under `nomad/`.
+
+## JetStream topology
+
+`terraform/live/prod/jetstream` owns the `REGISTRY_EVENTS` stream and the
+`registry-pdf-worker` durable pull consumer. Apply it after the infrastructure
+repository has deployed a healthy NATS service and before enabling any CV
+application allocation. Runtime application credentials cannot create or
+modify streams or consumers.
+
+Start an operator Connect upstream, read the existing NATS root credential from
+Vault into the apply process, and inspect the plan:
+
+```sh
+consul connect proxy -service operator-root -upstream nats:14222
+
+cd terraform/live/prod/jetstream
+NATS_ADMIN_SERVER=nats://127.0.0.1:14222 \
+NATS_ADMIN_USER="$(vault kv get -field=username secret/nats/root-credentials)" \
+NATS_ADMIN_PASSWORD="$(vault kv get -field=password secret/nats/root-credentials)" \
+terragrunt plan
+```
+
+The ephemeral Terraform variables supply credentials directly to the provider;
+they are not persisted in the `cv-jetstream` Terraform state. Both resources
+have `prevent_destroy` enabled. Because the provider replaces rather than edits
+durable consumers, an intentional contract change must introduce a versioned
+consumer and migrate it explicitly.
+
+Keep the HCP `cv-jetstream` workspace in local execution mode. The provider
+must reach NATS through the local Consul upstream shown above, and the three
+ephemeral `NATS_ADMIN_*` values exist only in that local apply process.
 
 ## What remains on Cloudflare
 
@@ -93,13 +125,15 @@ No apply is part of repository cleanup. Apply is a deliberate cutover action.
 1. Apply and verify `~/infrastructure` so the Tunnel, Traefik, PostgreSQL,
    MinIO, NATS, Vault policies, Consul intentions, and reduced sidecar budgets
    are ready.
-2. Deploy the disabled Nomad jobs from this repository and verify the API at
+2. Apply `terraform/live/prod/jetstream` and verify the stream and durable
+   consumer before starting application allocations.
+3. Deploy the disabled Nomad jobs from this repository and verify the API at
    the origin hostname.
-3. Stop D1 writes, take a permission-restricted export, and import it with
+4. Stop D1 writes, take a permission-restricted export, and import it with
    `tools/application-registry-migration`.
-4. Enable the API/BFF and background jobs, deploy `cv-public` with
+5. Enable the API/BFF and background jobs, deploy `cv-public` with
    `CV_PUBLIC_RESOLVER_URL`, then inspect and apply this Cloudflare stack.
-5. Verify Access, `/machine/*`, `/cv-*`, `/c/*`, analytics, PDF generation, and
+6. Verify Access, `/machine/*`, `/cv-*`, `/c/*`, analytics, PDF generation, and
    the frozen Pages routes before retiring D1 and deleting the migration tool.
 
 ## Permissions

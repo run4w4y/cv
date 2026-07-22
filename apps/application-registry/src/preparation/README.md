@@ -79,10 +79,10 @@ Workflow run, and keyed editor-local atom. The pure projection in
 computes validation, dirty/source state, save and approval gates, detached
 state, and approval mode. `editor/atoms.ts` owns only local mutations.
 
-CV approval depends on the document schema and review decision. The PDF runner
-owns exact A4 measurement because its Chromium process is the authoritative print
-environment. A layout or generation failure is recorded on the PDF artifact and
-disables only the still-current matching publication.
+CV approval depends on the document schema and review decision. The PDF event
+worker owns exact A4 measurement because its Chromium process is the
+authoritative print environment. A layout or generation failure is recorded on
+the PDF artifact and disables only the still-current matching publication.
 
 ## Publication run
 
@@ -93,13 +93,14 @@ publication is enabled, the PDF worker renders the literal public URL that it
 also embeds in the document's QR code.
 
 The publication Workflow accepts an approved staged revision, temporarily
-enables the exact page URL required by Chromium, and starts PDF
-generation. Management treats the publication as shareable only when that page
-is still enabled and its matching artifact is `ready`. A synchronous PDF-start
-failure rolls the page back to disabled; an asynchronous generation failure
-does the same only when the failed artifact still identifies the current
-revision, publication version, and URL. Retry uses the publication Workflow so
-the page is re-enabled for a fresh attempt.
+enables the exact page URL required by Chromium. That state change publishes a
+`CvPublicationAvailabilityChanged` event; the PDF worker consumes it and owns
+artifact creation, rendering, and completion. Management treats the publication
+as shareable only when that page is still enabled and its matching artifact is
+`ready`. An asynchronous generation failure disables the page only when the
+failed artifact still identifies the current revision, publication version,
+and URL. An explicit retry publishes `PdfGenerationRequested` for the current
+publication without introducing another orchestration path.
 
 Publication execution is also memory-backed. The registry page record and every
 artifact attempt remain authoritative and survive browser runtime loss.

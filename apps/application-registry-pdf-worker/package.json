@@ -1,0 +1,26 @@
+{
+  "name": "@cv/application-registry-pdf-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nx run application-registry-pdf-worker:build",
+    "start": "node dist/main.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.984.0",
+    "@cv/application-registry-artifact-store": "workspace:*",
+    "@cv/application-registry-crud": "workspace:*",
+    "@cv/application-registry-events": "workspace:*",
+    "@cv/application-registry-events-nats": "workspace:*",
+    "@cv/application-registry-pdf-processing": "workspace:*",
+    "@cv/application-registry-service": "workspace:*",
+    "@effect/platform-node": "4.0.0-beta.99",
+    "@effect/sql-pg": "4.0.0-beta.99",
+    "effect": "4.0.0-beta.99",
+    "playwright": "1.61.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  }
+}

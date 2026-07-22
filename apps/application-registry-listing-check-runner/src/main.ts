@@ -1,5 +1,9 @@
 import { RegistryCrudLive } from '@cv/application-registry-crud/live'
 import {
+  makeNatsRegistryEventPublisherLayer,
+  makeRegistryEventPublisherConfiguration,
+} from '@cv/application-registry-events-nats'
+import {
   ListingAvailabilityChecker,
   makeListingAvailabilityChecker,
 } from '@cv/application-registry-listing-check'
@@ -7,7 +11,7 @@ import { ScheduledListingChecksRunner } from '@cv/application-registry-service'
 import { ScheduledListingChecksRunnerLive } from '@cv/application-registry-service/live'
 import { BunRuntime, BunServices } from '@effect/platform-bun'
 import { PgClient } from '@effect/sql-pg'
-import { Console, Crypto, Effect, Layer } from 'effect'
+import { Console, Crypto, Effect, Layer, Redacted } from 'effect'
 
 import { type RunnerConfiguration, readRunnerConfiguration } from './config'
 import { makeSafeListingFetch } from './safe-fetch'
@@ -33,9 +37,20 @@ const makeRuntimeLayer = (configuration: RunnerConfiguration) => {
     )
   ).pipe(Layer.provide(platform))
   const crud = RegistryCrudLive.pipe(Layer.provide(postgres))
+  const events = makeNatsRegistryEventPublisherLayer(
+    makeRegistryEventPublisherConfiguration({
+      nats: {
+        clientName: 'application-registry-listing-check-runner',
+        maxReconnectAttempts: 10,
+        password: Redacted.value(configuration.nats.password),
+        server: configuration.nats.server,
+        username: configuration.nats.username,
+      },
+    })
+  )
 
   return ScheduledListingChecksRunnerLive.pipe(
-    Layer.provide(Layer.merge(crud, checker))
+    Layer.provide(Layer.mergeAll(crud, checker, events))
   )
 }
 

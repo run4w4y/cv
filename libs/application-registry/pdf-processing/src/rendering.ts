@@ -1,8 +1,8 @@
 import { Match, Predicate, Schema } from 'effect'
 
 import {
-  PdfJobPermanentError,
-  PdfJobTransientError,
+  PdfGenerationPermanentError,
+  PdfGenerationTransientError,
   type PdfPermanentFailureCode,
 } from './model'
 import {
@@ -81,12 +81,12 @@ const messageOf = (cause: unknown): string =>
 
 export const mapPdfRenderError = (
   cause: unknown
-): PdfJobPermanentError | PdfJobTransientError =>
+): PdfGenerationPermanentError | PdfGenerationTransientError =>
   Match.value(cause).pipe(
     Match.when(
       Schema.is(CvPageLayoutError),
       (error) =>
-        new PdfJobPermanentError({
+        new PdfGenerationPermanentError({
           cause: error,
           code: error.code,
           message: error.message,
@@ -99,13 +99,13 @@ export const mapPdfRenderError = (
         error.status !== 408 &&
         error.status !== 429
       ) {
-        return new PdfJobPermanentError({
+        return new PdfGenerationPermanentError({
           cause: error,
           code: 'pdf_public_page_unavailable',
           message: error.message,
         })
       }
-      return new PdfJobTransientError({
+      return new PdfGenerationTransientError({
         cause: error,
         code: 'pdf_render_failed',
         message: error.message,
@@ -114,7 +114,7 @@ export const mapPdfRenderError = (
     }),
     Match.orElse(
       (renderCause) =>
-        new PdfJobTransientError({
+        new PdfGenerationTransientError({
           cause: renderCause,
           code: 'pdf_render_failed',
           message: messageOf(renderCause),

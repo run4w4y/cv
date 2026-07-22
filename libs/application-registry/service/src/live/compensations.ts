@@ -2,6 +2,10 @@ import {
   ApplicationsCrud,
   CompensationsCrud,
 } from '@cv/application-registry-crud'
+import {
+  RegistryEventPublisher,
+  RegistryEventSchema,
+} from '@cv/application-registry-events'
 import { Effect, Layer } from 'effect'
 import { RegistryConflictError } from '../errors'
 import { selectAnnualCompensation } from '../internal/application-list-item'
@@ -23,6 +27,7 @@ import type {
 const make = Effect.gen(function* () {
   const applications = yield* ApplicationsCrud
   const compensations = yield* CompensationsCrud
+  const events = yield* RegistryEventPublisher
 
   const findApplication = Effect.fn('CompensationsService.findApplication')(
     (identifier: string) => findRequiredApplication(applications, identifier)
@@ -82,6 +87,16 @@ const make = Effect.gen(function* () {
           }
 
           const updated = yield* findApplication(application.id)
+          const eventId = `compensation-changed:${application.id}:${updated.version}`
+          yield* events.publish(
+            RegistryEventSchema.cases.CompensationChanged.make({
+              applicationId: application.id,
+              correlationId: eventId,
+              eventId,
+              occurredAt: updated.updatedAt,
+              version: 1,
+            })
+          )
           return {
             annualCompensation: input.annualCompensation,
             application: updated,

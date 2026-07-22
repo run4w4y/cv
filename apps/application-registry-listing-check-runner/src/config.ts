@@ -5,6 +5,11 @@ export interface RunnerConfiguration {
   readonly limit: number
   readonly maxConnections: number
   readonly mode: RunDueListingChecksInput['mode']
+  readonly nats: {
+    readonly password: Redacted.Redacted<string>
+    readonly server: string
+    readonly username: string
+  }
   readonly postgres: {
     readonly database: string
     readonly host: string
@@ -27,6 +32,13 @@ export const readRunnerConfiguration: Effect.Effect<
   mode: Config.schema(ListingCheckModeSchema, 'LISTING_CHECK_MODE').pipe(
     Config.withDefault('archive_eligible')
   ),
+  nats: Effect.all({
+    password: Config.redacted('NATS_PASSWORD'),
+    server: Config.nonEmptyString('NATS_SERVER').pipe(
+      Config.withDefault('nats://127.0.0.1:4222')
+    ),
+    username: Config.nonEmptyString('NATS_USER'),
+  }),
   postgres: Effect.all({
     database: Config.nonEmptyString('POSTGRES_DATABASE'),
     host: Config.nonEmptyString('POSTGRES_HOST'),

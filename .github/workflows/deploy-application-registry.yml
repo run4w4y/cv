@@ -126,7 +126,7 @@ jobs:
             --var "enabled=${RUNNER_ENABLED}"
 
   deploy-self-hosted-pdf:
-    name: Publish and register self-hosted PDF pipeline
+    name: Publish and register PDF event worker
     if: ${{ vars.CV_NOMAD_PDF_DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     environment: production
@@ -135,8 +135,7 @@ jobs:
       packages: write
     env:
       REGISTRY: ghcr.io
-      DISPATCHER_IMAGE_NAME: ${{ github.repository_owner }}/cv-pdf-dispatcher
-      RUNNER_IMAGE_NAME: ${{ github.repository_owner }}/cv-pdf-runner
+      IMAGE_NAME: ${{ github.repository_owner }}/application-registry-pdf-worker
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -148,23 +147,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push immutable dispatcher image
-        id: dispatcher-image
+      - name: Build and push immutable PDF worker image
+        id: image
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: apps/application-registry-pdf-dispatcher/Dockerfile
+          file: apps/application-registry-pdf-worker/Dockerfile
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.DISPATCHER_IMAGE_NAME }}:${{ github.sha }}
-
-      - name: Build and push immutable Playwright runner image
-        id: runner-image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: apps/cv-pdf-runner/Dockerfile
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.RUNNER_IMAGE_NAME }}:${{ github.sha }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
       - name: Install Nomad Pack
         run: |
@@ -174,26 +164,17 @@ jobs:
           unzip -q "$archive" -d /tmp/nomad-pack
           sudo install /tmp/nomad-pack/nomad-pack /usr/local/bin/nomad-pack
 
-      - name: Register disabled-by-default PDF jobs
+      - name: Register disabled-by-default PDF worker
         env:
-          DISPATCHER_ENABLED: ${{ vars.CV_PDF_DISPATCHER_ENABLED || 'false' }}
-          DISPATCHER_IMAGE_DIGEST: ${{ steps.dispatcher-image.outputs.digest }}
           NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
           NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
           REGISTRY_PULL_TOKEN: ${{ secrets.REGISTRY_PULL_TOKEN }}
-          RUNNER_ENABLED: ${{ vars.CV_PDF_RUNNER_ENABLED || 'false' }}
-          RUNNER_IMAGE_DIGEST: ${{ steps.runner-image.outputs.digest }}
+          WORKER_ENABLED: ${{ vars.CV_PDF_WORKER_ENABLED || 'false' }}
+          WORKER_IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
         run: |
-          nomad-pack run nomad/packs/application-registry-pdf-dispatcher \
+          nomad-pack run nomad/packs/application-registry-pdf-worker \
             --parser-v1 \
-            --var "docker_image=${REGISTRY}/${DISPATCHER_IMAGE_NAME}@${DISPATCHER_IMAGE_DIGEST}" \
+            --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${WORKER_IMAGE_DIGEST}" \
             --var "docker_image_username=${{ github.repository_owner }}" \
             --var "docker_image_password=${REGISTRY_PULL_TOKEN}" \
-            --var "enabled=${DISPATCHER_ENABLED}"
-
-          nomad-pack run nomad/packs/cv-pdf-runner \
-            --parser-v1 \
-            --var "docker_image=${REGISTRY}/${RUNNER_IMAGE_NAME}@${RUNNER_IMAGE_DIGEST}" \
-            --var "docker_image_username=${{ github.repository_owner }}" \
-            --var "docker_image_password=${REGISTRY_PULL_TOKEN}" \
-            --var "enabled=${RUNNER_ENABLED}"
+            --var "enabled=${WORKER_ENABLED}"

@@ -31,6 +31,11 @@ const configuration = (bffEnabled = false): ApiServerConfiguration => ({
     region: 'test',
     secretAccessKey: Redacted.make('secret'),
   },
+  nats: {
+    password: Redacted.make('secret'),
+    server: 'nats://127.0.0.1:4222',
+    username: 'registry',
+  },
   postgres: {
     database: 'registry',
     host: '127.0.0.1',

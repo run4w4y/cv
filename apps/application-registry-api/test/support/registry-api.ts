@@ -12,6 +12,10 @@ import {
   startMinioTestContainer,
 } from '@cv/test-infrastructure/minio'
 import {
+  type StartedNatsTestContainer,
+  startNatsTestContainer,
+} from '@cv/test-infrastructure/nats'
+import {
   type StartedPostgresTestContainer,
   startPostgresTestContainer,
 } from '@cv/test-infrastructure/postgres'
@@ -21,7 +25,7 @@ import { Effect, ManagedRuntime, Redacted } from 'effect'
 const workspaceRoot = fileURLToPath(new URL('../../../..', import.meta.url))
 const migrationPath = fileURLToPath(
   new URL(
-    '../../../../libs/application-registry/entity/drizzle/20260721013933_useful_harrier/migration.sql',
+    '../../../../libs/application-registry/entity/drizzle/20260721150524_registry_baseline/migration.sql',
     import.meta.url
   )
 )
@@ -44,7 +48,6 @@ const tableNames = [
   'idempotency_receipts',
   'job_posting_snapshots',
   'listing_check_runs',
-  'pdf_generation_outbox',
   'registry_sequence',
 ] as const
 
@@ -149,6 +152,7 @@ export class RegistryApiHarness {
   readonly token = registryTestToken
 
   readonly #minio: StartedMinioTestContainer
+  readonly #nats: StartedNatsTestContainer
   readonly #postgres: StartedPostgresTestContainer
   readonly #postgresRuntime: PostgresRuntime
   readonly #s3: S3Client
@@ -157,11 +161,13 @@ export class RegistryApiHarness {
 
   private constructor(
     minio: StartedMinioTestContainer,
+    nats: StartedNatsTestContainer,
     postgres: StartedPostgresTestContainer,
     postgresRuntime: PostgresRuntime,
     s3: S3Client
   ) {
     this.#minio = minio
+    this.#nats = nats
     this.#postgres = postgres
     this.#postgresRuntime = postgresRuntime
     this.#s3 = s3
@@ -181,6 +187,22 @@ export class RegistryApiHarness {
       await postgres.dispose()
       throw error
     }
+    let nats: StartedNatsTestContainer
+    try {
+      nats = await startNatsTestContainer({
+        topology: {
+          streams: [
+            {
+              name: 'REGISTRY_EVENTS',
+              subjects: ['registry.events.>'],
+            },
+          ],
+        },
+      })
+    } catch (error) {
+      await Promise.allSettled([minio.dispose(), postgres.dispose()])
+      throw error
+    }
     const s3 = new S3Client({
       credentials: {
         accessKeyId: minio.accessKeyId,
@@ -191,7 +213,13 @@ export class RegistryApiHarness {
       region: minio.region,
     })
     const postgresRuntime = makePostgresRuntime(postgres)
-    const harness = new RegistryApiHarness(minio, postgres, postgresRuntime, s3)
+    const harness = new RegistryApiHarness(
+      minio,
+      nats,
+      postgres,
+      postgresRuntime,
+      s3
+    )
 
     try {
       await Promise.all([
@@ -240,6 +268,9 @@ export class RegistryApiHarness {
         MINIO_OBJECTS_BUCKET: objectsBucket,
         MINIO_REGION: this.#minio.region,
         MINIO_SECRET_ACCESS_KEY: this.#minio.secretAccessKey,
+        NATS_PASSWORD: this.#nats.password,
+        NATS_SERVER: this.#nats.server,
+        NATS_USER: this.#nats.username,
         POSTGRES_DATABASE: this.#postgres.database,
         POSTGRES_HOST: this.#postgres.host,
         POSTGRES_MAX_CONNECTIONS: '4',
@@ -309,6 +340,10 @@ export class RegistryApiHarness {
     await this.stop()
     this.#s3.destroy()
     await this.#postgresRuntime.dispose()
-    await Promise.allSettled([this.#minio.dispose(), this.#postgres.dispose()])
+    await Promise.allSettled([
+      this.#minio.dispose(),
+      this.#nats.dispose(),
+      this.#postgres.dispose(),
+    ])
   }
 }

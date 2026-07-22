@@ -44,6 +44,10 @@ import {
   NotFoundErrorSchema,
 } from './errors'
 import {
+  RegistryEventAcceptedResponseSchema,
+  RequestPdfGenerationRequestSchema,
+} from './event-commands'
+import {
   ActivateFactsReleaseRequestSchema,
   ActiveFactsReleaseResponseSchema,
   FactsActivationResponseSchema,
@@ -54,11 +58,6 @@ import {
   FactsReleaseParamsSchema,
   factsPublicationApiPrefix,
 } from './facts-publication'
-import {
-  PdfJobParamsSchema,
-  PdfJobResponseSchema,
-  StartPdfJobRequestSchema,
-} from './pdf-jobs'
 import {
   AddApplicationNoteRequestSchema,
   AddApplicationNoteResponseSchema,
@@ -103,9 +102,8 @@ const CreatedNoteResponseSchema = AddApplicationNoteResponseSchema.pipe(
 const CreatedRevisionResponseSchema = ContentRevisionResultResponseSchema.pipe(
   HttpApiSchema.status('Created')
 )
-const AcceptedPdfJobResponseSchema = PdfJobResponseSchema.pipe(
-  HttpApiSchema.status('Accepted')
-)
+const AcceptedRegistryEventResponseSchema =
+  RegistryEventAcceptedResponseSchema.pipe(HttpApiSchema.status('Accepted'))
 
 const ListingCheckRunResponseSchema: Schema.Codec<ListingCheckRun> =
   Schema.revealCodec(ListingCheckRunSchema)
@@ -382,6 +380,7 @@ const publicationEndpoints = [
     '/applications/:id/content-entries/:entryId/publication',
     {
       error: endpointErrors,
+      headers: IdempotencyHeadersSchema,
       params: ContentEntryParamsSchema,
       payload: StageCvRequestSchema,
       success: CvLinkResponseSchema,
@@ -401,6 +400,7 @@ const publicationEndpoints = [
     '/applications/:id/content-entries/:entryId/publication',
     {
       error: endpointErrors,
+      headers: IdempotencyHeadersSchema,
       params: ContentEntryParamsSchema,
       payload: SetCvLinkAvailabilityRequestSchema,
       success: CvLinkResponseSchema,
@@ -427,22 +427,14 @@ const publicationEndpoints = [
     }
   ),
   HttpApiEndpoint.post(
-    'startPdfJob',
-    '/applications/:id/content-entries/:entryId/pdf-runs',
+    'requestPdfGeneration',
+    '/applications/:id/content-entries/:entryId/pdf-generation-requests',
     {
       error: endpointErrors,
+      headers: IdempotencyHeadersSchema,
       params: ContentEntryParamsSchema,
-      payload: StartPdfJobRequestSchema,
-      success: AcceptedPdfJobResponseSchema,
-    }
-  ),
-  HttpApiEndpoint.get(
-    'getPdfJob',
-    '/applications/:id/content-entries/:entryId/pdf-runs/:jobId',
-    {
-      error: endpointErrors,
-      params: PdfJobParamsSchema,
-      success: PdfJobResponseSchema,
+      payload: RequestPdfGenerationRequestSchema,
+      success: AcceptedRegistryEventResponseSchema,
     }
   ),
 ] as const
@@ -456,7 +448,6 @@ export const PublicationsApi = HttpApiGroup.make('publications')
   .add(publicationEndpoints[3])
   .add(publicationEndpoints[4])
   .add(publicationEndpoints[5])
-  .add(publicationEndpoints[6])
   .prefix(applicationRegistryApiPrefix)
   .middleware(RegistryAuthorization)
 

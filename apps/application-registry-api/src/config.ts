@@ -31,6 +31,11 @@ export interface ApiServerConfiguration {
     readonly region: string
     readonly secretAccessKey: Redacted.Redacted<string>
   }
+  readonly nats: {
+    readonly password: Redacted.Redacted<string>
+    readonly server: string
+    readonly username: string
+  }
   readonly postgres: {
     readonly database: string
     readonly host: string
@@ -114,6 +119,13 @@ export const readApiServerConfiguration: Effect.Effect<
       Config.withDefault('ru-central')
     ),
     secretAccessKey: Config.redacted('MINIO_SECRET_ACCESS_KEY'),
+  }),
+  nats: Effect.all({
+    password: Config.redacted('NATS_PASSWORD'),
+    server: Config.nonEmptyString('NATS_SERVER').pipe(
+      Config.withDefault('nats://127.0.0.1:4222')
+    ),
+    username: Config.nonEmptyString('NATS_USER'),
   }),
   postgres: Effect.all({
     database: Config.nonEmptyString('POSTGRES_DATABASE'),

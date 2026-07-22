@@ -9,6 +9,11 @@ import {
   type GeneratedArtifact,
   pdfGenerationFailedDisableReason,
 } from '@cv/application-registry-entity'
+import {
+  type PdfGenerationTriggerEvent,
+  RegistryEventPublisher,
+  RegistryEventSchema,
+} from '@cv/application-registry-events'
 import { Effect, Layer, Result } from 'effect'
 
 import {
@@ -33,7 +38,7 @@ import {
   PdfArtifactsService,
   type PdfArtifactsService as PdfArtifactsServiceShape,
 } from '../services/pdf-artifacts'
-import type { StartPdfJobInput } from '../types'
+import type { RequestPdfGenerationInput } from '../types'
 
 const pendingRendererVersion = 'pending:cv-application'
 
@@ -43,6 +48,7 @@ const make = Effect.gen(function* () {
   const content = yield* ContentCrud
   const links = yield* CvLinksCrud
   const store = yield* ArtifactStore
+  const events = yield* RegistryEventPublisher
 
   const findArtifactForApplication = Effect.fn(
     'PdfArtifactsService.findArtifactForApplication'
@@ -81,8 +87,8 @@ const make = Effect.gen(function* () {
     })
   )
 
-  const validateJobIdentity = Effect.fn(
-    'PdfArtifactsService.validateJobIdentity'
+  const validateAttemptIdentity = Effect.fn(
+    'PdfArtifactsService.validateAttemptIdentity'
   )(function* (
     existing: GeneratedArtifact,
     expected: {
@@ -100,7 +106,8 @@ const make = Effect.gen(function* () {
       existing.qrTarget !== expected.qrTarget
     ) {
       return yield* new RegistryConflictError({
-        message: 'The PDF request ID already belongs to a different job.',
+        message:
+          'The PDF request ID already belongs to a different generation attempt.',
       })
     }
     return existing
@@ -194,18 +201,160 @@ const make = Effect.gen(function* () {
     )
   })
 
+  const publishGenerated = Effect.fn('PdfArtifactsService.publishGenerated')(
+    (applicationId: string, entryId: string, artifact: GeneratedArtifact) =>
+      events.publish(
+        RegistryEventSchema.cases.PdfGenerated.make({
+          applicationId,
+          artifactId: artifact.id,
+          contentEntryId: entryId,
+          correlationId: artifact.requestId,
+          eventId: `pdf-generated:${artifact.id}`,
+          occurredAt: artifact.updatedAt,
+          publicationVersion: artifact.publicationVersion,
+          version: 1,
+        })
+      )
+  )
+
+  const publishFailed = Effect.fn('PdfArtifactsService.publishFailed')(
+    (applicationId: string, entryId: string, artifact: GeneratedArtifact) =>
+      events.publish(
+        RegistryEventSchema.cases.PdfGenerationFailed.make({
+          applicationId,
+          artifactId: artifact.id,
+          code: artifact.errorCode ?? 'pdf_generation_failed',
+          contentEntryId: entryId,
+          correlationId: artifact.requestId,
+          eventId: `pdf-generation-failed:${artifact.id}`,
+          occurredAt: artifact.updatedAt,
+          publicationVersion: artifact.publicationVersion,
+          version: 1,
+        })
+      )
+  )
+
   return {
-    startJob: Effect.fn('PdfArtifactsService.startJob')(
+    ensureAttempt: Effect.fn('PdfArtifactsService.ensureAttempt')(
+      (event: PdfGenerationTriggerEvent) =>
+        Effect.gen(function* () {
+          const requestId = yield* requireNonEmpty(
+            event.eventId,
+            'PDF request ID'
+          )
+          const application = yield* findApplicationForContent(
+            applications,
+            event.applicationId
+          )
+          const entry = yield* requireAssociatedEntry(
+            content,
+            application.id,
+            event.contentEntryId
+          )
+          if (entry.kind !== 'cv') {
+            return yield* new RegistryBadRequestError({
+              message: 'PDF artifacts can only be generated for CV content.',
+            })
+          }
+          const link = yield* links.findByEntry(entry.id)
+          if (!link || link.applicationId !== application.id) {
+            return yield* new RegistryNotFoundError({
+              identifier: entry.id,
+              message: `Public CV link not found for content entry ${entry.id}.`,
+            })
+          }
+          if (
+            link.id !== event.cvLinkId ||
+            link.currentRevisionId !== event.contentRevisionId ||
+            link.publicationVersion !== event.publicationVersion
+          ) {
+            return yield* new RegistryConflictError({
+              message:
+                'The current CV publication no longer matches the generation event.',
+            })
+          }
+          if (!link.enabled) {
+            return yield* new RegistryConflictError({
+              message:
+                'The public CV link must be temporarily enabled before PDF generation starts.',
+            })
+          }
+          if (entry.approvedRevisionId !== link.currentRevisionId) {
+            return yield* new RegistryConflictError({
+              message:
+                'The public CV link is not pinned to the approved content revision.',
+            })
+          }
+          yield* requireAssociatedRevision(
+            content,
+            entry.id,
+            link.currentRevisionId
+          )
+
+          const identity = {
+            contentRevisionId: link.currentRevisionId,
+            cvLinkId: link.id,
+            publicationVersion: link.publicationVersion,
+            qrTarget: link.publicUrl,
+          }
+          const existing = yield* artifacts.findByRequestId(requestId)
+          if (existing) {
+            const validated = yield* validateAttemptIdentity(existing, identity)
+            if (validated.status === 'ready') {
+              yield* publishGenerated(application.id, entry.id, validated)
+            } else if (validated.status === 'failed') {
+              yield* publishFailed(application.id, entry.id, validated)
+            }
+            return validated
+          }
+
+          const now = yield* registryNow
+          const pending: GeneratedArtifact = {
+            byteLength: null,
+            contentRevisionId: link.currentRevisionId,
+            createdAt: now,
+            cvLinkId: link.id,
+            errorCode: null,
+            errorMessage: null,
+            generatedAt: null,
+            id: newRegistryId(),
+            kind: 'pdf',
+            mediaType: null,
+            objectKey: null,
+            publicationVersion: link.publicationVersion,
+            qrTarget: link.publicUrl,
+            rendererVersion: pendingRendererVersion,
+            sha256: null,
+            status: 'pending',
+            updatedAt: now,
+            requestId,
+          }
+          const persisted = yield* Effect.result(
+            artifacts.persistPending(pending, link.version)
+          )
+          const stored = yield* artifacts.findByRequestId(requestId)
+          if (!stored) {
+            if (Result.isFailure(persisted)) return yield* persisted.failure
+            return yield* new RegistryConflictError({
+              message:
+                'The public CV link changed while PDF generation was starting.',
+            })
+          }
+          return yield* validateAttemptIdentity(stored, identity)
+        })
+    ),
+    requestGeneration: Effect.fn('PdfArtifactsService.requestGeneration')(
       (
         applicationIdentifier: string,
         entryId: string,
-        input: StartPdfJobInput
+        input: RequestPdfGenerationInput
       ) =>
         Effect.gen(function* () {
-          const requestId = yield* requireNonEmpty(
-            input.requestId,
-            'PDF request ID'
+          const operationId = yield* requireNonEmpty(
+            input.operationId,
+            'PDF generation operation ID'
           )
+          const eventId = `pdf-generation-requested:${operationId}`
           const application = yield* findApplicationForContent(
             applications,
             applicationIdentifier
@@ -235,7 +384,7 @@ const make = Effect.gen(function* () {
           if (!link.enabled) {
             return yield* new RegistryConflictError({
               message:
-                'The public CV link must be temporarily enabled before PDF generation starts.',
+                'The public CV link must be enabled before PDF generation starts.',
             })
           }
           if (entry.approvedRevisionId !== link.currentRevisionId) {
@@ -244,71 +393,20 @@ const make = Effect.gen(function* () {
                 'The public CV link is not pinned to the approved content revision.',
             })
           }
-          yield* requireAssociatedRevision(
-            content,
-            entry.id,
-            link.currentRevisionId
-          )
-
-          const identity = {
-            contentRevisionId: link.currentRevisionId,
-            cvLinkId: link.id,
-            publicationVersion: link.publicationVersion,
-            qrTarget: link.publicUrl,
-          }
-          const existing = yield* artifacts.findByRequestId(requestId)
-          if (existing) {
-            return yield* validateJobIdentity(existing, identity)
-          }
-
-          const now = yield* registryNow
-          const pending: GeneratedArtifact = {
-            byteLength: null,
-            contentRevisionId: link.currentRevisionId,
-            createdAt: now,
-            cvLinkId: link.id,
-            errorCode: null,
-            errorMessage: null,
-            generatedAt: null,
-            id: newRegistryId(),
-            kind: 'pdf',
-            mediaType: null,
-            objectKey: null,
-            publicationVersion: link.publicationVersion,
-            qrTarget: link.publicUrl,
-            rendererVersion: pendingRendererVersion,
-            sha256: null,
-            status: 'pending',
-            updatedAt: now,
-            requestId,
-          }
-          const persisted = yield* Effect.result(
-            artifacts.persistPending(
-              pending,
-              {
-                applicationId: application.id,
-                artifactId: pending.id,
-                attempts: 0,
-                contentEntryId: entry.id,
-                createdAt: now,
-                dispatchedAt: null,
-                lastAttemptAt: null,
-                lastError: null,
-                messageVersion: 1,
-                updatedAt: now,
-              },
-              link.version
-            )
-          )
-          const stored = yield* artifacts.findByRequestId(requestId)
-          if (!stored) {
-            if (Result.isFailure(persisted)) return yield* persisted.failure
-            return yield* new RegistryConflictError({
-              message:
-                'The public CV link changed while PDF generation was starting.',
+          yield* events.publish(
+            RegistryEventSchema.cases.PdfGenerationRequested.make({
+              applicationId: application.id,
+              contentEntryId: entry.id,
+              contentRevisionId: link.currentRevisionId,
+              correlationId: operationId,
+              cvLinkId: link.id,
+              eventId,
+              occurredAt: yield* registryNow,
+              publicationVersion: link.publicationVersion,
+              version: 1,
             })
-          }
-          return yield* validateJobIdentity(stored, identity)
+          )
+          return { eventId }
         })
     ),
     complete: Effect.fn('PdfArtifactsService.complete')(
@@ -319,7 +417,7 @@ const make = Effect.gen(function* () {
         bytes: Uint8Array
       ) =>
         Effect.gen(function* () {
-          const { artifact } = yield* findArtifactForApplication(
+          const { artifact, entry } = yield* findArtifactForApplication(
             applicationIdentifier,
             artifactId
           )
@@ -339,6 +437,7 @@ const make = Effect.gen(function* () {
               artifact.mediaType === 'application/pdf' &&
               artifact.rendererVersion === rendererVersion
             ) {
+              yield* publishGenerated(entry.applicationId, entry.id, artifact)
               return artifact
             }
             return yield* new RegistryConflictError({
@@ -369,7 +468,7 @@ const make = Effect.gen(function* () {
                 'The PDF artifact changed while completion was being recorded.',
             })
           }
-          return yield* artifacts
+          const completed = yield* artifacts
             .find(artifact.id)
             .pipe(
               Effect.flatMap((stored) =>
@@ -382,6 +481,8 @@ const make = Effect.gen(function* () {
                     )
               )
             )
+          yield* publishGenerated(entry.applicationId, entry.id, completed)
+          return completed
         })
     ),
     fail: Effect.fn('PdfArtifactsService.fail')(
@@ -407,6 +508,7 @@ const make = Effect.gen(function* () {
               artifact.errorMessage === message
             ) {
               yield* disableFailedPublication(entry.id, artifact)
+              yield* publishFailed(entry.applicationId, entry.id, artifact)
               return artifact
             }
             return yield* new RegistryConflictError({
@@ -441,27 +543,25 @@ const make = Effect.gen(function* () {
               )
             )
           yield* disableFailedPublication(entry.id, failed)
+          yield* publishFailed(entry.applicationId, entry.id, failed)
           return failed
         })
     ),
-    findJob: Effect.fn('PdfArtifactsService.findJob')(
+    findAttempt: Effect.fn('PdfArtifactsService.findAttempt')(
       (applicationIdentifier: string, entryId: string, artifactId: string) =>
         Effect.gen(function* () {
-          const job = yield* findArtifactForApplication(
+          const attempt = yield* findArtifactForApplication(
             applicationIdentifier,
             artifactId
           )
-          if (job.entry.id !== entryId) {
+          if (attempt.entry.id !== entryId) {
             return yield* new RegistryNotFoundError({
               identifier: artifactId,
-              message: `PDF job not found: ${artifactId}`,
+              message: `PDF generation attempt not found: ${artifactId}`,
             })
           }
-          return job
+          return attempt
         })
-    ),
-    findPendingDispatch: Effect.fn('PdfArtifactsService.findPendingDispatch')(
-      (artifactId: string) => artifacts.findPendingDispatch(artifactId)
     ),
     findCurrent,
     readCurrent: Effect.fn('PdfArtifactsService.readCurrent')(
@@ -484,25 +584,6 @@ const make = Effect.gen(function* () {
           const bytes = yield* readOpaquePayload(store, artifact.sha256)
           return { artifact, bytes }
         })
-    ),
-    markDispatchFailed: Effect.fn('PdfArtifactsService.markDispatchFailed')(
-      (artifactId: string, message: string) =>
-        Effect.gen(function* () {
-          yield* artifacts.markDispatchFailed(
-            artifactId,
-            message.slice(0, 2_000),
-            yield* registryNow
-          )
-        })
-    ),
-    markDispatched: Effect.fn('PdfArtifactsService.markDispatched')(
-      (artifactId: string) =>
-        Effect.gen(function* () {
-          yield* artifacts.markDispatched(artifactId, yield* registryNow)
-        })
-    ),
-    pendingDispatches: Effect.fn('PdfArtifactsService.pendingDispatches')(
-      (limit: number) => artifacts.pendingDispatches(limit)
     ),
   } satisfies PdfArtifactsServiceShape
 })

@@ -297,28 +297,6 @@ export const registryTables = [
     primaryKey: ['id'],
     timestamps: ['generated_at', 'created_at', 'updated_at'],
   },
-  {
-    name: 'pdf_generation_outbox',
-    columns: [
-      'artifact_id',
-      'application_id',
-      'content_entry_id',
-      'message_version',
-      'attempts',
-      'created_at',
-      'updated_at',
-      'last_attempt_at',
-      'last_error',
-      'dispatched_at',
-    ],
-    primaryKey: ['artifact_id'],
-    timestamps: [
-      'created_at',
-      'updated_at',
-      'last_attempt_at',
-      'dispatched_at',
-    ],
-  },
 ] as const satisfies readonly TableSpec[]
 
 export type RegistryTableName = (typeof registryTables)[number]['name']

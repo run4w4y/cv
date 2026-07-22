@@ -12,7 +12,7 @@ database credential, MinIO credential, or Worker service binding is present.
 
 The public and print layouts are intentionally separate. The public route is a
 responsive website, while the A4 renderer is deterministic and used by both
-the isolated management preview and the Playwright PDF runner.
+the isolated management preview and the Playwright PDF event worker.
 
 ## Development
 

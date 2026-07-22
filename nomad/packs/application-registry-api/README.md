@@ -19,6 +19,8 @@ Required Vault paths are:
   infrastructure module;
 - `secret/data/cv-registry/minio-credentials`, created by the MinIO
   infrastructure module;
+- `secret/data/cv-registry/nats-credentials`, created by the NATS
+  infrastructure module for the distinct `cv-registry` NATS identity;
 - `secret/data/cv-registry/runtime`, populated from the existing CV production
   secrets before the first allocation is enabled.
 
@@ -29,6 +31,10 @@ nomad-pack render nomad/packs/application-registry-api \
   --parser-v1 \
   --var 'docker_image=ghcr.io/run4w4y/cv-application-registry-api@sha256:<digest>'
 ```
+
+Apply `terraform/live/prod/jetstream` before enabling the allocation. The API
+publishes to the existing `REGISTRY_EVENTS` stream and has no permission to
+create or modify JetStream resources.
 
 Enable one allocation first on the temporary hostname with BFF authentication
 still disabled. Test `/health`, OpenAPI, machine transport, PostgreSQL, MinIO,

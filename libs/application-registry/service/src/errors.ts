@@ -2,6 +2,7 @@ import type {
   RegistryDatabaseError,
   RegistryQueryTooComplexError,
 } from '@cv/application-registry-crud'
+import type { RegistryEventPublishError } from '@cv/application-registry-events'
 import { Data } from 'effect'
 
 export {
@@ -49,5 +50,6 @@ export type ApplicationRegistryError =
   | RegistryBadRequestError
   | RegistryConflictError
   | RegistryDatabaseError
+  | RegistryEventPublishError
   | RegistryNotFoundError
   | RegistryQueryTooComplexError
