@@ -1,8 +1,0 @@
-{
-  "compilerOptions": {
-    "paths": {
-      "@cv/drizzle-query": ["libs/drizzle-query/dist"]
-    }
-  },
-  "extends": "../../../../libs/drizzle-query-effect/tsconfig.build.json"
-}
