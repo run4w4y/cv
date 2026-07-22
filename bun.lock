@@ -116,6 +116,7 @@
       "devDependencies": {
         "@cv/application-registry-api-client": "workspace:*",
         "@cv/test-infrastructure": "workspace:*",
+        "@types/node": "^22.0.0",
       },
     },
     "apps/application-registry-desktop": {
@@ -180,6 +181,7 @@
         "playwright": "1.61.1",
       },
       "devDependencies": {
+        "@cv/application-registry-entity": "workspace:*",
         "@types/node": "^22.0.0",
       },
     },

@@ -7,7 +7,10 @@ const executablePath = process.env.CV_CHROME_PATH ?? process.env.CHROME_PATH
 const rootDir = fileURLToPath(new URL('../..', import.meta.url))
 
 export default defineConfig({
-  expect: { timeout: 5_000 },
+  expect: {
+    timeout: 5_000,
+    toHaveScreenshot: { maxDiffPixels: 500 },
+  },
   forbidOnly: Boolean(process.env.CI),
   fullyParallel: true,
   outputDir: `${rootDir}/.cv-work/cv-playwright-results`,

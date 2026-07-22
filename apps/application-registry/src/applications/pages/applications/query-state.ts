@@ -1,5 +1,6 @@
 import type { ListApplicationsQuery } from '@cv/application-registry-api-contract'
 import { applicationListQuery } from '@cv/application-registry-entity/query'
+import type { OrderRequest } from '@cv/drizzle-query'
 import {
   orderByFromSortingState,
   writeQueryParameterState,
@@ -18,7 +19,7 @@ const isDefaultApplicationOrderBy = (
 ): boolean =>
   orderBy.length === defaultApplicationOrderBy.length &&
   orderBy.every(
-    (term, index) =>
+    (term: OrderRequest, index: number) =>
       term.field === defaultApplicationOrderBy[index]?.field &&
       term.direction === defaultApplicationOrderBy[index]?.direction &&
       term.nulls === undefined

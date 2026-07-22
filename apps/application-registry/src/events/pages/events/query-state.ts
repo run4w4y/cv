@@ -1,5 +1,6 @@
 import type { ListActivitiesQuery } from '@cv/application-registry-api-contract'
 import { activityListQuery } from '@cv/application-registry-entity/query'
+import type { OrderRequest } from '@cv/drizzle-query'
 import {
   orderByFromSortingState,
   writeQueryParameterState,
@@ -18,7 +19,7 @@ const isDefaultEventOrderBy = (
 ): boolean =>
   orderBy.length === defaultEventOrderBy.length &&
   orderBy.every(
-    (term, index) =>
+    (term: OrderRequest, index: number) =>
       term.field === defaultEventOrderBy[index]?.field &&
       term.direction === defaultEventOrderBy[index]?.direction &&
       term.nulls === undefined

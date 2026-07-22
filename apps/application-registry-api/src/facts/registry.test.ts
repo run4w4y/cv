@@ -11,7 +11,7 @@ import {
   fixtureAssetBytes,
   fixtureProvenance,
 } from '@cv/facts-release/test-support'
-import * as BrowserCrypto from '@effect/platform-browser/BrowserCrypto'
+import * as BunCrypto from '@effect/platform-bun/BunCrypto'
 import { Effect, Layer } from 'effect'
 
 import {
@@ -52,7 +52,7 @@ const releaseBundle = async () => {
   )
   const bundle = compileFactsReleaseBundle(release)
   const bytes = await Effect.runPromise(
-    encodeFactsReleaseBundle(bundle).pipe(Effect.provide(BrowserCrypto.layer))
+    encodeFactsReleaseBundle(bundle).pipe(Effect.provide(BunCrypto.layer))
   )
   return { bundle, bytes }
 }
@@ -116,7 +116,7 @@ const withRegistry = <A>(
   FactsRegistry.pipe(Effect.flatMap(use)).pipe(
     Effect.provide(FactsRegistryLive),
     Effect.provide(storage.layer),
-    Effect.provide(BrowserCrypto.layer)
+    Effect.provide(BunCrypto.layer)
   )
 
 describe('facts registry', () => {

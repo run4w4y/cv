@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "@cv/application-registry-api-client": "workspace:*",
-    "@cv/test-infrastructure": "workspace:*"
+    "@cv/test-infrastructure": "workspace:*",
+    "@types/node": "^22.0.0"
   }
 }
