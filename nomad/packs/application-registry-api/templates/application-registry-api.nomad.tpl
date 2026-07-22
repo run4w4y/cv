@@ -20,7 +20,7 @@ job [[ .my.job_name | quote ]] {
     service {
       name = [[ .my.job_name | quote ]]
       task = "api"
-      port = "http"
+      port = "3000"
 
       tags = [
         "traefik.enable=true",
