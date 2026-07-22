@@ -29,7 +29,6 @@ env:
 jobs:
   deploy-registry-api-server:
     name: Register self-hosted registry API
-    if: ${{ vars.CV_NOMAD_API_DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     environment: production
     permissions:
@@ -66,7 +65,6 @@ jobs:
 
   deploy-listing-check-runner:
     name: Register listing-check runner
-    if: ${{ vars.CV_NOMAD_DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     environment: production
     permissions:
@@ -99,7 +97,6 @@ jobs:
 
   deploy-self-hosted-pdf:
     name: Register PDF event worker
-    if: ${{ vars.CV_NOMAD_PDF_DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     environment: production
     permissions:
