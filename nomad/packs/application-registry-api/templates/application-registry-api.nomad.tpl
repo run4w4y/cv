@@ -33,6 +33,7 @@ job [[ .my.job_name | quote ]] {
         name     = "registry-api-live"
         type     = "http"
         expose   = true
+        port     = "http"
         method   = "GET"
         path     = "/health"
         interval = "15s"
