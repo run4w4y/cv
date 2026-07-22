@@ -207,5 +207,6 @@ jobs:
       contents: read
       deployments: write
       id-token: write
+      packages: write
     secrets: inherit
     uses: ./.github/workflows/deploy-application-registry.yml
