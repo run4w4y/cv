@@ -1,8 +1,4 @@
-import {
-  normalizeQueryFilterNodes,
-  parseQueryFilterNodes,
-  serializeQueryFilterNodes,
-} from '@cv/drizzle-query-ui'
+import { normalizeQueryFilterNodes } from '@cv/drizzle-query'
 import { Option, Schema } from 'effect'
 import type { SavedViewsStorage } from '../../../table-workspace/saved-view-menu'
 import {
@@ -151,9 +147,7 @@ export const cloneApplicationViewState = (
   state: ApplicationSavedViewState
 ): ApplicationSavedViewState => ({
   keyword: state.keyword,
-  filters:
-    parseQueryFilterNodes(serializeQueryFilterNodes(state.filters) ?? '[]') ??
-    [],
+  filters: structuredClone(state.filters),
   sorting: state.sorting.map((entry) => ({ ...entry })),
   columnVisibility: { ...state.columnVisibility },
   density: state.density,

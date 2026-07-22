@@ -1,30 +1,22 @@
 import type { ApplicationListRecord } from '@cv/application-registry-crud'
 import type {
   Application,
+  ApplicationActivity,
   ApplicationCompensation,
-  ApplicationEvent,
-  ApplicationLabel,
   ApplicationNote,
-  CampaignCapture,
-  CommandReceipt,
-  FxRate,
+  IdempotencyReceipt,
 } from '@cv/application-registry-entity'
+import type { RegistryActivityListItem } from '@cv/application-registry-entity/query'
 
 export const recordedAt = '2026-07-12T12:00:00.000Z'
 
 export const application: Application = {
   applicationStatus: 'preparing',
   appliedAt: null,
-  canonicalUrl: 'https://example.test/jobs/one',
-  category: null,
   company: 'Example',
   createdAt: recordedAt,
-  details: null,
-  fitScore: null,
   followUpAt: null,
   id: 'application-1',
-  jobKey: 'test:one',
-  lastContactAt: null,
   listingAvailability: 'unchecked',
   listingCheckedAt: null,
   listingClosedCandidateAt: null,
@@ -32,26 +24,13 @@ export const application: Application = {
   listingConsecutiveClosedChecks: 0,
   listingReasonCode: null,
   location: null,
-  openStatus: null,
   personalPriority: null,
-  recommendedAction: null,
-  remotePolicy: null,
-  researchPriority: null,
+  postingUrl: 'https://example.test/jobs/one',
   role: 'Engineer',
-  source: 'test',
-  sourceConfidence: null,
-  sourceJobId: null,
   targetStage: 'backlog',
-  technologyStack: null,
   updatedAt: recordedAt,
   updatedRevision: 3,
   version: 1,
-}
-
-export const label: ApplicationLabel = {
-  applicationId: application.id,
-  createdAt: recordedAt,
-  label: 'priority',
 }
 
 export const note: ApplicationNote = {
@@ -64,54 +43,22 @@ export const note: ApplicationNote = {
   updatedAt: recordedAt,
 }
 
-export const event: ApplicationEvent = {
+export const activity: ApplicationActivity = {
+  actor: 'user',
   applicationId: application.id,
-  deviceId: 'test',
-  id: 'event-1',
-  kind: 'stage_changed',
+  id: 'activity-1',
+  kind: 'details_changed',
   occurredAt: recordedAt,
-  operationId: 'event-operation-1',
   payload: {},
-  recordedAt,
   revision: 4,
+  source: 'management',
 }
 
-export const registryEventListItem = {
-  ...event,
-  canonicalUrl: application.canonicalUrl,
+export const registryActivityListItem: RegistryActivityListItem = {
+  ...activity,
   company: application.company,
+  postingUrl: application.postingUrl,
   role: application.role,
-}
-
-export const capture: CampaignCapture = {
-  applicationId: application.id,
-  artifacts: [],
-  audience: null,
-  applicationUrl: application.canonicalUrl,
-  campaignRunId: 'run-1',
-  capturedAt: recordedAt,
-  confidence: 0.8,
-  fitAssessment: null,
-  id: 'capture-1',
-  jobContentHash: null,
-  operationId: 'capture-operation-1',
-  profile: 'default',
-  submissionDetails: {
-    additionalInstructions: null,
-    applicationMethod: 'web',
-    applicationQuestions: [],
-    contactEmail: null,
-    coverLetterInstructions: null,
-    deadline: null,
-    employmentType: null,
-    languageRequirements: [],
-    locationRestrictions: null,
-    relocation: null,
-    requiredDocuments: [],
-    salary: null,
-    visaRequirements: null,
-    workMode: null,
-  },
 }
 
 export const compensation: ApplicationCompensation = {
@@ -131,32 +78,19 @@ export const compensation: ApplicationCompensation = {
 export const applicationListRecord: ApplicationListRecord = {
   ...application,
   compensations: [],
-  counts: { captures: 0, notes: 0 },
-  identityAliases: [],
+  counts: { notes: 0 },
   labels: [],
-  latestCapture: null,
-  latestEvent: null,
-}
-
-export const fxRate: FxRate = {
-  baseCurrency: 'EUR',
-  fetchedAt: recordedAt,
-  observedAt: recordedAt,
-  provider: 'test',
-  quoteCurrency: 'USD',
-  rate: 1.1,
+  latestActivity: null,
 }
 
 export const receipt = (
-  input: Partial<CommandReceipt> = {}
-): CommandReceipt => ({
+  input: Partial<IdempotencyReceipt> = {}
+): IdempotencyReceipt => ({
   applicationId: application.id,
-  captureId: null,
-  eventId: null,
-  kind: 'application_note',
-  noteId: note.id,
-  operationId: 'note-operation-1',
-  recordedAt,
-  operationRequestSignature: '',
+  createdAt: recordedAt,
+  idempotencyKey: 'note-operation-1',
+  requestHash: '',
+  resourceId: note.id,
+  scope: 'application_note',
   ...input,
 })

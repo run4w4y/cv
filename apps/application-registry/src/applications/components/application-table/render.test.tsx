@@ -15,29 +15,15 @@ afterEach(() => {
 
 const application = {
   id: 'application-1',
-  jobKey: 'web:one',
-  source: 'web',
-  sourceJobId: 'one',
-  canonicalUrl: 'https://example.test/jobs/one',
+  postingUrl: 'https://example.test/jobs/one',
   company: 'Example',
-  companyNormalized: 'example',
   role: 'Staff Engineer',
   location: 'Remote',
   applicationStatus: 'not_started',
   targetStage: 'apply_next',
   personalPriority: 'high',
-  fitScore: 91,
-  category: 'Engineering',
-  remotePolicy: 'Remote',
-  details: null,
-  openStatus: 'Open',
-  sourceConfidence: 'High',
-  technologyStack: 'TypeScript, React',
-  recommendedAction: 'Apply',
-  researchPriority: 'High',
   followUpAt: '2026-07-20T09:30:00.000Z',
   appliedAt: null,
-  lastContactAt: null,
   listingAvailability: 'open',
   listingCheckedAt: '2026-07-15T09:30:00.000Z',
   listingClosedCandidateAt: null,
@@ -53,12 +39,10 @@ const application = {
     minimumMinor: 15_000_000,
     maximumMinor: 18_000_000,
   },
-  counts: { captures: 1, notes: 2 },
-  identityAliases: [],
+  counts: { notes: 2 },
   labels: ['TypeScript', 'Remote'],
-  latestCapture: null,
-  latestEvent: {
-    kind: 'stage_changed',
+  latestActivity: {
+    kind: 'status_changed',
     occurredAt: '2026-07-15T09:30:00.000Z',
   },
 } as ApplicationListItem
@@ -102,9 +86,9 @@ describe('ApplicationsTable', () => {
     const headers = within(table).getAllByRole('columnheader')
     const cells = within(table).getAllByRole('cell')
 
-    expect(headers).toHaveLength(13)
-    expect(cells).toHaveLength(13)
-    expect(table.style.width).toBe('2774px')
+    expect(headers).toHaveLength(12)
+    expect(cells).toHaveLength(12)
+    expect(table.style.width).toBe('2610px')
     expect(view.getByText('Annual compensation')).toBeTruthy()
     expect(view.getByText('Updated')).toBeTruthy()
     expect(
@@ -149,7 +133,7 @@ describe('ApplicationsTable', () => {
 
     await waitFor(() => expect(requests).toHaveLength(1))
     expect(requests[0]?.method).toBe('PATCH')
-    expect(requests[0]?.url).toContain('/applications/application-1/management')
+    expect(requests[0]?.url).toContain('/applications/application-1')
     expect(await requests[0]?.json()).toMatchObject({
       company: 'Updated Example',
       expectedVersion: 1,

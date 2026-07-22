@@ -11,14 +11,16 @@ import { ExternalLink, FolderOpen, Pencil, Tag } from 'lucide-react'
 import { Link } from 'react-router'
 
 import { formatDateTime, formatLabel } from '../../../lib/format'
+import type {
+  CompensationDisplayCurrency,
+  CompensationFxRateTable,
+} from '../../model/currency'
 import { AnnualCompensation } from '../annual-compensation'
-import { FitScore } from '../fit-score'
 import { ListingAvailabilityReviewDialog } from '../listing-availability-review'
 import { StatusBadge } from '../status-badge'
 import {
   CompanyEditor,
   CompensationEditor,
-  FitScoreEditor,
   FollowUpEditor,
   LabelsEditor,
   PriorityEditor,
@@ -32,12 +34,16 @@ const EmptyValue = () => <span className="text-muted-foreground">—</span>
 
 export type ApplicationColumnsOptions = {
   readonly availableLabels: readonly string[]
+  readonly compensationDisplayCurrency: CompensationDisplayCurrency
+  readonly compensationFxRateTable?: CompensationFxRateTable
   readonly editingRowId?: string
   readonly onBeginEditing: (application: ApplicationListItem) => void
 }
 
 export const createApplicationColumns = ({
   availableLabels,
+  compensationDisplayCurrency,
+  compensationFxRateTable,
   editingRowId,
   onBeginEditing,
 }: ApplicationColumnsOptions): readonly ColumnDef<ApplicationListItem>[] => [
@@ -70,7 +76,7 @@ export const createApplicationColumns = ({
         <div className="min-w-52 whitespace-normal break-words">
           <p className="line-clamp-3 font-medium">{row.original.role}</p>
           <p className="mt-0.5 line-clamp-2 break-all font-mono text-[0.6875rem] text-muted-foreground">
-            {row.original.jobKey}
+            {row.original.id}
           </p>
         </div>
       ),
@@ -97,17 +103,6 @@ export const createApplicationColumns = ({
         <Badge variant="outline" className="whitespace-normal text-center">
           {formatLabel(row.original.targetStage)}
         </Badge>
-      ),
-  },
-  {
-    accessorKey: 'fitScore',
-    header: 'Fit',
-    size: 164,
-    cell: ({ row }) =>
-      editingRowId === row.original.id ? (
-        <FitScoreEditor />
-      ) : (
-        <FitScore score={row.original.fitScore} />
       ),
   },
   {
@@ -159,7 +154,11 @@ export const createApplicationColumns = ({
       editingRowId === row.original.id ? (
         <CompensationEditor />
       ) : (
-        <AnnualCompensation value={row.original.annualCompensation} />
+        <AnnualCompensation
+          value={row.original.annualCompensation}
+          displayCurrency={compensationDisplayCurrency}
+          rateTable={compensationFxRateTable}
+        />
       ),
   },
   {
@@ -176,19 +175,19 @@ export const createApplicationColumns = ({
       ),
   },
   {
-    id: 'latestEventAt',
-    accessorFn: (row) => row.latestEvent?.occurredAt ?? null,
-    header: 'Latest event',
+    id: 'latestActivityAt',
+    accessorFn: (row) => row.latestActivity?.occurredAt ?? null,
+    header: 'Latest activity',
     size: 180,
     cell: ({ row }) => (
       <div className="whitespace-normal break-words text-xs">
         <p className="line-clamp-2">
-          {row.original.latestEvent === null
-            ? 'No events'
-            : formatLabel(row.original.latestEvent.kind)}
+          {row.original.latestActivity === null
+            ? 'No activity'
+            : formatLabel(row.original.latestActivity.kind)}
         </p>
         <p className="mt-0.5 text-muted-foreground">
-          {formatDateTime(row.original.latestEvent?.occurredAt)}
+          {formatDateTime(row.original.latestActivity?.occurredAt)}
         </p>
       </div>
     ),
@@ -242,7 +241,7 @@ export const createApplicationColumns = ({
             <FolderOpen />
           </Link>
           <a
-            href={row.original.canonicalUrl}
+            href={row.original.postingUrl}
             target="_blank"
             rel="noreferrer"
             aria-label={`Open ${row.original.company} listing`}

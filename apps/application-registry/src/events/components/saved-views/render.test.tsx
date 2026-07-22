@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
-import type { RegistryEventListItem } from '@cv/application-registry-api-contract'
+import type { RegistryActivityListItem } from '@cv/application-registry-api-contract'
 import {
   functionalUpdate,
   getCoreRowModel,
@@ -26,7 +26,7 @@ const currentState: EventsSavedViewState = {
       type: 'condition',
       field: 'kind',
       operator: 'in',
-      value: ['submitted', 'stage_changed'],
+      value: ['application_created', 'status_changed'],
     },
     {
       type: 'condition',
@@ -37,20 +37,20 @@ const currentState: EventsSavedViewState = {
   ],
   sorting: [
     { id: 'occurredAt', desc: true },
-    { id: 'recordedAt', desc: false },
+    { id: 'revision', desc: false },
   ],
-  columnVisibility: { deviceId: false },
+  columnVisibility: { actor: false },
   density: 'compact',
 }
 
-const storageKey = '@cv/application-registry/events/saved-views:test'
+const storageKey = '@cv/application-registry/activities/saved-views:test'
 
 afterEach(() => {
   cleanup()
   window.localStorage.clear()
 })
 
-describe('event saved views storage', () => {
+describe('activity saved views storage', () => {
   test('round-trips nested saved filters without flattening them', () => {
     const nestedState: EventsSavedViewState = {
       ...currentState,
@@ -63,7 +63,7 @@ describe('event saved views storage', () => {
               type: 'condition',
               field: 'kind',
               operator: 'eq',
-              value: 'submitted',
+              value: 'application_created',
             },
           ],
         },
@@ -127,7 +127,7 @@ describe('event saved views storage', () => {
     ).toBe(EVENTS_SAVED_VIEWS_SCHEMA_VERSION)
   })
 
-  test('rejects another schema and malformed event table state', () => {
+  test('rejects another schema and malformed activity table state', () => {
     window.localStorage.setItem(
       storageKey,
       JSON.stringify({
@@ -170,7 +170,7 @@ const EventsViewMenuHarness = ({
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>(currentState.columnVisibility)
   const table = useReactTable({
-    data: [] as RegistryEventListItem[],
+    data: [] as RegistryActivityListItem[],
     columns: [...eventColumns],
     getCoreRowModel: getCoreRowModel(),
     state: { columnVisibility },

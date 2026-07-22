@@ -36,19 +36,9 @@ export const RegistryRevisionSchema = Schema.Int.pipe(
 /** Monotonic revision assigned to registry mutations. */
 export type RegistryRevision = Schema.Schema.Type<typeof RegistryRevisionSchema>
 
-export const FitScoreSchema = Schema.Int.pipe(
-  Schema.check(
-    Schema.isGreaterThanOrEqualTo(0),
-    Schema.isLessThanOrEqualTo(100)
-  )
-)
-
-export const ConfidenceSchema = Schema.Number.pipe(
-  Schema.check(Schema.isGreaterThanOrEqualTo(0), Schema.isLessThanOrEqualTo(1))
-)
-
 export const NonNegativeMinorAmountSchema = Schema.Int.pipe(
-  Schema.check(Schema.isGreaterThanOrEqualTo(0))
+  Schema.check(Schema.isGreaterThanOrEqualTo(0)),
+  Schema.check(Schema.isLessThanOrEqualTo(Number.MAX_SAFE_INTEGER))
 )
 
 export const PositiveRateSchema = Schema.Number.pipe(

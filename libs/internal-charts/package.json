@@ -1,0 +1,29 @@
+{
+  "name": "@cv/internal-charts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": [
+    "./dist/theme.css"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./theme.css": "./dist/theme.css"
+  },
+  "dependencies": {
+    "@cv/internal-ui": "workspace:*",
+    "react": "^19.0.0",
+    "tslib": "^2.8.1"
+  },
+  "devDependencies": {
+    "@storybook/react-vite": "^9.0.13",
+    "react-dom": "^19.0.0",
+    "storybook": "^9.0.13"
+  }
+}

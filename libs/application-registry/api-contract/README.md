@@ -1,59 +1,53 @@
 # Application registry HTTP contract
 
-The Effect HttpApi and OpenAPI document for the application registry. Database
-entity response schemas are reused from `@cv/application-registry-entity`.
+This package is the sole HTTP contract for the application registry. It defines
+one unversioned Effect `HttpApi`, generates its OpenAPI document, and supplies
+the schemas used by the Bun API, browser management app, and CLI client. There
+is no parallel legacy API.
 
-Public request schemas live here because they describe the transport, not
-persistence ports. The Worker and generated
-`@cv/application-registry-api-client` compile against the same declaration; there
-is no separately maintained REST client.
+The public health endpoint is `GET /health`. Registry resources live under
+`/api/registry` and require bearer authentication. Browser callers reach those
+paths through the same-origin BFF. Direct clients use the service's
+`/machine/api/registry` transport, which validates the explicitly supplied
+bearer credential and strips `/machine` before invoking this contract. Missing
+machine credentials are never replaced with the server's configured token.
 
-Application and event list capabilities are defined once by the entity package
-under `@cv/application-registry-entity/query`. Each table-first definition
-declares its filterable and sortable columns, computed fields, relations,
-custom operators, default ordering, and cursor pagination. This contract
-package derives the HTTP Effect Schemas from those definitions, while CRUD
-compiles the same objects directly. Adding a field or operator therefore does
-not require a second transport DTO.
+The contract is grouped internally by responsibility while remaining one API:
 
-The append-event request is a schema-level union rather than a convention in a
-handler. Lifecycle event kinds require `nextApplicationStatus`; informational
-event kinds omit it. This keeps the OpenAPI document, generated client, Worker,
-and service boundary aligned and prevents status from being inferred from an
-event name.
+- `applications`: create, get, list, aggregate update, annotations,
+  compensations, listing decisions, analytics, and read-only activities;
+- `content`: raw blobs, posting snapshots, content entries, and revisions;
+- `publications`: CV links and PDF runs/artifacts;
+- `automation`: listing-check runs and findings.
 
-The managed-application update requires `expectedVersion` and `operationId`.
-Scalar fields are patch-like; omitted `labels` and `annualCompensation` remain
-untouched, present labels replace the set, and a present null compensation
-clears the annual value. The annual range schema rejects a maximum below its
-minimum before the request reaches persistence.
+Applications are addressed only by their registry UUID. `postingUrl` is the
+external posting reference and private normalized/fingerprint columns enforce
+deduplication; transport schemas do not expose a second job/source identity.
+`POST /api/registry/applications` is used by manual creation and preparation
+imports alike.
 
-The generic GET wire format uses `filters=<JSON array>` and
-`orderBy=<JSON array>`. Cursor pagination remains readable as flat `after` and
-`size` parameters; the decoded TypeScript request contains them under
-`pagination`. The application-only `currency` and full-text `q` parameters
-remain flat. In particular, `q` is not injected into the encoded `filters`
-array, so a browser can forward that array to the API without rewriting it.
-`@cv/drizzle-query-effect/schema` provides the same bidirectional codec and
-`URLSearchParams` helpers to servers, generated clients, CLIs, and other
-TypeScript consumers. This package exports synchronous application- and
-event-specific `encodeList*SearchParams` and `decodeList*SearchParams` helpers
-so consumers use the concrete contract rather than manually serializing JSON.
-Numeric sizes are limited to 1–100 and default to 50.
-Responses are ordinary `{ items, pageInfo }` query pages;
-`pageInfo.nextCursor` is supplied as the next request's `after` parameter.
+Activities are backend-issued annotations. Clients can read
+`/api/registry/activities` or `/api/registry/applications/:id/activities`, but
+the contract intentionally has no activity-write endpoint.
 
-Revision-based reads use the same filters and ordering as every other query.
-For example, an application consumer can request rows after a known revision
-with an `updatedRevision gt <revision>` condition and order by
-`updatedRevision asc`. Event consumers can do the same with `revision`. These
-fields remain ordinary filterable and sortable data rather than defining a
-second synchronization or continuation protocol.
+Application and activity list requests are derived from the definitions in
+`@cv/application-registry-entity/query`. Their `filters` and `orderBy` query
+parameters are the JSON forms defined by `@cv/drizzle-query`; cursor pagination
+uses `after` and `size`. Consumers should use the exported encode/decode helpers
+instead of inventing an alternate query syntax.
 
-Follow-up categories are also expressed through the stored `followUpAt` field.
-`isNull` selects applications without a follow-up, `lt <reference-time>`
-selects overdue applications, and `gte <reference-time>` selects upcoming
-applications. The caller owns that reference time. A client following
-`nextCursor` across several pages must reuse the same timestamp in every
-request so the filter, and therefore the cursor-bound query, stays unchanged
-for the complete traversal.
+Opaque content uses binary HTTP bodies. `PUT /api/registry/blobs/:sha256`
+uploads bytes and `GET` returns bytes. Snapshot and revision JSON bodies contain
+only `{ sha256, mediaType }` references, avoiding base64 expansion and keeping
+content metadata separate from transport.
+
+The typed `factsPublication` group accepts a strict binary release bundle under
+`/machine/api/registry/facts`, registers immutable objects, and activates with
+an expected-current compare-and-set. It uses a dedicated publication bearer
+credential. Browser reads remain behind the authenticated, read-only
+same-origin object proxy, and the registry contract carries a facts release ID
+as content-revision provenance.
+
+Mutations that can be retried take `idempotency-key` in the HTTP header. The
+payload contains domain data and optimistic `expectedVersion` values; it does
+not duplicate transport idempotency metadata.

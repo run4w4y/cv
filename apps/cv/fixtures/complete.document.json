@@ -1,0 +1,174 @@
+{
+  "$schema": "cv.document.v1",
+  "locale": "en",
+  "direction": "ltr",
+  "person": {
+    "name": "Ada Lovelace",
+    "headline": "Staff software engineer · distributed systems",
+    "location": "London, UK · Remote",
+    "summary": "Builds dependable distributed systems and developer platforms, turning ambiguous operational problems into observable, maintainable products. Leads cross-functional delivery while staying close to architecture, implementation, and production feedback.",
+    "contacts": [
+      {
+        "kind": "email",
+        "label": "Email",
+        "value": "ada@example.com",
+        "href": "mailto:ada@example.com"
+      },
+      {
+        "kind": "github",
+        "label": "GitHub",
+        "value": "github.com/ada",
+        "href": "https://github.com/ada"
+      },
+      {
+        "kind": "linkedin",
+        "label": "LinkedIn",
+        "value": "linkedin.com/in/ada",
+        "href": "https://www.linkedin.com/in/ada"
+      }
+    ]
+  },
+  "experience": [
+    {
+      "id": "experience.engine",
+      "company": "Analytical Engines",
+      "role": "Staff Software Engineer",
+      "period": "2022–present",
+      "location": "Remote",
+      "summary": "Owns the architecture and delivery of a multi-region computation platform used by product and data teams.",
+      "highlights": [
+        "Cut recovery time from hours to minutes by introducing deterministic replay and automated reconciliation.",
+        "Led a platform migration across six teams without interrupting customer workloads.",
+        "Established service-level objectives and production review practices for critical workflows."
+      ],
+      "technologies": [
+        "TypeScript",
+        "Effect",
+        "PostgreSQL",
+        "Cloudflare Workers",
+        "OpenTelemetry"
+      ]
+    },
+    {
+      "id": "experience.numbers",
+      "company": "Difference Engine Labs",
+      "role": "Senior Software Engineer",
+      "period": "2019–2022",
+      "location": "London, UK",
+      "summary": "Built internal developer tooling and high-volume data services for financial modelling teams.",
+      "highlights": [
+        "Designed a typed workflow system that replaced error-prone manual release coordination.",
+        "Improved batch throughput by 4× while reducing peak infrastructure cost."
+      ],
+      "technologies": ["React", "Node.js", "Kafka", "Kubernetes"]
+    }
+  ],
+  "projects": [
+    {
+      "id": "project.notes",
+      "name": "Notes on dependable computation",
+      "summary": "A technical publication explaining practical reliability techniques through small, reproducible examples.",
+      "highlights": [
+        "Published reviewed explanations and runnable reference implementations.",
+        "Used by engineering teams as onboarding material for distributed-systems work."
+      ],
+      "technologies": ["Markdown", "TypeScript", "Property-based testing"],
+      "links": [
+        {
+          "kind": "website",
+          "label": "Read",
+          "value": "example.com/notes",
+          "href": "https://example.com/notes"
+        }
+      ]
+    },
+    {
+      "id": "project.observatory",
+      "name": "Workflow Observatory",
+      "summary": "An open-source diagnostic interface for inspecting long-running workflows and their causal history.",
+      "highlights": [
+        "Designed an accessible timeline that remains useful for traces with thousands of events."
+      ],
+      "technologies": ["React", "Web Components", "OpenTelemetry"],
+      "links": [
+        {
+          "kind": "github",
+          "label": "Source",
+          "value": "github.com/ada/observatory",
+          "href": "https://github.com/ada/observatory"
+        }
+      ]
+    }
+  ],
+  "skills": [
+    {
+      "id": "skills.platform",
+      "label": "Platform engineering",
+      "items": [
+        "Distributed systems",
+        "Workflow orchestration",
+        "Observability",
+        "Incident response"
+      ]
+    },
+    {
+      "id": "skills.application",
+      "label": "Application development",
+      "items": ["TypeScript", "React", "Next.js", "Effect"]
+    },
+    {
+      "id": "skills.data",
+      "label": "Data and infrastructure",
+      "items": ["PostgreSQL", "Kafka", "Cloudflare", "Kubernetes"]
+    },
+    {
+      "id": "skills.leadership",
+      "label": "Leadership",
+      "items": [
+        "Technical strategy",
+        "Architecture review",
+        "Mentoring",
+        "Cross-team delivery"
+      ]
+    }
+  ],
+  "education": [
+    {
+      "id": "education.mathematics",
+      "institution": "University of London",
+      "qualification": "Mathematics",
+      "period": "2015–2019",
+      "location": "London, UK",
+      "details": ["Focused on numerical methods and formal reasoning."]
+    }
+  ],
+  "additionalSections": [
+    {
+      "id": "additional.languages",
+      "title": "Languages",
+      "items": [
+        {
+          "id": "language.english",
+          "title": "English",
+          "text": "Native proficiency"
+        },
+        {
+          "id": "language.french",
+          "title": "French",
+          "text": "Professional working proficiency"
+        }
+      ]
+    },
+    {
+      "id": "additional.community",
+      "title": "Community",
+      "items": [
+        {
+          "id": "community.mentoring",
+          "title": "Mentoring",
+          "text": "Volunteer mentor for engineers moving into platform and reliability roles."
+        }
+      ]
+    }
+  ]
+}

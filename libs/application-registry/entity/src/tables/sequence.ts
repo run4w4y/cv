@@ -1,12 +1,7 @@
 import { sql } from 'drizzle-orm'
-import {
-  check,
-  integer,
-  primaryKey,
-  sqliteTable,
-} from 'drizzle-orm/sqlite-core'
+import { check, integer, pgTable, primaryKey } from 'drizzle-orm/pg-core'
 
-export const registrySequence = sqliteTable(
+export const registrySequence = pgTable(
   'registry_sequence',
   {
     id: integer('id').notNull(),

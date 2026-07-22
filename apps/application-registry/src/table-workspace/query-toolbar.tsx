@@ -81,7 +81,7 @@ export const QueryWorkspaceToolbar = ({
             className="min-h-8 max-w-full whitespace-normal"
           >
             <ShieldAlert className="size-3.5" />
-            Invalid filters URL; the table request is blocked
+            Invalid query URL; the table request is blocked
           </Badge>
         ) : null}
         {(filters.decoded.hasUnsupportedStructure ||
@@ -102,7 +102,7 @@ export const QueryWorkspaceToolbar = ({
             variant="outline"
             onClick={filters.replaceUneditable}
           >
-            Replace URL filters
+            {filters.replacementLabel}
           </Button>
         ) : (
           <QueryFiltersToggle />

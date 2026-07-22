@@ -1,33 +1,14 @@
+import type { FilterNode } from '@cv/drizzle-query'
 import {
-  areQueryFiltersStatesEqual,
-  decodeQueryFiltersUrlState,
   emptyQueryFiltersState,
-  parseCanonicalQueryFiltersState,
-  parseQueryFilterNodes,
+  filterNodesFromState,
   type QueryFilterDefinition,
   type QueryFilterFieldPresentation,
   type QueryFiltersState,
+  queryFiltersStateFromFilterNodes,
   resolveQueryFiltersState,
-  serializeCanonicalQueryFiltersState,
-  writeCanonicalQueryFiltersUrlState,
 } from '@cv/drizzle-query-ui'
-import { createParser } from 'nuqs'
 import * as React from 'react'
-
-export const canonicalFiltersParser = createParser<QueryFiltersState>({
-  parse: (value) =>
-    parseCanonicalQueryFiltersState(value) ?? emptyQueryFiltersState(),
-  serialize: (state) => serializeCanonicalQueryFiltersState(state) ?? '[]',
-  eq: areQueryFiltersStatesEqual,
-}).withDefault(emptyQueryFiltersState())
-
-export const filterUrlSignature = (searchParams: URLSearchParams): string =>
-  JSON.stringify(searchParams.getAll('filters'))
-
-export const canonicalFilterUrlSignature = (
-  canonicalValue: string | undefined
-): string =>
-  JSON.stringify(canonicalValue === undefined ? [] : [canonicalValue])
 
 export type CanonicalQueryFiltersController = ReturnType<
   typeof useCanonicalQueryFilters
@@ -35,97 +16,80 @@ export type CanonicalQueryFiltersController = ReturnType<
 
 export const useCanonicalQueryFilters = ({
   searchParams,
-  setSearchParams,
+  appliedFilters,
+  blocksRequest,
   definition,
   presentation,
-  applyState,
+  onFiltersChange,
+  onClearInvalidQuery,
 }: {
   readonly searchParams: URLSearchParams
-  readonly setSearchParams: (
-    next: URLSearchParams,
-    options: { readonly replace: boolean }
-  ) => void
+  readonly appliedFilters: readonly FilterNode[]
+  readonly blocksRequest: boolean
   readonly definition: QueryFilterDefinition
   readonly presentation?: Readonly<Record<string, QueryFilterFieldPresentation>>
-  readonly applyState: (state: QueryFiltersState) => void
+  readonly onFiltersChange: (filters: readonly FilterNode[] | undefined) => void
+  readonly onClearInvalidQuery: () => void
 }) => {
-  const locationSignature = filterUrlSignature(searchParams)
-  const decoded = decodeQueryFiltersUrlState(
-    searchParams,
+  const locationSignature = JSON.stringify(searchParams.getAll('filter'))
+  const representedState = queryFiltersStateFromFilterNodes(appliedFilters)
+  const editorStateFromUrl = representedState ?? emptyQueryFiltersState()
+  const appliedResolution = resolveQueryFiltersState(
+    editorStateFromUrl,
+    definition
+  )
+  const editorResolution = resolveQueryFiltersState(
+    editorStateFromUrl,
     definition,
     presentation
   )
-  const decodedEditorSignature = serializeCanonicalQueryFiltersState(
-    decoded.editorState
-  )
-  const [editorState, setEditorState] = React.useState<QueryFiltersState>(
-    decoded.editorState
-  )
-  const pendingSignature = React.useRef<string | null>(null)
-  const [navigationTarget, setNavigationTarget] = React.useState<string | null>(
-    null
-  )
+  const hasUnsupportedStructure =
+    !blocksRequest &&
+    representedState === undefined &&
+    appliedFilters.length > 0
+  const hasUnsupportedEditorConditions =
+    !blocksRequest &&
+    !hasUnsupportedStructure &&
+    editorResolution.hasInvalidConditions
+  const decoded = {
+    editorState: editorStateFromUrl,
+    appliedState: appliedResolution.validState,
+    appliedFilters,
+    source: blocksRequest
+      ? ('invalid' as const)
+      : appliedFilters.length === 0
+        ? ('empty' as const)
+        : ('canonical' as const),
+    hasUnsupportedStructure,
+    hasUnsupportedEditorConditions,
+    blocksRequest,
+  }
+  const [editorState, setEditorState] =
+    React.useState<QueryFiltersState>(editorStateFromUrl)
+  const editorStateFromUrlRef = React.useRef(editorStateFromUrl)
+  editorStateFromUrlRef.current = editorStateFromUrl
+  const previousLocationSignature = React.useRef(locationSignature)
 
-  // URL navigation is an external subscription boundary. Keep the editor in
-  // sync with browser history, while preserving edits during our own write.
   React.useEffect(() => {
-    if (pendingSignature.current === locationSignature) {
-      pendingSignature.current = null
-      setNavigationTarget((current) =>
-        current === locationSignature ? null : current
-      )
-      return
-    }
-    setEditorState(
-      decodedEditorSignature === undefined
-        ? emptyQueryFiltersState()
-        : (parseCanonicalQueryFiltersState(decodedEditorSignature) ??
-            emptyQueryFiltersState())
-    )
-  }, [decodedEditorSignature, locationSignature])
-
-  // Canonicalization changes browser state and therefore belongs in an effect,
-  // not in render. Invalid URLs remain blocked and are never broadened.
-  React.useEffect(() => {
-    if (!decoded.needsCanonicalWrite) return
-    const target = canonicalFilterUrlSignature(decoded.canonicalValue)
-    pendingSignature.current = target
-    setNavigationTarget(target)
-    setSearchParams(
-      writeCanonicalQueryFiltersUrlState(searchParams, decoded.canonicalValue),
-      { replace: true }
-    )
-  }, [
-    decoded.canonicalValue,
-    decoded.needsCanonicalWrite,
-    searchParams,
-    setSearchParams,
-  ])
+    if (previousLocationSignature.current === locationSignature) return
+    previousLocationSignature.current = locationSignature
+    setEditorState(editorStateFromUrlRef.current)
+  }, [locationSignature])
 
   const resolved = resolveQueryFiltersState(
     editorState,
     definition,
     presentation
   )
-  const queryFilters = parseQueryFilterNodes(decoded.canonicalValue ?? '') ?? []
   const requiresReplacement =
-    decoded.hasUnsupportedStructure ||
-    decoded.hasUnsupportedEditorConditions ||
-    (decoded.blocksRequest && decoded.editorState.conditions.length === 0)
-
-  const markNavigation = (canonicalValue: string | undefined) => {
-    const target = canonicalFilterUrlSignature(canonicalValue)
-    pendingSignature.current = target === locationSignature ? null : target
-    setNavigationTarget(target === locationSignature ? null : target)
-  }
+    hasUnsupportedStructure ||
+    hasUnsupportedEditorConditions ||
+    (blocksRequest && editorStateFromUrl.conditions.length === 0)
 
   const replaceUneditable = () => {
-    markNavigation(undefined)
     setEditorState(emptyQueryFiltersState())
-    setSearchParams(
-      writeCanonicalQueryFiltersUrlState(searchParams, undefined),
-      { replace: true }
-    )
+    if (blocksRequest) onClearInvalidQuery()
+    else onFiltersChange(undefined)
   }
 
   const onEditorStateChange = (nextState: QueryFiltersState) => {
@@ -136,20 +100,19 @@ export const useCanonicalQueryFilters = ({
       presentation
     )
     if (nextResolution.hasInvalidConditions) return
-    const nextStateToApply = nextResolution.validState
-    markNavigation(serializeCanonicalQueryFiltersState(nextStateToApply))
-    applyState(nextStateToApply)
+    const nextFilters = filterNodesFromState(nextResolution.validState)
+    onFiltersChange(nextFilters.length === 0 ? undefined : nextFilters)
   }
 
   return {
     decoded,
     editorState,
-    locationSignature,
-    markNavigation,
-    navigationSettled: navigationTarget === null,
     onEditorStateChange,
-    queryFilters,
+    queryFilters: appliedFilters,
     replaceUneditable,
+    replacementLabel: blocksRequest
+      ? 'Clear invalid query'
+      : 'Replace URL filters',
     requiresReplacement,
     resolved,
     setEditorState,

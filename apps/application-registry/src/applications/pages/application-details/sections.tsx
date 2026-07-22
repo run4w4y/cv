@@ -1,5 +1,7 @@
-import type { ApplicationCompensationResponseItem } from '@cv/application-registry-api-contract'
-import type { Application } from '@cv/application-registry-entity'
+import type {
+  Application,
+  ApplicationCompensation as ApplicationCompensationValue,
+} from '@cv/application-registry-entity'
 import {
   Alert,
   AlertDescription,
@@ -25,10 +27,12 @@ import type React from 'react'
 import { formatDateTime, formatLabel } from '../../../lib/format'
 import { AnnualCompensation } from '../../components/annual-compensation'
 import { CurrencyCombobox } from '../../components/currency-combobox'
-import { FitScore } from '../../components/fit-score'
 import { ListingAvailabilityReviewDialog } from '../../components/listing-availability-review'
 import { StatusBadge } from '../../components/status-badge'
-import type { CompensationDisplayCurrency } from '../../model/currency'
+import type {
+  CompensationDisplayCurrency,
+  CompensationFxRateTable,
+} from '../../model/currency'
 
 const Detail = ({
   label,
@@ -85,11 +89,11 @@ export const ApplicationSummary = ({
               <MapPin className="size-3.5" />
               {application.location ?? 'Location not specified'}
             </span>
-            <span className="font-mono">{application.jobKey}</span>
+            <span className="font-mono">{application.id}</span>
           </div>
         </div>
         <a
-          href={application.canonicalUrl}
+          href={application.postingUrl}
           target="_blank"
           rel="noreferrer"
           className={cn(buttonVariants({ variant: 'outline' }))}
@@ -110,7 +114,7 @@ export const ApplicationMetadata = ({
     <Card>
       <CardHeader className="flex-row items-center gap-2 pb-0">
         <FileText className="size-4 text-primary" />
-        <CardTitle>Opportunity details</CardTitle>
+        <CardTitle>Application details</CardTitle>
       </CardHeader>
       <CardContent>
         <dl className="mt-5 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -123,19 +127,6 @@ export const ApplicationMetadata = ({
             {application.personalPriority === null
               ? '—'
               : formatLabel(application.personalPriority)}
-          </Detail>
-          <Detail label="Fit score">
-            <FitScore score={application.fitScore} />
-          </Detail>
-          <Detail label="Category">{application.category ?? '—'}</Detail>
-          <Detail label="Remote policy">
-            {application.remotePolicy ?? '—'}
-          </Detail>
-          <Detail label="Technology">
-            {application.technologyStack ?? '—'}
-          </Detail>
-          <Detail label="Recommended action">
-            {application.recommendedAction ?? '—'}
           </Detail>
           <Detail label="Follow up">
             {formatDateTime(application.followUpAt)}
@@ -156,9 +147,6 @@ export const ApplicationMetadata = ({
           <Detail label="Listing availability">
             <ListingAvailabilityReviewDialog application={application} />
           </Detail>
-          <Detail label="Source">
-            <Badge variant="outline">{application.source}</Badge>
-          </Detail>
           <Detail label="Version">{application.version}</Detail>
           <Detail label="Revision">{application.updatedRevision}</Detail>
           <Detail label="Created">
@@ -178,14 +166,18 @@ export const ApplicationCompensation = ({
   onCurrencyChange,
   compensations,
   error,
+  conversionError,
+  rateTable,
 }: {
   readonly currency: CompensationDisplayCurrency
   readonly onCurrencyChange: (currency: CompensationDisplayCurrency) => void
-  readonly compensations?: readonly ApplicationCompensationResponseItem[]
+  readonly compensations?: readonly ApplicationCompensationValue[]
   readonly error?: string
+  readonly conversionError?: string
+  readonly rateTable?: CompensationFxRateTable
 }) => {
   const annual = compensations?.filter(
-    ({ original }) => original.period === 'year'
+    (compensation) => compensation.period === 'year'
   )
   return (
     <Card className="mt-4">
@@ -204,8 +196,16 @@ export const ApplicationCompensation = ({
         <p className="mt-2 text-xs text-muted-foreground">
           {currency === 'original'
             ? 'Showing the original stored values.'
-            : `Showing converted ${currency} values using the registry FX rate.`}
+            : `Showing converted ${currency} values using client-side Frankfurter rates.`}
         </p>
+        {conversionError !== undefined ? (
+          <Alert className="mt-4">
+            <AlertTitle>Currency conversion unavailable</AlertTitle>
+            <AlertDescription>
+              {conversionError} Original compensation values remain visible.
+            </AlertDescription>
+          </Alert>
+        ) : null}
         {error !== undefined ? (
           <Alert variant="destructive" className="mt-4">
             <AlertTitle>Could not load compensation</AlertTitle>
@@ -222,11 +222,7 @@ export const ApplicationCompensation = ({
           </p>
         ) : (
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {annual.map(({ conversion, original }) => {
-              const visible =
-                currency === 'original' || conversion === null
-                  ? original
-                  : conversion
+            {annual.map((original) => {
               return (
                 <div
                   key={original.id}
@@ -237,10 +233,12 @@ export const ApplicationCompensation = ({
                   </Badge>
                   <AnnualCompensation
                     value={{
-                      currencyCode: visible.currencyCode,
-                      minimumMinor: visible.minimumMinor,
-                      maximumMinor: visible.maximumMinor,
+                      currencyCode: original.currencyCode,
+                      minimumMinor: original.minimumMinor,
+                      maximumMinor: original.maximumMinor,
                     }}
+                    displayCurrency={currency}
+                    rateTable={rateTable}
                   />
                 </div>
               )

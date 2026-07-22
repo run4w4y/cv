@@ -13,7 +13,7 @@
       "!**/.cache",
       "!**/.rslib",
       "!**/.terragrunt-cache",
-      "!**/*.css.hbs",
+      "!apps/cv/next-env.d.ts",
       "!public/**/*.pdf"
     ]
   },
@@ -91,7 +91,7 @@
       }
     },
     {
-      "includes": ["apps/cv/src/styles/global.css"],
+      "includes": ["apps/cv/src/app/global.css"],
       "linter": {
         "rules": {
           "complexity": {

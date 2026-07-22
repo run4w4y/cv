@@ -1,42 +1,46 @@
-import { eventListQuery } from '@cv/application-registry-entity/query'
+import type { ListActivitiesQuery } from '@cv/application-registry-api-contract'
+import { activityListQuery } from '@cv/application-registry-entity/query'
+import type { OrderRequest } from '@cv/drizzle-query'
 import {
-  serializeQueryFilterNodes,
-  writeCanonicalQueryFiltersUrlState,
-} from '@cv/drizzle-query-ui'
+  orderByFromSortingState,
+  writeQueryParameterState,
+} from '@cv/drizzle-query-ui/search-params'
 import type { SortingState } from '@tanstack/react-table'
 
-import {
-  parseSorting as parseRegistrySorting,
-  serializeSorting as serializeRegistrySorting,
-} from '../../../lib/sorting'
+import { activityQueryBoundary } from '../../../table-workspace/query-codecs'
 import type { EventsSavedViewState } from '../../components/saved-views'
 
-export const defaultEventSorting: SortingState = [
-  { id: 'revision', desc: true },
-]
+export const defaultEventOrderBy = [
+  { field: 'revision', direction: 'asc' },
+] as const satisfies NonNullable<ListActivitiesQuery['orderBy']>
 
-const sortableFields = new Set(
-  eventListQuery.fields
-    .filter((field) => field.sortable)
-    .map((field) => field.name)
-)
+const isDefaultEventOrderBy = (
+  orderBy: NonNullable<ListActivitiesQuery['orderBy']>
+): boolean =>
+  orderBy.length === defaultEventOrderBy.length &&
+  orderBy.every(
+    (term: OrderRequest, index: number) =>
+      term.field === defaultEventOrderBy[index]?.field &&
+      term.direction === defaultEventOrderBy[index]?.direction &&
+      term.nulls === undefined
+  )
 
-export const parseEventSorting = (value: string): SortingState =>
-  parseRegistrySorting(value, sortableFields, defaultEventSorting)
-
-export const serializeEventSorting = (sorting: SortingState): string =>
-  serializeRegistrySorting(sorting, defaultEventSorting)
+export const eventOrderByFromSorting = (
+  sorting: SortingState
+): ListActivitiesQuery['orderBy'] => {
+  const orderBy = orderByFromSortingState(sorting, activityListQuery)
+  return orderBy === undefined || isDefaultEventOrderBy(orderBy)
+    ? undefined
+    : orderBy
+}
 
 export const writeEventsViewQueryState = (
   searchParams: URLSearchParams,
   state: EventsSavedViewState
 ): URLSearchParams => {
-  const next = writeCanonicalQueryFiltersUrlState(
-    searchParams,
-    serializeQueryFilterNodes(state.filters)
-  )
-  const sort = serializeEventSorting(state.sorting)
-  if (sort === serializeEventSorting(defaultEventSorting)) next.delete('sort')
-  else next.set('sort', sort)
-  return next
+  const orderBy = eventOrderByFromSorting(state.sorting)
+  return writeQueryParameterState(activityQueryBoundary, searchParams, {
+    ...(state.filters.length === 0 ? {} : { filters: state.filters }),
+    ...(orderBy === undefined ? {} : { orderBy }),
+  })
 }

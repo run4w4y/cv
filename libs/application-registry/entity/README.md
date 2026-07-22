@@ -1,57 +1,50 @@
 # Application registry entity
 
-TS-first Drizzle tables and Drizzle-derived Effect codecs for the application
-registry. This package is the sole physical-schema source of truth and owns the
-D1 migrations generated from it.
+TS-first Drizzle tables and Drizzle-derived Effect codecs for the registry.
+This package is the sole physical-schema source of truth and owns the PostgreSQL
+migration history.
 
-The tables cover applications, labels, notes, events, campaign captures,
-compensation entries, FX-rate observations, idempotency receipts, and the
-monotonic revision sequence. Table row types are inferred directly from those
-definitions; there is no hand-maintained duplicate entity interface.
+The current application model has one opaque text identity and one external
+`postingUrl`. Keeping identifiers as text preserves the existing D1 records
+during the one-time import; new identifiers can still use UUID values. Private
+normalized URL and fingerprint columns support lookup and deduplication; there
+are no public job keys, source IDs, or identity aliases.
+Related tables cover labels, notes, backend-issued activities, compensation,
+listing checks, opaque content revisions, publications, PDF
+artifacts and idempotency receipts.
 
-`applications.remotePolicy` retains the source's short/raw work-policy text for
-search and display. `applications.details.workMode` is the normalized shared
-opportunity field used alongside the other geography-independent details.
+`content_revisions.facts_release_id` is provenance text, not a foreign key:
+facts releases live as immutable static objects in the private object store and
+have no registry tables.
 
-The package separates the three concerns involved in the entity model:
+Activities are descriptive history written by backend workflows. Their kinds,
+actor, source, revision, time, and JSON payload are queryable, but they are not
+client-authored lifecycle commands. Application status remains an ordinary
+application field changed through the aggregate update workflow.
 
-- `src/model` owns reusable Effect leaf and structured-value schemas. Literal
-  schemas supply the enum values used by the physical columns.
-- `src/tables` owns SQLite names, columns, constraints, indexes, and foreign
-  keys. `src/tables/index.ts` is Drizzle Kit's migration source.
-- `src/codecs` uses the official `drizzle-orm/effect-schema` integration to
-  derive select, insert, and update schemas from those tables. Explicit field
-  callbacks preserve Drizzle's column-derived nullability and update
-  optionality while adding constraints SQLite metadata cannot express, such as
-  UTC timestamps and structured JSON. A single, narrowly scoped helper works
-  around nullable insert refinements in `drizzle-orm@1.0.0-rc.4`.
-- `src/relations.ts` owns the complete Drizzle relation graph used by relational
-  reads. `src/query` owns the table-derived application and event list
-  definitions shared by persistence and transport schema derivation.
+The package separates model concerns:
 
-JSON columns are reserved for structured values that are always consumed as a
-whole, such as capture artifacts, fit assessments, submission instructions,
-listing-check evidence, and event-specific payloads. Values used independently
-for filtering, ordering, joining, or projection remain ordinary typed columns.
-In particular, the captured application URL is stored as
-`campaign_captures.applicationUrl`, not hidden inside submission JSON.
+- `src/model` owns reusable constrained values and literal schemas;
+- `src/tables` owns PostgreSQL columns, constraints, indexes, and foreign keys;
+- `src/codecs` derives select/insert/update Effect schemas from Drizzle;
+- `src/query` defines the authoritative `drizzle-query` filtering, ordering,
+  computed fields, and cursor contracts shared by transport and persistence.
 
-The model also owns the appendable, status-changing, and informational event
-kind subsets. The service types and HTTP union derive from those same values,
-so lifecycle semantics cannot drift between the two boundaries.
+JSON columns are used only for values consumed as a whole, such as activity
+details and listing evidence. Values used independently for filtering,
+ordering, joins, or projection remain typed columns.
+Compensation minor-unit amounts use PostgreSQL `bigint` while remaining bounded
+to exact JavaScript safe integers at the codec boundary.
 
-The package root exports each model, codec, relation, and table module
-explicitly. The `@cv/application-registry-entity/query` entry point exposes the
-shared query definitions without coupling callers to the HTTP contract.
-`src/tables/index.ts` exists only as Drizzle Kit's complete migration schema.
+The PostgreSQL history starts with one clean baseline. Historical D1 migrations
+are neither copied nor replayed. The one-shot migration tool reconstructs a
+frozen D1 export at its supported final version and maps the data directly into
+this final schema.
 
-Drizzle Kit reads `src/tables/index.ts`. After a table change, generate and
-inspect the migration, then verify that the checked-in history is current:
+After changing tables, generate and inspect the migration and run the drift
+check:
 
 ```bash
 bunx nx run application-registry-entity:migrations:generate
 bunx nx run application-registry-entity:migrations:check
 ```
-
-Codec unit coverage lives beside the public entrypoint in `src/codecs.test.ts`.
-CI always runs the drift check before building the Worker.

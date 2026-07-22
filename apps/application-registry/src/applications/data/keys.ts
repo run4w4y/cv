@@ -1,4 +1,4 @@
-import { eventListsReactivityKey } from '../../events/data'
+import { activityListsReactivityKey } from '../../events/data'
 
 export const applicationReactivity = {
   lists: 'registry:applications:list',
@@ -7,8 +7,8 @@ export const applicationReactivity = {
     `registry:applications:${applicationId}`,
   compensations: (applicationId: string) =>
     `registry:applications:${applicationId}:compensations`,
-  events: (applicationId: string) =>
-    `registry:applications:${applicationId}:events`,
+  activities: (applicationId: string) =>
+    `registry:applications:${applicationId}:activities`,
 } as const
 
 export const applicationMutationKeys = (applicationId: string) => [
@@ -16,8 +16,8 @@ export const applicationMutationKeys = (applicationId: string) => [
   applicationReactivity.facets,
   applicationReactivity.application(applicationId),
   applicationReactivity.compensations(applicationId),
-  applicationReactivity.events(applicationId),
-  eventListsReactivityKey,
+  applicationReactivity.activities(applicationId),
+  activityListsReactivityKey,
 ]
 
 export const createApplicationMutationKeys = [

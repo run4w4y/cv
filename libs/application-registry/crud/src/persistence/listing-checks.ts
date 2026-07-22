@@ -1,37 +1,35 @@
 import {
-  applicationEvents,
+  applicationActivities,
   applicationListingCheckSchedules,
   applicationListingChecks,
   applications,
-  commandReceipts,
+  idempotencyReceipts,
   listingCheckRuns,
-  registrySequence,
 } from '@cv/application-registry-entity'
 import {
   and,
   asc,
   desc,
   eq,
-  exists,
+  gt,
   inArray,
   isNull,
-  lt,
   lte,
   not,
   or,
   sql,
 } from 'drizzle-orm'
-import type { BatchItem } from 'drizzle-orm/batch'
 import { Effect } from 'effect'
 
 import { databaseFailure } from '../errors'
-import type { RegistryConnections } from '../internal/connection'
+import type { RegistryDatabase, RegistryExecutor } from '../internal/connection'
 import type {
   ListingCheckRunCounts,
   PersistedListingCheck,
+  StartedScheduledListingCheckRun,
   StartListingCheckRun,
 } from '../types'
-import { currentRevision, runBatch } from './shared'
+import { allocateRevision, runTransaction } from './shared'
 
 const checkableStatuses = ['not_started', 'preparing'] as const
 
@@ -46,94 +44,58 @@ const applicationVersionCondition = (
         eq(applications.version, expectedVersion)
       )
 
-const listingCheckReceiptMatches = (
-  database: RegistryConnections['batch'],
-  applicationId: string,
-  operationId: string,
-  operationRequestSignature: string
-) =>
-  exists(
-    database
-      .select({ operationId: commandReceipts.operationId })
-      .from(commandReceipts)
-      .where(
-        and(
-          eq(commandReceipts.applicationId, applicationId),
-          eq(commandReceipts.kind, 'listing_check'),
-          eq(commandReceipts.operationId, operationId),
-          eq(
-            commandReceipts.operationRequestSignature,
-            operationRequestSignature
-          )
-        )
-      )
-  )
-
-const allocateListingCheckRevision = (
-  database: RegistryConnections['batch'],
-  applicationId: string,
-  expectedVersion: number | undefined
+export const ensureEligibleListingCheckSchedules = (
+  database: RegistryExecutor,
+  now: string
 ) =>
   database
-    .insert(registrySequence)
+    .insert(applicationListingCheckSchedules)
     .select(
       database
         .select({
-          id: sql<number>`1`.as('id'),
-          revision: sql<number>`1`.as('revision'),
+          applicationId: applications.id,
+          attemptCount: sql<number>`0`.as('attempt_count'),
+          dueAt: sql<string>`${now}`.as('due_at'),
+          lastError: sql<null>`null`.as('last_error'),
+          leaseToken: sql<null>`null`.as('lease_token'),
+          leaseUntil: sql<null>`null`.as('lease_until'),
+          updatedAt: sql<string>`${now}`.as('updated_at'),
         })
         .from(applications)
-        .where(applicationVersionCondition(applicationId, expectedVersion))
-    )
-    .onConflictDoUpdate({
-      target: registrySequence.id,
-      set: { revision: sql`${registrySequence.revision} + 1` },
-    })
-
-export const ensureEligibleListingCheckSchedules = (
-  database: RegistryConnections,
-  now: string
-) =>
-  runBatch(database.batch, 'listing check schedule initialization', [
-    database.batch
-      .insert(applicationListingCheckSchedules)
-      .select(
-        database.batch
-          .select({
-            applicationId: applications.id,
-            attemptCount: sql<number>`0`.as('attempt_count'),
-            dueAt: sql<string>`${now}`.as('due_at'),
-            lastError: sql<null>`null`.as('last_error'),
-            leaseToken: sql<null>`null`.as('lease_token'),
-            leaseUntil: sql<null>`null`.as('lease_until'),
-            updatedAt: sql<string>`${now}`.as('updated_at'),
-          })
-          .from(applications)
-          .where(
-            and(
-              inArray(applications.applicationStatus, checkableStatuses),
-              not(eq(applications.targetStage, 'closed_skip'))
-            )
+        .where(
+          and(
+            inArray(applications.applicationStatus, checkableStatuses),
+            not(eq(applications.targetStage, 'closed_skip'))
           )
-      )
-      .onConflictDoNothing(),
-  ]).pipe(Effect.asVoid)
+        )
+    )
+    .onConflictDoNothing()
+    .pipe(
+      Effect.mapError(
+        databaseFailure('Failed to initialize listing check schedules')
+      ),
+      Effect.asVoid
+    )
 
 export const ensureListingCheckSchedule = (
-  database: RegistryConnections,
+  database: RegistryExecutor,
   applicationId: string,
   dueAt: string,
   now: string
 ) =>
-  runBatch(database.batch, 'listing check schedule upsert', [
-    database.batch
-      .insert(applicationListingCheckSchedules)
-      .values({ applicationId, dueAt, updatedAt: now })
-      .onConflictDoNothing(),
-  ]).pipe(Effect.asVoid)
+  database
+    .insert(applicationListingCheckSchedules)
+    .values({ applicationId, dueAt, updatedAt: now })
+    .onConflictDoNothing()
+    .pipe(
+      Effect.mapError(
+        databaseFailure('Failed to ensure listing check schedule')
+      ),
+      Effect.asVoid
+    )
 
 export const claimDueListingCheckSchedules = (
-  database: RegistryConnections,
+  database: RegistryDatabase,
   input: {
     readonly leaseToken: string
     readonly leaseUntil: string
@@ -141,77 +103,278 @@ export const claimDueListingCheckSchedules = (
     readonly now: string
   }
 ) =>
-  Effect.gen(function* () {
-    const candidates = yield* database.query
-      .select({ applicationId: applicationListingCheckSchedules.applicationId })
-      .from(applicationListingCheckSchedules)
-      .innerJoin(
-        applications,
-        eq(applications.id, applicationListingCheckSchedules.applicationId)
-      )
-      .where(
-        and(
-          lte(applicationListingCheckSchedules.dueAt, input.now),
-          or(
-            isNull(applicationListingCheckSchedules.leaseUntil),
-            lt(applicationListingCheckSchedules.leaseUntil, input.now)
-          ),
-          inArray(applications.applicationStatus, checkableStatuses),
-          not(eq(applications.targetStage, 'closed_skip'))
+  runTransaction(database, 'listing check schedule claim', (transaction) =>
+    Effect.gen(function* () {
+      const candidates = yield* transaction
+        .select({
+          applicationId: applicationListingCheckSchedules.applicationId,
+        })
+        .from(applicationListingCheckSchedules)
+        .innerJoin(
+          applications,
+          eq(applications.id, applicationListingCheckSchedules.applicationId)
         )
-      )
-      .orderBy(
-        asc(applicationListingCheckSchedules.dueAt),
-        asc(applicationListingCheckSchedules.applicationId)
-      )
-      .limit(input.limit)
-      .pipe(
-        Effect.mapError(databaseFailure('Failed to find due listing checks'))
+        .where(
+          and(
+            lte(applicationListingCheckSchedules.dueAt, input.now),
+            or(
+              isNull(applicationListingCheckSchedules.leaseUntil),
+              lte(applicationListingCheckSchedules.leaseUntil, input.now)
+            ),
+            inArray(applications.applicationStatus, checkableStatuses),
+            not(eq(applications.targetStage, 'closed_skip'))
+          )
+        )
+        .orderBy(
+          asc(applicationListingCheckSchedules.dueAt),
+          asc(applicationListingCheckSchedules.applicationId)
+        )
+        .limit(input.limit)
+        .for('update', {
+          of: applicationListingCheckSchedules,
+          skipLocked: true,
+        })
+
+      if (candidates.length === 0) {
+        return []
+      }
+
+      const claimed = yield* transaction
+        .update(applicationListingCheckSchedules)
+        .set({
+          leaseToken: input.leaseToken,
+          leaseUntil: input.leaseUntil,
+          updatedAt: input.now,
+        })
+        .where(
+          and(
+            inArray(
+              applicationListingCheckSchedules.applicationId,
+              candidates.map(({ applicationId }) => applicationId)
+            ),
+            lte(applicationListingCheckSchedules.dueAt, input.now),
+            or(
+              isNull(applicationListingCheckSchedules.leaseUntil),
+              lte(applicationListingCheckSchedules.leaseUntil, input.now)
+            )
+          )
+        )
+        .returning()
+
+      const claimedByApplicationId = new Map(
+        claimed.map((schedule) => [schedule.applicationId, schedule])
       )
 
-    const claimed = yield* Effect.forEach(
-      candidates,
-      ({ applicationId }) =>
-        database.query
-          .update(applicationListingCheckSchedules)
+      return candidates.flatMap(({ applicationId }) => {
+        const schedule = claimedByApplicationId.get(applicationId)
+        return schedule !== undefined &&
+          schedule.leaseToken !== null &&
+          schedule.leaseUntil !== null
+          ? [
+              {
+                ...schedule,
+                leaseToken: schedule.leaseToken,
+                leaseUntil: schedule.leaseUntil,
+              },
+            ]
+          : []
+      })
+    })
+  )
+
+export const startScheduledListingCheckRun = (
+  database: RegistryDatabase,
+  input: {
+    readonly id: string
+    readonly leaseUntil: string
+    readonly limit: number
+    readonly mode: StartListingCheckRun['mode']
+    readonly now: string
+  }
+) =>
+  runTransaction(database, 'scheduled listing check run start', (transaction) =>
+    Effect.gen(function* () {
+      const candidates = yield* transaction
+        .select({
+          applicationId: applicationListingCheckSchedules.applicationId,
+        })
+        .from(applicationListingCheckSchedules)
+        .innerJoin(
+          applications,
+          eq(applications.id, applicationListingCheckSchedules.applicationId)
+        )
+        .where(
+          and(
+            lte(applicationListingCheckSchedules.dueAt, input.now),
+            or(
+              isNull(applicationListingCheckSchedules.leaseUntil),
+              lte(applicationListingCheckSchedules.leaseUntil, input.now)
+            ),
+            inArray(applications.applicationStatus, checkableStatuses),
+            not(eq(applications.targetStage, 'closed_skip'))
+          )
+        )
+        .orderBy(
+          asc(applicationListingCheckSchedules.dueAt),
+          asc(applicationListingCheckSchedules.applicationId)
+        )
+        .limit(input.limit)
+        .for('update', {
+          of: applicationListingCheckSchedules,
+          skipLocked: true,
+        })
+
+      if (candidates.length === 0) return null
+
+      const claimed = yield* transaction
+        .update(applicationListingCheckSchedules)
+        .set({
+          leaseToken: input.id,
+          leaseUntil: input.leaseUntil,
+          updatedAt: input.now,
+        })
+        .where(
+          inArray(
+            applicationListingCheckSchedules.applicationId,
+            candidates.map(({ applicationId }) => applicationId)
+          )
+        )
+        .returning()
+
+      if (claimed.length !== candidates.length) {
+        return yield* Effect.fail(
+          new Error('The scheduled listing-check claim was incomplete.')
+        )
+      }
+
+      const runs = yield* transaction
+        .insert(listingCheckRuns)
+        .values({
+          id: input.id,
+          mode: input.mode,
+          selectedCount: claimed.length,
+          startedAt: input.now,
+          state: 'running',
+          trigger: 'scheduled',
+        })
+        .returning()
+      const run = runs.at(0)
+      if (run === undefined) {
+        return yield* Effect.fail(
+          new Error('The scheduled listing-check run was not created.')
+        )
+      }
+
+      const schedules = claimed.flatMap((schedule) =>
+        schedule.leaseToken === null || schedule.leaseUntil === null
+          ? []
+          : [
+              {
+                ...schedule,
+                leaseToken: schedule.leaseToken,
+                leaseUntil: schedule.leaseUntil,
+              },
+            ]
+      )
+      if (schedules.length !== claimed.length) {
+        return yield* Effect.fail(
+          new Error('The scheduled listing-check leases were not returned.')
+        )
+      }
+
+      return { run, schedules } satisfies StartedScheduledListingCheckRun
+    })
+  )
+
+export const failListingCheckRun = (
+  database: RegistryDatabase,
+  input: {
+    readonly failedAt: string
+    readonly failureCode: string
+    readonly failureMessage: string
+    readonly runId: string
+  }
+) =>
+  runTransaction(database, 'listing check run failure', (transaction) =>
+    Effect.gen(function* () {
+      const failed = yield* transaction
+        .update(listingCheckRuns)
+        .set({
+          failedAt: input.failedAt,
+          failureCode: input.failureCode.slice(0, 100),
+          failureMessage: input.failureMessage.slice(0, 1_000),
+          state: 'failed',
+        })
+        .where(
+          and(
+            eq(listingCheckRuns.id, input.runId),
+            eq(listingCheckRuns.state, 'running')
+          )
+        )
+        .returning({ id: listingCheckRuns.id })
+
+      if (failed.length === 0) return
+
+      yield* transaction
+        .update(applicationListingCheckSchedules)
+        .set({
+          leaseToken: null,
+          leaseUntil: null,
+          updatedAt: input.failedAt,
+        })
+        .where(eq(applicationListingCheckSchedules.leaseToken, input.runId))
+    })
+  )
+
+export const reconcileOrphanedListingCheckRuns = (
+  database: RegistryDatabase,
+  input: { readonly failedAt: string; readonly staleBefore: string }
+) =>
+  runTransaction(
+    database,
+    'orphaned listing check run reconciliation',
+    (transaction) =>
+      Effect.gen(function* () {
+        const failed = yield* transaction
+          .update(listingCheckRuns)
           .set({
-            leaseToken: input.leaseToken,
-            leaseUntil: input.leaseUntil,
-            updatedAt: input.now,
+            failedAt: input.failedAt,
+            failureCode: 'orphaned_run',
+            failureMessage:
+              'The runner stopped before finalizing this scheduled listing-check run.',
+            state: 'failed',
           })
           .where(
             and(
-              eq(applicationListingCheckSchedules.applicationId, applicationId),
-              lte(applicationListingCheckSchedules.dueAt, input.now),
-              or(
-                isNull(applicationListingCheckSchedules.leaseUntil),
-                lt(applicationListingCheckSchedules.leaseUntil, input.now)
-              )
+              eq(listingCheckRuns.trigger, 'scheduled'),
+              eq(listingCheckRuns.state, 'running'),
+              lte(listingCheckRuns.startedAt, input.staleBefore)
             )
           )
-          .returning()
-          .pipe(
-            Effect.map((rows) => rows.at(0)),
-            Effect.mapError(databaseFailure('Failed to claim listing check'))
-          ),
-      { concurrency: 1 }
-    )
+          .returning({ id: listingCheckRuns.id })
 
-    return claimed.flatMap((schedule) =>
-      schedule?.leaseToken && schedule.leaseUntil
-        ? [
-            {
-              ...schedule,
-              leaseToken: schedule.leaseToken,
-              leaseUntil: schedule.leaseUntil,
-            },
-          ]
-        : []
-    )
-  })
+        if (failed.length === 0) return 0
+
+        yield* transaction
+          .update(applicationListingCheckSchedules)
+          .set({
+            leaseToken: null,
+            leaseUntil: null,
+            updatedAt: input.failedAt,
+          })
+          .where(
+            inArray(
+              applicationListingCheckSchedules.leaseToken,
+              failed.map(({ id }) => id)
+            )
+          )
+
+        return failed.length
+      })
+  )
 
 export const failListingCheckClaim = (
-  database: RegistryConnections,
+  database: RegistryExecutor,
   input: {
     readonly applicationId: string
     readonly error: string
@@ -220,30 +383,31 @@ export const failListingCheckClaim = (
     readonly now: string
   }
 ) =>
-  runBatch(database.batch, 'listing check claim failure', [
-    database.batch
-      .update(applicationListingCheckSchedules)
-      .set({
-        attemptCount: sql`${applicationListingCheckSchedules.attemptCount} + 1`,
-        dueAt: input.nextAttemptAt,
-        lastError: input.error.slice(0, 1000),
-        leaseToken: null,
-        leaseUntil: null,
-        updatedAt: input.now,
-      })
-      .where(
-        and(
-          eq(
-            applicationListingCheckSchedules.applicationId,
-            input.applicationId
-          ),
-          eq(applicationListingCheckSchedules.leaseToken, input.leaseToken)
-        )
+  database
+    .update(applicationListingCheckSchedules)
+    .set({
+      attemptCount: sql`${applicationListingCheckSchedules.attemptCount} + 1`,
+      dueAt: input.nextAttemptAt,
+      lastError: input.error.slice(0, 1000),
+      leaseToken: null,
+      leaseUntil: null,
+      updatedAt: input.now,
+    })
+    .where(
+      and(
+        eq(applicationListingCheckSchedules.applicationId, input.applicationId),
+        eq(applicationListingCheckSchedules.leaseToken, input.leaseToken)
+      )
+    )
+    .pipe(
+      Effect.mapError(
+        databaseFailure('Failed to record listing check failure')
       ),
-  ]).pipe(Effect.asVoid)
+      Effect.asVoid
+    )
 
 export const findListingCheckByOperation = (
-  database: RegistryConnections['query'],
+  database: RegistryExecutor,
   operationId: string
 ) =>
   database
@@ -257,7 +421,7 @@ export const findListingCheckByOperation = (
     )
 
 export const listApplicationListingChecks = (
-  database: RegistryConnections['query'],
+  database: RegistryExecutor,
   applicationId: string
 ) =>
   database
@@ -271,7 +435,7 @@ export const listApplicationListingChecks = (
     .pipe(Effect.mapError(databaseFailure('Failed to list application checks')))
 
 export const listListingChecksByRun = (
-  database: RegistryConnections['query'],
+  database: RegistryExecutor,
   runId: string
 ) =>
   database
@@ -282,7 +446,7 @@ export const listListingChecksByRun = (
     .pipe(Effect.mapError(databaseFailure('Failed to list run checks')))
 
 export const findListingCheckRun = (
-  database: RegistryConnections['query'],
+  database: RegistryExecutor,
   runId: string
 ) =>
   database
@@ -296,211 +460,225 @@ export const findListingCheckRun = (
     )
 
 export const startListingCheckRun = (
-  database: RegistryConnections,
+  database: RegistryExecutor,
   input: StartListingCheckRun
 ) =>
-  runBatch(database.batch, 'listing check run start', [
-    database.batch
-      .insert(listingCheckRuns)
-      .values({
-        ...input,
-        state: 'running',
-      })
-      .onConflictDoNothing(),
-  ]).pipe(Effect.asVoid)
+  database
+    .insert(listingCheckRuns)
+    .values({
+      ...input,
+      state: 'running',
+    })
+    .onConflictDoNothing()
+    .pipe(
+      Effect.mapError(databaseFailure('Failed to start listing check run')),
+      Effect.asVoid
+    )
 
 export const updateListingCheckRunCounts = (
-  database: RegistryConnections,
+  database: RegistryExecutor,
   runId: string,
   counts: ListingCheckRunCounts
 ) =>
-  runBatch(database.batch, 'listing check run count update', [
-    database.batch
-      .update(listingCheckRuns)
-      .set(counts)
-      .where(eq(listingCheckRuns.id, runId)),
-  ]).pipe(Effect.asVoid)
+  database
+    .update(listingCheckRuns)
+    .set(counts)
+    .where(eq(listingCheckRuns.id, runId))
+    .pipe(
+      Effect.mapError(databaseFailure('Failed to update listing check counts')),
+      Effect.asVoid
+    )
 
 export const completeListingCheckRun = (
-  database: RegistryConnections,
+  database: RegistryExecutor,
   runId: string,
   counts: ListingCheckRunCounts,
   completedAt: string
 ) =>
-  runBatch(database.batch, 'listing check run completion', [
-    database.batch
-      .update(listingCheckRuns)
-      .set({ ...counts, completedAt, state: 'completed' })
-      .where(eq(listingCheckRuns.id, runId)),
-  ]).pipe(Effect.asVoid)
+  database
+    .update(listingCheckRuns)
+    .set({ ...counts, completedAt, state: 'completed' })
+    .where(
+      and(eq(listingCheckRuns.id, runId), eq(listingCheckRuns.state, 'running'))
+    )
+    .returning({ id: listingCheckRuns.id })
+    .pipe(
+      Effect.mapError(databaseFailure('Failed to complete listing check run')),
+      Effect.flatMap((rows) =>
+        rows.length === 1
+          ? Effect.void
+          : Effect.fail(
+              databaseFailure('Failed to complete listing check run')(
+                new Error(`Listing check run ${runId} is not running.`)
+              )
+            )
+      )
+    )
 
 export const persistListingCheck = (
-  database: RegistryConnections,
+  database: RegistryDatabase,
   input: PersistedListingCheck
 ) => {
   const {
     archiveApplication,
+    claimedLeaseToken,
     closedCandidateAt,
     consecutiveClosedChecks,
-    eventId,
+    activityId,
     expectedVersion,
     listingAvailability,
-    operationRequestSignature,
+    requestHash,
     recordedAt,
     ...listingCheck
   } = input
-  const receiptMatches = listingCheckReceiptMatches(
-    database.batch,
-    listingCheck.applicationId,
-    listingCheck.operationId,
-    operationRequestSignature
-  )
-  const versionMatches = applicationVersionCondition(
-    listingCheck.applicationId,
-    expectedVersion
-  )
-  const receiptInsert = database.batch.insert(commandReceipts).select(
-    database.batch
-      .select({
-        applicationId: applications.id,
-        captureId: sql<null>`null`.as('capture_id'),
-        eventId: sql<string | null>`${eventId}`.as('event_id'),
-        kind: sql<'listing_check'>`'listing_check'`.as('kind'),
-        noteId: sql<null>`null`.as('note_id'),
-        operationId: sql<string>`${listingCheck.operationId}`.as(
-          'operation_id'
-        ),
-        operationRequestSignature: sql<string>`${operationRequestSignature}`.as(
-          'operation_request_signature'
-        ),
-        recordedAt: sql<string>`${recordedAt}`.as('recorded_at'),
-      })
-      .from(applications)
-      .where(versionMatches)
-  )
-  const listingCheckInsert = database.batch
-    .insert(applicationListingChecks)
-    .select(
-      database.batch
+
+  return runTransaction(database, 'listing check', (transaction) =>
+    Effect.gen(function* () {
+      const application = yield* transaction
         .select({
-          applicationId: applications.id,
-          checkedAt: sql<string>`${listingCheck.checkedAt}`.as('checked_at'),
-          checkerVersion: sql<string>`${listingCheck.checkerVersion}`.as(
-            'checker_version'
-          ),
-          confidence: sql`${listingCheck.confidence}`.as('confidence'),
-          contentHash: sql<string | null>`${listingCheck.contentHash}`.as(
-            'content_hash'
-          ),
-          evidence: sql`${JSON.stringify(listingCheck.evidence)}`.as(
-            'evidence'
-          ),
-          finalUrl: sql<string | null>`${listingCheck.finalUrl}`.as(
-            'final_url'
-          ),
-          httpStatus: sql<number | null>`${listingCheck.httpStatus}`.as(
-            'http_status'
-          ),
-          id: sql<string>`${listingCheck.id}`.as('id'),
-          nextCheckAt: sql<string>`${listingCheck.nextCheckAt}`.as(
-            'next_check_at'
-          ),
-          operationId: sql<string>`${listingCheck.operationId}`.as(
-            'operation_id'
-          ),
-          outcome: sql`${listingCheck.outcome}`.as('outcome'),
-          provider: sql<string>`${listingCheck.provider}`.as('provider'),
-          reasonCode: sql`${listingCheck.reasonCode}`.as('reason_code'),
-          receivedAt: sql<string>`${listingCheck.receivedAt}`.as('received_at'),
-          recommendedAction: sql`${listingCheck.recommendedAction}`.as(
-            'recommended_action'
-          ),
-          requestedUrl: sql<string>`${listingCheck.requestedUrl}`.as(
-            'requested_url'
-          ),
-          runId: sql<string | null>`${listingCheck.runId}`.as('run_id'),
+          id: applications.id,
+          version: applications.version,
         })
         .from(applications)
-        .where(and(versionMatches, receiptMatches))
-    )
-  const eventInsert = database.batch.insert(applicationEvents).select(
-    database.batch
-      .select({
-        applicationId: applications.id,
-        deviceId: sql<null>`null`.as('device_id'),
-        id: sql<string>`${eventId}`.as('id'),
-        kind: sql<'listing_closed'>`'listing_closed'`.as('kind'),
-        occurredAt: sql<string>`${listingCheck.checkedAt}`.as('occurred_at'),
-        operationId: sql<string>`${`${listingCheck.operationId}:closed`}`.as(
-          'operation_id'
-        ),
-        payload: sql`${JSON.stringify({
-          listingCheckId: listingCheck.id,
-          reasonCode: listingCheck.reasonCode,
-        })}`.as('payload'),
-        recordedAt: sql<string>`${recordedAt}`.as('recorded_at'),
-        revision: currentRevision.as('revision'),
-      })
-      .from(applications)
-      .where(
-        and(
-          versionMatches,
-          receiptMatches,
-          inArray(applications.applicationStatus, checkableStatuses)
+        .where(
+          applicationVersionCondition(
+            listingCheck.applicationId,
+            expectedVersion
+          )
         )
-      )
-  )
+        .limit(1)
+        .for('update')
+        .pipe(Effect.map((rows) => rows.at(0)))
 
-  const statements = [
-    allocateListingCheckRevision(
-      database.batch,
-      listingCheck.applicationId,
-      expectedVersion
-    ),
-    receiptInsert,
-    listingCheckInsert,
-    ...(archiveApplication && eventId !== null ? [eventInsert] : []),
-    database.batch
-      .update(applicationListingCheckSchedules)
-      .set({
-        attemptCount: 0,
-        dueAt: listingCheck.nextCheckAt,
-        lastError: null,
-        leaseToken: null,
-        leaseUntil: null,
-        updatedAt: recordedAt,
+      if (application === undefined) {
+        return false
+      }
+
+      if (claimedLeaseToken !== undefined) {
+        const claim = yield* transaction
+          .select({
+            applicationId: applicationListingCheckSchedules.applicationId,
+          })
+          .from(applicationListingCheckSchedules)
+          .where(
+            and(
+              eq(
+                applicationListingCheckSchedules.applicationId,
+                listingCheck.applicationId
+              ),
+              eq(
+                applicationListingCheckSchedules.leaseToken,
+                claimedLeaseToken
+              ),
+              gt(
+                applicationListingCheckSchedules.leaseUntil,
+                sql`CURRENT_TIMESTAMP`
+              )
+            )
+          )
+          .limit(1)
+          .for('update')
+          .pipe(Effect.map((rows) => rows.at(0)))
+
+        if (claim === undefined) {
+          return false
+        }
+      }
+
+      yield* transaction.insert(idempotencyReceipts).values({
+        applicationId: listingCheck.applicationId,
+        idempotencyKey: listingCheck.operationId,
+        requestHash,
+        scope: 'listing_check',
+        resourceId: listingCheck.id,
+        createdAt: recordedAt,
       })
-      .where(
-        and(
-          eq(
-            applicationListingCheckSchedules.applicationId,
-            listingCheck.applicationId
-          ),
-          receiptMatches
+
+      const revision = yield* allocateRevision(transaction)
+
+      yield* transaction
+        .insert(applicationListingChecks)
+        .values({ ...listingCheck, evidence: listingCheck.evidence })
+
+      if (activityId !== null) {
+        yield* transaction.insert(applicationActivities).values({
+          applicationId: listingCheck.applicationId,
+          actor: 'automation',
+          source: 'listing_checker',
+          id: activityId,
+          kind: 'listing_availability_changed',
+          occurredAt: listingCheck.checkedAt,
+          payload: {
+            listingCheckId: listingCheck.id,
+            availability: listingAvailability,
+            reasonCode: listingCheck.reasonCode,
+          },
+          revision,
+        })
+      }
+
+      const scheduleUpdates = yield* transaction
+        .update(applicationListingCheckSchedules)
+        .set({
+          attemptCount: 0,
+          dueAt: listingCheck.nextCheckAt,
+          lastError: null,
+          leaseToken: null,
+          leaseUntil: null,
+          updatedAt: recordedAt,
+        })
+        .where(
+          claimedLeaseToken === undefined
+            ? eq(
+                applicationListingCheckSchedules.applicationId,
+                listingCheck.applicationId
+              )
+            : and(
+                eq(
+                  applicationListingCheckSchedules.applicationId,
+                  listingCheck.applicationId
+                ),
+                eq(
+                  applicationListingCheckSchedules.leaseToken,
+                  claimedLeaseToken
+                ),
+                gt(
+                  applicationListingCheckSchedules.leaseUntil,
+                  sql`CURRENT_TIMESTAMP`
+                )
+              )
         )
-      ),
-    database.batch
-      .update(applications)
-      .set({
-        ...(archiveApplication
-          ? {
-              applicationStatus: sql`case when ${applications.applicationStatus} in ('not_started', 'preparing') then 'archived' else ${applications.applicationStatus} end`,
-            }
-          : {}),
-        listingAvailability,
-        listingCheckedAt: listingCheck.checkedAt,
-        listingClosedCandidateAt: closedCandidateAt,
-        listingConfidence: listingCheck.confidence,
-        listingConsecutiveClosedChecks: consecutiveClosedChecks,
-        listingReasonCode: listingCheck.reasonCode,
-        updatedAt: recordedAt,
-        updatedRevision: currentRevision,
-        version: sql`${applications.version} + 1`,
-      })
-      .where(and(versionMatches, receiptMatches)),
-  ] as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]
+        .returning({
+          applicationId: applicationListingCheckSchedules.applicationId,
+        })
 
-  return runBatch(database.batch, 'listing check', statements).pipe(
-    Effect.map((results) => (results.at(-1)?.meta.changes ?? 0) > 0)
+      if (claimedLeaseToken !== undefined && scheduleUpdates.length !== 1) {
+        return yield* Effect.fail(
+          new Error('The claimed listing-check schedule could not be advanced.')
+        )
+      }
+
+      yield* transaction
+        .update(applications)
+        .set({
+          ...(archiveApplication
+            ? {
+                applicationStatus: sql`case when ${applications.applicationStatus} in ('not_started', 'preparing') then 'archived' else ${applications.applicationStatus} end`,
+              }
+            : {}),
+          listingAvailability,
+          listingCheckedAt: listingCheck.checkedAt,
+          listingClosedCandidateAt: closedCandidateAt,
+          listingConfidence: listingCheck.confidence,
+          listingConsecutiveClosedChecks: consecutiveClosedChecks,
+          listingReasonCode: listingCheck.reasonCode,
+          updatedAt: recordedAt,
+          updatedRevision: revision,
+          version: sql`${applications.version} + 1`,
+        })
+        .where(eq(applications.id, application.id))
+
+      return true
+    })
   )
 }

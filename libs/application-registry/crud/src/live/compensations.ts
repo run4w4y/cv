@@ -1,28 +1,21 @@
-import type { D1Database } from '@cloudflare/workers-types'
-import { type Effect, Layer } from 'effect'
-import { withRegistryConnections } from '../internal/connection'
+import { Layer } from 'effect'
+import type { RegistryDatabase } from '../internal/connection'
 import {
   listCompensations,
   replaceAnnualCompensation,
 } from '../persistence/compensations'
 import { CompensationsCrud } from '../services/compensations'
 
-export const makeCompensationsCrudLive = (
-  database: Effect.Effect<D1Database>
-) =>
+export const makeCompensationsCrudLive = (database: RegistryDatabase) =>
   Layer.succeed(CompensationsCrud, {
     listByApplication: (applicationId) =>
-      withRegistryConnections(database, ({ query }) =>
-        listCompensations(query, applicationId)
-      ),
+      listCompensations(database, applicationId),
     replaceAnnual: (applicationId, expectedVersion, replacement, recordedAt) =>
-      withRegistryConnections(database, (connections) =>
-        replaceAnnualCompensation(
-          connections,
-          applicationId,
-          expectedVersion,
-          replacement,
-          recordedAt
-        )
+      replaceAnnualCompensation(
+        database,
+        applicationId,
+        expectedVersion,
+        replacement,
+        recordedAt
       ),
   })

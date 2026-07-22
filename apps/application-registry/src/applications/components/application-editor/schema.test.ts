@@ -12,7 +12,6 @@ const rowInput = {
   role: ' Platform engineer ',
   applicationStatus: 'applied' as const,
   targetStage: 'apply_next' as const,
-  fitScore: '82',
   personalPriority: null,
   labels: [' remote ', 'typescript'],
   annualCompensation: {
@@ -30,7 +29,6 @@ describe('application edit form schema', () => {
     )
     expect(decoded.company).toBe('Acme')
     expect(decoded.location).toBeNull()
-    expect(decoded.fitScore).toBe(82)
     expect(decoded.annualCompensation).toEqual({
       currencyCode: 'USD',
       minimumMinor: 12_000_000,
@@ -48,26 +46,21 @@ describe('application edit form schema', () => {
     ).toThrow(/greater than or equal/u)
   })
 
-  it('rejects required text, invalid scores, and invalid URLs', () => {
+  it('rejects required text and invalid URLs', () => {
     expect(() =>
       Schema.decodeUnknownSync(ApplicationDetailEditFormSchema)(
         {
           company: ' ',
           role: 'Role',
-          canonicalUrl: 'not a url',
+          postingUrl: 'not a url',
           location: '',
           applicationStatus: 'applied',
           targetStage: 'apply_next',
           personalPriority: null,
-          fitScore: '101',
-          category: '',
-          remotePolicy: '',
-          technologyStack: '',
-          recommendedAction: '',
           followUpAt: null,
         },
         { errors: 'all' }
       )
-    ).toThrow(/company|canonicalUrl|fitScore/u)
+    ).toThrow(/company|postingUrl/u)
   })
 })

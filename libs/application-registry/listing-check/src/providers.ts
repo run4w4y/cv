@@ -2,10 +2,11 @@ import type {
   ListingCheckTarget,
   ListingObservation,
 } from '@cv/application-registry-entity'
-import { Effect } from 'effect'
+import { type Crypto, Effect } from 'effect'
 
 import { fetchListingPage, hashListingContent, type ListingFetch } from './http'
 import { baseObservation } from './observation'
+import { parseUrl } from './url'
 
 type ProviderApiTarget = {
   readonly provider: string
@@ -15,9 +16,8 @@ type ProviderApiTarget = {
 const providerApiTarget = (
   target: ListingCheckTarget
 ): ProviderApiTarget | null => {
-  if (!URL.canParse(target.url)) return null
-
-  const url = new URL(target.url)
+  const url = parseUrl(target.url)
+  if (!url) return null
   const segments = url.pathname.split('/').filter(Boolean)
   if (
     url.hostname === 'job-boards.greenhouse.io' &&
@@ -42,6 +42,7 @@ const providerApiTarget = (
 export const checkProviderApi = (
   target: ListingCheckTarget,
   fetcher: ListingFetch,
+  crypto: Crypto.Crypto,
   checkedAt: string
 ): Effect.Effect<ListingObservation | null, unknown> => {
   const api = providerApiTarget(target)
@@ -69,7 +70,7 @@ export const checkProviderApi = (
       return {
         ...base,
         confidence: 'confirmed',
-        contentHash: yield* hashListingContent(result.body),
+        contentHash: yield* hashListingContent(crypto, result.body),
         evidence: [
           {
             code: 'provider_api',

@@ -4,6 +4,7 @@ locals {
   application_registry_path = "${local.root_path}/application-registry"
   content_path              = "${local.root_path}/content"
   deploy_path               = "${local.root_path}/deploy"
+  facts_publication_path    = "${local.root_path}/facts-publication"
   grafana_path              = "${local.root_path}/grafana"
 
   placeholder_value = "TODO_FILL_ME"
@@ -23,17 +24,22 @@ locals {
     application_registry = {
       name        = "application-registry"
       path        = local.application_registry_path
-      description = "Application registry API authentication and Cloudflare deployment values."
+      description = "Personal application registry authentication and Cloudflare deployment values."
     }
     content = {
       name        = "content"
       path        = local.content_path
-      description = "Private CV content encryption and build secrets."
+      description = "Reviewed facts publication and frozen analytics compatibility secrets."
     }
     deploy = {
       name        = "deploy"
       path        = local.deploy_path
       description = "Cloudflare account, zone, and project deployment settings."
+    }
+    facts_publication = {
+      name        = "facts-publication"
+      path        = local.facts_publication_path
+      description = "Production registry credentials used only by reviewed-facts publication CI."
     }
     grafana = {
       name        = "grafana"
@@ -43,6 +49,13 @@ locals {
   }
 
   secret_shape = {
+    (local.application_registry_path) = {
+      APPLICATION_REGISTRY_MANAGEMENT_ACCESS_EMAIL = {
+        value       = local.placeholder_value
+        description = "Single owner email allowed through Cloudflare Access to the personal management UI."
+      }
+    }
+
     (local.analytics_path) = {
       CACHE_TTL_SECONDS = {
         value       = "600"
@@ -59,13 +72,9 @@ locals {
     }
 
     (local.content_path) = {
-      CONTENT_REPO_TOKEN = {
-        value       = local.placeholder_value
-        description = "GitHub token or GitHub App installation token used by CI to read the private run4w4y/cv-content repository."
-      }
       PUBLIC_CV_FULL_ACCESS_EMAIL = {
         value       = local.placeholder_value
-        description = "Public contact email shown in redaction notices for full CV access requests."
+        description = "Frozen v1 redaction-contact value retained only to preserve existing Infisical state; CV v2 does not consume it."
       }
     }
 
@@ -118,5 +127,4 @@ locals {
     }
   ]...)
 
-  private_content_root_key = "base64url:${random_id.private_content_root_key.b64_url}"
 }

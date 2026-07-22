@@ -145,6 +145,7 @@ export type ListingCheckMode = Schema.Schema.Type<typeof ListingCheckModeSchema>
 export const ListingCheckRunStateSchema = Schema.Literals([
   'running',
   'completed',
+  'failed',
 ])
 
 export const listingCheckRunStateValues = ListingCheckRunStateSchema.literals
@@ -153,66 +154,56 @@ export type ListingCheckRunState = Schema.Schema.Type<
   typeof ListingCheckRunStateSchema
 >
 
-export const systemApplicationEventKindValues = [
-  'discovered',
-  'campaign_prepared',
-  'listing_closed',
-] as const
-
-export const statusChangingApplicationEventKindValues = [
-  'submitted',
-  'stage_changed',
-  'interview_scheduled',
-  'rejected',
-  'withdrawn',
-  'offer_received',
-] as const
-
-export const informationalApplicationEventKindValues = [
+export const applicationActivityKindValues = [
+  'application_created',
+  'details_changed',
+  'status_changed',
+  'follow_up_changed',
   'note_added',
-  'contact_logged',
-  'follow_up_scheduled',
-  'research_updated',
+  'listing_availability_changed',
+  'preparation_started',
+  'content_approved',
+  'publication_changed',
+  'milestone_recorded',
 ] as const
 
-export const appendableApplicationEventKindValues = [
-  ...statusChangingApplicationEventKindValues,
-  ...informationalApplicationEventKindValues,
+export const ApplicationActivityKindSchema = Schema.Literals(
+  applicationActivityKindValues
+)
+
+export type ApplicationActivityKind = Schema.Schema.Type<
+  typeof ApplicationActivityKindSchema
+>
+
+export const applicationActivityActorValues = [
+  'user',
+  'system',
+  'automation',
+  'migration',
 ] as const
 
-export const ApplicationEventKindSchema = Schema.Literals([
-  ...systemApplicationEventKindValues,
-  ...appendableApplicationEventKindValues,
-])
-
-export const StatusChangingApplicationEventKindSchema = Schema.Literals(
-  statusChangingApplicationEventKindValues
+export const ApplicationActivityActorSchema = Schema.Literals(
+  applicationActivityActorValues
 )
 
-export const InformationalApplicationEventKindSchema = Schema.Literals(
-  informationalApplicationEventKindValues
+export type ApplicationActivityActor = Schema.Schema.Type<
+  typeof ApplicationActivityActorSchema
+>
+
+export const applicationActivitySourceValues = [
+  'management',
+  'preparation',
+  'listing_checker',
+  'publisher',
+  'migration',
+] as const
+
+export const ApplicationActivitySourceSchema = Schema.Literals(
+  applicationActivitySourceValues
 )
 
-export const AppendableApplicationEventKindSchema = Schema.Literals(
-  appendableApplicationEventKindValues
-)
-
-export const applicationEventKindValues = ApplicationEventKindSchema.literals
-
-export type ApplicationEventKind = Schema.Schema.Type<
-  typeof ApplicationEventKindSchema
->
-
-export type StatusChangingApplicationEventKind = Schema.Schema.Type<
-  typeof StatusChangingApplicationEventKindSchema
->
-
-export type InformationalApplicationEventKind = Schema.Schema.Type<
-  typeof InformationalApplicationEventKindSchema
->
-
-export type AppendableApplicationEventKind = Schema.Schema.Type<
-  typeof AppendableApplicationEventKindSchema
+export type ApplicationActivitySource = Schema.Schema.Type<
+  typeof ApplicationActivitySourceSchema
 >
 
 export const ApplicationNoteKindSchema = Schema.Literals([
@@ -233,17 +224,15 @@ export type ApplicationNoteKind = Schema.Schema.Type<
   typeof ApplicationNoteKindSchema
 >
 
-export const CommandKindSchema = Schema.Literals([
-  'campaign_capture',
-  'application_event',
+export const IdempotencyScopeSchema = Schema.Literals([
+  'application_update',
   'application_note',
   'listing_check',
-  'managed_application_update',
 ])
 
-export const commandKindValues = CommandKindSchema.literals
+export const idempotencyScopeValues = IdempotencyScopeSchema.literals
 
-export type CommandKind = Schema.Schema.Type<typeof CommandKindSchema>
+export type IdempotencyScope = Schema.Schema.Type<typeof IdempotencyScopeSchema>
 
 export const CompensationKindSchema = Schema.Literals([
   'base_salary',

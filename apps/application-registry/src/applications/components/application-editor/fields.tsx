@@ -60,7 +60,7 @@ export const ApplicationEditFields = ({
       />
       <FormField
         control={form.control}
-        name="canonicalUrl"
+        name="postingUrl"
         render={({ field }) => (
           <FormItem className="sm:col-span-2">
             <FormLabel required>Canonical URL</FormLabel>
@@ -142,68 +142,6 @@ export const ApplicationEditFields = ({
               onBlur={field.onBlur}
               triggerRef={field.ref}
             />
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-      <FormField
-        control={form.control}
-        name="fitScore"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Fit score</FormLabel>
-            <FormInput
-              {...field}
-              type="number"
-              min={0}
-              max={100}
-              step={1}
-              disabled={pending}
-            />
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-      <FormField
-        control={form.control}
-        name="category"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Category</FormLabel>
-            <FormInput {...field} disabled={pending} />
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-      <FormField
-        control={form.control}
-        name="remotePolicy"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Remote policy</FormLabel>
-            <FormInput {...field} disabled={pending} />
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-      <FormField
-        control={form.control}
-        name="technologyStack"
-        render={({ field }) => (
-          <FormItem className="sm:col-span-2">
-            <FormLabel>Technology stack</FormLabel>
-            <FormTextarea {...field} disabled={pending} className="min-h-20" />
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-      <FormField
-        control={form.control}
-        name="recommendedAction"
-        render={({ field }) => (
-          <FormItem className="sm:col-span-2">
-            <FormLabel>Recommended action</FormLabel>
-            <FormTextarea {...field} disabled={pending} className="min-h-20" />
             <FormMessage />
           </FormItem>
         )}

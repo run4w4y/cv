@@ -3,14 +3,12 @@ import {
   check,
   index,
   integer,
+  pgTable,
   primaryKey,
-  real,
-  sqliteTable,
   text,
   uniqueIndex,
-} from 'drizzle-orm/sqlite-core'
+} from 'drizzle-orm/pg-core'
 
-import type { OpportunityDetails } from '../model/details'
 import {
   applicationStatusValues,
   listingAvailabilityValues,
@@ -20,17 +18,16 @@ import {
   targetStageValues,
 } from '../model/values'
 import { sqlStringList } from './checks'
+import { utcTimestamp } from './columns'
 
-export const applications = sqliteTable(
+export const applications = pgTable(
   'applications',
   {
     id: text('id').notNull(),
-    jobKey: text('job_key').notNull(),
-    source: text('source').notNull(),
-    sourceJobId: text('source_job_id'),
-    canonicalUrl: text('canonical_url').notNull(),
+    postingUrl: text('posting_url').notNull(),
+    postingUrlNormalized: text('posting_url_normalized').notNull(),
+    postingFingerprint: text('posting_fingerprint').notNull(),
     company: text('company').notNull(),
-    companyNormalized: text('company_normalized').notNull(),
     role: text('role').notNull(),
     location: text('location'),
     applicationStatus: text('application_status', {
@@ -44,18 +41,8 @@ export const applications = sqliteTable(
     personalPriority: text('personal_priority', {
       enum: personalPriorityValues,
     }),
-    fitScore: real('fit_score'),
-    category: text('category'),
-    remotePolicy: text('remote_policy'),
-    details: text('details', { mode: 'json' }).$type<OpportunityDetails>(),
-    openStatus: text('open_status'),
-    sourceConfidence: text('source_confidence'),
-    technologyStack: text('technology_stack'),
-    recommendedAction: text('recommended_action'),
-    researchPriority: text('research_priority'),
-    followUpAt: text('follow_up_at'),
-    appliedAt: text('applied_at'),
-    lastContactAt: text('last_contact_at'),
+    followUpAt: utcTimestamp('follow_up_at'),
+    appliedAt: utcTimestamp('applied_at'),
     listingAvailability: text('listing_availability', {
       enum: listingAvailabilityValues,
     })
@@ -67,20 +54,25 @@ export const applications = sqliteTable(
     listingReasonCode: text('listing_reason_code', {
       enum: listingCheckReasonValues,
     }),
-    listingCheckedAt: text('listing_checked_at'),
-    listingClosedCandidateAt: text('listing_closed_candidate_at'),
+    listingCheckedAt: utcTimestamp('listing_checked_at'),
+    listingClosedCandidateAt: utcTimestamp('listing_closed_candidate_at'),
     listingConsecutiveClosedChecks: integer('listing_consecutive_closed_checks')
       .notNull()
       .default(0),
     version: integer('version').notNull().default(1),
     updatedRevision: integer('updated_revision').notNull(),
-    createdAt: text('created_at').notNull(),
-    updatedAt: text('updated_at').notNull(),
+    createdAt: utcTimestamp('created_at').notNull(),
+    updatedAt: utcTimestamp('updated_at').notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.id] }),
-    uniqueIndex('applications_job_key_unique').on(table.jobKey),
-    index('applications_company_normalized_idx').on(table.companyNormalized),
+    uniqueIndex('applications_posting_fingerprint_unique').on(
+      table.postingFingerprint
+    ),
+    index('applications_posting_url_normalized_idx').on(
+      table.postingUrlNormalized
+    ),
+    index('applications_company_idx').on(table.company),
     index('applications_status_updated_revision_idx').on(
       table.applicationStatus,
       table.updatedRevision
@@ -122,14 +114,6 @@ export const applications = sqliteTable(
     check(
       'applications_listing_closed_count_check',
       sql`${table.listingConsecutiveClosedChecks} >= 0`
-    ),
-    check(
-      'applications_fit_score_check',
-      sql`${table.fitScore} is null or (${table.fitScore} >= 0 and ${table.fitScore} <= 100)`
-    ),
-    check(
-      'applications_details_json_check',
-      sql`${table.details} is null or json_valid(${table.details})`
     ),
     check('applications_version_check', sql`${table.version} >= 1`),
   ]

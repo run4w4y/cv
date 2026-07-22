@@ -6,28 +6,15 @@ import { ApplicationsTable } from '..'
 
 const application: ApplicationListItem = {
   id: 'application-1',
-  jobKey: 'web:one',
-  source: 'web',
-  sourceJobId: 'one',
-  canonicalUrl: 'https://example.test/jobs/one',
+  postingUrl: 'https://example.test/jobs/one',
   company: 'Example Systems',
   role: 'Staff Platform Engineer working across a distributed systems estate',
   location: 'Remote — Europe',
   applicationStatus: 'technical_screen',
   targetStage: 'apply_next',
   personalPriority: 'high',
-  fitScore: 91,
-  category: 'Engineering',
-  remotePolicy: 'Remote',
-  details: null,
-  openStatus: 'Open',
-  sourceConfidence: 'High',
-  technologyStack: 'TypeScript, React, Effect',
-  recommendedAction: 'Prepare architecture examples.',
-  researchPriority: 'High',
   followUpAt: '2026-07-20T09:30:00.000Z',
   appliedAt: null,
-  lastContactAt: null,
   listingAvailability: 'open',
   listingCheckedAt: '2026-07-15T09:30:00.000Z',
   listingClosedCandidateAt: null,
@@ -43,12 +30,10 @@ const application: ApplicationListItem = {
     minimumMinor: 15_000_000,
     maximumMinor: 18_000_000,
   },
-  counts: { captures: 1, notes: 2 },
-  identityAliases: [],
+  counts: { notes: 2 },
   labels: ['TypeScript', 'Remote'],
-  latestCapture: null,
-  latestEvent: {
-    kind: 'stage_changed',
+  latestActivity: {
+    kind: 'status_changed',
     occurredAt: '2026-07-15T09:30:00.000Z',
   },
 }
@@ -67,7 +52,7 @@ const RegistryMutationStub = ({
       const url = String(input)
       if (
         init?.method === 'PATCH' &&
-        url.endsWith(`/v1/applications/${application.id}/management`)
+        url.endsWith(`/api/registry/applications/${application.id}`)
       ) {
         const request = JSON.parse(String(init.body)) as {
           readonly annualCompensation: ApplicationListItem['annualCompensation']

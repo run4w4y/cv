@@ -1,21 +1,19 @@
 import { fileURLToPath } from 'node:url'
 import { defineConfig, devices } from '@playwright/test'
-import { e2eFixtureEnv } from './e2e/fixture-env'
 
-const port = Number(process.env.CV_E2E_PORT ?? process.env.PORT ?? 4381)
-const host = '127.0.0.1'
+const port = Number(process.env.CV_E2E_PORT ?? 4381)
+const host = 'localhost'
 const executablePath = process.env.CV_CHROME_PATH ?? process.env.CHROME_PATH
 const rootDir = fileURLToPath(new URL('../..', import.meta.url))
-const outputDir =
-  process.env.PLAYWRIGHT_OUTPUT_DIR ?? `${rootDir}/.cv-work/playwright-results`
 
 export default defineConfig({
   expect: {
     timeout: 5_000,
+    toHaveScreenshot: { maxDiffPixels: 500 },
   },
   forbidOnly: Boolean(process.env.CI),
   fullyParallel: true,
-  outputDir,
+  outputDir: `${rootDir}/.cv-work/cv-playwright-results`,
   projects: [
     {
       name: 'chromium-desktop',
@@ -26,30 +24,27 @@ export default defineConfig({
     },
     {
       name: 'chromium-mobile',
-      use: {
-        ...devices['Pixel 5'],
-      },
+      use: devices['Pixel 5'],
     },
   ],
   reporter: process.env.CI ? 'github' : 'list',
   retries: process.env.CI ? 1 : 0,
   testDir: `${rootDir}/apps/cv/e2e`,
   timeout: 30_000,
-  workers: Number(process.env.CV_E2E_WORKERS ?? 4),
   use: {
     baseURL: `http://${host}:${port}`,
     launchOptions: executablePath ? { executablePath } : undefined,
-    trace: process.env.CV_E2E_TRACE === '1' ? 'retain-on-failure' : 'off',
+    trace: 'retain-on-failure',
   },
   webServer: {
-    command: `./node_modules/.bin/nx run cv:build --skip-nx-cache && ./node_modules/.bin/nx run cv:preview -- --host ${host} --port ${port}`,
+    command: './node_modules/.bin/nx run cv:dev:fixture',
     cwd: rootDir,
     env: {
-      ...e2eFixtureEnv,
-      NX_PARALLEL: '1',
+      ...process.env,
+      CV_FIXTURE_PORT: port.toString(10),
     },
-    reuseExistingServer: false,
+    reuseExistingServer: !process.env.CI,
     timeout: 120_000,
-    url: `http://${host}:${port}/en/`,
+    url: `http://${host}:${port}/c/fixture`,
   },
 })

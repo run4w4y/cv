@@ -1,9 +1,9 @@
 import {
   type Application,
+  type ApplicationActivity,
+  ApplicationActivitySchema,
   type ApplicationCompensation,
   ApplicationCompensationSchema,
-  type ApplicationEvent,
-  ApplicationEventSchema,
   type ApplicationLabel,
   ApplicationLabelSchema,
   type ApplicationListingCheck,
@@ -11,27 +11,23 @@ import {
   type ApplicationNote,
   ApplicationNoteSchema,
   ApplicationSchema,
-  type CampaignCapture,
-  CampaignCaptureSchema,
-  CurrencyCodeSchema,
   ExpectedApplicationVersionSchema,
   type ListingCheckRun,
   ListingCheckRunSchema,
   NonEmptyTrimmedStringSchema as NonEmptyString,
-  UtcIsoTimestampSchema,
 } from '@cv/application-registry-entity'
 import {
   type AnnualCompensation,
   AnnualCompensationSchema,
   ApplicationListItemSchema,
-  RegistryEventListItemSchema,
+  RegistryActivityListItemSchema,
 } from '@cv/application-registry-entity/query'
 
 export {
   type ApplicationListItem,
   ApplicationListItemSchema,
-  type RegistryEventListItem,
-  RegistryEventListItemSchema,
+  type RegistryActivityListItem,
+  RegistryActivityListItemSchema,
 } from '@cv/application-registry-entity/query'
 
 import {
@@ -39,36 +35,26 @@ import {
   queryPageSchema,
 } from '@cv/drizzle-query-effect/schema'
 import { Schema } from 'effect'
-import { HttpApiSchema } from 'effect/unstable/httpapi'
 
 export type {
   AddApplicationNoteCommand as AddApplicationNoteRequest,
-  AppendApplicationEventCommand as AppendApplicationEventRequest,
-  CreateCampaignCaptureCommand as CreateCampaignCaptureRequest,
-  DeleteApplicationQuery,
+  ListActivitiesQuery,
   ListApplicationsQuery,
-  ListEventsQuery,
-  PatchApplicationCommand as PatchApplicationRequest,
-  RegistryApplicationInput as UpsertApplicationRequest,
   RegistryApplicationInput as CreateApplicationRequest,
   ResolveListingAvailabilityCommand as ResolveListingAvailabilityRequest,
   SubmitListingCheckFindingsCommand as SubmitListingCheckFindingsRequest,
-  UpdateManagedApplicationCommand as UpdateManagedApplicationRequest,
+  UpdateApplicationCommand as UpdateApplicationRequest,
 } from './commands'
 export {
   AddApplicationNoteCommandSchema as AddApplicationNoteRequestSchema,
-  AppendApplicationEventCommandSchema as AppendApplicationEventRequestSchema,
-  CreateCampaignCaptureCommandSchema as CreateCampaignCaptureRequestSchema,
-  DeleteApplicationQuerySchema,
+  IdempotencyHeadersSchema,
+  ListActivitiesQuerySchema,
   ListApplicationsQuerySchema,
-  ListEventsQuerySchema,
   PaginationSizeSchema,
-  PatchApplicationCommandSchema as PatchApplicationRequestSchema,
-  RegistryApplicationInputSchema as UpsertApplicationRequestSchema,
   RegistryApplicationInputSchema as CreateApplicationRequestSchema,
   ResolveListingAvailabilityCommandSchema as ResolveListingAvailabilityRequestSchema,
   SubmitListingCheckFindingsCommandSchema as SubmitListingCheckFindingsRequestSchema,
-  UpdateManagedApplicationCommandSchema as UpdateManagedApplicationRequestSchema,
+  UpdateApplicationCommandSchema as UpdateApplicationRequestSchema,
 } from './commands'
 
 export const ApplicationIdentifierParamsSchema = Schema.Struct({
@@ -77,6 +63,10 @@ export const ApplicationIdentifierParamsSchema = Schema.Struct({
 
 export const ListingCheckRunIdentifierParamsSchema = Schema.Struct({
   id: NonEmptyString,
+})
+
+export const ListingCheckRunFindingsParamsSchema = Schema.Struct({
+  runId: NonEmptyString,
 })
 
 /** Canonical application response used by application read and write routes. */
@@ -137,13 +127,13 @@ export const ReplaceAnnualCompensationResponseSchema: Schema.Codec<ReplaceAnnual
     })
   )
 
-export type UpdateManagedApplicationResponse = {
+export type UpdateApplicationResponse = {
   readonly annualCompensation: AnnualCompensation | null
   readonly application: Application
   readonly labels: readonly string[]
 }
 
-export const UpdateManagedApplicationResponseSchema: Schema.Codec<UpdateManagedApplicationResponse> =
+export const UpdateApplicationResponseSchema: Schema.Codec<UpdateApplicationResponse> =
   Schema.revealCodec(
     Schema.Struct({
       annualCompensation: Schema.NullOr(AnnualCompensationSchema),
@@ -185,45 +175,6 @@ export const ApplicationAnnotationsResponseSchema: Schema.Codec<ApplicationAnnot
       labels: Schema.Array(ApplicationLabelSchema),
       notes: Schema.Array(ApplicationNoteSchema),
     })
-  )
-
-export type CreateCampaignCaptureResponse = {
-  readonly application: Application
-  readonly capture: CampaignCapture
-  readonly replayed: boolean
-}
-
-export const CreateCampaignCaptureResponseSchema: Schema.Codec<CreateCampaignCaptureResponse> =
-  Schema.revealCodec(
-    Schema.Struct({
-      application: ApplicationSchema,
-      capture: CampaignCaptureSchema,
-      replayed: Schema.Boolean,
-    })
-  )
-
-export type AppendApplicationEventResponse = {
-  readonly application: Application
-  readonly event: ApplicationEvent
-  readonly replayed: boolean
-}
-
-export const AppendApplicationEventResponseSchema: Schema.Codec<AppendApplicationEventResponse> =
-  Schema.revealCodec(
-    Schema.Struct({
-      application: ApplicationSchema,
-      event: ApplicationEventSchema,
-      replayed: Schema.Boolean,
-    })
-  )
-
-export type ListApplicationCapturesResponse = {
-  readonly items: readonly CampaignCapture[]
-}
-
-export const ListApplicationCapturesResponseSchema: Schema.Codec<ListApplicationCapturesResponse> =
-  Schema.revealCodec(
-    Schema.Struct({ items: Schema.Array(CampaignCaptureSchema) })
   )
 
 export type ListApplicationListingChecksResponse = {
@@ -283,79 +234,35 @@ export const SubmitListingCheckFindingsResponseSchema: Schema.Codec<SubmitListin
     })
   )
 
-export type ListApplicationEventsResponse = {
-  readonly items: readonly ApplicationEvent[]
+export type ListApplicationActivitiesResponse = {
+  readonly items: readonly ApplicationActivity[]
 }
 
-export const ListApplicationEventsResponseSchema: Schema.Codec<ListApplicationEventsResponse> =
+export const ListApplicationActivitiesResponseSchema: Schema.Codec<ListApplicationActivitiesResponse> =
   Schema.revealCodec(
-    Schema.Struct({ items: Schema.Array(ApplicationEventSchema) })
-  )
-
-export const ListApplicationCompensationsQuerySchema = Schema.Struct({
-  currency: Schema.optional(CurrencyCodeSchema),
-})
-
-export type ListApplicationCompensationsQuery = Schema.Schema.Type<
-  typeof ListApplicationCompensationsQuerySchema
->
-
-export type ConvertedCompensation = {
-  readonly currencyCode: string
-  readonly minimumMinor: number | null
-  readonly maximumMinor: number | null
-  readonly rate: number
-  readonly provider: string
-  readonly observedAt: string
-}
-
-export const ConvertedCompensationSchema: Schema.Codec<ConvertedCompensation> =
-  Schema.revealCodec(
-    Schema.Struct({
-      currencyCode: CurrencyCodeSchema,
-      minimumMinor: Schema.NullOr(Schema.Int),
-      maximumMinor: Schema.NullOr(Schema.Int),
-      rate: Schema.Number.pipe(Schema.check(Schema.isGreaterThan(0))),
-      provider: NonEmptyString,
-      observedAt: UtcIsoTimestampSchema,
-    })
-  )
-
-export type ApplicationCompensationResponseItem = {
-  readonly original: ApplicationCompensation
-  readonly conversion: ConvertedCompensation | null
-}
-
-export const ApplicationCompensationResponseItemSchema: Schema.Codec<ApplicationCompensationResponseItem> =
-  Schema.revealCodec(
-    Schema.Struct({
-      original: ApplicationCompensationSchema,
-      conversion: Schema.NullOr(ConvertedCompensationSchema),
-    })
+    Schema.Struct({ items: Schema.Array(ApplicationActivitySchema) })
   )
 
 export type ListApplicationCompensationsResponse = {
-  readonly items: readonly ApplicationCompensationResponseItem[]
+  readonly items: readonly ApplicationCompensation[]
 }
 
 export const ListApplicationCompensationsResponseSchema: Schema.Codec<ListApplicationCompensationsResponse> =
   Schema.revealCodec(
     Schema.Struct({
-      items: Schema.Array(ApplicationCompensationResponseItemSchema),
+      items: Schema.Array(ApplicationCompensationSchema),
     })
   )
 
-/** Standard cursor-page response returned by registry-wide event listing. */
-export const ListEventsResponseSchema = queryPageSchema(
-  RegistryEventListItemSchema,
+/** Standard cursor-page response returned by registry-wide activity listing. */
+export const ListActivitiesResponseSchema = queryPageSchema(
+  RegistryActivityListItemSchema,
   CursorPageInfoSchema
 )
 
-export type ListEventsResponse = Schema.Schema.Type<
-  typeof ListEventsResponseSchema
+export type ListActivitiesResponse = Schema.Schema.Type<
+  typeof ListActivitiesResponseSchema
 >
 
 export const HealthResponseSchema = Schema.Struct({ ok: Schema.Boolean })
 export type HealthResponse = Schema.Schema.Type<typeof HealthResponseSchema>
-
-export const DeleteApplicationResponseSchema = HttpApiSchema.NoContent

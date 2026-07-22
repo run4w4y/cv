@@ -2,39 +2,35 @@ import {
   AnnotationsCrud,
   ApplicationsCrud,
   CompensationsCrud,
-  OperationsCrud,
+  IdempotencyCrud,
+  type PersistedActivity,
   type PersistedApplication,
-  type PersistedEvent,
 } from '@cv/application-registry-crud'
-import type {
-  ApplicationCompensation,
-  ApplicationStatus,
-  CurrencyCode,
-  FxRate,
-} from '@cv/application-registry-entity'
+import { normalizeApplicationPostingUrl } from '@cv/application-registry-entity'
 import { applicationListQuery } from '@cv/application-registry-entity/query'
-import { FxRates } from '@cv/application-registry-fx'
+import {
+  RegistryEventPublisher,
+  RegistryEventSchema,
+} from '@cv/application-registry-events'
 import { Effect, Layer } from 'effect'
-import { uniq } from 'es-toolkit'
 
 import {
-  type RegistryBadRequestError,
+  RegistryBadRequestError,
   RegistryConflictError,
-  RegistryDatabaseError,
+  type RegistryDatabaseError,
 } from '../errors'
 import {
   selectAnnualCompensation,
   toApplicationListItem,
 } from '../internal/application-list-item'
-import { convertCompensationForDisplay } from '../internal/compensation-conversion'
 import { operationRequestSignature } from '../internal/operation-request-signature'
 import { resolveRegistryQuery } from '../internal/query-resolution'
 import {
   decorateCompensations,
   findRequiredApplication,
-  findValidatedOperation,
+  findValidatedIdempotency,
+  type IdempotencyIdentity,
   newRegistryId,
-  type OperationIdentity,
   registryNow,
   requireApplication,
 } from '../internal/shared'
@@ -43,60 +39,41 @@ import {
   type ApplicationsService as ApplicationsServiceShape,
 } from '../services/applications'
 import type {
+  CreateApplicationInput,
   ListApplicationsInput,
-  PatchApplicationInput,
-  UpdateManagedApplicationInput,
-  UpsertApplicationInput,
+  UpdateApplicationInput,
 } from '../types'
 
-const eventKindForManagedStatus = (
-  status: ApplicationStatus
-): PersistedEvent['kind'] => {
-  switch (status) {
-    case 'applied':
-      return 'submitted'
-    case 'recruiter_screen':
-    case 'technical_screen':
-    case 'take_home':
-    case 'interview_loop':
-      return 'interview_scheduled'
-    case 'offer':
-      return 'offer_received'
-    case 'rejected':
-      return 'rejected'
-    case 'withdrawn':
-      return 'withdrawn'
-    default:
-      return 'stage_changed'
-  }
-}
+const postingIdentity = (postingUrl: string) =>
+  Effect.try({
+    try: () => {
+      const normalizedUrl = normalizeApplicationPostingUrl(postingUrl)
+      return {
+        fingerprint: normalizedUrl,
+        normalizedUrl,
+      }
+    },
+    catch: () =>
+      new RegistryBadRequestError({
+        message: 'postingUrl must be a valid absolute HTTP(S) URL.',
+      }),
+  })
 
-const convertForSummary = (
-  original: ApplicationCompensation,
-  quoteCurrency: CurrencyCode,
-  rates: ReadonlyMap<CurrencyCode, FxRate>
-): Effect.Effect<
-  ApplicationCompensation,
-  RegistryBadRequestError | RegistryDatabaseError
-> => {
-  const rate = rates.get(original.currencyCode)
-  if (!rate) {
-    return Effect.fail(
-      new RegistryDatabaseError({
-        cause: new Error('Resolved compensation rate disappeared.'),
-        message: 'Could not resolve a compensation exchange rate.',
-      })
-    )
-  }
-  return convertCompensationForDisplay(original, quoteCurrency, rate)
-}
+const submittedStatuses = new Set([
+  'applied',
+  'recruiter_screen',
+  'technical_screen',
+  'take_home',
+  'interview_loop',
+  'offer',
+])
 
 const make = Effect.gen(function* () {
   const applications = yield* ApplicationsCrud
   const annotations = yield* AnnotationsCrud
   const compensations = yield* CompensationsCrud
-  const fxRates = yield* FxRates
-  const operations = yield* OperationsCrud
+  const idempotency = yield* IdempotencyCrud
+  const events = yield* RegistryEventPublisher
 
   const find = Effect.fn('ApplicationsService.find')((identifier: string) =>
     applications
@@ -106,12 +83,24 @@ const make = Effect.gen(function* () {
 
   const persistedApplication = Effect.fn(
     'ApplicationsService.persistedApplication'
-  )(function* (request: UpsertApplicationInput, applicationId: string) {
+  )(function* (request: CreateApplicationInput, applicationId: string) {
+    const identity = yield* postingIdentity(request.postingUrl)
+    const recordedAt = yield* registryNow
     return {
       ...request,
+      activity: {
+        activityId: newRegistryId(),
+        actor: 'system',
+        kind: 'application_created',
+        occurredAt: recordedAt,
+        payload: { postingUrl: identity.normalizedUrl },
+        source: 'management',
+      },
       applicationId,
+      postingFingerprint: identity.fingerprint,
+      postingUrlNormalized: identity.normalizedUrl,
       compensations: decorateCompensations(request.compensations),
-      recordedAt: yield* registryNow,
+      recordedAt,
     } satisfies PersistedApplication
   })
 
@@ -141,13 +130,20 @@ const make = Effect.gen(function* () {
 
   return {
     create: Effect.fn('ApplicationsService.create')(
-      (request: UpsertApplicationInput) =>
+      (request: CreateApplicationInput) =>
         Effect.gen(function* () {
           const applicationId = newRegistryId()
           const input = yield* persistedApplication(request, applicationId)
+          const existing = yield* applications.findByPostingUrl(
+            input.postingUrlNormalized
+          )
+          if (existing.length > 0) {
+            return yield* new RegistryConflictError({
+              message: `Posting already registered by application ${existing[0]?.id}.`,
+            })
+          }
           yield* applications
             .persist(input, {
-              mode: 'replace',
               operation: 'application create',
             })
             .pipe(
@@ -159,21 +155,33 @@ const make = Effect.gen(function* () {
                   void,
                   RegistryConflictError | RegistryDatabaseError
                 > =>
-                  applications.findByJobKey(request.jobKey).pipe(
-                    Effect.flatMap((existing) =>
-                      Effect.gen(function* () {
-                        if (existing) {
-                          return yield* new RegistryConflictError({
-                            message: `Application ${request.jobKey} already exists.`,
-                          })
-                        }
-                        return yield* failure
-                      })
+                  applications
+                    .findByPostingFingerprint(input.postingFingerprint)
+                    .pipe(
+                      Effect.flatMap((existing) =>
+                        Effect.gen(function* () {
+                          if (existing) {
+                            return yield* new RegistryConflictError({
+                              message: `Posting already registered by application ${existing.id}.`,
+                            })
+                          }
+                          return yield* failure
+                        })
+                      )
                     )
-                  )
               )
             )
-          return yield* find(applicationId)
+          const created = yield* find(applicationId)
+          yield* events.publish(
+            RegistryEventSchema.cases.ApplicationCreated.make({
+              applicationId: created.id,
+              correlationId: created.id,
+              eventId: `application-created:${created.id}`,
+              occurredAt: created.createdAt,
+              version: 1,
+            })
+          )
+          return created
         })
     ),
     facets: Effect.fn('ApplicationsService.facets')(() =>
@@ -183,7 +191,7 @@ const make = Effect.gen(function* () {
     list: Effect.fn('ApplicationsService.list')(
       (query: ListApplicationsInput) =>
         Effect.gen(function* () {
-          const { currency, q, ...request } = query
+          const { q, ...request } = query
           const keyword = q?.trim()
           const resolved = yield* resolveRegistryQuery(
             applicationListQuery,
@@ -204,88 +212,50 @@ const make = Effect.gen(function* () {
           )
           const page = yield* applications.list(resolved)
 
-          const quoteCurrency =
-            currency === undefined || currency === 'original'
-              ? undefined
-              : currency
-          const rates = quoteCurrency
-            ? new Map(
-                yield* Effect.forEach(
-                  uniq(
-                    page.items.flatMap(({ compensations }) =>
-                      compensations.map(({ currencyCode }) => currencyCode)
-                    )
-                  ),
-                  (baseCurrency) =>
-                    fxRates
-                      .get(baseCurrency, quoteCurrency)
-                      .pipe(Effect.map((rate) => [baseCurrency, rate] as const))
-                )
-              )
-            : undefined
-          const items = yield* Effect.forEach(page.items, (item) =>
-            quoteCurrency && rates
-              ? Effect.forEach(item.compensations, (original) =>
-                  convertForSummary(original, quoteCurrency, rates)
-                ).pipe(
-                  Effect.map((displayed) =>
-                    toApplicationListItem(item, displayed)
-                  )
-                )
-              : Effect.succeed(toApplicationListItem(item))
-          )
-
           return {
             ...page,
-            items,
+            items: page.items.map(toApplicationListItem),
           }
         })
     ),
-    patch: Effect.fn('ApplicationsService.patch')(
-      (identifier: string, request: PatchApplicationInput) =>
-        Effect.gen(function* () {
-          const current = yield* find(identifier)
-
-          if (
-            request.expectedVersion !== undefined &&
-            request.expectedVersion !== current.version
-          ) {
-            return yield* new RegistryConflictError({
-              message: `Application version ${current.version} does not match expected version ${request.expectedVersion}.`,
-            })
-          }
-
-          const updated = yield* applications.patch(
-            current.id,
-            request,
-            yield* registryNow
-          )
-
-          if (!updated) {
-            return yield* new RegistryConflictError({
-              message:
-                'The application changed while the update was being recorded.',
-            })
-          }
-
-          return updated
-        })
-    ),
-    updateManaged: Effect.fn('ApplicationsService.updateManaged')(
-      (identifier: string, request: UpdateManagedApplicationInput) =>
+    update: Effect.fn('ApplicationsService.update')(
+      (identifier: string, request: UpdateApplicationInput) =>
         Effect.gen(function* () {
           const application = yield* find(identifier)
-          const identity: OperationIdentity = {
+          const identity: IdempotencyIdentity = {
             applicationId: application.id,
-            kind: 'managed_application_update',
-            operationId: request.operationId,
-            operationRequestSignature: operationRequestSignature(
-              'managed_application_update',
-              { applicationId: application.id, request }
-            ),
+            scope: 'application_update',
+            idempotencyKey: request.idempotencyKey,
+            requestHash: operationRequestSignature('application_update', {
+              applicationId: application.id,
+              request,
+            }),
           }
-          const replay = yield* findValidatedOperation(operations, identity)
-          if (replay) return yield* managedResult(application.id)
+          const eventChangedFields = Object.entries(request)
+            .filter(
+              ([field, value]) =>
+                value !== undefined &&
+                field !== 'expectedVersion' &&
+                field !== 'idempotencyKey'
+            )
+            .map(([field]) => field)
+          const replay = yield* findValidatedIdempotency(idempotency, identity)
+          if (replay) {
+            const result = yield* managedResult(application.id)
+            yield* events.publish(
+              RegistryEventSchema.cases.ApplicationUpdated.make({
+                applicationId: application.id,
+                applicationVersion: result.application.version,
+                changedFields: eventChangedFields,
+                correlationId: request.idempotencyKey,
+                eventId: `application-updated:${request.idempotencyKey}`,
+                occurredAt: result.application.updatedAt,
+                status: result.application.applicationStatus,
+                version: 1,
+              })
+            )
+            return result
+          }
 
           if (request.expectedVersion !== application.version) {
             return yield* new RegistryConflictError({
@@ -296,11 +266,19 @@ const make = Effect.gen(function* () {
           const {
             annualCompensation,
             expectedVersion,
+            idempotencyKey,
             labels,
-            operationId,
             ...patch
           } = request
           const recordedAt = yield* registryNow
+          if (
+            patch.applicationStatus !== undefined &&
+            submittedStatuses.has(patch.applicationStatus) &&
+            application.appliedAt === null &&
+            patch.appliedAt === undefined
+          ) {
+            patch.appliedAt = recordedAt
+          }
           const currentAnnual =
             annualCompensation === undefined
               ? undefined
@@ -322,40 +300,77 @@ const make = Effect.gen(function* () {
                           source: 'manual',
                         },
                 }
-          const nextStatus = patch.applicationStatus
-          const statusEvent =
-            nextStatus === undefined ||
-            nextStatus === application.applicationStatus
+          const changedFields = Object.entries(patch)
+            .filter(
+              ([field, value]) =>
+                value !== undefined &&
+                value !== application[field as keyof typeof application]
+            )
+            .map(([field]) => field)
+          if (labels !== undefined) changedFields.push('labels')
+          if (annualCompensation !== undefined)
+            changedFields.push('annualCompensation')
+          const statusChanged =
+            patch.applicationStatus !== undefined &&
+            patch.applicationStatus !== application.applicationStatus
+          const followUpChanged =
+            patch.followUpAt !== undefined &&
+            patch.followUpAt !== application.followUpAt
+          const activity: PersistedActivity = {
+            activityId: newRegistryId(),
+            actor: 'user',
+            kind: statusChanged
+              ? 'status_changed'
+              : followUpChanged
+                ? 'follow_up_changed'
+                : 'details_changed',
+            occurredAt: recordedAt,
+            payload: {
+              fields: changedFields,
+              ...(statusChanged
+                ? {
+                    from: application.applicationStatus,
+                    to: patch.applicationStatus,
+                  }
+                : {}),
+              ...(followUpChanged
+                ? { from: application.followUpAt, to: patch.followUpAt }
+                : {}),
+            },
+            source: 'management',
+          }
+          const nextPostingIdentity =
+            patch.postingUrl === undefined ||
+            patch.postingUrl === application.postingUrl
               ? undefined
-              : {
-                  deviceId: null,
-                  eventId: newRegistryId(),
-                  kind: eventKindForManagedStatus(nextStatus),
-                  occurredAt: recordedAt,
-                  operationId,
-                  operationRequestSignature: identity.operationRequestSignature,
-                  payload: {
-                    source: 'application_registry_management',
-                    previousApplicationStatus: application.applicationStatus,
-                    nextApplicationStatus: nextStatus,
-                  },
-                  recordedAt,
-                }
+              : yield* postingIdentity(patch.postingUrl)
+          if (nextPostingIdentity) {
+            const existing = yield* applications.findByPostingUrl(
+              nextPostingIdentity.normalizedUrl
+            )
+            const conflict = existing.find(({ id }) => id !== application.id)
+            if (conflict) {
+              return yield* new RegistryConflictError({
+                message: `Posting already registered by application ${conflict.id}.`,
+              })
+            }
+          }
 
           const applied = yield* applications
             .updateManaged(application.id, {
+              activity,
               annualCompensation: replacement,
-              event: statusEvent,
               expectedVersion,
+              idempotencyKey,
               labels,
-              operationId,
-              operationRequestSignature: identity.operationRequestSignature,
               patch,
+              postingIdentity: nextPostingIdentity,
               recordedAt,
+              requestHash: identity.requestHash,
             })
             .pipe(
               Effect.catchTag('RegistryDatabaseError', (failure) =>
-                findValidatedOperation(operations, identity).pipe(
+                findValidatedIdempotency(idempotency, identity).pipe(
                   Effect.flatMap((receipt) =>
                     receipt ? Effect.succeed(false) : Effect.fail(failure)
                   )
@@ -364,8 +379,8 @@ const make = Effect.gen(function* () {
             )
 
           if (!applied) {
-            const concurrentReplay = yield* findValidatedOperation(
-              operations,
+            const concurrentReplay = yield* findValidatedIdempotency(
+              idempotency,
               identity
             )
             if (!concurrentReplay) {
@@ -376,7 +391,20 @@ const make = Effect.gen(function* () {
             }
           }
 
-          return yield* managedResult(application.id)
+          const result = yield* managedResult(application.id)
+          yield* events.publish(
+            RegistryEventSchema.cases.ApplicationUpdated.make({
+              applicationId: application.id,
+              applicationVersion: result.application.version,
+              changedFields: eventChangedFields,
+              correlationId: request.idempotencyKey,
+              eventId: `application-updated:${request.idempotencyKey}`,
+              occurredAt: result.application.updatedAt,
+              status: result.application.applicationStatus,
+              version: 1,
+            })
+          )
+          return result
         })
     ),
     remove: Effect.fn('ApplicationsService.remove')(
@@ -400,76 +428,16 @@ const make = Effect.gen(function* () {
               message: 'The application changed while it was being removed.',
             })
           }
-        })
-    ),
-    replaceLabels: Effect.fn('ApplicationsService.replaceLabels')(
-      (
-        identifier: string,
-        labels: readonly string[],
-        expectedVersion?: number
-      ) =>
-        Effect.gen(function* () {
-          const application = yield* find(identifier)
-          if (
-            expectedVersion !== undefined &&
-            expectedVersion !== application.version
-          ) {
-            return yield* new RegistryConflictError({
-              message: `Application version ${application.version} does not match expected version ${expectedVersion}.`,
+          const occurredAt = yield* registryNow
+          yield* events.publish(
+            RegistryEventSchema.cases.ApplicationRemoved.make({
+              applicationId: application.id,
+              correlationId: application.id,
+              eventId: `application-removed:${application.id}`,
+              occurredAt,
+              version: 1,
             })
-          }
-          const replaced = yield* annotations.replaceLabels(
-            application.id,
-            labels,
-            yield* registryNow,
-            expectedVersion
           )
-          if (replaced === undefined) {
-            return yield* new RegistryConflictError({
-              message: 'The application changed while labels were being saved.',
-            })
-          }
-          return replaced
-        })
-    ),
-    upsert: Effect.fn('ApplicationsService.upsert')(
-      (request: UpsertApplicationInput) =>
-        Effect.gen(function* () {
-          const existing = yield* applications.findByJobKey(request.jobKey)
-          const applicationId = existing?.id ?? newRegistryId()
-          const input = yield* persistedApplication(request, applicationId)
-
-          yield* applications
-            .persist(input, {
-              mode: 'replace',
-              operation: 'application upsert',
-            })
-            .pipe(
-              Effect.catchTag('RegistryDatabaseError', (failure) =>
-                applications.findByJobKey(request.jobKey).pipe(
-                  Effect.flatMap((winner) =>
-                    winner && winner.id !== applicationId
-                      ? applications.persist(
-                          { ...input, applicationId: winner.id },
-                          {
-                            mode: 'replace',
-                            operation: 'application upsert retry',
-                          }
-                        )
-                      : Effect.fail(failure)
-                  )
-                )
-              )
-            )
-
-          const stored = yield* applications.findByJobKey(request.jobKey)
-          if (!stored) {
-            return yield* new RegistryDatabaseError({
-              cause: new Error('D1 returned no upserted application.'),
-              message: 'Failed to upsert application',
-            })
-          }
-          return stored
         })
     ),
   } satisfies ApplicationsServiceShape

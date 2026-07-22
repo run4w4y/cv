@@ -107,6 +107,11 @@ export class SelectQueryView<
     return this.#rendered.where
   }
 
+  /** Parameters introduced by package-owned predicates, ordering, and bounds. */
+  get boundParameterCount(): number {
+    return this.#rendered.boundParameterCount
+  }
+
   /** Hidden selection to spread into a cursor-paginated select. */
   get requiredSelection(): RequiredSelection {
     return this.#ordering.requiredSelection

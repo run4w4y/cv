@@ -1,83 +1,128 @@
 name: Deploy Application Registry
 
 permissions:
-  actions: read
   contents: read
-  id-token: write
 
 on:
   workflow_call:
+    inputs:
+      api_image_digest:
+        description: Immutable registry API image digest.
+        required: true
+        type: string
+      listing_check_runner_image_digest:
+        description: Immutable listing-check runner image digest.
+        required: true
+        type: string
+      pdf_worker_image_digest:
+        description: Immutable PDF worker image digest.
+        required: true
+        type: string
 
 concurrency:
   group: application-registry-production
   cancel-in-progress: false
 
 env:
-  INFISICAL_ENV: ${{ vars.INFISICAL_ENV || 'prod' }}
-  INFISICAL_HOST: ${{ vars.INFISICAL_HOST || 'https://app.infisical.com' }}
+  REGISTRY: ghcr.io
 
 jobs:
-  deploy-application-registry:
-    name: Migrate and deploy registry Worker
+  deploy-registry-api-server:
+    name: Register self-hosted registry API
     runs-on: ubuntu-latest
     environment: production
     permissions:
-      actions: read
       contents: read
-      deployments: write
-      id-token: write
+    env:
+      IMAGE_NAME: ${{ github.repository_owner }}/cv-application-registry-api
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          filter: tree:0
 
-      - name: Fetch Infisical secrets
-        if: ${{ !env.ACT }}
-        uses: ./.github/actions/fetch-infisical
-        with:
-          identity-id: ${{ secrets.INFISICAL_IDENTITY_ID }}
-          project-slug: ${{ secrets.INFISICAL_PROJECT_SLUG }}
-          env-slug: ${{ env.INFISICAL_ENV }}
-          host: ${{ env.INFISICAL_HOST }}
-
-      - name: Set up workspace runtime
-        uses: ./.github/actions/setup-runtime
-
-      - name: Validate production registry configuration
+      - name: Install Nomad Pack
         run: |
-          missing=()
-          for name in \
-            APPLICATION_REGISTRY_DB_ID \
-            APPLICATION_REGISTRY_DB_NAME \
-            APPLICATION_REGISTRY_WORKER_NAME \
-            CLOUDFLARE_ACCOUNT_ID \
-            CLOUDFLARE_API_TOKEN \
-            REGISTRY_API_TOKEN
-          do
-            if [[ -z "${!name:-}" ]]; then
-              missing+=("$name")
-            fi
-          done
+          version=0.3.0
+          archive="nomad-pack_${version}_linux_amd64.zip"
+          curl -fsSL "https://releases.hashicorp.com/nomad-pack/${version}/${archive}" -o "$archive"
+          unzip -q "$archive" -d /tmp/nomad-pack
+          sudo install /tmp/nomad-pack/nomad-pack /usr/local/bin/nomad-pack
 
-          if (( ${#missing[@]} > 0 )); then
-            printf '::error title=Missing production registry configuration::Missing: %s\n' "${missing[*]}"
-            exit 1
-          fi
-
-      - name: Build registry Worker
-        run: ./node_modules/.bin/nx run application-registry-api:build --skip-nx-cache
-
-      - name: Generate production Wrangler config
+      - name: Register registry API service
         env:
-          APPLICATION_REGISTRY_COMPATIBILITY_DATE: ${{ vars.APPLICATION_REGISTRY_COMPATIBILITY_DATE }}
-        run: bun apps/application-registry-api/scripts/write-wrangler-config.ts apps/application-registry-api/wrangler.deploy.jsonc
+          API_BFF_ENABLED: ${{ vars.CV_REGISTRY_BFF_ENABLED || 'false' }}
+          API_ENABLED: ${{ vars.CV_REGISTRY_NOMAD_ENABLED || 'false' }}
+          API_IMAGE_DIGEST: ${{ inputs.api_image_digest }}
+          API_SUBDOMAIN: ${{ vars.CV_REGISTRY_ORIGIN_SUBDOMAIN || 'registry-origin' }}
+          NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
+          NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
+        run: |
+          nomad-pack run nomad/packs/application-registry-api \
+            --parser-v1 \
+            --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${API_IMAGE_DIGEST}" \
+            --var "enabled=${API_ENABLED}" \
+            --var "bff_enabled=${API_BFF_ENABLED}" \
+            --var "traefik_subdomain=${API_SUBDOMAIN}"
 
-      - name: Apply D1 migrations
-        run: node ../../node_modules/wrangler/bin/wrangler.js d1 migrations apply APPLICATION_REGISTRY_DB --remote --config wrangler.deploy.jsonc
-        working-directory: apps/application-registry-api
+  deploy-listing-check-runner:
+    name: Register listing-check runner
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    env:
+      IMAGE_NAME: ${{ github.repository_owner }}/cv-listing-check-runner
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
 
-      - name: Deploy registry Worker with bearer secret
-        run: bun scripts/deploy.ts wrangler.deploy.jsonc
-        working-directory: apps/application-registry-api
+      - name: Install Nomad Pack
+        run: |
+          version=0.3.0
+          archive="nomad-pack_${version}_linux_amd64.zip"
+          curl -fsSL "https://releases.hashicorp.com/nomad-pack/${version}/${archive}" -o "$archive"
+          unzip -q "$archive" -d /tmp/nomad-pack
+          sudo install /tmp/nomad-pack/nomad-pack /usr/local/bin/nomad-pack
+
+      - name: Register periodic listing-check job
+        env:
+          NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
+          NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
+          RUNNER_ENABLED: ${{ vars.CV_LISTING_CHECKS_ENABLED || 'false' }}
+          RUNNER_IMAGE_DIGEST: ${{ inputs.listing_check_runner_image_digest }}
+        run: |
+          nomad-pack run nomad/packs/application-registry-listing-check-runner \
+            --parser-v1 \
+            --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${RUNNER_IMAGE_DIGEST}" \
+            --var "enabled=${RUNNER_ENABLED}"
+
+  deploy-self-hosted-pdf:
+    name: Register PDF event worker
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    env:
+      IMAGE_NAME: ${{ github.repository_owner }}/application-registry-pdf-worker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Nomad Pack
+        run: |
+          version=0.3.0
+          archive="nomad-pack_${version}_linux_amd64.zip"
+          curl -fsSL "https://releases.hashicorp.com/nomad-pack/${version}/${archive}" -o "$archive"
+          unzip -q "$archive" -d /tmp/nomad-pack
+          sudo install /tmp/nomad-pack/nomad-pack /usr/local/bin/nomad-pack
+
+      - name: Register PDF worker service
+        env:
+          NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
+          NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
+          WORKER_ENABLED: ${{ vars.CV_PDF_WORKER_ENABLED || 'false' }}
+          WORKER_IMAGE_DIGEST: ${{ inputs.pdf_worker_image_digest }}
+        run: |
+          nomad-pack run nomad/packs/application-registry-pdf-worker \
+            --parser-v1 \
+            --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${WORKER_IMAGE_DIGEST}" \
+            --var "enabled=${WORKER_ENABLED}"

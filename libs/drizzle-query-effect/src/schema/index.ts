@@ -3,16 +3,15 @@ import { Schema } from 'effect'
 
 export { schemaCursorState } from './cursor-state'
 export { schemaBinaryFilterOperator } from './operator'
-export {
-  type QuerySchemaDefinition,
-  queryRequestSchema,
-} from './query/index'
+export { type QuerySchemaDefinition, queryRequestSchema } from './query/index'
 export {
   type EncodedQueryParams,
   fromSearchParams,
   type QueryParamsExtras,
   type QueryParamsRequest,
   type QueryParamsSchemaOptions,
+  type QuerySearchParamsCodec,
+  queryParamsCodec,
   queryParamsSchema,
   toSearchParams,
 } from './query-params/index'

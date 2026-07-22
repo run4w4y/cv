@@ -9,22 +9,24 @@ Date descriptors use the segmented calendar and date-time controls from
 range editor, while values remain UTC ISO strings at the query transport
 boundary.
 
-Browser state is handled in two phases: URL decoding first reconstructs
-structural editor state, then
-`resolveQueryFiltersState` checks every condition against the authoritative
-field/operator/value metadata. Only `validState` (or
-`filterNodesFromState(state, definition, presentation)`) should be sent to an
-API; incomplete and invalid conditions remain available for correction in the
-editor.
+Editor state and applied query state remain separate.
+`resolveQueryFiltersState` keeps incomplete conditions available for correction
+without applying them to a request.
 
 Field presentation can customize labels, descriptions, visibility, initial
 values, and suggestion labels. It cannot add, remove, or redefine operators or
 their operand types; those capabilities always come from the query definition.
 
-The query codec uses the same canonical value as the API:
-`filters=<JSON FilterNode[]>`. It preserves recursive AND, OR, and NOT groups,
-validates the complete payload before it can be forwarded, and rejects
-malformed or duplicate `filters` parameters.
+The `@cv/drizzle-query-ui/search-params` entry point adapts a schema-composed
+API codec to browser `URLSearchParams`. It preserves valid and invalid query
+states and provides the shared table sorting bridges. It does not redefine
+fields, operators, operand codecs, or ordering validation.
+
+Compact browser URLs use `filter` and `sort`, for example:
+
+```text
+?filter=listingAvailability:ne:closed;applicationStatus:notIn:[rejected,withdrawn]&sort=applicationStatus:desc
+```
 
 ## Storybook
 

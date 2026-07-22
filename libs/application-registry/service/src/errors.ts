@@ -2,6 +2,7 @@ import type {
   RegistryDatabaseError,
   RegistryQueryTooComplexError,
 } from '@cv/application-registry-crud'
+import type { RegistryEventPublishError } from '@cv/application-registry-events'
 import { Data } from 'effect'
 
 export {
@@ -28,9 +29,27 @@ export class RegistryBadRequestError extends Data.TaggedError(
   readonly message: string
 }> {}
 
+export class RegistryArtifactError extends Data.TaggedError(
+  'RegistryArtifactError'
+)<{
+  readonly cause: unknown
+  readonly message: string
+  readonly operation: 'read' | 'verify' | 'write'
+}> {}
+
+export class RegistryAnalyticsError extends Data.TaggedError(
+  'RegistryAnalyticsError'
+)<{
+  readonly cause: unknown
+  readonly message: string
+}> {}
+
 export type ApplicationRegistryError =
+  | RegistryAnalyticsError
+  | RegistryArtifactError
   | RegistryBadRequestError
   | RegistryConflictError
   | RegistryDatabaseError
+  | RegistryEventPublishError
   | RegistryNotFoundError
   | RegistryQueryTooComplexError

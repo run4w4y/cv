@@ -1,0 +1,27 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "facts-release",
+  "projectType": "library",
+  "sourceRoot": "libs/facts-release/src",
+  "tags": ["scope:cv", "type:build", "visibility:private"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/facts-release/src/index.ts",
+        "outputPath": "libs/facts-release/dist",
+        "rootDir": "libs/facts-release/src",
+        "tsConfig": "libs/facts-release/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
+    "format": {},
+    "format:check": {}
+  }
+}

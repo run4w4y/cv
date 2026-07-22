@@ -6,6 +6,7 @@ import type {
 import type { ListingDocument } from './document'
 import type { ListingFetchResult } from './http'
 import { baseObservation } from './observation'
+import { parseUrl } from './url'
 
 const normalizeText = (value: string) =>
   value
@@ -65,10 +66,9 @@ const isWorkableNotFoundRedirect = (
   target: ListingCheckTarget,
   result: ListingFetchResult
 ) => {
-  if (!URL.canParse(target.url) || !URL.canParse(result.finalUrl)) return false
-
-  const requested = new URL(target.url)
-  const final = new URL(result.finalUrl)
+  const requested = parseUrl(target.url)
+  const final = parseUrl(result.finalUrl)
+  if (!requested || !final) return false
   return (
     requested.hostname === 'apply.workable.com' &&
     requested.pathname.includes('/j/') &&

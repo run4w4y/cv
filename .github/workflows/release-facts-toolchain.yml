@@ -1,0 +1,102 @@
+name: Release Facts Toolchain
+
+on:
+  push:
+    tags:
+      - facts-toolchain-v*
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    name: Build public toolchain artifact
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout compiler source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up workspace runtime
+        uses: ./.github/actions/setup-runtime
+
+      - name: Validate release tag
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version="${RELEASE_TAG#facts-toolchain-v}"
+          package_version="$(jq -r .version tools/facts-release/package.json)"
+          if [[ "$RELEASE_TAG" != "facts-toolchain-v${package_version}" ]]; then
+            echo "::error title=Facts toolchain version mismatch::Tag ${RELEASE_TAG} must match package version ${package_version}."
+            exit 1
+          fi
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+
+      - name: Verify toolchain and release contracts
+        run: >-
+          bunx nx run-many
+          --targets=typecheck,test:unit
+          --projects=facts-authoring,facts-release,facts-toolchain,application-registry-api-contract
+          --parallel=4
+
+      - name: Build deterministic release archive
+        env:
+          COMPILER_COMMIT: ${{ github.sha }}
+          TOOLCHAIN_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          staging="$RUNNER_TEMP/cv-facts-toolchain"
+          mkdir -p "$staging/bin" "$staging/types"
+
+          version_json="$(jq -Rn --arg value "$TOOLCHAIN_VERSION" '$value')"
+          commit_json="$(jq -Rn --arg value "$COMPILER_COMMIT" '$value')"
+          bun build --compile --target=bun-linux-x64 \
+            --define "CV_FACTS_TOOLCHAIN_VERSION=${version_json}" \
+            --define "CV_FACTS_COMPILER_COMMIT=${commit_json}" \
+            tools/facts-release/src/cli.ts \
+            --outfile "$staging/bin/cv-facts"
+          bun run tools/facts-types/src/generate.ts \
+            --out "$staging/types/facts-authoring.d.ts"
+
+          "$staging/bin/cv-facts" version --json | jq -e \
+            --arg version "$TOOLCHAIN_VERSION" \
+            --arg commit "$COMPILER_COMMIT" \
+            '.toolchainVersion == $version and .compilerCommit == $commit' >/dev/null
+
+          jq -n \
+            --arg version "$TOOLCHAIN_VERSION" \
+            --arg commit "$COMPILER_COMMIT" \
+            '{
+              artifactContract: "cv.facts-toolchain-artifact.v1",
+              bundleContract: "cv.facts-bundle.v1",
+              compilerCommit: $commit,
+              compilerRepository: "run4w4y/cv",
+              pointerContract: "cv.facts-current.v2",
+              publicationProtocol: "cv.facts-publication.v1",
+              releaseContract: "cv.facts-release.v2",
+              toolchainVersion: $version
+            }' > "$staging/manifest.json"
+
+          archive="cv-facts-toolchain-linux-x64.tar.gz"
+          tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
+            -C "$staging" -cf - bin manifest.json types | gzip -n > "$archive"
+          sha256sum "$archive" > "${archive}.sha256"
+
+      - name: Attest toolchain archive
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: cv-facts-toolchain-linux-x64.tar.gz
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Facts toolchain ${{ steps.version.outputs.version }}" \
+            --generate-notes \
+            cv-facts-toolchain-linux-x64.tar.gz \
+            cv-facts-toolchain-linux-x64.tar.gz.sha256

@@ -1,13 +1,42 @@
 import {
-  type ApplicationLabel,
-  ApplicationLabelSchema,
   type ListingCheckRun,
   ListingCheckRunSchema,
 } from '@cv/application-registry-entity'
 import { Schema } from 'effect'
-import { HttpApi, HttpApiEndpoint, HttpApiGroup } from 'effect/unstable/httpapi'
+import {
+  HttpApi,
+  HttpApiEndpoint,
+  HttpApiGroup,
+  HttpApiSchema,
+} from 'effect/unstable/httpapi'
 
+import { CvAnalyticsQuerySchema, CvAnalyticsResponseSchema } from './analytics'
 import { RegistryAuthorization } from './auth'
+import {
+  AppendContentRevisionRequestSchema,
+  ApproveContentRevisionRequestSchema,
+  BinaryBodySchema,
+  BlobMetadataResponseSchema,
+  BlobParamsSchema,
+  CaptureJobPostingSnapshotResponseSchema,
+  ContentEntryNaturalKeyParamsSchema,
+  ContentEntryParamsSchema,
+  ContentEntryResponseSchema,
+  ContentRevisionParamsSchema,
+  ContentRevisionResultResponseSchema,
+  CurrentPdfArtifactParamsSchema,
+  CurrentPdfArtifactQuerySchema,
+  CvLinkResponseSchema,
+  GeneratedArtifactResponseSchema,
+  JobPostingSnapshotParamsSchema,
+  JobPostingSnapshotPayloadParamsSchema,
+  JobPostingSnapshotResponseSchema,
+  ListContentRevisionsResponseSchema,
+  PersistJobPostingSnapshotRequestSchema,
+  SetCvLinkAvailabilityRequestSchema,
+  StageCvRequestSchema,
+} from './content'
+import { assertUniqueHttpApiEndpoints } from './endpoint-integrity'
 import {
   BadRequestErrorSchema,
   ConflictErrorSchema,
@@ -15,274 +44,480 @@ import {
   NotFoundErrorSchema,
 } from './errors'
 import {
+  RegistryEventAcceptedResponseSchema,
+  RequestPdfGenerationRequestSchema,
+} from './event-commands'
+import {
+  ActivateFactsReleaseRequestSchema,
+  ActiveFactsReleaseResponseSchema,
+  FactsActivationResponseSchema,
+  FactsPublicationCapabilitiesSchema,
+  FactsPublisherAuthorization,
+  FactsRegistrationResponseSchema,
+  FactsReleaseBundleBodySchema,
+  FactsReleaseParamsSchema,
+  factsPublicationApiPrefix,
+} from './facts-publication'
+import {
   AddApplicationNoteRequestSchema,
   AddApplicationNoteResponseSchema,
-  AppendApplicationEventRequestSchema,
-  AppendApplicationEventResponseSchema,
   ApplicationAnnotationsResponseSchema,
   ApplicationFacetsResponseSchema,
   ApplicationIdentifierParamsSchema,
   ApplicationResponseSchema,
   CreateApplicationRequestSchema,
-  CreateCampaignCaptureRequestSchema,
-  CreateCampaignCaptureResponseSchema,
-  DeleteApplicationQuerySchema,
-  DeleteApplicationResponseSchema,
   HealthResponseSchema,
-  ListApplicationCapturesResponseSchema,
-  ListApplicationCompensationsQuerySchema,
+  IdempotencyHeadersSchema,
+  ListActivitiesQuerySchema,
+  ListActivitiesResponseSchema,
+  ListApplicationActivitiesResponseSchema,
   ListApplicationCompensationsResponseSchema,
-  ListApplicationEventsResponseSchema,
-  ListApplicationLabelsResponseSchema,
   ListApplicationListingChecksResponseSchema,
   ListApplicationsQuerySchema,
   ListApplicationsResponseSchema,
-  ListEventsQuerySchema,
-  ListEventsResponseSchema,
+  ListingCheckRunFindingsParamsSchema,
   ListingCheckRunIdentifierParamsSchema,
-  PatchApplicationRequestSchema,
-  ReplaceAnnualCompensationRequestSchema,
-  ReplaceAnnualCompensationResponseSchema,
-  ReplaceApplicationLabelsRequestSchema,
   ResolveListingAvailabilityRequestSchema,
   ResolveListingAvailabilityResponseSchema,
   SubmitListingCheckFindingsRequestSchema,
   SubmitListingCheckFindingsResponseSchema,
-  UpdateManagedApplicationRequestSchema,
-  UpdateManagedApplicationResponseSchema,
-  UpsertApplicationRequestSchema,
+  UpdateApplicationRequestSchema,
+  UpdateApplicationResponseSchema,
 } from './schemas'
+import { applicationRegistryApiPrefix } from './transport'
 
-const registryEndpointErrors = [
+const endpointErrors = [
   BadRequestErrorSchema,
   NotFoundErrorSchema,
   ConflictErrorSchema,
   InternalServerErrorSchema,
 ] as const
 
-const ApplicationLabelArrayResponseSchema: Schema.Codec<
-  readonly ApplicationLabel[]
-> = Schema.revealCodec(Schema.Array(ApplicationLabelSchema))
+const CreatedApplicationResponseSchema = ApplicationResponseSchema.pipe(
+  HttpApiSchema.status('Created')
+)
+const CreatedNoteResponseSchema = AddApplicationNoteResponseSchema.pipe(
+  HttpApiSchema.status('Created')
+)
+const CreatedRevisionResponseSchema = ContentRevisionResultResponseSchema.pipe(
+  HttpApiSchema.status('Created')
+)
+const AcceptedRegistryEventResponseSchema =
+  RegistryEventAcceptedResponseSchema.pipe(HttpApiSchema.status('Accepted'))
+
 const ListingCheckRunResponseSchema: Schema.Codec<ListingCheckRun> =
   Schema.revealCodec(ListingCheckRunSchema)
 
-export class PublicApi extends HttpApiGroup.make('public', {
+export const PublicApi = HttpApiGroup.make('public', {
   topLevel: true,
 }).add(
   HttpApiEndpoint.get('health', '/health', {
     success: HealthResponseSchema,
   })
-) {}
+)
 
-export class RegistryApi extends HttpApiGroup.make('registry')
-  .add(
-    HttpApiEndpoint.post('createApplication', '/applications', {
-      error: registryEndpointErrors,
-      payload: CreateApplicationRequestSchema,
-      success: ApplicationResponseSchema,
-    })
-  )
-  .add(
-    HttpApiEndpoint.put('upsertApplication', '/applications', {
-      error: registryEndpointErrors,
-      payload: UpsertApplicationRequestSchema,
-      success: ApplicationResponseSchema,
-    })
-  )
-  .add(
-    HttpApiEndpoint.post('createCapture', '/captures', {
-      error: registryEndpointErrors,
-      payload: CreateCampaignCaptureRequestSchema,
-      success: CreateCampaignCaptureResponseSchema,
-    })
-  )
-  .add(
-    HttpApiEndpoint.get('listApplications', '/applications', {
-      error: registryEndpointErrors,
-      query: ListApplicationsQuerySchema,
-      success: ListApplicationsResponseSchema,
-    })
-  )
-  .add(
-    HttpApiEndpoint.get('listApplicationFacets', '/applications/facets', {
-      error: registryEndpointErrors,
-      success: ApplicationFacetsResponseSchema,
-    })
-  )
-  .add(
-    HttpApiEndpoint.get('getApplication', '/applications/:id', {
-      error: registryEndpointErrors,
+const applicationEndpoints = [
+  HttpApiEndpoint.post('createApplication', '/applications', {
+    error: endpointErrors,
+    payload: CreateApplicationRequestSchema,
+    success: CreatedApplicationResponseSchema,
+  }),
+  HttpApiEndpoint.get('listApplications', '/applications', {
+    error: endpointErrors,
+    query: ListApplicationsQuerySchema,
+    success: ListApplicationsResponseSchema,
+  }),
+  HttpApiEndpoint.get('listApplicationFacets', '/applications/facets', {
+    error: endpointErrors,
+    success: ApplicationFacetsResponseSchema,
+  }),
+  HttpApiEndpoint.get('getApplication', '/applications/:id', {
+    error: endpointErrors,
+    params: ApplicationIdentifierParamsSchema,
+    success: ApplicationResponseSchema,
+  }),
+  HttpApiEndpoint.patch('updateApplication', '/applications/:id', {
+    error: endpointErrors,
+    headers: IdempotencyHeadersSchema,
+    params: ApplicationIdentifierParamsSchema,
+    payload: UpdateApplicationRequestSchema,
+    success: UpdateApplicationResponseSchema,
+  }),
+  HttpApiEndpoint.get(
+    'listApplicationActivities',
+    '/applications/:id/activities',
+    {
+      error: endpointErrors,
       params: ApplicationIdentifierParamsSchema,
-      success: ApplicationResponseSchema,
-    })
-  )
-  .add(
-    HttpApiEndpoint.patch('patchApplication', '/applications/:id', {
-      error: registryEndpointErrors,
+      success: ListApplicationActivitiesResponseSchema,
+    }
+  ),
+  HttpApiEndpoint.get('listActivities', '/activities', {
+    error: endpointErrors,
+    query: ListActivitiesQuerySchema,
+    success: ListActivitiesResponseSchema,
+  }),
+  HttpApiEndpoint.get(
+    'listApplicationAnnotations',
+    '/applications/:id/annotations',
+    {
+      error: endpointErrors,
       params: ApplicationIdentifierParamsSchema,
-      payload: PatchApplicationRequestSchema,
-      success: ApplicationResponseSchema,
-    })
-  )
-  .add(
-    HttpApiEndpoint.patch(
-      'updateManagedApplication',
-      '/applications/:id/management',
-      {
-        error: registryEndpointErrors,
-        params: ApplicationIdentifierParamsSchema,
-        payload: UpdateManagedApplicationRequestSchema,
-        success: UpdateManagedApplicationResponseSchema,
-      }
-    )
-  )
-  .add(
-    HttpApiEndpoint.delete('deleteApplication', '/applications/:id', {
-      error: registryEndpointErrors,
+      success: ApplicationAnnotationsResponseSchema,
+    }
+  ),
+  HttpApiEndpoint.post('addApplicationNote', '/applications/:id/notes', {
+    error: endpointErrors,
+    headers: IdempotencyHeadersSchema,
+    params: ApplicationIdentifierParamsSchema,
+    payload: AddApplicationNoteRequestSchema,
+    success: CreatedNoteResponseSchema,
+  }),
+  HttpApiEndpoint.get(
+    'listApplicationCompensations',
+    '/applications/:id/compensations',
+    {
+      error: endpointErrors,
       params: ApplicationIdentifierParamsSchema,
-      query: DeleteApplicationQuerySchema,
-      success: DeleteApplicationResponseSchema,
-    })
-  )
-  .add(
-    HttpApiEndpoint.get(
-      'listApplicationCaptures',
-      '/applications/:id/captures',
-      {
-        error: registryEndpointErrors,
-        params: ApplicationIdentifierParamsSchema,
-        success: ListApplicationCapturesResponseSchema,
-      }
-    )
-  )
-  .add(
-    HttpApiEndpoint.get(
-      'listApplicationCompensations',
-      '/applications/:id/compensations',
-      {
-        error: registryEndpointErrors,
-        params: ApplicationIdentifierParamsSchema,
-        query: ListApplicationCompensationsQuerySchema,
-        success: ListApplicationCompensationsResponseSchema,
-      }
-    )
-  )
-  .add(
-    HttpApiEndpoint.put(
-      'replaceAnnualCompensation',
-      '/applications/:id/annual-compensation',
-      {
-        error: registryEndpointErrors,
-        params: ApplicationIdentifierParamsSchema,
-        payload: ReplaceAnnualCompensationRequestSchema,
-        success: ReplaceAnnualCompensationResponseSchema,
-      }
-    )
-  )
-  .add(
-    HttpApiEndpoint.get('listApplicationEvents', '/applications/:id/events', {
-      error: registryEndpointErrors,
+      success: ListApplicationCompensationsResponseSchema,
+    }
+  ),
+  HttpApiEndpoint.get(
+    'listApplicationListingChecks',
+    '/applications/:id/listing-checks',
+    {
+      error: endpointErrors,
       params: ApplicationIdentifierParamsSchema,
-      success: ListApplicationEventsResponseSchema,
-    })
-  )
-  .add(
-    HttpApiEndpoint.post('appendApplicationEvent', '/applications/:id/events', {
-      error: registryEndpointErrors,
+      success: ListApplicationListingChecksResponseSchema,
+    }
+  ),
+  HttpApiEndpoint.post(
+    'resolveApplicationListingAvailability',
+    '/applications/:id/listing-resolutions',
+    {
+      error: endpointErrors,
+      headers: IdempotencyHeadersSchema,
       params: ApplicationIdentifierParamsSchema,
-      payload: AppendApplicationEventRequestSchema,
-      success: AppendApplicationEventResponseSchema,
-    })
-  )
-  .add(
-    HttpApiEndpoint.get(
-      'listApplicationAnnotations',
-      '/applications/:id/annotations',
-      {
-        error: registryEndpointErrors,
-        params: ApplicationIdentifierParamsSchema,
-        success: ApplicationAnnotationsResponseSchema,
-      }
-    )
-  )
-  .add(
-    HttpApiEndpoint.get('listApplicationLabels', '/applications/:id/labels', {
-      error: registryEndpointErrors,
+      payload: ResolveListingAvailabilityRequestSchema,
+      success: ResolveListingAvailabilityResponseSchema,
+    }
+  ),
+  HttpApiEndpoint.get('getCvAnalytics', '/analytics/cv-links', {
+    error: endpointErrors,
+    query: CvAnalyticsQuerySchema,
+    success: CvAnalyticsResponseSchema,
+  }),
+] as const
+
+assertUniqueHttpApiEndpoints('applications', applicationEndpoints)
+
+export const ApplicationsApi = HttpApiGroup.make('applications')
+  .add(applicationEndpoints[0])
+  .add(applicationEndpoints[1])
+  .add(applicationEndpoints[2])
+  .add(applicationEndpoints[3])
+  .add(applicationEndpoints[4])
+  .add(applicationEndpoints[5])
+  .add(applicationEndpoints[6])
+  .add(applicationEndpoints[7])
+  .add(applicationEndpoints[8])
+  .add(applicationEndpoints[9])
+  .add(applicationEndpoints[10])
+  .add(applicationEndpoints[11])
+  .add(applicationEndpoints[12])
+  .prefix(applicationRegistryApiPrefix)
+  .middleware(RegistryAuthorization)
+
+const contentEndpoints = [
+  HttpApiEndpoint.put('putBlob', '/blobs/:sha256', {
+    error: endpointErrors,
+    params: BlobParamsSchema,
+    payload: BinaryBodySchema,
+    success: BlobMetadataResponseSchema,
+  }),
+  HttpApiEndpoint.get('getBlob', '/blobs/:sha256', {
+    error: endpointErrors,
+    params: BlobParamsSchema,
+    success: BinaryBodySchema,
+  }),
+  HttpApiEndpoint.post(
+    'captureJobPostingSnapshot',
+    '/applications/:id/job-snapshot-captures',
+    {
+      error: endpointErrors,
       params: ApplicationIdentifierParamsSchema,
-      success: ListApplicationLabelsResponseSchema,
-    })
-  )
-  .add(
-    HttpApiEndpoint.put(
-      'replaceApplicationLabels',
-      '/applications/:id/labels',
-      {
-        error: registryEndpointErrors,
-        params: ApplicationIdentifierParamsSchema,
-        payload: ReplaceApplicationLabelsRequestSchema,
-        success: ApplicationLabelArrayResponseSchema,
-      }
-    )
-  )
-  .add(
-    HttpApiEndpoint.post('addApplicationNote', '/applications/:id/notes', {
-      error: registryEndpointErrors,
+      success: CaptureJobPostingSnapshotResponseSchema,
+    }
+  ),
+  HttpApiEndpoint.post(
+    'persistJobPostingSnapshot',
+    '/applications/:id/job-snapshots',
+    {
+      error: endpointErrors,
       params: ApplicationIdentifierParamsSchema,
-      payload: AddApplicationNoteRequestSchema,
-      success: AddApplicationNoteResponseSchema,
-    })
-  )
-  .add(
-    HttpApiEndpoint.get('listEvents', '/events', {
-      error: registryEndpointErrors,
-      query: ListEventsQuerySchema,
-      success: ListEventsResponseSchema,
-    })
-  )
-  .add(
-    HttpApiEndpoint.get(
-      'listApplicationListingChecks',
-      '/applications/:id/listing-checks',
-      {
-        error: registryEndpointErrors,
-        params: ApplicationIdentifierParamsSchema,
-        success: ListApplicationListingChecksResponseSchema,
-      }
-    )
-  )
-  .add(
-    HttpApiEndpoint.put(
-      'resolveApplicationListingAvailability',
-      '/applications/:id/listing-availability',
-      {
-        error: registryEndpointErrors,
-        params: ApplicationIdentifierParamsSchema,
-        payload: ResolveListingAvailabilityRequestSchema,
-        success: ResolveListingAvailabilityResponseSchema,
-      }
-    )
-  )
-  .add(
-    HttpApiEndpoint.post(
-      'submitListingCheckFindings',
-      '/listing-check-findings',
-      {
-        error: registryEndpointErrors,
-        payload: SubmitListingCheckFindingsRequestSchema,
-        success: SubmitListingCheckFindingsResponseSchema,
-      }
-    )
-  )
-  .add(
-    HttpApiEndpoint.get('getListingCheckRun', '/listing-check-runs/:id', {
-      error: registryEndpointErrors,
+      payload: PersistJobPostingSnapshotRequestSchema,
+      success: JobPostingSnapshotResponseSchema,
+    }
+  ),
+  HttpApiEndpoint.get(
+    'getLatestJobPostingSnapshot',
+    '/applications/:id/job-snapshots/latest',
+    {
+      error: endpointErrors,
+      params: ApplicationIdentifierParamsSchema,
+      success: JobPostingSnapshotResponseSchema,
+    }
+  ),
+  HttpApiEndpoint.get(
+    'getJobPostingSnapshot',
+    '/applications/:id/job-snapshots/:snapshotId',
+    {
+      error: endpointErrors,
+      params: JobPostingSnapshotParamsSchema,
+      success: JobPostingSnapshotResponseSchema,
+    }
+  ),
+  HttpApiEndpoint.get(
+    'getJobPostingSnapshotPayload',
+    '/applications/:id/job-snapshots/:snapshotId/content/:kind',
+    {
+      error: endpointErrors,
+      params: JobPostingSnapshotPayloadParamsSchema,
+      success: BinaryBodySchema,
+    }
+  ),
+  HttpApiEndpoint.put(
+    'ensureContentEntry',
+    '/applications/:id/content-entries/:kind/:locale',
+    {
+      error: endpointErrors,
+      params: ContentEntryNaturalKeyParamsSchema,
+      success: ContentEntryResponseSchema,
+    }
+  ),
+  HttpApiEndpoint.get(
+    'getContentEntry',
+    '/applications/:id/content-entries/:entryId',
+    {
+      error: endpointErrors,
+      params: ContentEntryParamsSchema,
+      success: ContentEntryResponseSchema,
+    }
+  ),
+  HttpApiEndpoint.patch(
+    'approveContentRevision',
+    '/applications/:id/content-entries/:entryId',
+    {
+      error: endpointErrors,
+      params: ContentEntryParamsSchema,
+      payload: ApproveContentRevisionRequestSchema,
+      success: ContentRevisionResultResponseSchema,
+    }
+  ),
+  HttpApiEndpoint.get(
+    'listContentRevisions',
+    '/applications/:id/content-entries/:entryId/revisions',
+    {
+      error: endpointErrors,
+      params: ContentEntryParamsSchema,
+      success: ListContentRevisionsResponseSchema,
+    }
+  ),
+  HttpApiEndpoint.post(
+    'appendContentRevision',
+    '/applications/:id/content-entries/:entryId/revisions',
+    {
+      error: endpointErrors,
+      headers: IdempotencyHeadersSchema,
+      params: ContentEntryParamsSchema,
+      payload: AppendContentRevisionRequestSchema,
+      success: CreatedRevisionResponseSchema,
+    }
+  ),
+  HttpApiEndpoint.get(
+    'readContentRevision',
+    '/applications/:id/content-entries/:entryId/revisions/:revisionId',
+    {
+      error: endpointErrors,
+      params: ContentRevisionParamsSchema,
+      success: ContentRevisionResultResponseSchema,
+    }
+  ),
+  HttpApiEndpoint.get(
+    'readContentRevisionPayload',
+    '/applications/:id/content-entries/:entryId/revisions/:revisionId/content',
+    {
+      error: endpointErrors,
+      params: ContentRevisionParamsSchema,
+      success: BinaryBodySchema,
+    }
+  ),
+] as const
+
+assertUniqueHttpApiEndpoints('content', contentEndpoints)
+
+export const ContentApi = HttpApiGroup.make('content')
+  .add(contentEndpoints[0])
+  .add(contentEndpoints[1])
+  .add(contentEndpoints[2])
+  .add(contentEndpoints[3])
+  .add(contentEndpoints[4])
+  .add(contentEndpoints[5])
+  .add(contentEndpoints[6])
+  .add(contentEndpoints[7])
+  .add(contentEndpoints[8])
+  .add(contentEndpoints[9])
+  .add(contentEndpoints[10])
+  .add(contentEndpoints[11])
+  .add(contentEndpoints[12])
+  .add(contentEndpoints[13])
+  .prefix(applicationRegistryApiPrefix)
+  .middleware(RegistryAuthorization)
+
+const publicationEndpoints = [
+  HttpApiEndpoint.put(
+    'stageCv',
+    '/applications/:id/content-entries/:entryId/publication',
+    {
+      error: endpointErrors,
+      headers: IdempotencyHeadersSchema,
+      params: ContentEntryParamsSchema,
+      payload: StageCvRequestSchema,
+      success: CvLinkResponseSchema,
+    }
+  ),
+  HttpApiEndpoint.get(
+    'getCvLink',
+    '/applications/:id/content-entries/:entryId/publication',
+    {
+      error: endpointErrors,
+      params: ContentEntryParamsSchema,
+      success: CvLinkResponseSchema,
+    }
+  ),
+  HttpApiEndpoint.patch(
+    'setCvLinkAvailability',
+    '/applications/:id/content-entries/:entryId/publication',
+    {
+      error: endpointErrors,
+      headers: IdempotencyHeadersSchema,
+      params: ContentEntryParamsSchema,
+      payload: SetCvLinkAvailabilityRequestSchema,
+      success: CvLinkResponseSchema,
+    }
+  ),
+  HttpApiEndpoint.get(
+    'getCurrentPdfArtifact',
+    '/applications/:id/content-entries/:entryId/pdf',
+    {
+      error: endpointErrors,
+      params: CurrentPdfArtifactParamsSchema,
+      query: CurrentPdfArtifactQuerySchema,
+      success: GeneratedArtifactResponseSchema,
+    }
+  ),
+  HttpApiEndpoint.get(
+    'readCurrentPdfArtifact',
+    '/applications/:id/content-entries/:entryId/pdf/content',
+    {
+      error: endpointErrors,
+      params: CurrentPdfArtifactParamsSchema,
+      query: CurrentPdfArtifactQuerySchema,
+      success: BinaryBodySchema,
+    }
+  ),
+  HttpApiEndpoint.post(
+    'requestPdfGeneration',
+    '/applications/:id/content-entries/:entryId/pdf-generation-requests',
+    {
+      error: endpointErrors,
+      headers: IdempotencyHeadersSchema,
+      params: ContentEntryParamsSchema,
+      payload: RequestPdfGenerationRequestSchema,
+      success: AcceptedRegistryEventResponseSchema,
+    }
+  ),
+] as const
+
+assertUniqueHttpApiEndpoints('publications', publicationEndpoints)
+
+export const PublicationsApi = HttpApiGroup.make('publications')
+  .add(publicationEndpoints[0])
+  .add(publicationEndpoints[1])
+  .add(publicationEndpoints[2])
+  .add(publicationEndpoints[3])
+  .add(publicationEndpoints[4])
+  .add(publicationEndpoints[5])
+  .prefix(applicationRegistryApiPrefix)
+  .middleware(RegistryAuthorization)
+
+const automationEndpoints = [
+  HttpApiEndpoint.post(
+    'submitListingCheckFindings',
+    '/automation/listing-check-runs/:runId/findings',
+    {
+      error: endpointErrors,
+      params: ListingCheckRunFindingsParamsSchema,
+      payload: SubmitListingCheckFindingsRequestSchema,
+      success: SubmitListingCheckFindingsResponseSchema,
+    }
+  ),
+  HttpApiEndpoint.get(
+    'getListingCheckRun',
+    '/automation/listing-check-runs/:id',
+    {
+      error: endpointErrors,
       params: ListingCheckRunIdentifierParamsSchema,
       success: ListingCheckRunResponseSchema,
-    })
-  )
-  .prefix('/v1')
-  .middleware(RegistryAuthorization) {}
+    }
+  ),
+] as const
 
-export class ApplicationRegistryApi extends HttpApi.make('applicationRegistry')
-  .add(PublicApi)
-  .add(RegistryApi) {}
+assertUniqueHttpApiEndpoints('automation', automationEndpoints)
+
+export const AutomationApi = HttpApiGroup.make('automation')
+  .add(automationEndpoints[0])
+  .add(automationEndpoints[1])
+  .prefix(applicationRegistryApiPrefix)
+  .middleware(RegistryAuthorization)
+
+const factsPublicationEndpoints = [
+  HttpApiEndpoint.get('getCapabilities', '/capabilities', {
+    error: endpointErrors,
+    success: FactsPublicationCapabilitiesSchema,
+  }),
+  HttpApiEndpoint.get('getCurrentRelease', '/current', {
+    error: endpointErrors,
+    success: ActiveFactsReleaseResponseSchema,
+  }),
+  HttpApiEndpoint.put('registerRelease', '/releases/:releaseId', {
+    error: endpointErrors,
+    params: FactsReleaseParamsSchema,
+    payload: FactsReleaseBundleBodySchema,
+    success: FactsRegistrationResponseSchema,
+  }),
+  HttpApiEndpoint.put('activateRelease', '/current', {
+    error: endpointErrors,
+    payload: ActivateFactsReleaseRequestSchema,
+    success: FactsActivationResponseSchema,
+  }),
+] as const
+
+assertUniqueHttpApiEndpoints('factsPublication', factsPublicationEndpoints)
+
+export const FactsPublicationApi = HttpApiGroup.make('factsPublication')
+  .add(factsPublicationEndpoints[0])
+  .add(factsPublicationEndpoints[1])
+  .add(factsPublicationEndpoints[2])
+  .add(factsPublicationEndpoints[3])
+  .prefix(factsPublicationApiPrefix)
+  .middleware(FactsPublisherAuthorization)
+
+export const ApplicationRegistryApi = HttpApi.make('applicationRegistry').add(
+  PublicApi,
+  ApplicationsApi,
+  ContentApi,
+  PublicationsApi,
+  AutomationApi,
+  FactsPublicationApi
+)

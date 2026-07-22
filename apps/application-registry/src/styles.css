@@ -1,11 +1,14 @@
 @import "tailwindcss";
 @import "shadcn/tailwind.css";
 @import "@cv/internal-ui/theme.css";
+@import "@cv/internal-charts/theme.css";
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
 
 @source "../../../libs/internal-ui/src";
+@source "../../../libs/internal-charts/src";
 @source "../../../libs/drizzle-query-ui/src";
+@source "../../../libs/schema-editor/src";
 
 html,
 body,

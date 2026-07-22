@@ -97,6 +97,11 @@ export class ResolvedQuery<
     return this.select.where
   }
 
+  /** Parameters introduced by package-owned predicates, ordering, and bounds. */
+  get boundParameterCount(): number {
+    return this.select.boundParameterCount
+  }
+
   /** Hidden nested selection required by the default select renderer. */
   get requiredSelection(): RequiredSelection {
     return this.select.requiredSelection

@@ -7,20 +7,18 @@ import {
 } from '@cv/internal-ui'
 import { useAtomValue } from '@effect/atom-react'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
-import { ArrowLeft, FileText } from 'lucide-react'
+import { ArrowLeft, FilePenLine, FileText, WandSparkles } from 'lucide-react'
 import * as React from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
+import { asyncResultErrorMessage } from '@/lib/async-result'
 import { HeaderActions } from '../../../shell/header-actions'
+import { ApplicationEditDialog } from '../../components/application-editor'
+import { ApplicationActivitiesTable } from '../../components/application-events-table'
 import {
-  ApplicationEditDialog,
-  DeleteApplicationDialog,
-} from '../../components/application-editor'
-import { ApplicationEventsTable } from '../../components/application-events-table'
-import { RecordEventDialog } from '../../components/record-event'
-import {
+  applicationActivitiesAtom,
   applicationAtom,
   applicationCompensationsAtom,
-  applicationEventsAtom,
+  compensationFxRateTableAtom,
 } from '../../data'
 import type { CompensationDisplayCurrency } from '../../model/currency'
 import {
@@ -30,62 +28,72 @@ import {
   ApplicationSummary,
 } from './sections'
 
-const resultError = (
-  result: AsyncResult.AsyncResult<unknown, unknown>,
-  fallback: string
-) =>
-  AsyncResult.matchWithError(result, {
-    onInitial: () => undefined,
-    onError: (reason) => (reason instanceof Error ? reason.message : fallback),
-    onDefect: (reason) => (reason instanceof Error ? reason.message : fallback),
-    onSuccess: () => undefined,
-  })
-
 export const ApplicationDetailsPage = () => {
   const { applicationId = '' } = useParams()
-  const navigate = useNavigate()
   const [compensationCurrency, setCompensationCurrency] =
     React.useState<CompensationDisplayCurrency>('original')
   const applicationResult = useAtomValue(applicationAtom(applicationId))
   const compensationResult = useAtomValue(
-    applicationCompensationsAtom({
-      applicationId,
-      currency: compensationCurrency,
-    })
+    applicationCompensationsAtom(applicationId)
   )
-  const eventsResult = useAtomValue(applicationEventsAtom(applicationId))
+  const compensationFxRatesResult = useAtomValue(
+    compensationFxRateTableAtom(compensationCurrency)
+  )
+  const activitiesResult = useAtomValue(
+    applicationActivitiesAtom(applicationId)
+  )
   const application = AsyncResult.getOrElse(applicationResult, () => undefined)
   const compensations = AsyncResult.getOrElse(
     compensationResult,
     () => undefined
   )?.items
-  const events = AsyncResult.getOrElse(
-    eventsResult,
+  const compensationFxRateTable = AsyncResult.getOrElse(
+    compensationFxRatesResult,
+    () => undefined
+  )
+  const activities = AsyncResult.getOrElse(
+    activitiesResult,
     () => undefined
   )?.items.slice(0, 8)
-  const error = resultError(
+  const error = asyncResultErrorMessage(
     applicationResult,
     'The application could not be loaded.'
   )
-  const compensationError = resultError(
+  const compensationError = asyncResultErrorMessage(
     compensationResult,
     'The application compensation could not be loaded.'
   )
-  const eventsError = resultError(
-    eventsResult,
-    'The related events could not be loaded.'
+  const compensationConversionError =
+    compensationCurrency === 'original'
+      ? undefined
+      : asyncResultErrorMessage(
+          compensationFxRatesResult,
+          'The compensation exchange rates could not be loaded.'
+        )
+  const activitiesError = asyncResultErrorMessage(
+    activitiesResult,
+    'The related activities could not be loaded.'
   )
 
   return (
     <section className="min-h-0 flex-1 overflow-y-auto bg-background p-4 lg:p-6">
       {application === undefined ? null : (
         <HeaderActions>
-          <RecordEventDialog application={application} />
+          <Link
+            to={`/applications/${application.id}/prepare`}
+            className={cn(buttonVariants())}
+          >
+            <WandSparkles />
+            Prepare CV
+          </Link>
+          <Link
+            to={`/applications/${application.id}/cover-letter`}
+            className={cn(buttonVariants({ variant: 'outline' }))}
+          >
+            <FilePenLine />
+            Cover letter
+          </Link>
           <ApplicationEditDialog application={application} />
-          <DeleteApplicationDialog
-            application={application}
-            onDeleted={() => navigate('/applications', { replace: true })}
-          />
         </HeaderActions>
       )}
       <div className="mx-auto max-w-6xl">
@@ -113,8 +121,13 @@ export const ApplicationDetailsPage = () => {
               onCurrencyChange={setCompensationCurrency}
               compensations={compensations}
               error={compensationError}
+              conversionError={compensationConversionError}
+              rateTable={compensationFxRateTable ?? undefined}
             />
-            <ApplicationEventsTable events={events} error={eventsError} />
+            <ApplicationActivitiesTable
+              activities={activities}
+              error={activitiesError}
+            />
           </>
         )}
       </div>

@@ -1,0 +1,27 @@
+{
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "name": "application-registry-events",
+  "projectType": "library",
+  "sourceRoot": "libs/application-registry/events/src",
+  "tags": ["scope:application-registry", "type:data", "visibility:private"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/application-registry/events/src/index.ts",
+        "outputPath": "libs/application-registry/events/dist",
+        "rootDir": "libs/application-registry/events/src",
+        "tsConfig": "libs/application-registry/events/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
+    "format": {},
+    "format:check": {}
+  }
+}

@@ -1,75 +1,85 @@
-import { eventListQuery } from '@cv/application-registry-entity/query'
+import type { ListActivitiesQuery } from '@cv/application-registry-api-contract'
+import { activityListQuery } from '@cv/application-registry-entity/query'
 import {
   emptyQueryFiltersState,
   queryFiltersStateFromFilterNodes,
-  serializeQueryFilterNodes,
 } from '@cv/drizzle-query-ui'
+import {
+  decodeQueryParameterState,
+  sortingStateFromOrderBy,
+  writeQueryParameterState,
+} from '@cv/drizzle-query-ui/search-params'
 import {
   functionalUpdate,
   type SortingState,
   type Updater,
   type VisibilityState,
 } from '@tanstack/react-table'
-import { parseAsString, useQueryStates } from 'nuqs'
 import * as React from 'react'
 import { useSearchParams } from 'react-router'
-import {
-  canonicalFiltersParser,
-  useCanonicalQueryFilters,
-} from '../../../table-workspace/query-filters'
+
+import { activityQueryBoundary } from '../../../table-workspace/query-codecs'
+import { useCanonicalQueryFilters } from '../../../table-workspace/query-filters'
 import type {
   EventsSavedViewState,
   EventsTableDensity,
 } from '../../components/saved-views'
 import { eventFilterFieldPresentation } from '../../model/filter-fields'
 import {
-  defaultEventSorting,
-  parseEventSorting,
-  serializeEventSorting,
+  defaultEventOrderBy,
+  eventOrderByFromSorting,
   writeEventsViewQueryState,
 } from './query-state'
 
 export const useEventsWorkspace = () => {
-  const [isNavigating, startQueryTransition] = React.useTransition()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [queryState, setQueryState] = useQueryStates(
-    {
-      filters: canonicalFiltersParser,
-      sort: parseAsString.withDefault(
-        serializeEventSorting(defaultEventSorting)
-      ),
-    },
-    {
-      history: 'replace',
-      shallow: false,
-      scroll: false,
-      startTransition: startQueryTransition,
-      urlKeys: { filters: 'filters', sort: 'sort' },
-    }
+  const parameterState = decodeQueryParameterState(
+    activityQueryBoundary,
+    searchParams
   )
+  const query: ListActivitiesQuery =
+    parameterState.status === 'valid' ? parameterState.value : {}
   const [density, setDensity] =
     React.useState<EventsTableDensity>('comfortable')
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({})
+
+  const writeQuery = (next: ListActivitiesQuery) =>
+    setSearchParams(
+      writeQueryParameterState(activityQueryBoundary, searchParams, next),
+      { replace: true }
+    )
+  const appliedFilters = query.filters ?? []
   const filters = useCanonicalQueryFilters({
     searchParams,
-    setSearchParams,
-    definition: eventListQuery,
+    appliedFilters,
+    blocksRequest: parameterState.status === 'invalid',
+    definition: activityListQuery,
     presentation: eventFilterFieldPresentation,
-    applyState: (state) => void setQueryState({ filters: state }),
+    onFiltersChange: (nextFilters) =>
+      writeQuery({ ...query, filters: nextFilters }),
+    onClearInvalidQuery: () => writeQuery({}),
   })
-  const sorting = parseEventSorting(queryState.sort)
+  const effectiveOrderBy = query.orderBy ?? defaultEventOrderBy
+  const sorting: SortingState = sortingStateFromOrderBy(effectiveOrderBy).map(
+    (entry) => ({ ...entry })
+  )
+  const appliedQuery: Omit<ListActivitiesQuery, 'pagination'> = {
+    ...(appliedFilters.length === 0 ? {} : { filters: appliedFilters }),
+    ...(query.orderBy === undefined ? {} : { orderBy: query.orderBy }),
+  }
   const currentState: EventsSavedViewState = {
-    filters: filters.queryFilters,
+    filters: appliedFilters,
     sorting,
     columnVisibility,
     density,
   }
 
   const applyView = (state: EventsSavedViewState) => {
-    const nextFilters = queryFiltersStateFromFilterNodes(state.filters)
-    filters.markNavigation(serializeQueryFilterNodes(state.filters))
-    filters.setEditorState(nextFilters ?? emptyQueryFiltersState())
+    filters.setEditorState(
+      queryFiltersStateFromFilterNodes(state.filters) ??
+        emptyQueryFiltersState()
+    )
     setColumnVisibility(state.columnVisibility)
     setDensity(state.density)
     setSearchParams(writeEventsViewQueryState(searchParams, state), {
@@ -79,17 +89,18 @@ export const useEventsWorkspace = () => {
 
   return {
     applyView,
+    appliedQuery,
     columnVisibility,
     currentState,
     density,
     filters,
-    isNavigating,
+    queryParameterState: parameterState,
     setColumnVisibility: (updater: Updater<VisibilityState>) =>
       setColumnVisibility((current) => functionalUpdate(updater, current)),
     setDensity,
     setSorting: (updater: Updater<SortingState>) => {
       const next = functionalUpdate(updater, sorting)
-      void setQueryState({ sort: serializeEventSorting(next) })
+      writeQuery({ ...query, orderBy: eventOrderByFromSorting(next) })
     },
     sorting,
   }

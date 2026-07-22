@@ -13,12 +13,18 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./facts-publication": {
+      "types": "./dist/facts-publication.d.ts",
+      "default": "./dist/facts-publication.js"
     }
   },
   "dependencies": {
     "@cv/application-registry-entity": "workspace:*",
+    "@cv/contracts": "workspace:*",
     "@cv/drizzle-query-effect": "workspace:*",
-    "effect": "4.0.0-beta.91",
+    "@cv/facts-release": "workspace:*",
+    "effect": "4.0.0-beta.99",
     "es-toolkit": "^1.43.0"
   }
 }

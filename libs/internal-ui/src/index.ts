@@ -41,6 +41,11 @@ export {
 } from './card'
 export { Checkbox } from './checkbox'
 export {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from './collapsible'
+export {
   Combobox,
   type ComboboxOption,
   type ComboboxProps,
@@ -123,7 +128,14 @@ export {
 export { Kbd, KbdGroup } from './kbd'
 export { Label } from './label'
 export { Popover, PopoverContent, PopoverTrigger } from './popover'
+export { Progress, type ProgressProps } from './progress'
 export { RadioGroup, RadioGroupItem } from './radio-group'
+export {
+  ScrollArea,
+  type ScrollAreaProps,
+  ScrollBar,
+  type ScrollBarProps,
+} from './scroll-area'
 export { Select, type SelectOption, type SelectProps } from './select'
 export { Separator } from './separator'
 export {
@@ -155,6 +167,22 @@ export {
   useSidebar,
 } from './sidebar'
 export { Skeleton } from './skeleton'
+export { Spinner, type SpinnerProps } from './spinner'
+export {
+  Stepper,
+  StepperContent,
+  type StepperContentProps,
+  StepperDescription,
+  StepperIndicator,
+  StepperItem,
+  type StepperItemProps,
+  StepperList,
+  type StepperProps,
+  StepperSeparator,
+  type StepperStatus,
+  StepperTitle,
+  StepperTrigger,
+} from './stepper'
 export { Switch } from './switch'
 export {
   Table,
@@ -166,6 +194,19 @@ export {
 } from './table'
 export { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs'
 export { Textarea } from './textarea'
+export {
+  Timeline,
+  TimelineConnector,
+  TimelineContent,
+  TimelineDescription,
+  TimelineIndicator,
+  TimelineItem,
+  type TimelineItemProps,
+  type TimelineProps,
+  type TimelineStatus,
+  TimelineTime,
+  TimelineTitle,
+} from './timeline'
 export {
   Tooltip,
   TooltipContent,

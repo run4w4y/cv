@@ -6,58 +6,62 @@ entry point provides reusable Effect Schemas, definition-derived request and
 HTTP query codecs, and browser-native query-string helpers.
 
 ```ts
-import { resolveQuery, finalizeQuery } from '@cv/drizzle-query-effect'
-import { Effect, Schema } from 'effect'
-import {
-  fromSearchParams,
-  queryParamsSchema,
-  queryRequestSchema,
-  schemaCursorState,
-  toSearchParams,
-} from '@cv/drizzle-query-effect/schema'
+import { resolveQuery, finalizeQuery } from "@cv/drizzle-query-effect";
+import { Effect, Schema } from "effect";
+import { fromSearchParams, queryParamsCodec, queryParamsSchema, queryRequestSchema, schemaCursorState, toSearchParams } from "@cv/drizzle-query-effect/schema";
 
-const RequestSchema = queryRequestSchema(applicationsQuery)
+const RequestSchema = queryRequestSchema(applicationsQuery);
 
 const QueryParamsSchema = queryParamsSchema(applicationsQuery, {
   extras: {
     tenantId: Schema.optional(Schema.String),
   },
-})
+});
 
-const params = yield* toSearchParams(QueryParamsSchema, {
-  filters: [
-    {
-      type: 'condition',
-      field: 'status',
-      operator: 'in',
-      value: ['active'],
-    },
-  ],
-  pagination: { after: nextCursor, size: 25 },
-  tenantId,
-})
+const QueryParamsCodec = queryParamsCodec(applicationsQuery);
 
-const request = yield* fromSearchParams(QueryParamsSchema, params)
+const params =
+  yield *
+  toSearchParams(QueryParamsSchema, {
+    filters: [
+      {
+        type: "condition",
+        field: "status",
+        operator: "in",
+        value: ["active"],
+      },
+    ],
+    pagination: { after: nextCursor, size: 25 },
+    tenantId,
+  });
+
+const request = yield * fromSearchParams(QueryParamsSchema, params);
 
 // A browser or CLI consumer chooses its own synchronous boundary when needed.
-const browserParams = Effect.runSync(toSearchParams(QueryParamsSchema, request))
-const browserRequest = Effect.runSync(
-  fromSearchParams(QueryParamsSchema, browserParams)
-)
+const browserParams = Effect.runSync(toSearchParams(QueryParamsSchema, request));
+const browserRequest = Effect.runSync(fromSearchParams(QueryParamsSchema, browserParams));
 
-const CursorStateSchema = Schema.Struct({ asOf: Schema.String })
-const cursorState = schemaCursorState(CursorStateSchema)
+const CursorStateSchema = Schema.Struct({ asOf: Schema.String });
+const cursorState = schemaCursorState(CursorStateSchema);
 ```
 
 `queryRequestSchema` derives filter fields, unary and binary operators, operand
 types, ordering fields, and the selected built-in pagination request directly
 from a query definition. No second list of query capabilities is required.
 
-`queryParamsSchema` represents `filters` and `orderBy` as one JSON query
-parameter each. Cursor pagination uses flat `after` and `size` parameters;
-page pagination uses flat `page` and `size` parameters. Its decoded value keeps
-pagination nested exactly like the core `QueryRequest`. Consumer-specific
-parameters can be added through `extras` without redefining the generic fields.
+`queryParamsSchema` emits `filter` and `sort` using the core compact language.
+The parsed representation feeds the same definition-derived request schema;
+there is no second field, operator, or operand validator. Unrelated query
+parameters are ignored unless a consumer declares them through `extras`.
+
+Cursor pagination uses flat `after` and `size` parameters; page pagination
+uses flat `page` and `size` parameters. The decoded value keeps pagination
+nested exactly like the core `QueryRequest`. Consumer-specific parameters can
+be added through `extras` without redefining the generic fields.
+
+`queryParamsCodec` packages that schema with its browser-native Effect encode
+and decode operations so an API contract, HTTP server, and UI adapter can bind
+the derived boundary once.
 
 `schemaCursorState` adapts one existing Effect Schema to the core package's
 synchronous cursor-state codec. Use it in `defineQuery` when request-owned state
@@ -68,18 +72,13 @@ Custom binary operators can provide their operand schema at their sole
 definition site:
 
 ```ts
-import { schemaBinaryFilterOperator } from '@cv/drizzle-query-effect/schema'
-import { Schema } from 'effect'
-import { sql } from 'drizzle-orm'
+import { schemaBinaryFilterOperator } from "@cv/drizzle-query-effect/schema";
+import { Schema } from "effect";
+import { sql } from "drizzle-orm";
 
-const within = schemaBinaryFilterOperator(
-  'within',
-  Schema.Struct({ minimum: Schema.Number, maximum: Schema.Number }),
-  {
-    compile: ({ expression, value }) =>
-      sql`${expression} between ${value.minimum} and ${value.maximum}`,
-  },
-)
+const within = schemaBinaryFilterOperator("within", Schema.Struct({ minimum: Schema.Number, maximum: Schema.Number }), {
+  compile: ({ expression, value }) => sql`${expression} between ${value.minimum} and ${value.maximum}`,
+});
 ```
 
 The Effect package stores this schema under its own symbol in the operator's

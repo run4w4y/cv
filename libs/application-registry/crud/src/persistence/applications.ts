@@ -1,15 +1,11 @@
 export {
   findApplication,
   findApplicationByIdentifier,
-  findApplicationByJobKey,
-  findApplicationsByCanonicalUrl,
+  findApplicationByPostingFingerprint,
+  findApplicationsByPostingUrl,
   listApplicationFacets,
   listApplications,
 } from './application-queries'
-export {
-  opportunityStatements,
-  replacementStatements,
-} from './application-values'
 export {
   patchApplication,
   persistApplication,

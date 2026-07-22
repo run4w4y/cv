@@ -1,0 +1,27 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "facts-authoring",
+  "projectType": "library",
+  "sourceRoot": "libs/facts-authoring/src",
+  "tags": ["scope:cv", "type:build", "visibility:private"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/facts-authoring/src/index.ts",
+        "outputPath": "libs/facts-authoring/dist",
+        "rootDir": "libs/facts-authoring/src",
+        "tsConfig": "libs/facts-authoring/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
+    "format": {},
+    "format:check": {}
+  }
+}

@@ -1,13 +1,13 @@
 import * as Redacted from 'effect/Redacted'
 
-import type { CloudflareAnalyticsConfig } from './types'
+import type { Configuration } from './types'
 
-export const testConfig = {
+export const testConfiguration = {
   apiToken: Redacted.make('secret-token'),
-  endpoint: 'https://cloudflare.test/graphql',
+  endpoint: new URL('https://cloudflare.test/graphql'),
   host: 'cv.example.test',
   zoneId: 'zone-123',
-} satisfies CloudflareAnalyticsConfig
+} satisfies Configuration
 
 export const cloudflarePayload = {
   data: {

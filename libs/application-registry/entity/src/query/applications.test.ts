@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { alias, SQLiteDialect } from 'drizzle-orm/sqlite-core'
+import { alias, PgDialect } from 'drizzle-orm/pg-core'
 
 import { applications } from '../tables/applications'
 import { applicationListQuery } from './applications'
 
-const dialect = new SQLiteDialect()
+const dialect = new PgDialect()
 const referenceTime = '2026-07-12T12:00:00.000Z'
 
 const renderWhere = (
@@ -24,6 +24,22 @@ describe('application list query definition', () => {
         ({ name }) => name === 'companyNormalized'
       )
     ).toBe(false)
+    const fieldNames = new Set(
+      applicationListQuery.fields.map(({ name }) => name)
+    )
+    for (const removed of [
+      'category',
+      'details',
+      'fitScore',
+      'openStatus',
+      'recommendedAction',
+      'remotePolicy',
+      'researchPriority',
+      'sourceConfidence',
+      'technologyStack',
+    ]) {
+      expect(fieldNames.has(removed)).toBe(false)
+    }
     expect(applicationListQuery.fields).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -50,10 +66,6 @@ describe('application list query definition', () => {
             expect.objectContaining({ name: 'hasAny' }),
             expect.objectContaining({ name: 'hasAll' }),
           ]),
-        }),
-        expect.objectContaining({
-          name: 'captureCount',
-          sortable: true,
         }),
         expect.objectContaining({
           name: 'q',
@@ -114,6 +126,39 @@ describe('application list query definition', () => {
     expect(rendered.params).toContain(referenceTime)
   })
 
+  test('keeps user-facing text filters case-insensitive on PostgreSQL', () => {
+    const rendered = renderWhere({
+      filters: [
+        {
+          type: 'condition',
+          field: 'location',
+          operator: 'contains',
+          value: 'REMOTE',
+        },
+        {
+          type: 'condition',
+          field: 'postingUrl',
+          operator: 'contains',
+          value: 'EXAMPLE.TEST',
+        },
+        {
+          type: 'condition',
+          field: 'role',
+          operator: 'contains',
+          value: 'PLATFORM',
+        },
+      ],
+      pagination: { size: 25 },
+    })
+
+    expect(rendered.sql.match(/ ilike /gu)).toHaveLength(3)
+    expect(rendered.params).toEqual([
+      '%REMOTE%',
+      '%EXAMPLE.TEST%',
+      '%PLATFORM%',
+    ])
+  })
+
   test('binds only request-owned values for full-text matching', () => {
     const rendered = renderWhere({
       filters: [
@@ -128,9 +173,9 @@ describe('application list query definition', () => {
     })
 
     expect(rendered.params).toEqual(
-      Array.from({ length: 7 }, () => '%Effect engineer%')
+      Array.from({ length: 4 }, () => '%Effect engineer%')
     )
-    expect(rendered.sql.match(/escape '\\'/gu)).toHaveLength(7)
+    expect(rendered.sql.match(/escape '\\'/gu)).toHaveLength(4)
   })
 
   test('binds timestamp ranges from the published date tuple metadata', () => {
@@ -148,15 +193,15 @@ describe('application list query definition', () => {
       pagination: { size: 25 },
     })
 
-    expect(rendered.sql).toContain('between ? and ?')
+    expect(rendered.sql).toContain('between $1 and $2')
     expect(rendered.params).toContain(from)
     expect(rendered.params).toContain(to)
   })
 
-  test('supports generic ordering over computed relation fields', () => {
+  test('supports generic ordering over computed fields', () => {
     const resolved = applicationListQuery.resolve({
       orderBy: [
-        { field: 'captureCount', direction: 'desc' },
+        { field: 'noteCount', direction: 'desc' },
         { field: 'updatedRevision', direction: 'asc' },
       ],
       pagination: { size: 10 },

@@ -10,7 +10,7 @@ import { eq, type SQL, type SQLWrapper, sql } from 'drizzle-orm'
 import { Schema } from 'effect'
 
 import {
-  applicationEventKindValues,
+  applicationActivityKindValues,
   applicationStatusValues,
   listingAvailabilityValues,
   listingCheckConfidenceValues,
@@ -18,14 +18,10 @@ import {
   personalPriorityValues,
   targetStageValues,
 } from '../model/values'
+import { applicationActivities } from '../tables/activities'
 import { applicationLabels, applicationNotes } from '../tables/annotations'
 import { applications } from '../tables/applications'
-import { campaignCaptures } from '../tables/captures'
-import { applicationEvents } from '../tables/events'
-import { applicationIdentityAliases } from '../tables/identity-aliases'
 import { timestampFilterOperators } from './timestamp-filter-operators'
-
-const applicationListCursorRevision = 'applications-list-v6'
 
 const escapeLikeLiteral = (value: string): string =>
   value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')
@@ -33,7 +29,13 @@ const escapeLikeLiteral = (value: string): string =>
 const likeEscapeCharacter = sql`${'\\'}`.inlineParams()
 
 const literalContains = (expression: SQLWrapper, value: string): SQL =>
-  sql`${expression} like ${sql.param(`%${escapeLikeLiteral(value)}%`)} escape ${likeEscapeCharacter}`
+  sql`${expression} ilike ${sql.param(`%${escapeLikeLiteral(value)}%`)} escape ${likeEscapeCharacter}`
+
+const caseInsensitiveContains = (expression: SQLWrapper) =>
+  schemaBinaryFilterOperator('contains', Schema.String, {
+    valueDescriptor: { type: 'string' },
+    compile: ({ value }) => literalContains(expression, value),
+  })
 
 /** Authoritative filtering, ordering, and cursor contract for application lists. */
 export const applicationListQuery = defineQuery(
@@ -43,49 +45,32 @@ export const applicationListQuery = defineQuery(
       valueDescriptor: { type: 'string' },
       compile: ({ value }) =>
         sql`(
-            ${literalContains(root.jobKey, value)} or
-            ${literalContains(root.source, value)} or
-            ${literalContains(root.sourceJobId, value)} or
-            ${literalContains(root.canonicalUrl, value)} or
+            ${literalContains(root.postingUrl, value)} or
             ${literalContains(root.company, value)} or
             ${literalContains(root.role, value)} or
             ${literalContains(root.location, value)}
           )`,
     })
-    const companyContains = schemaBinaryFilterOperator(
-      'contains',
-      Schema.String,
-      {
-        valueDescriptor: { type: 'string' },
-        compile: ({ value }) =>
-          literalContains(
-            root.companyNormalized,
-            value.toLocaleLowerCase('en-US')
-          ),
-      }
-    )
-    const latestEventAt = sql<string>`(
-      select ${applicationEvents.occurredAt}
-      from ${applicationEvents}
-      where ${applicationEvents.applicationId} = ${root.id}
-      order by ${applicationEvents.revision} desc
+    const companyContains = caseInsensitiveContains(root.company)
+    const locationContains = caseInsensitiveContains(root.location)
+    const postingUrlContains = caseInsensitiveContains(root.postingUrl)
+    const roleContains = caseInsensitiveContains(root.role)
+    const latestActivityAt = sql<string>`(
+      select ${applicationActivities.occurredAt}
+      from ${applicationActivities}
+      where ${applicationActivities.applicationId} = ${root.id}
+      order by ${applicationActivities.revision} desc
       limit 1
     )`
-    const latestEventKind = sql<(typeof applicationEventKindValues)[number]>`(
-      select ${applicationEvents.kind}
-      from ${applicationEvents}
-      where ${applicationEvents.applicationId} = ${root.id}
-      order by ${applicationEvents.revision} desc
+    const latestActivityKind = sql<
+      (typeof applicationActivityKindValues)[number]
+    >`(
+      select ${applicationActivities.kind}
+      from ${applicationActivities}
+      where ${applicationActivities.applicationId} = ${root.id}
+      order by ${applicationActivities.revision} desc
       limit 1
     )`
-    const latestApplicationUrl = sql<string>`(
-      select ${campaignCaptures.applicationUrl}
-      from ${campaignCaptures}
-      where ${campaignCaptures.applicationId} = ${root.id}
-      order by ${campaignCaptures.capturedAt} desc, ${campaignCaptures.id} desc
-      limit 1
-    )`
-
     return [
       col.id.filterable().sortable(),
       ...col({
@@ -93,10 +78,13 @@ export const applicationListQuery = defineQuery(
           'id',
           'appliedAt',
           'company',
-          'companyNormalized',
           'createdAt',
           'followUpAt',
-          'lastContactAt',
+          'location',
+          'postingFingerprint',
+          'postingUrl',
+          'postingUrlNormalized',
+          'role',
           'applicationStatus',
           'targetStage',
           'personalPriority',
@@ -112,17 +100,21 @@ export const applicationListQuery = defineQuery(
       col.company
         .filterable((defaults) => replaceOperator(defaults, companyContains))
         .sortable(),
+      col.location
+        .filterable((defaults) => replaceOperator(defaults, locationContains))
+        .sortable(),
+      col.postingUrl
+        .filterable((defaults) => replaceOperator(defaults, postingUrlContains))
+        .sortable(),
+      col.role
+        .filterable((defaults) => replaceOperator(defaults, roleContains))
+        .sortable(),
       col.followUpAt
         .filterable((defaults) =>
           appendOperators(defaults, timestampFilterOperators)
         )
         .sortable(),
       col.appliedAt
-        .filterable((defaults) =>
-          appendOperators(defaults, timestampFilterOperators)
-        )
-        .sortable(),
-      col.lastContactAt
         .filterable((defaults) =>
           appendOperators(defaults, timestampFilterOperators)
         )
@@ -173,24 +165,6 @@ export const applicationListQuery = defineQuery(
         .as('labels')
         .filterable(),
       rel
-        .many(applicationIdentityAliases, {
-          on: ({ root: columns, related }) =>
-            eq(related.applicationId, columns.id),
-          value: ({ related }) => related.jobKey,
-        })
-        .as('identityAliases')
-        .filterable(),
-      rel
-        .many(campaignCaptures, {
-          on: ({ root: columns, related }) =>
-            eq(related.applicationId, columns.id),
-          value: ({ related }) => related.id,
-        })
-        .count()
-        .as('captureCount')
-        .filterable()
-        .sortable(),
-      rel
         .many(applicationNotes, {
           on: ({ root: columns, related }) =>
             eq(related.applicationId, columns.id),
@@ -201,26 +175,24 @@ export const applicationListQuery = defineQuery(
         .filterable()
         .sortable(),
       expr
-        .string(latestEventAt, { nullable: true })
-        .as('latestEventAt')
+        .string(latestActivityAt, { nullable: true })
+        .as('latestActivityAt')
         .filterable((defaults) =>
           appendOperators(defaults, timestampFilterOperators)
         )
         .sortable(),
       expr
-        .enum(latestEventKind, applicationEventKindValues, { nullable: true })
-        .as('latestEventKind')
+        .enum(latestActivityKind, applicationActivityKindValues, {
+          nullable: true,
+        })
+        .as('latestActivityKind')
         .filterable()
-        .sortable({ values: applicationEventKindValues }),
-      expr
-        .string(latestApplicationUrl, { nullable: true })
-        .as('latestApplicationUrl')
-        .filterable(),
+        .sortable({ values: applicationActivityKindValues }),
       expr.filter('q', [matchesQuery]),
     ]
   },
   {
-    cursor: { revision: applicationListCursorRevision },
+    cursor: { revision: 'applications-list-v9' },
     defaultOrderBy: [{ field: 'updatedRevision', direction: 'asc' }],
     pagination: cursorPagination({ defaultSize: 50, maxSize: 100 }),
   }

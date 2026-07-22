@@ -1,85 +1,55 @@
 # Application registry service
 
-Slice-oriented Effect services for registry workflows. The package root exports
-stable service interfaces, Context keys, inputs, outputs, and errors. Consumers
-can build programs entirely against those contracts. Concrete workflow Layers
-are available separately from `@cv/application-registry-service/live` and are
-installed only by runtime composition roots.
+Slice-oriented Effect workflows for the registry. The package root exports
+service contracts and errors; concrete Layers are exported from
+`@cv/application-registry-service/live`.
 
-This package owns replay and conflict handling, explicit status transitions,
-and coordination across CRUD and FX services. List requests use the shared
-query definitions and their pagination implementation; this package contains
-no HTTP, D1, or Drizzle implementation concerns.
+The service owns optimistic concurrency, idempotent replay, URL normalization,
+status update semantics, backend activities, and coordination across CRUD,
+artifact storage, listing checks, and analytics. It contains no HTTP routing or
+PostgreSQL connection code.
 
-Idempotent commands store a canonical operation request signature with their
-receipt. Reusing an operation ID with the same request safely replays its
-result; reusing it for different content is rejected instead of silently
-returning the first command's result.
+Key services are:
 
-The public services are split by registry slice:
+- `ApplicationsService`: UUID creation, normalized posting deduplication,
+  lookup/listing, and one aggregate update for scalar fields, labels, and annual
+  compensation;
+- `ActivitiesService`: read-only per-application and registry-wide history;
+- `AnnotationsService`: annotation reads and idempotent note creation;
+- `ListingChecksService`: HTTP-facing findings, manual resolution, imports,
+  grace windows, and safe archival;
+- `ScheduledListingChecksRunner`: the separate one-shot periodic claim/check/
+  finalize workflow used only by the Nomad batch application;
+- `OpaqueObjectsService`: schema-free content-addressed bytes;
+- `JobPostingSnapshotsService`: immutable raw/normalized posting context;
+- `ContentEntriesService`: linear opaque revisions and head approval;
+- `CvPublicationsService`, `CvAnalyticsService`, and `PdfArtifactsService`:
+  stable publications, traffic, and exact PDF artifacts.
 
-- `ApplicationsService` owns application upsert, patch, lookup, deletion,
-  cursor pagination, dashboard row decoration and facets, plus the atomic
-  management update spanning scalar fields, labels, annual compensation, and
-  server-owned status audit events.
-- `AnnotationsService` owns annotation lookup and idempotent note creation.
-- `CapturesService` owns idempotent campaign capture ingestion.
-- `EventsService` owns idempotent event append and cursor pagination.
-- `CompensationsService` owns original and converted compensation views.
-- `ListingChecksService` owns idempotent local-finding ingestion, internal
-  scheduled runs, grace windows, lifecycle safeguards, and listing-check
-  history.
+Reopening an application restores a rejection-disabled publication only when
+the latest PDF artifact for its exact revision, publication version, and public
+URL is ready. A missing, pending, or failed current attempt leaves the link
+disabled even when an older matching PDF succeeded.
 
-`ListingAvailabilityChecker` lives in the runtime-neutral
-`@cv/application-registry-listing-check` package. Both the local Bun CLI and the
-internal Worker scheduler use its provider and bounded-page strategies. This
-service owns the durable decision: target validation, target-stage cadence,
-suspected-closed confirmation windows, safe archival eligibility, leases, and
-failure backoff all remain server-side.
+Activities are annotations, not authoritative commands. Application creation,
+aggregate updates, notes, and listing decisions issue them from the backend as
+part of the same persistence operation. Clients never ask the service to append
+an arbitrary activity.
 
-Both global list services accept the generic definition-derived request shape
-and return ordinary `{ items, pageInfo }` query pages.
-`pageInfo.nextCursor` continues the same filtered and ordered traversal through
-`pagination.after`. Numeric page sizes default to 50 and are capped at 100.
+List workflows accept the request inferred from the entity package's
+`drizzle-query` definition and return standard `{ items, pageInfo }` cursor
+pages. No alternate filter or ordering syntax is maintained here.
 
-Revision-based reads do not have a separate service protocol. Applications can
-be filtered with `updatedRevision gt <revision>` and ordered by
-`updatedRevision asc`; events expose the equivalent `revision` field. The
-regular query model remains responsible for binding those filters and ordering
-terms to the cursor.
-
-The service returns the stored `followUpAt` timestamp without deriving a
-request-time follow-up category. Consumers can express those categories with
-ordinary filters: `isNull` for no follow-up, `lt <reference-time>` for overdue,
-and `gte <reference-time>` for upcoming. The consumer chooses the reference
-time and must keep it stable while following cursors through one traversal.
-Application listing still formats stored minor-unit compensation into a concise
-original-currency summary.
-
-Application rows retain the entity's natural nested shape: `counts` groups
-capture and note totals, while `latestEvent` and `latestCapture` are nullable
-objects. The service adds the requested compensation presentation without
-flattening persistence relations into a set of unrelated scalar aliases.
-
-Event status changes are explicit. Status-changing kinds (`submitted`,
-`stage_changed`, `interview_scheduled`, `rejected`, `withdrawn`, and
-`offer_received`) carry `nextApplicationStatus`; the service passes that value
-to the atomic projection/event write. Informational kinds (`note_added`,
-`contact_logged`, `follow_up_scheduled`, and `research_updated`) omit it and
-leave the projection status unchanged. No event-name-to-status conversion is
-hidden in the service.
-
-Unit tests live beside the `/live` implementations and replace CRUD and FX
-dependencies with `Layer.succeed` fakes. `test/service.integration.test.ts`
-composes a managed Effect runtime from the live services, the real CRUD layer,
-and Miniflare's direct D1 proxy, without an HTTP test Worker, a browser bundle,
-or network FX requests. The integration suite owns workflow-level coverage for
-idempotency and operation conflicts, concurrent job-key
-convergence, capture merge policy, database defaults, nullable patches,
-optimistic races, explicit lifecycle transitions, atomic rollback, and
-ordinary filtered and cursor-paginated listing.
+Content services inspect only contract IDs, media types, hashes, byte lengths,
+release IDs, and locales. Document field validation stays with the management
+and rendering boundaries. Facts are read and verified directly by the
+management client, not this service. Payload bytes remain opaque.
 
 ```bash
 bunx nx run application-registry-service:test:unit
 bunx nx run application-registry-service:test:integration
 ```
+
+The integration suite starts a disposable PostgreSQL 17 container, applies the
+canonical registry baseline, and resets it between tests. A working Docker
+daemon is required.

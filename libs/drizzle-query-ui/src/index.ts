@@ -30,22 +30,7 @@ export {
   resolveQueryFiltersState,
   valueForDescriptor,
 } from './model'
-export type {
-  CanonicalQueryFiltersOptions,
-  DecodedQueryFiltersUrlState,
-  QueryFiltersUrlSource,
-} from './query-codec'
-export {
-  areQueryFiltersStatesEqual,
-  decodeQueryFiltersUrlState,
-  normalizeQueryFilterNodes,
-  parseCanonicalQueryFiltersState,
-  parseQueryFilterNodes,
-  queryFiltersStateFromFilterNodes,
-  serializeCanonicalQueryFiltersState,
-  serializeQueryFilterNodes,
-  writeCanonicalQueryFiltersUrlState,
-} from './query-codec'
+export { queryFiltersStateFromFilterNodes } from './query-codec'
 export {
   QueryFilters,
   QueryFiltersAddButton,

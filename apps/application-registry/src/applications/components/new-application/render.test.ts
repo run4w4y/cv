@@ -3,10 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import { newApplicationRequest } from './render'
 
 const values = {
-  jobKey: 'manual:acme-staff',
-  source: 'manual',
-  sourceJobId: '',
-  canonicalUrl: 'https://example.test/jobs/staff',
+  postingUrl: 'https://example.test/jobs/staff',
   company: 'Acme',
   role: 'Staff Engineer',
   location: 'Remote',
@@ -60,5 +57,14 @@ describe('newApplicationRequest', () => {
         annualFrom: '1000',
       })
     ).toThrow('three-letter currency code')
+  })
+
+  test('accepts only HTTP(S) posting URLs', () => {
+    expect(() =>
+      newApplicationRequest({
+        ...values,
+        postingUrl: 'file:///tmp/job.html',
+      })
+    ).toThrow('HTTP or HTTPS')
   })
 })

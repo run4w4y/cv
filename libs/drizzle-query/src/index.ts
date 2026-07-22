@@ -150,15 +150,25 @@ export type {
 } from './query/index'
 export { defineQuery, QueryDefinition } from './query/index'
 export {
+  formatFilterExpression,
+  formatSortExpression,
+  maxCompactFilterLength,
+  maxCompactSortLength,
+  maxCompactSortTerms,
+  parseFilterExpression,
+  parseSortExpression,
+  type QueryLanguageIssue,
+  type QueryLanguageIssueCode,
+  type QueryLanguageResult,
+} from './query-language/index'
+export {
   appendQueryParam,
   decodeFlatQueryParams,
   encodeFlatQueryParams,
   type FlatQueryParams,
-  maxCanonicalQueryFiltersLength,
   maxQueryFilterDepth,
   maxQueryFilterNodes,
   normalizeQueryFilterNodes,
-  parseQueryFilterNodes,
   type QueryPaginationKind,
   type QuerySearchParamsInput,
   queryParamsFromRecord,
@@ -166,7 +176,6 @@ export {
   queryParamValues,
   replaceQueryParam,
   reservedQueryParameters,
-  serializeQueryFilterNodes,
 } from './query-params/index'
 export type { FinalizedPage } from './rendering/result'
 export {

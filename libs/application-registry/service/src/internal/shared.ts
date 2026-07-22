@@ -1,28 +1,26 @@
 import {
   type ApplicationsCrud,
-  type OperationsCrud,
+  type IdempotencyCrud,
   type PersistedCompensation,
   RegistryDatabaseError,
 } from '@cv/application-registry-crud'
 import type {
   Application,
   ApplicationCompensationInput,
-  ApplicationEvent,
   ApplicationNote,
-  CampaignCapture,
-  CommandKind,
-  CommandReceipt,
+  IdempotencyReceipt,
+  IdempotencyScope,
   UtcIsoTimestamp,
 } from '@cv/application-registry-entity'
 import { DateTime, Effect } from 'effect'
 
 import { RegistryConflictError, RegistryNotFoundError } from '../errors'
 
-export type OperationIdentity = {
+export type IdempotencyIdentity = {
   readonly applicationId?: string
-  readonly kind: CommandKind
-  readonly operationId: string
-  readonly operationRequestSignature: string
+  readonly scope: IdempotencyScope
+  readonly idempotencyKey: string
+  readonly requestHash: string
 }
 
 export const registryNow: Effect.Effect<UtcIsoTimestamp> = DateTime.now.pipe(
@@ -52,32 +50,6 @@ export const requireApplication = (
         })
       )
 
-export const requireEvent = (
-  value: ApplicationEvent | undefined,
-  operationId: string
-) =>
-  value
-    ? Effect.succeed(value)
-    : Effect.fail(
-        new RegistryDatabaseError({
-          cause: new Error('An operation receipt has no application event.'),
-          message: `Application event is missing for ${operationId}`,
-        })
-      )
-
-export const requireCapture = (
-  value: CampaignCapture | undefined,
-  operationId: string
-) =>
-  value
-    ? Effect.succeed(value)
-    : Effect.fail(
-        new RegistryDatabaseError({
-          cause: new Error('An operation receipt has no campaign capture.'),
-          message: `Campaign capture is missing for ${operationId}`,
-        })
-      )
-
 export const requireNote = (
   value: ApplicationNote | undefined,
   noteId: string
@@ -103,46 +75,46 @@ export const findRequiredApplication = (
       )
     )
 
-const validateOperation = (
-  receipt: CommandReceipt,
-  expected: OperationIdentity
+const validateIdempotency = (
+  receipt: IdempotencyReceipt,
+  expected: IdempotencyIdentity
 ) =>
   (expected.applicationId === undefined ||
     receipt.applicationId === expected.applicationId) &&
-  receipt.kind === expected.kind &&
-  receipt.operationId === expected.operationId &&
-  receipt.operationRequestSignature === expected.operationRequestSignature
+  receipt.scope === expected.scope &&
+  receipt.idempotencyKey === expected.idempotencyKey &&
+  receipt.requestHash === expected.requestHash
     ? Effect.void
     : Effect.fail(
         new RegistryConflictError({
           message:
-            'The operation id is already used by a different registry request.',
+            'The idempotency key is already used by a different registry request.',
         })
       )
 
-export const findValidatedOperation = (
-  operations: OperationsCrud,
-  identity: OperationIdentity
+export const findValidatedIdempotency = (
+  idempotency: IdempotencyCrud,
+  identity: IdempotencyIdentity
 ) =>
-  operations
-    .find(identity.operationId)
+  idempotency
+    .find(identity.idempotencyKey)
     .pipe(
       Effect.flatMap((receipt) =>
         receipt
-          ? validateOperation(receipt, identity).pipe(Effect.as(receipt))
+          ? validateIdempotency(receipt, identity).pipe(Effect.as(receipt))
           : Effect.succeed(undefined)
       )
     )
 
 export const recoverConcurrentReplay = <A>(
-  operations: OperationsCrud,
-  identity: OperationIdentity,
+  idempotency: IdempotencyCrud,
+  identity: IdempotencyIdentity,
   write: Effect.Effect<A, RegistryDatabaseError>
 ) =>
   write.pipe(
     Effect.as(false),
     Effect.catchTag('RegistryDatabaseError', (failure) =>
-      findValidatedOperation(operations, identity).pipe(
+      findValidatedIdempotency(idempotency, identity).pipe(
         Effect.flatMap((receipt) =>
           receipt ? Effect.succeed(true) : Effect.fail(failure)
         )
@@ -150,13 +122,13 @@ export const recoverConcurrentReplay = <A>(
     )
   )
 
-export const requireReceiptNoteId = (receipt: CommandReceipt) =>
-  receipt.noteId
-    ? Effect.succeed(receipt.noteId)
+export const requireReceiptResourceId = (receipt: IdempotencyReceipt) =>
+  receipt.resourceId
+    ? Effect.succeed(receipt.resourceId)
     : Effect.fail(
         new RegistryDatabaseError({
           cause: new Error('Application note receipt has no note id.'),
-          message: `Application note receipt is invalid: ${receipt.operationId}`,
+          message: `Idempotency receipt is invalid: ${receipt.idempotencyKey}`,
         })
       )
 

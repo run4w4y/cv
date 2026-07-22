@@ -99,7 +99,84 @@ const cursorDefinition = {
 } as const
 
 describe('definition-derived query parameters', () => {
-  test('round-trips page requests, JSON fields, and consumer extras', async () => {
+  test('round-trips compact filters and ordering through definition schemas', async () => {
+    const schema = queryParamsSchema(pageDefinition)
+    const request = {
+      filters: [
+        {
+          type: 'condition',
+          field: 'name',
+          operator: 'contains',
+          value: 'R&D / 東京',
+        },
+        {
+          type: 'condition',
+          field: 'createdAt',
+          operator: 'gte',
+          value: new Date('2026-07-15T08:30:00.000Z'),
+        },
+      ],
+      orderBy: [
+        { field: 'name', direction: 'asc' },
+        { field: 'id', direction: 'desc', nulls: 'last' },
+      ],
+      pagination: { page: 3, size: 20 },
+    } as const satisfies PageRequest
+
+    const params = await Effect.runPromise(toSearchParams(schema, request))
+
+    expect(params.get('filter')).toBe(
+      'name:contains:"R&D / 東京";createdAt:gte:2026-07-15T08:30:00.000Z'
+    )
+    expect(params.get('sort')).toBe('name:asc,id:desc:last')
+    expect(params.has('filters')).toBe(false)
+    expect(params.has('orderBy')).toBe(false)
+    expect(await Effect.runPromise(fromSearchParams(schema, params))).toEqual(
+      request
+    )
+  })
+
+  test('ignores unrelated parameters and rejects invalid compact state', () => {
+    const schema = queryParamsSchema(pageDefinition)
+
+    expect(
+      Effect.runSync(
+        fromSearchParams(
+          schema,
+          'filters=whatever&orderBy=whatever&another=value'
+        )
+      )
+    ).toEqual({})
+
+    const inputs = [
+      'filter=unknown:eq:value',
+      'sort=name:sideways',
+      'sort=name:asc,name:desc',
+      new URLSearchParams([
+        ['filter', 'name:eq:Ada'],
+        ['filter', 'name:eq:Grace'],
+      ]),
+    ]
+    for (const input of inputs) {
+      expect(
+        Option.isNone(
+          Effect.runSync(Effect.option(fromSearchParams(schema, input)))
+        )
+      ).toBe(true)
+    }
+  })
+
+  test('omits empty compact filters and ordering canonically', () => {
+    const schema = queryParamsSchema(pageDefinition)
+    const params = Effect.runSync(
+      toSearchParams(schema, { filters: [], orderBy: [] })
+    )
+
+    expect(params.has('filter')).toBe(false)
+    expect(params.has('sort')).toBe(false)
+  })
+
+  test('round-trips page requests and consumer extras', async () => {
     const schema = queryParamsSchema(pageDefinition, {
       extras: {
         scope: Schema.optional(Schema.NonEmptyString),
@@ -135,8 +212,10 @@ describe('definition-derived query parameters', () => {
     expect(params.get('page')).toBe('3')
     expect(params.get('size')).toBe('20')
     expect(params.get('scope')).toBe('active')
-    expect(JSON.parse(params.get('filters') ?? '')).toEqual(request.filters)
-    expect(JSON.parse(params.get('orderBy') ?? '')).toEqual(request.orderBy)
+    expect(params.get('filter')).toBe(
+      '(name:contains:"R&D / 東京"|note:isNull)'
+    )
+    expect(params.get('sort')).toBe('name:asc')
     expect(await Effect.runPromise(fromSearchParams(schema, params))).toEqual(
       request
     )
@@ -161,6 +240,7 @@ describe('definition-derived query parameters', () => {
     )
 
     expect(params.get('after')).toBe('opaque-token')
+    expect(params.get('filter')).toBe('name:eq:Ada')
     expect(params.has('page')).toBe(false)
     expect(decoded).toEqual(request)
   })
@@ -182,20 +262,9 @@ describe('definition-derived query parameters', () => {
     const params = Effect.runSync(toSearchParams(schema, request))
 
     expect(Effect.runSync(fromSearchParams(schema, params))).toEqual(request)
-    expect(() =>
-      Effect.runSync(
-        fromSearchParams(
-          schema,
-          new URLSearchParams([
-            ['filters', '[]'],
-            ['filters', '[]'],
-          ])
-        )
-      )
-    ).toThrow()
   })
 
-  test('uses operand codecs before JSON serialization', async () => {
+  test('uses operand codecs before compact serialization', async () => {
     const schema = queryParamsSchema(pageDefinition)
     const createdAt = new Date('2026-07-15T08:30:00.000Z')
     const request = {
@@ -216,42 +285,22 @@ describe('definition-derived query parameters', () => {
     } as const satisfies PageRequest
 
     const params = await Effect.runPromise(toSearchParams(schema, request))
-    expect(JSON.parse(params.get('filters') ?? '')).toEqual([
-      {
-        type: 'condition',
-        field: 'createdAt',
-        operator: 'gte',
-        value: createdAt.toISOString(),
-      },
-      {
-        type: 'condition',
-        field: 'sequence',
-        operator: 'gt',
-        value: '9007199254740993',
-      },
-    ])
+    expect(params.get('filter')).toBe(
+      'createdAt:gte:2026-07-15T08:30:00.000Z;sequence:gt:"9007199254740993"'
+    )
     expect(await Effect.runPromise(fromSearchParams(schema, params))).toEqual(
       request
     )
   })
 
-  test('rejects malformed JSON, invalid values, and duplicate JSON fields', () => {
+  test('rejects malformed compact values, duplicates, and invalid pagination', () => {
     const schema = queryParamsSchema(pageDefinition)
     const inputs = [
-      'filters=%7Bnot-json',
-      `filters=${encodeURIComponent(
-        JSON.stringify([
-          {
-            type: 'condition',
-            field: 'score',
-            operator: 'gte',
-            value: 'high',
-          },
-        ])
-      )}`,
+      'filter=name:eq:[broken',
+      'filter=score:gte:high',
       new URLSearchParams([
-        ['filters', '[]'],
-        ['filters', '[]'],
+        ['filter', 'name:eq:Ada'],
+        ['filter', 'name:eq:Grace'],
       ]),
       'page=0&size=10',
       'page=1&size=51',

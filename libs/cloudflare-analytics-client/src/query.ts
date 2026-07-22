@@ -1,16 +1,33 @@
-import type {
-  CloudflareAnalyticsConfig,
-  CloudflareAnalyticsRange,
-  GraphqlVariables,
-} from './types'
+import type { Configuration, GraphqlVariables, Range } from './types'
 
-export const buildCloudflareAnalyticsQuery = () => `
-query AudienceAnalytics($zoneTag: string, $filter: filter) {
+export const buildLimitsQuery = () => `
+query AnalyticsLimits($zoneTag: string) {
+  viewer {
+    zones(filter: { zoneTag: $zoneTag }) {
+      settings {
+        httpRequestsAdaptiveGroups {
+          enabled
+          maxDuration
+          maxPageSize
+          notOlderThan
+        }
+      }
+    }
+  }
+}
+`
+
+export const buildLimitsVariables = (configuration: Configuration) => ({
+  zoneTag: configuration.zoneId,
+})
+
+export const buildQuery = (maxPageSize = 5_000) => `
+query AliasedPathAnalytics($zoneTag: string, $filter: filter) {
   viewer {
     zones(filter: { zoneTag: $zoneTag }) {
       topPaths: httpRequestsAdaptiveGroups(
         filter: $filter
-        limit: 1000
+        limit: ${Math.min(1_000, maxPageSize)}
         orderBy: [sum_visits_DESC]
       ) {
         count
@@ -23,7 +40,7 @@ query AudienceAnalytics($zoneTag: string, $filter: filter) {
       }
       dailyPaths: httpRequestsAdaptiveGroups(
         filter: $filter
-        limit: 5000
+        limit: ${maxPageSize}
         orderBy: [date_ASC]
       ) {
         count
@@ -41,11 +58,13 @@ query AudienceAnalytics($zoneTag: string, $filter: filter) {
 }
 `
 
-export const buildCloudflareAnalyticsVariables = (
-  config: CloudflareAnalyticsConfig,
-  range: CloudflareAnalyticsRange
+export const buildVariables = (
+  configuration: Configuration,
+  range: Range,
+  pathLike?: string
 ): GraphqlVariables => {
-  const host = range.host ?? config.host
+  const host = range.host ?? configuration.host
+  const normalizedPathLike = pathLike?.trim()
 
   return {
     filter: {
@@ -58,8 +77,11 @@ export const buildCloudflareAnalyticsVariables = (
           requestSource: 'eyeball',
         },
         ...(host ? [{ clientRequestHTTPHost: host }] : []),
+        ...(normalizedPathLike
+          ? [{ clientRequestPath_like: normalizedPathLike }]
+          : []),
       ],
     },
-    zoneTag: config.zoneId,
+    zoneTag: configuration.zoneId,
   }
 }

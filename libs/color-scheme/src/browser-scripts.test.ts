@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import {
-  createColorSchemeBootScript,
-  createColorSchemeRuntimeScript,
-} from './astro'
+import { createColorSchemeRuntimeScript } from './astro'
 import {
   colorSchemeDataAttribute,
   colorSchemeStorageKey,
@@ -10,6 +7,7 @@ import {
   darkColorSchemeClassName,
   legacyThemeStorageKey,
 } from './index'
+import { createColorSchemeBootScript } from './script'
 
 class MemoryStorage implements Storage {
   readonly values = new Map<string, string>()

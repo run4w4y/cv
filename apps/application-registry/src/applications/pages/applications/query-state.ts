@@ -1,49 +1,54 @@
+import type { ListApplicationsQuery } from '@cv/application-registry-api-contract'
 import { applicationListQuery } from '@cv/application-registry-entity/query'
+import type { OrderRequest } from '@cv/drizzle-query'
 import {
-  serializeQueryFilterNodes,
-  writeCanonicalQueryFiltersUrlState,
-} from '@cv/drizzle-query-ui'
+  orderByFromSortingState,
+  writeQueryParameterState,
+} from '@cv/drizzle-query-ui/search-params'
 import type { SortingState } from '@tanstack/react-table'
 
-import {
-  parseSorting as parseRegistrySorting,
-  serializeSorting as serializeRegistrySorting,
-} from '../../../lib/sorting'
+import { applicationQueryBoundary } from '../../../table-workspace/query-codecs'
 import type { ApplicationSavedViewState } from '../../components/saved-views'
 
-export const defaultApplicationSorting: SortingState = [
-  { id: 'updatedRevision', desc: true },
-]
+export const defaultApplicationOrderBy = [
+  { field: 'updatedRevision', direction: 'asc' },
+] as const satisfies NonNullable<ListApplicationsQuery['orderBy']>
 
-const sortableFields = new Set(
-  applicationListQuery.fields
-    .filter((field) => field.sortable)
-    .map((field) => field.name)
-)
+const isDefaultApplicationOrderBy = (
+  orderBy: NonNullable<ListApplicationsQuery['orderBy']>
+): boolean =>
+  orderBy.length === defaultApplicationOrderBy.length &&
+  orderBy.every(
+    (term: OrderRequest, index: number) =>
+      term.field === defaultApplicationOrderBy[index]?.field &&
+      term.direction === defaultApplicationOrderBy[index]?.direction &&
+      term.nulls === undefined
+  )
 
-export const parseApplicationSorting = (value: string): SortingState =>
-  parseRegistrySorting(value, sortableFields, defaultApplicationSorting)
-
-export const serializeApplicationSorting = (sorting: SortingState): string =>
-  serializeRegistrySorting(sorting, defaultApplicationSorting)
+export const applicationOrderByFromSorting = (
+  sorting: SortingState
+): ListApplicationsQuery['orderBy'] => {
+  const orderBy = orderByFromSortingState(sorting, applicationListQuery)
+  return orderBy === undefined || isDefaultApplicationOrderBy(orderBy)
+    ? undefined
+    : orderBy
+}
 
 export const writeApplicationViewQueryState = (
   searchParams: URLSearchParams,
   state: ApplicationSavedViewState
 ): URLSearchParams => {
-  const next = writeCanonicalQueryFiltersUrlState(
-    searchParams,
-    serializeQueryFilterNodes(state.filters)
-  )
-  if (state.keyword.length === 0) next.delete('q')
-  else next.set('q', state.keyword)
-
-  const sort = serializeApplicationSorting(state.sorting)
-  if (sort === serializeApplicationSorting(defaultApplicationSorting)) {
-    next.delete('sort')
-  } else {
-    next.set('sort', sort)
+  const orderBy = applicationOrderByFromSorting(state.sorting)
+  const query: ListApplicationsQuery = {
+    ...(state.filters.length === 0 ? {} : { filters: state.filters }),
+    ...(orderBy === undefined ? {} : { orderBy }),
+    ...(state.keyword.length === 0 ? {} : { q: state.keyword }),
   }
+  const next = writeQueryParameterState(
+    applicationQueryBoundary,
+    searchParams,
+    query
+  )
 
   if (state.displayCurrency === 'original') next.delete('currency')
   else next.set('currency', state.displayCurrency)

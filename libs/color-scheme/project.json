@@ -17,7 +17,15 @@
     },
     "lint": {},
     "lint:fix": {},
-    "test:unit": {},
+    "test:unit": {
+      "dependsOn": [
+        "^build",
+        {
+          "projects": "self",
+          "target": "build:browser"
+        }
+      ]
+    },
     "typecheck": {},
     "build:tsc": {
       "executor": "@nx/js:tsc",

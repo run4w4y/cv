@@ -1,23 +1,29 @@
-import type { ApplicationFacetsResponse } from '@cv/application-registry-api-contract'
+import type {
+  ApplicationFacetsResponse,
+  ListApplicationsQuery,
+} from '@cv/application-registry-api-contract'
 import { applicationListQuery } from '@cv/application-registry-entity/query'
 import {
   emptyQueryFiltersState,
   queryFiltersStateFromFilterNodes,
-  serializeQueryFilterNodes,
 } from '@cv/drizzle-query-ui'
+import {
+  decodeQueryParameterState,
+  sortingStateFromOrderBy,
+  writeQueryParameterState,
+} from '@cv/drizzle-query-ui/search-params'
 import {
   functionalUpdate,
   type SortingState,
   type Updater,
   type VisibilityState,
 } from '@tanstack/react-table'
-import { createParser, parseAsString, useQueryStates } from 'nuqs'
+import { createParser, useQueryState } from 'nuqs'
 import * as React from 'react'
 import { useSearchParams } from 'react-router'
-import {
-  canonicalFiltersParser,
-  useCanonicalQueryFilters,
-} from '../../../table-workspace/query-filters'
+
+import { applicationQueryBoundary } from '../../../table-workspace/query-codecs'
+import { useCanonicalQueryFilters } from '../../../table-workspace/query-filters'
 import { useDebouncedDraft } from '../../../table-workspace/use-debounced-value'
 import type { TableDensity } from '../../components/application-table'
 import {
@@ -28,51 +34,39 @@ import {
 import { parseCompensationDisplayCurrency } from '../../model/currency'
 import { createApplicationFilterFieldPresentation } from '../../model/filter-fields'
 import {
-  defaultApplicationSorting,
-  parseApplicationSorting,
-  serializeApplicationSorting,
+  applicationOrderByFromSorting,
+  defaultApplicationOrderBy,
   writeApplicationViewQueryState,
 } from './query-state'
 
 const applicationCurrencyParser = createParser({
   parse: parseCompensationDisplayCurrency,
   serialize: (value) => value,
-}).withDefault('original')
+})
+  .withDefault('original')
+  .withOptions({ history: 'replace', shallow: false, scroll: false })
 
 export const useApplicationsWorkspace = (
   facets: ApplicationFacetsResponse | undefined
 ) => {
-  const [isNavigating, startQueryTransition] = React.useTransition()
   const [searchParams, setSearchParams] = useSearchParams()
+  const parameterState = decodeQueryParameterState(
+    applicationQueryBoundary,
+    searchParams
+  )
+  const query: ListApplicationsQuery =
+    parameterState.status === 'valid' ? parameterState.value : {}
+  const [currency, setCurrency] = useQueryState(
+    'currency',
+    applicationCurrencyParser
+  )
   const [initialState] = React.useState<ApplicationSavedViewState | null>(() =>
     typeof window === 'undefined'
       ? null
       : loadApplicationWorkspaceState(window.localStorage)
   )
   const [urlInitiallyConfigured] = React.useState(() =>
-    ['currency', 'filters', 'q', 'sort'].some((key) => searchParams.has(key))
-  )
-  const [queryState, setQueryState] = useQueryStates(
-    {
-      keyword: parseAsString.withDefault(''),
-      filters: canonicalFiltersParser,
-      sort: parseAsString.withDefault(
-        serializeApplicationSorting(defaultApplicationSorting)
-      ),
-      currency: applicationCurrencyParser,
-    },
-    {
-      history: 'replace',
-      shallow: false,
-      scroll: false,
-      startTransition: startQueryTransition,
-      urlKeys: {
-        keyword: 'q',
-        filters: 'filters',
-        sort: 'sort',
-        currency: 'currency',
-      },
-    }
+    ['currency', 'filter', 'q', 'sort'].some((key) => searchParams.has(key))
   )
   const [density, setDensity] = React.useState<TableDensity>(
     initialState?.density ?? 'comfortable'
@@ -82,69 +76,89 @@ export const useApplicationsWorkspace = (
   const [ready, setReady] = React.useState(
     urlInitiallyConfigured || initialState === null
   )
+
+  const writeQuery = (next: ListApplicationsQuery) =>
+    setSearchParams(
+      writeQueryParameterState(applicationQueryBoundary, searchParams, next),
+      { replace: true }
+    )
+  const keyword = query.q ?? ''
   const [keywordDraft, setKeywordDraft] = useDebouncedDraft(
-    queryState.keyword,
+    keyword,
     300,
-    (keyword) => void setQueryState({ keyword })
+    (nextKeyword) =>
+      writeQuery({
+        ...query,
+        q: nextKeyword.trim().length === 0 ? undefined : nextKeyword.trim(),
+      })
   )
   const fieldPresentation = createApplicationFilterFieldPresentation(facets)
+  const appliedFilters = query.filters ?? []
   const filters = useCanonicalQueryFilters({
     searchParams,
-    setSearchParams,
+    appliedFilters,
+    blocksRequest: parameterState.status === 'invalid',
     definition: applicationListQuery,
     presentation: fieldPresentation,
-    applyState: (state) => void setQueryState({ filters: state }),
+    onFiltersChange: (nextFilters) =>
+      writeQuery({ ...query, filters: nextFilters }),
+    onClearInvalidQuery: () => writeQuery({}),
   })
-  const sorting = parseApplicationSorting(queryState.sort)
+  const effectiveOrderBy = query.orderBy ?? defaultApplicationOrderBy
+  const sorting: SortingState = sortingStateFromOrderBy(effectiveOrderBy).map(
+    (entry) => ({ ...entry })
+  )
+  const appliedQuery: Omit<ListApplicationsQuery, 'pagination'> = {
+    ...(appliedFilters.length === 0 ? {} : { filters: appliedFilters }),
+    ...(query.orderBy === undefined ? {} : { orderBy: query.orderBy }),
+    ...(keyword.length === 0 ? {} : { q: keyword }),
+  }
   const currentState: ApplicationSavedViewState = {
-    keyword: queryState.keyword,
-    filters: filters.queryFilters,
+    keyword,
+    filters: appliedFilters,
     sorting,
     columnVisibility,
     density,
-    displayCurrency: queryState.currency,
+    displayCurrency: currency,
   }
 
   // Restore browser-facing workspace state once on entry.
   React.useEffect(() => {
     if (ready || initialState === null) return
-    filters.markNavigation(serializeQueryFilterNodes(initialState.filters))
-    filters.setEditorState(
-      queryFiltersStateFromFilterNodes(initialState.filters) ??
-        emptyQueryFiltersState()
-    )
-    setSearchParams(
-      writeApplicationViewQueryState(searchParams, initialState),
-      {
-        replace: true,
-      }
-    )
-    setReady(true)
+    const target = writeApplicationViewQueryState(searchParams, initialState)
+    if (target.toString() === searchParams.toString()) {
+      filters.setEditorState(
+        queryFiltersStateFromFilterNodes(initialState.filters) ??
+          emptyQueryFiltersState()
+      )
+      setReady(true)
+      return
+    }
+    setSearchParams(target, { replace: true })
   }, [filters, initialState, ready, searchParams, setSearchParams])
 
   // localStorage is the durable boundary for the last visited workspace.
   React.useEffect(() => {
     if (!ready || typeof window === 'undefined') return
     persistApplicationWorkspaceState(window.localStorage, {
-      keyword: queryState.keyword,
-      filters: filters.queryFilters,
-      sorting: parseApplicationSorting(queryState.sort),
+      keyword,
+      filters: appliedFilters,
+      sorting,
       columnVisibility,
       density,
-      displayCurrency: queryState.currency,
+      displayCurrency: currency,
     })
   }, [
+    appliedFilters,
     columnVisibility,
+    currency,
     density,
-    filters.queryFilters,
-    queryState.currency,
-    queryState.keyword,
-    queryState.sort,
+    keyword,
     ready,
+    sorting,
   ])
 
   const applyView = (state: ApplicationSavedViewState) => {
-    filters.markNavigation(serializeQueryFilterNodes(state.filters))
     filters.setEditorState(
       queryFiltersStateFromFilterNodes(state.filters) ??
         emptyQueryFiltersState()
@@ -158,24 +172,29 @@ export const useApplicationsWorkspace = (
 
   return {
     applyView,
+    appliedQuery,
     columnVisibility,
     currentState,
     density,
     fieldPresentation,
     filters,
-    isNavigating,
     keywordDraft,
-    queryState,
+    queryParameterState: parameterState,
+    queryState: { currency, keyword },
     ready,
     setColumnVisibility: (updater: Updater<VisibilityState>) =>
       setColumnVisibility((current) => functionalUpdate(updater, current)),
-    setCurrency: (currency: string) => void setQueryState({ currency }),
+    setCurrency: (nextCurrency: string) => void setCurrency(nextCurrency),
     setDensity,
-    setKeyword: (keyword: string) => void setQueryState({ keyword }),
+    setKeyword: (nextKeyword: string) =>
+      writeQuery({
+        ...query,
+        q: nextKeyword.trim().length === 0 ? undefined : nextKeyword.trim(),
+      }),
     setKeywordDraft,
     setSorting: (updater: Updater<SortingState>) => {
       const next = functionalUpdate(updater, sorting)
-      void setQueryState({ sort: serializeApplicationSorting(next) })
+      writeQuery({ ...query, orderBy: applicationOrderByFromSorting(next) })
     },
     sorting,
   }

@@ -1,304 +1,148 @@
-# CV Infrastructure
+# CV project infrastructure
 
-This directory contains the infrastructure that belongs to the CV workspace
-itself: secret layout, static-site hosting, analytics connector routing, the
-application registry's D1 database and Worker routing, and Grafana dashboards.
-It does not provision a general cloud account, a Grafana server, or a content
-repository.
+This directory owns project-specific Infisical and Cloudflare policy plus the
+application registry's JetStream topology. Cluster-wide DNS/Tunnel
+configuration, Nomad, Consul, Vault, PostgreSQL, MinIO, and the NATS server and
+authorization belong to `~/infrastructure`; CV application jobs and packs
+belong to this repository under `nomad/`.
 
-The live configuration uses Terragrunt and HCP Terraform state. Each stack
-generates a Terraform Cloud backend from `TF_CLOUD_ORGANIZATION`,
-`TF_CLOUD_PROJECT`, and a fixed workspace name.
+## JetStream topology
 
-## Stacks
+`terraform/live/prod/jetstream` owns the `REGISTRY_EVENTS` stream and the
+`registry-pdf-worker` durable pull consumer. Apply it after the infrastructure
+repository has deployed a healthy NATS service and before enabling any CV
+application allocation. Runtime application credentials cannot create or
+modify streams or consumers.
 
-- `live/prod/infisical`: creates the `/cv` Infisical folder tree, placeholder
-  secrets that operators fill manually, and generated secrets used by builds,
-  private links, and Grafana auth.
-- `live/prod/cloudflare`: creates the Cloudflare Pages project/domain/DNS record
-  for the static CV site, exposes the analytics connector and application
-  registry Workers through their Cloudflare-provided `workers.dev` URLs, and
-  creates the application registry's D1 database. Wrangler deploys Worker code,
-  D1 bindings, migrations, and runtime secrets separately.
-- `live/prod/grafana`: creates separate analytics and applications folders,
-  Infinity datasources, and dashboards backed by the analytics connector and
-  application registry API.
-
-Terraform Cloud workspace names:
-
-- `cv-infisical`
-- `cv-cloudflare`
-- `cv-grafana`
-
-Forks can keep those names or change the `name` values in the live
-`terragrunt.hcl` files.
-
-## External Prerequisites
-
-- Terraform, Terragrunt, and the Infisical CLI.
-- An Infisical project and environment.
-- A Cloudflare account and zone for the public CV hostname.
-- A Grafana instance. This repository provisions Grafana resources, not the
-  Grafana server itself.
-- The `yesoreyeram-infinity-datasource` plugin installed in Grafana before
-  applying the Grafana stack.
-- HCP Terraform organization/project values, unless you adapt the generated
-  backend to another state backend.
-
-The repository's `terraform/live/prod/.envrc` can load `/cv/deploy`,
-`/cv/analytics`, `/cv/application-registry`, and `/cv/grafana` through
-Infisical. Forks should replace the checked-in Terraform Cloud defaults there
-or set `TF_CLOUD_ORGANIZATION` and `TF_CLOUD_PROJECT` in their shell before
-running Terragrunt.
-
-## Bootstrap
-
-Start with these values in `.env.local` or your shell:
-
-```dotenv
-INFISICAL_PROJECT_ID=...
-INFISICAL_ENV=prod
-INFISICAL_HOST=https://app.infisical.com
-TF_CLOUD_ORGANIZATION=...
-TF_CLOUD_PROJECT=...
-```
-
-Log in and load the shell:
+Start an operator Connect upstream, read the existing NATS root credential from
+Vault into the apply process, and inspect the plan:
 
 ```sh
-infisical login
-direnv allow
-```
+consul connect proxy -service operator-root -upstream nats:14222
 
-Create the Infisical folder and secret skeleton first:
-
-```sh
-cd terraform/live/prod/infisical
-terragrunt init
+cd terraform/live/prod/jetstream
+NATS_ADMIN_SERVER=nats://127.0.0.1:14222 \
+NATS_ADMIN_USER="$(vault kv get -field=username secret/nats/root-credentials)" \
+NATS_ADMIN_PASSWORD="$(vault kv get -field=password secret/nats/root-credentials)" \
 terragrunt plan
-terragrunt apply
 ```
 
-Then fill the user-owned placeholder secrets in Infisical.
+The ephemeral Terraform variables supply credentials directly to the provider;
+they are not persisted in the `cv-jetstream` Terraform state. Both resources
+have `prevent_destroy` enabled. Because the provider replaces rather than edits
+durable consumers, an intentional contract change must introduce a versioned
+consumer and migrate it explicitly.
 
-Open Cloudflare's **Workers & Pages** landing page once before filling the
-Worker settings. Cloudflare creates the account-level `workers.dev` subdomain
-on that first visit. Its label is the middle portion of any default Worker URL:
-`<worker>.<account-label>.workers.dev`.
+Keep the HCP `cv-jetstream` workspace in local execution mode. The provider
+must reach NATS through the local Consul upstream shown above, and the three
+ephemeral `NATS_ADMIN_*` values exist only in that local apply process.
 
-Required under `/cv/deploy`:
+## What remains on Cloudflare
 
-- `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_API_TOKEN`
-- `CLOUDFLARE_ZONE_ID`
-- `CLOUDFLARE_WORKERS_DEV_ACCOUNT_SUBDOMAIN`, the account label shown in
-  `<worker>.<account-label>.workers.dev`, without `.workers.dev`
-- `CV_WEB_HOST`, for example `cv.example.com`
-- `DOMAIN_NAME`, for example `example.com`
+The `cloudflare-cv` module manages:
 
-On an existing deployment, Terraform renames the former
-`CV_ANALYTICS_CONNECTOR_HOSTNAME` secret to
-`CLOUDFLARE_WORKERS_DEV_ACCOUNT_SUBDOMAIN` without destroying the protected
-secret. Replace its old custom-hostname value with the new account label before
-applying the Cloudflare stack.
+- the analytics connector Worker's route or `workers.dev` exposure;
+- the `cv-public` Worker's `workers.dev` exposure and exact
+  `CV_WEB_HOST/c/*` overlay;
+- owner-only Access for the self-hosted registry management origin;
+- bypass applications for the registry's bearer-token `/machine/*` API and
+  capability-token `/cv-*` publication resolver;
+- derived `REGISTRY_API_URL`, `CV_PUBLIC_RESOLVER_URL`, public Worker name, and
+  route values in Infisical.
 
-The registry D1 primary defaults to Cloudflare's `weur` location hint. Override
-it with `APPLICATION_REGISTRY_DB_PRIMARY_LOCATION_HINT` (`wnam`, `enam`,
-`weur`, `eeur`, `apac`, or `oc`), or set it to an empty string to let
-Cloudflare choose the primary location.
+The existing Cloudflare Pages site stays deployed and unmanaged. DNS and the
+Tunnel continue routing the Nomad origin through the adjacent infrastructure
+stack.
 
-Required under `/cv/analytics`:
+The module no longer creates or configures the registry Worker, D1 runtime,
+R2, Queues, or Browser Rendering. The public CV and analytics Workers are the
+only retained Workers.
 
-- `CLOUDFLARE_ANALYTICS_API_TOKEN`
+## State transition
 
-The `/cv/application-registry` folder has no manually maintained secrets. The
-Infisical stack generates `REGISTRY_API_TOKEN`; the Cloudflare stack later
-writes the Worker URL, D1 identifiers, and Worker name into the same folder.
+The D1 database contains the source data for the one-time PostgreSQL import.
+`storage.tf` therefore removes it from Terraform state with `destroy = false`.
+After the first successful post-cutover apply and verified import, delete that
+`removed` block and retire the database separately.
 
-Required under `/cv/content`:
+The R2 buckets are empty and have no migration step. Removing their resource
+blocks makes the next full apply delete them. The old registry Worker hostname,
+route, and `workers.dev` resources are also removed by that apply. Do not apply
+this stack until the self-hosted origin is healthy and the cutover window has
+started.
 
-- `CONTENT_REPO_TOKEN`, a GitHub token or GitHub App installation token that CI
-  can use to read your private content repository.
-- `PUBLIC_CV_FULL_ACCESS_EMAIL`, the contact email shown in public redaction
-  notices.
+Always inspect the plan. A correct cutover plan should preserve D1 outside
+Terraform, remove both R2 buckets, remove old registry Worker exposure, retain
+the analytics and `cv-public` resources, and create/update Access for the
+Tunnel origin.
 
-Required under `/cv/grafana`:
+## Inputs
 
-- `GRAFANA_AUTH`, usually a Grafana service-account token.
-- `GRAFANA_URL`
+The production Terragrunt stack is `terraform/live/prod/cloudflare`. Important
+inputs are read from the environment:
 
-The Infisical stack generates these secrets:
+- `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ZONE_ID`, and
+  `DOMAIN_NAME`;
+- `CV_WEB_HOST` and `CV_PUBLIC_WORKER_NAME`;
+- `REGISTRY_API_URL`, defaulting to
+  `https://registry-origin.${DOMAIN_NAME}`;
+- `CV_PUBLIC_RESOLVER_URL`, defaulting to the same Tunnel origin;
+- `APPLICATION_REGISTRY_MANAGEMENT_ACCESS_EMAIL`;
+- `CLOUDFLARE_WORKERS_DEV_ACCOUNT_SUBDOMAIN` and the retained Worker exposure
+  flags;
+- `INFISICAL_PROJECT_ID`, `INFISICAL_ENV`, and `INFISICAL_HOST` when secret
+  synchronization is enabled.
 
-- `/cv/content:CONTENT_ID_SALT`
-- `/cv/content:PRIVATE_CONTENT_AUDIENCE_KEY`
-- `/cv/content:PRIVATE_CONTENT_ROOT_KEY`
-- `/cv/analytics:GRAFANA_CONNECTOR_TOKEN`
-- `/cv/application-registry:REGISTRY_API_TOKEN`
+`REGISTRY_API_URL` and `CV_PUBLIC_RESOLVER_URL` must be HTTPS origins without a
+path. They may be different hostnames; Access applies the public resolver bypass
+to the resolver hostname.
 
-Reload the shell after editing or generating secrets:
+## Validation
 
 ```sh
-direnv reload
+terraform fmt -recursive terraform/modules
+
+validation_root="$(mktemp -d)"
+rsync -a --exclude=.terraform --exclude=.terragrunt-cache \
+  terraform/modules/ "$validation_root/modules/"
+for module in "$validation_root"/modules/*; do
+  terraform -chdir="$module" init -backend=false -input=false
+  terraform -chdir="$module" validate
+done
 ```
 
-Apply Cloudflare next:
+Run Terragrunt plan only with the production environment loaded:
 
 ```sh
 cd terraform/live/prod/cloudflare
-terragrunt init
 terragrunt plan
-terragrunt apply
 ```
 
-This stack creates:
+No apply is part of repository cleanup. Apply is a deliberate cutover action.
 
-- a Cloudflare Pages project;
-- the Pages custom domain and proxied CNAME record;
-- the analytics connector Worker's `workers.dev` exposure and derived URL;
-- the `cv-application-registry` D1 database, protected from accidental
-  Terraform destruction;
-- the application registry Worker's `workers.dev` exposure and derived URL;
-- `ANALYTICS_CONNECTOR_URL` in `/cv/analytics` when Infisical sync is enabled;
-- `REGISTRY_API_URL`, `APPLICATION_REGISTRY_DB_ID`,
-  `APPLICATION_REGISTRY_DB_NAME`, and `APPLICATION_REGISTRY_WORKER_NAME` in
-  `/cv/application-registry` when Infisical sync is enabled.
+## Cutover sequence
 
-Reload the shell after the first Cloudflare apply so Wrangler receives those
-derived values:
+1. Apply and verify `~/infrastructure` so the Tunnel, Traefik, PostgreSQL,
+   MinIO, NATS, Vault policies, Consul intentions, and reduced sidecar budgets
+   are ready.
+2. Apply `terraform/live/prod/jetstream` and verify the stream and durable
+   consumer before starting application allocations.
+3. Deploy the disabled Nomad jobs from this repository and verify the API at
+   the origin hostname.
+4. Stop D1 writes, take a permission-restricted export, and import it with
+   `tools/application-registry-migration`.
+5. Enable the API/BFF and background jobs, deploy `cv-public` with
+   `CV_PUBLIC_RESOLVER_URL`, then inspect and apply this Cloudflare stack.
+6. Verify Access, `/machine/*`, `/cv-*`, `/c/*`, analytics, PDF generation, and
+   the frozen Pages routes before retiring D1 and deleting the migration tool.
 
-```sh
-direnv reload
-```
+## Permissions
 
-Apply the registry schema and deploy the Worker with its bearer secret:
+The Terraform Cloudflare token needs account Access application/policy write
+permission and zone Workers Routes write permission. It may also need the
+legacy R2 delete permission for the one cutover apply. Wrangler's public-Worker
+deployment token continues to need Workers Scripts write permission.
 
-```sh
-bunx nx run application-registry-api:migrations:apply:remote
-bunx nx run application-registry-api:deploy
-```
-
-Terraform owns the D1 database, dedicated `workers.dev` exposure resources,
-derived URLs, and Infisical writes. Wrangler owns Worker creation and deployed
-versions, observability configuration, the `APPLICATION_REGISTRY_DB` D1
-binding, migrations, and runtime secrets. The registry deploy target publishes
-code and `REGISTRY_API_TOKEN` in one Worker version.
-
-Apply Grafana after the analytics connector URL, application registry URL and
-token, and Grafana token are available:
-
-```sh
-cd terraform/live/prod/grafana
-terragrunt init
-terragrunt plan
-terragrunt apply
-```
-
-The applications dashboard provides lifecycle KPIs, status/stage/priority
-breakdowns, a complete applications table, follow-up queue, and
-time-ranged recent activity. The table has Grafana-owned Active, Interest, To
-apply, and Archive presets. One multi-property Grafana variable supplies each
-preset's generic registry filters and ordering to a single applications query.
-Company, lifecycle, stage, priority, and label controls filter the assembled
-view in Grafana. Numeric fit-score bounds are applied while the paged response
-is assembled, and an empty bound preserves applications without a score.
-Follow-up timing is derived from `followUpAt` against one dashboard request
-timestamp. Lifecycle and target-stage values are color-coded. The compensation
-currency control asks the applications endpoint to convert displayed summaries
-while preserving original stored values.
-
-Empty registries retain table schemas and zero-valued KPIs. The applications
-and recent-activity queries use Infinity cursor pagination with 100 rows per
-request, following `pageInfo.nextCursor` through the `after` query parameter for
-up to five continuation pages.
-
-The applications table also exposes confirmed row actions for lifecycle
-events, notes, labels, contact and research events, and follow-up scheduling.
-They use the application version shown in the row for optimistic concurrency
-where the registry command supports it. Note bodies and sources are entered as
-JSON strings, labels as a JSON string array, and event/status values use the
-registry contract's literal names. Actions call the registry through Grafana's
-same-origin datasource proxy, which keeps the shared bearer token in the
-provisioned datasource rather than the dashboard JSON. The dashboard refreshes
-every 30 seconds after mutations; refresh manually when the updated row is
-needed immediately.
-
-## Cloudflare Permissions
-
-The Cloudflare deploy token in `/cv/deploy:CLOUDFLARE_API_TOKEN` needs
-permissions for both Terraform-managed resources and Wrangler deployments:
-
-- Account: `Workers Scripts` `Write`
-- Account: `D1` `Write`
-- Account: `Pages` `Write`
-- Zone: `DNS` `Write`
-- Zone: `Zone` `Read`
-
-Scope account permissions to the target Cloudflare account and zone permissions
-to the target CV domain's zone.
-
-The Cloudflare analytics runtime token in
-`/cv/analytics:CLOUDFLARE_ANALYTICS_API_TOKEN` needs enough access to query
-GraphQL analytics:
-
-- Account: `Account Analytics` `Read`
-- Zone: `Analytics` `Read`, sometimes shown by Cloudflare as `Zone Analytics`
-- Zone resources: include the CV domain's zone
-
-On the Cloudflare Free plan, prefer first-level Worker hostnames such as
-`analytics.example.com` and `applications.example.com`. Deeper names may not be
-covered by Universal SSL.
-
-## GitHub Actions
-
-The workflows fetch deployment values from Infisical through OIDC. Configure the
-production environment with:
-
-- `INFISICAL_IDENTITY_ID`
-- `INFISICAL_PROJECT_SLUG`
-
-Configure repository variables:
-
-- `CLOUDFLARE_PAGES_PROJECT`
-- `CV_WEB_BASE_URL`
-- `INFISICAL_ENV`, optional, defaults to `prod`
-- `INFISICAL_HOST`, optional, defaults to `https://app.infisical.com`
-- `ANALYTICS_CONNECTOR_WORKER_NAME`, optional, defaults to
-  `cv-analytics-connector`
-- `ANALYTICS_CONNECTOR_COMPATIBILITY_DATE`, optional, defaults in the Wrangler
-  config generator
-- `APPLICATION_REGISTRY_COMPATIBILITY_DATE`, optional, defaults in the registry
-  Wrangler config generator
-
-Forks should update the content checkout in `.github/workflows/deploy-cv.yml` so
-it clones their content repository. A separate content repository can dispatch
-the CV deploy workflow after content changes by sending a `content-updated`
-repository dispatch event.
-
-## Secret State
-
-Worker runtime secrets are deployed with Wrangler, not Terraform:
-
-- `CLOUDFLARE_ANALYTICS_API_TOKEN`
-- `GRAFANA_CONNECTOR_TOKEN`
-- `PRIVATE_CONTENT_AUDIENCE_KEY`
-- `REGISTRY_API_TOKEN`
-
-The application registry D1 database ID is not secret. Terraform writes it to
-Infisical as `APPLICATION_REGISTRY_DB_ID` so the generated production Wrangler
-configuration can bind the correct database without checking an environment-
-specific UUID into source control.
-
-The Cloudflare Terraform stack should only manage `workers.dev` exposure,
-derived deployment values, and non-secret infrastructure. Treat HCP Terraform
-state as sensitive anyway:
-Infisical and Grafana provider state can include generated or provider-managed
-secret values.
-
-## Modules
-
-- `modules/infisical-cv`: folder tree, placeholder secrets, generated content,
-  analytics, and application registry secrets.
-- `modules/cloudflare-cv`: Pages project/domain/DNS, analytics Worker routing,
-  application registry D1 database, and registry Worker routing.
-- `modules/grafana-cv`: analytics and application-registry Infinity
-  datasources, dashboard folders, and dashboard template bindings.
+The runtime analytics token remains separate and read-only for Zone Analytics;
+the Bun API uses it through the framework-neutral
+`@cv/cloudflare-analytics-client` package.

@@ -1,5 +1,4 @@
 import type { ApplicationListItem } from '@cv/application-registry-api-contract'
-import { ConflictError } from '@cv/application-registry-api-contract'
 import { Form } from '@cv/internal-forms'
 import { useAtom, useAtomSet } from '@effect/atom-react'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
@@ -9,6 +8,7 @@ import * as Atom from 'effect/unstable/reactivity/Atom'
 import * as React from 'react'
 import { useForm } from 'react-hook-form'
 
+import { asyncResultError } from '@/lib/async-result'
 import {
   reloadLatestApplication,
   updateManagedApplication,
@@ -94,10 +94,8 @@ export const ApplicationRowEditor = ({
       submission.current = operationSubmissionFor(submission.current, input)
       await saveApplication({
         applicationId: draft.current.applicationId,
-        input: {
-          ...input,
-          operationId: submission.current.operationId,
-        },
+        idempotencyKey: submission.current.operationId,
+        input,
       })
       submission.current = undefined
       onCancel()
@@ -133,16 +131,11 @@ export const ApplicationRowEditor = ({
       })
   }
   const error = form.formState.errors.root?.server?.message
-  const updateFailure = AsyncResult.matchWithError(updateResult, {
-    onInitial: () => undefined,
-    onError: (failure) => failure,
-    onDefect: (defect) => defect,
-    onSuccess: () => undefined,
-  })
+  const updateFailure = asyncResultError(updateResult)
   const context: ApplicationRowEditorContextValue = {
     cancel,
     formId,
-    isConflict: updateFailure instanceof ConflictError,
+    isConflict: updateFailure?._tag === 'ConflictError',
     pending:
       AsyncResult.isWaiting(updateResult) ||
       AsyncResult.isWaiting(reloadResult),

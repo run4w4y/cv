@@ -19,20 +19,51 @@ import {
   sidebarMenuButtonVariants,
   useSidebar,
 } from '@cv/internal-ui'
-import { Activity, BriefcaseBusiness, Database } from 'lucide-react'
+import {
+  Activity,
+  BriefcaseBusiness,
+  ChartNoAxesCombined,
+  Database,
+  GitBranch,
+  Settings2,
+} from 'lucide-react'
 import { NuqsAdapter } from 'nuqs/adapters/react-router/v7'
 import * as React from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router'
-
+import { isDesktopHost } from '@/host/desktop'
+import { RegistryConnectionControl } from '@/host/registry-connection-dialog'
 import { HeaderActionsProvider } from './header-actions'
 
 const navItems = [
   { to: '/applications', label: 'Applications', icon: BriefcaseBusiness },
-  { to: '/events', label: 'Events', icon: Activity },
+  { to: '/workflows', label: 'URL workflows', icon: GitBranch },
+  { to: '/activities', label: 'Activities', icon: Activity },
+  { to: '/analytics', label: 'CV analytics', icon: ChartNoAxesCombined },
+  { to: '/facts', label: 'Reviewed facts', icon: Database },
+  {
+    to: '/preparation/cv-guidance',
+    label: 'CV guidance',
+    icon: Settings2,
+  },
 ] as const
 
 const routeTitle = (pathname: string) => {
-  if (pathname.startsWith('/events')) return 'Events'
+  if (pathname.startsWith('/facts')) return 'Reviewed facts'
+  if (pathname === '/preparation/cv-guidance') return 'CV guidance'
+  if (pathname === '/workflows/new') return 'New URL workflow'
+  if (pathname.startsWith('/workflows/')) return 'Workflow details'
+  if (pathname === '/workflows') return 'URL workflows'
+  if (pathname.startsWith('/activities')) return 'Activities'
+  if (pathname.startsWith('/analytics')) return 'CV analytics'
+  if (/^\/applications\/[^/]+\/prepare$/u.test(pathname)) {
+    return 'Prepare tailored CV'
+  }
+  if (/^\/applications\/[^/]+\/cover-letter$/u.test(pathname)) {
+    return 'Prepare cover letter'
+  }
+  if (/^\/applications\/[^/]+\/publish$/u.test(pathname)) {
+    return 'Publish CV'
+  }
   if (/^\/applications\/[^/]+/u.test(pathname)) return 'Application details'
   return 'Applications'
 }
@@ -42,18 +73,8 @@ const ShellNavigation = () => {
 
   return (
     <Sidebar>
-      <SidebarHeader className="h-16 justify-center px-4">
-        <div className="flex items-center gap-3">
-          <span className="flex size-9 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
-            <Database className="size-4" />
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">Registry</p>
-            <p className="truncate text-xs text-muted-foreground">
-              Internal workspace
-            </p>
-          </div>
-        </div>
+      <SidebarHeader className="h-16 justify-center px-2">
+        <RegistryConnectionControl />
       </SidebarHeader>
 
       <SidebarSeparator />
@@ -62,20 +83,22 @@ const ShellNavigation = () => {
           <SidebarGroup>
             <SidebarGroupLabel>Manage</SidebarGroupLabel>
             <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.to}>
-                  <NavLink
-                    to={item.to}
-                    onClick={() => setOpen(false)}
-                    className={({ isActive }) =>
-                      cn(sidebarMenuButtonVariants({ active: isActive }))
-                    }
-                  >
-                    <item.icon />
-                    {item.label}
-                  </NavLink>
-                </SidebarMenuItem>
-              ))}
+              {navItems
+                .filter((item) => item.to !== '/workflows' || isDesktopHost())
+                .map((item) => (
+                  <SidebarMenuItem key={item.to}>
+                    <NavLink
+                      to={item.to}
+                      onClick={() => setOpen(false)}
+                      className={({ isActive }) =>
+                        cn(sidebarMenuButtonVariants({ active: isActive }))
+                      }
+                    >
+                      <item.icon />
+                      {item.label}
+                    </NavLink>
+                  </SidebarMenuItem>
+                ))}
             </SidebarMenu>
           </SidebarGroup>
         </nav>

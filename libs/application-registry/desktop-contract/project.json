@@ -1,0 +1,27 @@
+{
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "name": "application-registry-desktop-contract",
+  "projectType": "library",
+  "sourceRoot": "libs/application-registry/desktop-contract/src",
+  "tags": ["scope:application-registry", "type:contract", "visibility:private"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/application-registry/desktop-contract/src/index.ts",
+        "outputPath": "libs/application-registry/desktop-contract/dist",
+        "rootDir": "libs/application-registry/desktop-contract/src",
+        "tsConfig": "libs/application-registry/desktop-contract/tsconfig.build.json",
+        "generatePackageJson": false
+      }
+    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
+    "format": {},
+    "format:check": {}
+  }
+}

@@ -1,4 +1,4 @@
-import type { RegistryEventListItem } from '@cv/application-registry-api-contract'
+import type { RegistryActivityListItem } from '@cv/application-registry-api-contract'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import {
   functionalUpdate,
@@ -20,7 +20,7 @@ const initialState: EventsSavedViewState = {
       type: 'condition',
       field: 'kind',
       operator: 'eq',
-      value: 'stage_changed',
+      value: 'status_changed',
     },
   ],
   sorting: [{ id: 'occurredAt', desc: true }],
@@ -36,7 +36,7 @@ const EventsViewMenuStory = () => {
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>(state.columnVisibility)
   const table = useReactTable({
-    data: [] as RegistryEventListItem[],
+    data: [] as RegistryActivityListItem[],
     columns: [...eventColumns],
     getCoreRowModel: getCoreRowModel(),
     state: { columnVisibility },

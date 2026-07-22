@@ -7,22 +7,14 @@ permissions:
 on:
   pull_request:
   push:
-  repository_dispatch:
-    types:
-      - content-updated
   workflow_dispatch:
     inputs:
-      content_ref:
-        description: Git ref or SHA from run4w4y/cv-content.
-        required: false
-        type: string
       deploy_target:
         default: all
         description: Production target to deploy after the quality gates pass.
         options:
           - all
           - cv
-          - analytics
           - registry
           - none
         required: true
@@ -30,13 +22,6 @@ on:
 
 env:
   ASTRO_TELEMETRY_DISABLED: "1"
-  CONTENT_ID_SALT: cv-ci-fixture-salt
-  CONTENT_ROOT: ${{ github.workspace }}/fixtures/cv-content-e2e
-  CV_WEB_BASE_URL: https://cv.example.invalid
-  PRIVATE_CONTENT_AUDIENCE_KEY: cv-ci-fixture-audience-key
-  PRIVATE_CONTENT_ROOT_KEY: base64url:AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA
-  PUBLIC_CV_FULL_ACCESS_EMAIL: full-access.fixture@example.invalid
-  PUBLIC_CV_WEB_BASE_URL: https://cv.example.invalid
 
 jobs:
   quality:
@@ -87,7 +72,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [[ -n "${ACT:-}" || "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "repository_dispatch" ]]; then
+          if [[ -n "${ACT:-}" || "$EVENT_NAME" == "workflow_dispatch" ]]; then
             ./node_modules/.bin/nx run-many -t typecheck test:unit --parallel=6
           else
             ./node_modules/.bin/nx affected -t typecheck test:unit --parallel=6
@@ -106,27 +91,11 @@ jobs:
       - name: Set up workspace runtime
         uses: ./.github/actions/setup-runtime
 
-      - name: Build fixture CV app
+      - name: Build public CV Worker
         run: ./node_modules/.bin/nx run cv:build --skip-nx-cache
 
-  analytics-build:
-    name: Build analytics Worker
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          filter: tree:0
-
-      - name: Set up workspace runtime
-        uses: ./.github/actions/setup-runtime
-
-      - name: Build analytics Worker
-        run: ./node_modules/.bin/nx run analytics-connector:build
-
   application-registry-build:
-    name: Build application registry Worker
+    name: Build application registry services
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -141,11 +110,17 @@ jobs:
       - name: Verify application registry migration drift
         run: ./node_modules/.bin/nx run application-registry-entity:migrations:check --skip-nx-cache
 
-      - name: Build application registry Worker
+      - name: Build self-hosted application registry API
         run: ./node_modules/.bin/nx run application-registry-api:build --skip-nx-cache
 
+      - name: Build listing-check runner
+        run: ./node_modules/.bin/nx run application-registry-listing-check-runner:build --skip-nx-cache
+
+      - name: Build PDF event worker
+        run: ./node_modules/.bin/nx run application-registry-pdf-worker:build --skip-nx-cache
+
   application-registry-tests:
-    name: Test application registry Worker
+    name: Test application registry services
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -157,20 +132,23 @@ jobs:
       - name: Set up workspace runtime
         uses: ./.github/actions/setup-runtime
 
+      - name: Run registry event transport integration tests
+        run: ./node_modules/.bin/nx run application-registry-events-nats:test:integration --skip-nx-cache
+
+      - name: Run registry API system tests
+        run: ./node_modules/.bin/nx run application-registry-api:test:integration --skip-nx-cache
+
       - name: Run registry CRUD integration tests
         run: ./node_modules/.bin/nx run application-registry-crud:test:integration --skip-nx-cache
+
+      - name: Run registry D1-to-PostgreSQL migration integration tests
+        run: ./node_modules/.bin/nx run application-registry-migration:test:integration --skip-nx-cache
 
       - name: Run registry service integration tests
         run: ./node_modules/.bin/nx run application-registry-service:test:integration --skip-nx-cache
 
-      - name: Run registry API integration tests
-        run: ./node_modules/.bin/nx run application-registry-api:test:integration --skip-nx-cache
-
-      - name: Run built Worker end-to-end tests
-        run: ./node_modules/.bin/nx run application-registry-api:test:e2e --skip-nx-cache
-
   cv-e2e:
-    name: Run CV e2e tests
+    name: Test CV app in Chromium
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -184,8 +162,27 @@ jobs:
         with:
           install-playwright: "true"
 
-      - name: Run browser e2e tests
-        run: ./node_modules/.bin/nx run cv:test:e2e
+      - name: Run CV browser end-to-end tests
+        run: ./node_modules/.bin/nx run cv:test:e2e --skip-nx-cache
+
+  publish-application-registry-images:
+    name: Publish application registry images
+    needs:
+      - quality
+      - application-registry-build
+      - application-registry-tests
+    if: >-
+      ${{
+        (github.event_name == 'push' &&
+          (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v2')) ||
+        (github.event_name == 'workflow_dispatch' &&
+          github.ref == 'refs/heads/main' &&
+          inputs.deploy_target != 'none')
+      }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-application-registry-images.yml
 
   deploy-cv:
     name: Deploy production CV
@@ -193,58 +190,40 @@ jobs:
       - quality
       - cv-build
       - cv-e2e
+      - deploy-application-registry
     if: >-
       ${{
         (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-        github.event_name == 'repository_dispatch' ||
         (github.event_name == 'workflow_dispatch' &&
+          github.ref == 'refs/heads/main' &&
           (inputs.deploy_target == 'all' || inputs.deploy_target == 'cv'))
       }}
     permissions:
       actions: read
-      contents: write
+      contents: read
       deployments: write
       id-token: write
     secrets: inherit
     uses: ./.github/workflows/deploy-cv.yml
-    with:
-      content_ref: ${{ github.event.client_payload.content_ref || inputs.content_ref || 'main' }}
-
-  deploy-analytics:
-    name: Deploy production analytics
-    needs:
-      - quality
-      - analytics-build
-    if: >-
-      ${{
-        (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-        (github.event_name == 'workflow_dispatch' &&
-          (inputs.deploy_target == 'all' || inputs.deploy_target == 'analytics'))
-      }}
-    permissions:
-      actions: read
-      contents: read
-      deployments: write
-      id-token: write
-    secrets: inherit
-    uses: ./.github/workflows/deploy-analytics.yml
 
   deploy-application-registry:
     name: Deploy production application registry
     needs:
-      - quality
-      - application-registry-build
-      - application-registry-tests
+      - publish-application-registry-images
     if: >-
       ${{
         (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
         (github.event_name == 'workflow_dispatch' &&
-          (inputs.deploy_target == 'all' || inputs.deploy_target == 'registry'))
+          github.ref == 'refs/heads/main' &&
+          (inputs.deploy_target == 'all' ||
+            inputs.deploy_target == 'cv' ||
+            inputs.deploy_target == 'registry'))
       }}
     permissions:
-      actions: read
       contents: read
-      deployments: write
-      id-token: write
     secrets: inherit
+    with:
+      api_image_digest: ${{ needs.publish-application-registry-images.outputs.api_image_digest }}
+      listing_check_runner_image_digest: ${{ needs.publish-application-registry-images.outputs.listing_check_runner_image_digest }}
+      pdf_worker_image_digest: ${{ needs.publish-application-registry-images.outputs.pdf_worker_image_digest }}
     uses: ./.github/workflows/deploy-application-registry.yml

@@ -1,48 +1,36 @@
 import assert from 'node:assert/strict'
-import { afterEach, beforeEach, test } from 'node:test'
-import type { D1Database } from '@cloudflare/workers-types'
-import { makeRegistryCrudLive } from '@cv/application-registry-crud/live'
-import { RegistryMiniflareHarness } from '@cv/application-registry-crud/test-support'
-import { FxRates } from '@cv/application-registry-fx'
+import { after, afterEach, before, beforeEach, test } from 'node:test'
+import { makeInMemoryArtifactStoreLayer } from '@cv/application-registry-artifact-store/test-support'
+import {
+  makeRegistryCrudLive,
+  type RegistryDatabaseShape,
+} from '@cv/application-registry-crud/live'
+import {
+  RegistryEventPublisherNoop,
+  RegistryEventSchema,
+} from '@cv/application-registry-events'
 import { ListingAvailabilityChecker } from '@cv/application-registry-listing-check'
-import { Duration, Effect, Layer, ManagedRuntime, Result } from 'effect'
+import { Effect, Layer, ManagedRuntime, Result } from 'effect'
+
+import { RegistryPostgresHarness } from '../../crud/test/postgres-harness.ts'
 
 import {
+  ActivitiesService,
+  AnnotationsService,
   ApplicationsService,
-  type ListApplicationsInput,
-  ListingChecksService,
+  ContentEntriesService,
+  type CreateApplicationInput,
+  CvAnalyticsTrafficSource,
+  CvPublicationsService,
+  PdfArtifactsService,
+  ScheduledListingChecksRunner,
 } from '../src'
-import { RegistryServicesLive } from '../src/live'
-import { makeApplicationInput, recordedAt } from './support/inputs'
 import {
-  concurrentCapturesWorkflow,
-  concurrentNoteWorkflow,
-  concurrentUpsertsWorkflow,
-  lifecycleRaceWorkflow,
-  optimisticPatchRaceWorkflow,
-} from './workflows/concurrency'
-import {
-  applicationWorkflow,
-  captureMergeWorkflow,
-  compensationWorkflow,
-  defaultsWorkflow,
-  eventWorkflow,
-  noteAndCaptureWorkflow,
-  patchNullabilityWorkflow,
-} from './workflows/core'
-import { rollbackWorkflow } from './workflows/persistence'
+  RegistryServicesLive,
+  ScheduledListingChecksRunnerLive,
+} from '../src/live'
 
-const FakeFxRatesLive = Layer.succeed(FxRates, {
-  get: (baseCurrency, quoteCurrency) =>
-    Effect.succeed({
-      baseCurrency,
-      fetchedAt: recordedAt,
-      observedAt: recordedAt,
-      provider: 'service-integration',
-      quoteCurrency,
-      rate: 2,
-    }),
-})
+const recordedAt = '2026-07-12T12:00:00.000Z'
 
 const FakeListingAvailabilityCheckerLive = Layer.succeed(
   ListingAvailabilityChecker,
@@ -50,16 +38,10 @@ const FakeListingAvailabilityCheckerLive = Layer.succeed(
     check: (target) =>
       Effect.succeed({
         checkedAt: recordedAt,
-        checkerVersion: 'test',
+        checkerVersion: 'service-integration',
         confidence: 'high',
         contentHash: null,
-        evidence: [
-          {
-            code: 'test_open',
-            detail: 'Integration test listing is open.',
-            sourceUrl: target.url,
-          },
-        ],
+        evidence: [],
         finalUrl: target.url,
         httpStatus: 200,
         outcome: 'open',
@@ -70,707 +52,401 @@ const FakeListingAvailabilityCheckerLive = Layer.succeed(
   }
 )
 
-const makeRegistryServiceTestRuntime = (database: D1Database) =>
+const FakeCvAnalyticsTrafficSourceLive = Layer.succeed(
+  CvAnalyticsTrafficSource,
+  {
+    capabilities: () =>
+      Effect.succeed({ retentionMs: 31 * 24 * 60 * 60 * 1_000 }),
+    read: (_aliases, range) =>
+      Effect.succeed({
+        generatedAt: recordedAt,
+        range: { ...range, granularity: 'day' },
+        records: [],
+      }),
+  }
+)
+
+const makeRegistryServiceTestRuntime = (database: RegistryDatabaseShape) =>
   ManagedRuntime.make(
     RegistryServicesLive.pipe(
-      Layer.provide(makeRegistryCrudLive(Effect.succeed(database))),
-      Layer.provide(FakeFxRatesLive),
-      Layer.provide(FakeListingAvailabilityCheckerLive)
+      Layer.provide(makeRegistryCrudLive(database)),
+      Layer.provide(makeInMemoryArtifactStoreLayer()),
+      Layer.provide(RegistryEventPublisherNoop),
+      Layer.provide(FakeCvAnalyticsTrafficSourceLive)
     )
   )
 
-let harness: RegistryMiniflareHarness
+const applicationInput = (suffix: string): CreateApplicationInput => ({
+  postingUrl: `https://example.test/jobs/${suffix}`,
+  company: 'Service Integration',
+  role: 'Effect Engineer',
+  location: 'Remote',
+  applicationStatus: 'not_started',
+  targetStage: 'apply_next',
+  personalPriority: null,
+  followUpAt: null,
+  appliedAt: null,
+  labels: ['seed'],
+})
+
+const makeScheduledRunnerTestRuntime = (database: RegistryDatabaseShape) =>
+  ManagedRuntime.make(
+    ScheduledListingChecksRunnerLive.pipe(
+      Layer.provide(makeRegistryCrudLive(database)),
+      Layer.provide(FakeListingAvailabilityCheckerLive),
+      Layer.provide(RegistryEventPublisherNoop)
+    )
+  )
+
+let harness: RegistryPostgresHarness
 let runtime: ReturnType<typeof makeRegistryServiceTestRuntime>
 
-beforeEach(async () => {
-  harness = await RegistryMiniflareHarness.make({
-    databaseBinding: 'APPLICATION_REGISTRY_DB',
-  })
+before(async () => {
+  harness = await RegistryPostgresHarness.make()
+})
+
+beforeEach(() => {
   runtime = makeRegistryServiceTestRuntime(harness.database)
 })
 
 afterEach(async () => {
   await runtime.dispose()
+  await harness.reset()
+})
+
+after(async () => {
   await harness.dispose()
 })
 
-test('runs application defaults, patches, labels, and revision filters over D1', async () => {
-  const result = await runtime.runPromise(applicationWorkflow)
-
-  assert.equal(result.created.applicationStatus, 'not_started')
-  assert.equal(result.created.version, 1)
-  assert.deepEqual(result.deltaIds, [result.created.id])
-  assert.deepEqual(result.labels, ['priority', 'remote'])
-  assert.deepEqual(result.storedLabels, result.labels)
-  assert.equal(result.patched.fitScore, 91)
-  assert.equal(result.patched.recommendedAction, 'Apply this week')
-  assert.equal(result.patched.version, 2)
-})
-
-test('continues an explicit revision filter through query cursors', async () => {
+test('creates and updates applications while issuing read-only activities', async () => {
   const result = await runtime.runPromise(
     Effect.gen(function* () {
       const applications = yield* ApplicationsService
-      const baseline = yield* applications.upsert(
-        makeApplicationInput('revision-page-baseline')
-      )
-      const revisionFilter = [
-        {
-          type: 'condition',
-          field: 'updatedRevision',
-          operator: 'gt',
-          value: baseline.updatedRevision,
-        },
-      ] satisfies NonNullable<ListApplicationsInput['filters']>
-
-      const firstDelta = yield* applications.upsert(
-        makeApplicationInput('revision-page-first')
-      )
-      const secondDelta = yield* applications.upsert(
-        makeApplicationInput('revision-page-second')
-      )
-      const first = yield* applications.list({
-        filters: revisionFilter,
-        pagination: { size: 1 },
-      })
-      const nextCursor = first.pageInfo.nextCursor
-      if (nextCursor === null) {
-        return yield* Effect.die('Expected an opaque continuation cursor.')
-      }
-      const second = yield* applications.list({
-        filters: revisionFilter,
-        pagination: { after: nextCursor, size: 1 },
-      })
-      const changedFilter = yield* applications.list({
-        filters: [
-          ...revisionFilter,
-          {
-            type: 'condition',
-            field: 'company',
-            operator: 'contains',
-            value: 'A company that does not exist',
-          },
-        ],
-        pagination: { size: 1 },
-      })
-
-      return {
-        baseline,
-        changedFilter,
-        first,
-        firstDelta,
-        second,
-        secondDelta,
-      }
-    })
-  )
-
-  assert.deepEqual(result.changedFilter.items, [])
-  assert.deepEqual(
-    [...result.first.items, ...result.second.items].map(({ id }) => id),
-    [result.firstDelta.id, result.secondDelta.id]
-  )
-  assert.equal(result.second.pageInfo.nextCursor, null)
-})
-
-test('rejects application cursors after filter or token tampering', async () => {
-  const result = await runtime.runPromise(
-    Effect.gen(function* () {
-      const applications = yield* ApplicationsService
-      yield* applications.upsert(makeApplicationInput('cursor-first'))
-      yield* applications.upsert(makeApplicationInput('cursor-second'))
-
-      const first = yield* applications.list({
-        filters: [
-          {
-            type: 'condition',
-            field: 'company',
-            operator: 'contains',
-            value: 'Service Integration',
-          },
-        ],
-        pagination: { size: 1 },
-      })
-      if (first.pageInfo.nextCursor === null) {
-        return yield* Effect.die('Expected a second application page.')
-      }
-
-      const changedFilter = yield* Effect.result(
-        applications.list({
-          filters: [
-            {
-              type: 'condition',
-              field: 'company',
-              operator: 'contains',
-              value: 'Another Company',
-            },
-          ],
-          pagination: { after: first.pageInfo.nextCursor, size: 1 },
+      const activities = yield* ActivitiesService
+      const created = yield* applications.create(applicationInput('platform'))
+      const duplicate = yield* Effect.result(
+        applications.create({
+          ...applicationInput('duplicate'),
+          postingUrl:
+            'https://example.test/jobs/platform?utm_source=integration#apply',
         })
       )
-      const cursor = first.pageInfo.nextCursor
-      const tampered = `${cursor.startsWith('A') ? 'B' : 'A'}${cursor.slice(1)}`
-      const changedCursor = yield* Effect.result(
-        applications.list({
-          filters: [
-            {
-              type: 'condition',
-              field: 'company',
-              operator: 'contains',
-              value: 'Service Integration',
-            },
-          ],
-          pagination: { after: tampered, size: 1 },
-        })
-      )
-
-      return { changedCursor, changedFilter }
-    })
-  )
-
-  assert.equal(
-    Result.isFailure(result.changedFilter)
-      ? result.changedFilter.failure._tag
-      : null,
-    'RegistryBadRequestError'
-  )
-  assert.equal(
-    Result.isFailure(result.changedCursor)
-      ? result.changedCursor.failure._tag
-      : null,
-    'RegistryBadRequestError'
-  )
-})
-
-test('creates without replacement, searches identity fields, patches metadata, and deletes optimistically', async () => {
-  const result = await runtime.runPromise(
-    Effect.gen(function* () {
-      const applications = yield* ApplicationsService
-      const input = {
-        ...makeApplicationInput('operator-crud'),
-        sourceJobId: 'searchable-source-id-42',
-      }
-      const created = yield* applications.create(input)
-      const duplicate = yield* Effect.result(applications.create(input))
-      const search = yield* applications.list({
-        filters: [
-          {
-            type: 'condition',
-            field: 'q',
-            operator: 'matches',
-            value: 'source-id-42',
-          },
-        ],
-        pagination: { size: 10 },
-      })
-      const patched = yield* applications.patch(created.id, {
-        canonicalUrl: 'https://example.test/jobs/operator-crud-updated',
-        company: 'Updated Operator Company',
+      const updateRequest = {
+        applicationStatus: 'applied' as const,
         expectedVersion: created.version,
-        location: 'Tokyo',
-        role: 'Staff Effect Engineer',
-        source: 'official-careers',
-        sourceJobId: 'updated-source-id',
-      })
-      const staleDelete = yield* Effect.result(
-        applications.remove(created.id, created.version)
+        idempotencyKey: 'application-update-1',
+      }
+      const updated = yield* applications.update(created.id, updateRequest)
+      const replayed = yield* applications.update(created.id, updateRequest)
+      const applicationActivities = yield* activities.listByApplication(
+        created.id
       )
-      yield* applications.remove(created.id, patched.version)
-      const removed = yield* Effect.result(applications.find(created.id))
-      return { created, duplicate, patched, removed, search, staleDelete }
+      const statusActivities = yield* activities.list({
+        filters: [
+          {
+            type: 'condition',
+            field: 'kind',
+            operator: 'eq',
+            value: 'status_changed',
+          },
+        ],
+        pagination: { size: 20 },
+      })
+      const listed = yield* applications.list({
+        filters: [
+          {
+            type: 'condition',
+            field: 'postingUrl',
+            operator: 'eq',
+            value: created.postingUrl,
+          },
+        ],
+        pagination: { size: 20 },
+      })
+      return {
+        applicationActivities,
+        created,
+        duplicate,
+        listed,
+        replayed,
+        statusActivities,
+        updated,
+      }
     })
   )
 
+  assert.match(result.created.id, /^[0-9a-f-]{36}$/u)
   assert.equal(result.created.version, 1)
-  assert.equal(
-    Result.isFailure(result.duplicate) ? result.duplicate.failure._tag : null,
-    'RegistryConflictError'
+  assert.equal(Result.isFailure(result.duplicate), true)
+  if (Result.isFailure(result.duplicate)) {
+    assert.equal(result.duplicate.failure._tag, 'RegistryConflictError')
+  }
+  assert.equal(result.updated.application.applicationStatus, 'applied')
+  assert.equal(result.updated.application.version, 2)
+  assert.equal(typeof result.updated.application.appliedAt, 'string')
+  assert.deepEqual(result.replayed, result.updated)
+  assert.deepEqual(
+    result.applicationActivities.items.map(({ kind, source }) => ({
+      kind,
+      source,
+    })),
+    [
+      { kind: 'application_created', source: 'management' },
+      { kind: 'status_changed', source: 'management' },
+    ]
   )
   assert.deepEqual(
-    result.search.items.map(({ id }) => id),
+    result.statusActivities.items.map(({ applicationId, kind }) => ({
+      applicationId,
+      kind,
+    })),
+    [{ applicationId: result.created.id, kind: 'status_changed' }]
+  )
+  assert.deepEqual(
+    result.listed.items.map(({ id }) => id),
     [result.created.id]
   )
-  assert.equal(result.patched.company, 'Updated Operator Company')
-  assert.equal(result.patched.role, 'Staff Effect Engineer')
-  assert.equal(result.patched.source, 'official-careers')
-  assert.equal(result.patched.location, 'Tokyo')
-  assert.equal(
-    Result.isFailure(result.staleDelete)
-      ? result.staleDelete.failure._tag
-      : null,
-    'RegistryConflictError'
-  )
-  assert.equal(
-    Result.isFailure(result.removed) ? result.removed.failure._tag : null,
-    'RegistryNotFoundError'
-  )
 })
 
-test('persists an explicit status transition and replays its event command', async () => {
-  const result = await runtime.runPromise(eventWorkflow)
-
-  assert.equal(result.applicationStatus, 'technical_screen')
-  assert.equal(result.applicationVersion, 2)
-  assert.equal(result.firstReplayed, false)
-  assert.equal(result.replayed, true)
-  assert.equal(result.eventIdsMatch, true)
-  assert.equal(result.conflictTag, 'RegistryConflictError')
-  assert.deepEqual(result.storedEventOperationIds, ['service:event:1'])
-
-  const receipts = await harness.query<{ operationId: string }>(
-    `select operation_id as operationId
-       from command_receipts
-      where operation_id = ?1`,
-    ['service:event:1']
+test('runs scheduled listing checks through the separate one-shot service', async () => {
+  const created = await runtime.runPromise(
+    ApplicationsService.pipe(
+      Effect.flatMap((applications) =>
+        applications.create(applicationInput('scheduled-runner'))
+      )
+    )
   )
-  assert.deepEqual(receipts, [{ operationId: 'service:event:1' }])
+  const scheduledRuntime = makeScheduledRunnerTestRuntime(harness.database)
+
+  try {
+    const first = await scheduledRuntime.runPromise(
+      ScheduledListingChecksRunner.pipe(
+        Effect.flatMap((runner) =>
+          runner.runOnce({ limit: 5, mode: 'archive_eligible' })
+        )
+      )
+    )
+    const second = await scheduledRuntime.runPromise(
+      ScheduledListingChecksRunner.pipe(
+        Effect.flatMap((runner) =>
+          runner.runOnce({ limit: 5, mode: 'archive_eligible' })
+        )
+      )
+    )
+
+    assert.equal(first.run?.state, 'completed')
+    assert.equal(first.run?.selectedCount, 1)
+    assert.equal(first.checks.at(0)?.applicationId, created.id)
+    assert.equal(second.run, null)
+    assert.deepEqual(second.checks, [])
+  } finally {
+    await scheduledRuntime.dispose()
+  }
 })
 
-test('ingests local findings idempotently and applies archival policy on the backend', async () => {
+test('persists notes idempotently and issues their activity on the backend', async () => {
   const result = await runtime.runPromise(
     Effect.gen(function* () {
       const applications = yield* ApplicationsService
-      const listingChecks = yield* ListingChecksService
-      const application = yield* applications.upsert(
-        makeApplicationInput('local-finding')
-      )
-      const input = {
-        expectedCount: 1,
-        finalBatch: true,
-        findings: [
-          {
-            applicationId: application.id,
-            canonicalUrl: application.canonicalUrl,
-            observation: {
-              checkedAt: recordedAt,
-              checkerVersion: 'test-local',
-              confidence: 'confirmed' as const,
-              contentHash: null,
-              evidence: [
-                {
-                  code: 'provider_api',
-                  detail: 'Provider confirms the posting is closed.',
-                  sourceUrl: application.canonicalUrl,
-                },
-              ],
-              finalUrl: application.canonicalUrl,
-              httpStatus: 410,
-              outcome: 'closed' as const,
-              provider: 'test-provider',
-              reasonCode: 'provider_closed' as const,
-              requestedUrl: application.canonicalUrl,
-            },
-            operationId: 'local-run:application:1',
-            target: {
-              company: application.company,
-              role: application.role,
-              url: application.canonicalUrl,
-            },
-          },
-        ],
-        mode: 'archive_eligible' as const,
-        runId: 'local-run',
-        startedAt: recordedAt,
+      const annotations = yield* AnnotationsService
+      const activities = yield* ActivitiesService
+      const application = yield* applications.create(applicationInput('notes'))
+      const request = {
+        body: 'Follow up after the technical screen.',
+        kind: 'general' as const,
+        source: 'management',
+        idempotencyKey: 'note-1',
       }
-      const first = yield* listingChecks.submitFindings(input)
-      const replay = yield* listingChecks.submitFindings(input)
-      return { first, replay }
+      const first = yield* annotations.addNote(application.id, request)
+      const replay = yield* annotations.addNote(application.id, request)
+      const stored = yield* annotations.list(application.id)
+      const history = yield* activities.listByApplication(application.id)
+      return { first, history, replay, stored }
     })
   )
 
-  assert.equal(result.first.archivedCount, 1)
-  assert.equal(result.first.run.state, 'completed')
-  assert.equal(result.first.run.checkedCount, 1)
-  assert.equal(result.replay.replayedCount, 1)
-  assert.equal(result.replay.run.checkedCount, 1)
-  assert.deepEqual(result.replay.rejected, [])
+  assert.equal(result.first.replayed, false)
+  assert.equal(result.replay.replayed, true)
+  assert.equal(result.replay.note.id, result.first.note.id)
+  assert.deepEqual(
+    result.stored.notes.map(({ id }) => id),
+    [result.first.note.id]
+  )
+  assert.deepEqual(
+    result.history.items.map(({ kind }) => kind),
+    ['application_created', 'note_added']
+  )
 })
 
-test('manually resolves suspected listings as open or closed with an audit check', async () => {
+test('keeps content payloads as exact opaque bytes across revision history', async () => {
+  const bytes = new TextEncoder().encode(
+    JSON.stringify({ sections: [{ type: 'summary', value: 'Exact bytes' }] })
+  )
   const result = await runtime.runPromise(
     Effect.gen(function* () {
       const applications = yield* ApplicationsService
-      const listingChecks = yield* ListingChecksService
-      const openCandidate = yield* applications.upsert(
-        makeApplicationInput('manual-open-review')
+      const content = yield* ContentEntriesService
+      const application = yield* applications.create(
+        applicationInput('content')
       )
-      const closedCandidate = yield* applications.upsert(
-        makeApplicationInput('manual-closed-review')
+      const entry = yield* content.ensure(application.id, {
+        kind: 'cv',
+        locale: 'en',
+      })
+      const request = {
+        contractId: '@cv/contracts/cv-document',
+        contractVersion: '1',
+        expectedVersion: entry.version,
+        operationId: 'revision-1',
+        payload: { bytes, mediaType: 'application/json' },
+        source: 'ai' as const,
+      }
+      const appended = yield* content.appendRevision(
+        application.id,
+        entry.id,
+        request
       )
-
-      const makeSuspected = (
-        application: typeof openCandidate,
-        runId: string
-      ) =>
-        listingChecks.submitFindings({
-          expectedCount: 1,
-          finalBatch: true,
-          findings: [
-            {
-              applicationId: application.id,
-              canonicalUrl: application.canonicalUrl,
-              observation: {
-                checkedAt: recordedAt,
-                checkerVersion: 'test-local',
-                confidence: 'medium',
-                contentHash: null,
-                evidence: [
-                  {
-                    code: 'closed_copy',
-                    detail: 'The page says applications are closed.',
-                    sourceUrl: application.canonicalUrl,
-                  },
-                ],
-                finalUrl: application.canonicalUrl,
-                httpStatus: 200,
-                outcome: 'closed',
-                provider: 'test-provider',
-                reasonCode: 'explicit_closed_text',
-                requestedUrl: application.canonicalUrl,
-              },
-              operationId: `${runId}:finding`,
-              target: {
-                company: application.company,
-                role: application.role,
-                url: application.canonicalUrl,
-              },
-            },
-          ],
-          mode: 'report',
-          runId,
-          startedAt: recordedAt,
-        })
-
-      yield* makeSuspected(openCandidate, 'manual-open-candidate')
-      yield* makeSuspected(closedCandidate, 'manual-closed-candidate')
-      const suspectedOpen = yield* applications.find(openCandidate.id)
-      const suspectedClosed = yield* applications.find(closedCandidate.id)
-
-      const opened = yield* listingChecks.resolveAvailability(
-        suspectedOpen.id,
+      const replayed = yield* content.appendRevision(
+        application.id,
+        entry.id,
+        request
+      )
+      const loaded = yield* content.readRevision(
+        application.id,
+        entry.id,
+        appended.revision.id
+      )
+      const approved = yield* content.approveRevision(
+        application.id,
+        entry.id,
         {
-          expectedVersion: suspectedOpen.version,
-          operationId: 'manual-review:open',
-          resolution: 'open',
+          expectedVersion: appended.entry.version,
+          revisionId: appended.revision.id,
         }
       )
-      const closeInput = {
-        expectedVersion: suspectedClosed.version,
-        operationId: 'manual-review:closed',
-        resolution: 'closed' as const,
-      }
-      const closed = yield* listingChecks.resolveAvailability(
-        suspectedClosed.id,
-        closeInput
-      )
-      const replayed = yield* listingChecks.resolveAvailability(
-        suspectedClosed.id,
-        closeInput
-      )
-      const conflictingReplay = yield* listingChecks
-        .resolveAvailability(suspectedClosed.id, {
-          ...closeInput,
-          resolution: 'open',
-        })
-        .pipe(Effect.flip)
-      return {
-        closed,
-        conflictingReplay,
-        opened,
-        replayed,
-        suspectedClosed,
-        suspectedOpen,
-      }
+      return { appended, approved, loaded, replayed }
     })
   )
 
-  assert.equal(result.suspectedOpen.listingAvailability, 'suspected_closed')
-  assert.equal(result.suspectedClosed.listingAvailability, 'suspected_closed')
-  assert.equal(result.opened.application.listingAvailability, 'open')
-  assert.equal(result.opened.application.listingClosedCandidateAt, null)
-  assert.equal(result.opened.application.listingConsecutiveClosedChecks, 0)
-  assert.equal(result.opened.check.provider, 'manual-review')
-  assert.equal(result.opened.check.confidence, 'confirmed')
-  assert.equal(result.closed.application.listingAvailability, 'closed')
-  assert.equal(result.closed.application.applicationStatus, 'archived')
-  assert.equal(result.closed.archived, true)
-  assert.equal(result.replayed.replayed, true)
-  assert.equal(result.replayed.check.id, result.closed.check.id)
-  assert.equal(result.conflictingReplay._tag, 'RegistryConflictError')
+  assert.equal(result.appended.revision.revisionNumber, 1)
+  assert.equal(result.replayed.revision.id, result.appended.revision.id)
+  assert.deepEqual(result.loaded.bytes, bytes)
+  assert.equal(result.approved.entry.state, 'approved')
+  assert.equal(
+    result.approved.entry.approvedRevisionId,
+    result.appended.revision.id
+  )
 })
 
-test('keeps completed run counts accurate when durable batches arrive out of order', async () => {
+test('restores a rejection-disabled publication only after its current PDF is ready', async () => {
+  const pdf = new TextEncoder().encode('%PDF ready after rejection')
   const result = await runtime.runPromise(
     Effect.gen(function* () {
       const applications = yield* ApplicationsService
-      const listingChecks = yield* ListingChecksService
-      const firstApplication = yield* applications.upsert(
-        makeApplicationInput('out-of-order-first')
+      const content = yield* ContentEntriesService
+      const publications = yield* CvPublicationsService
+      const pdfs = yield* PdfArtifactsService
+      const application = yield* applications.create(
+        applicationInput('publication-restore')
       )
-      const secondApplication = yield* applications.upsert(
-        makeApplicationInput('out-of-order-second')
-      )
-      const finding = (
-        application: typeof firstApplication,
-        operationId: string
-      ) => ({
-        applicationId: application.id,
-        canonicalUrl: application.canonicalUrl,
-        observation: {
-          checkedAt: recordedAt,
-          checkerVersion: 'test-local',
-          confidence: 'high' as const,
-          contentHash: null,
-          evidence: [
-            {
-              code: 'application_action',
-              detail: 'The application action is available.',
-              sourceUrl: application.canonicalUrl,
-            },
-          ],
-          finalUrl: application.canonicalUrl,
-          httpStatus: 200,
-          outcome: 'open' as const,
-          provider: 'test-provider',
-          reasonCode: 'working_application_path' as const,
-          requestedUrl: application.canonicalUrl,
-        },
-        operationId,
-        target: {
-          company: application.company,
-          role: application.role,
-          url: application.canonicalUrl,
-        },
+      const entry = yield* content.ensure(application.id, {
+        kind: 'cv',
+        locale: 'en',
       })
-      const common = {
-        expectedCount: 3,
-        mode: 'report' as const,
-        runId: 'out-of-order-run',
-        startedAt: recordedAt,
+      const appended = yield* content.appendRevision(application.id, entry.id, {
+        contractId: '@cv/contracts/cv-document',
+        contractVersion: '1',
+        expectedVersion: entry.version,
+        operationId: 'publication-restore-revision',
+        payload: {
+          bytes: new TextEncoder().encode('{"publication":"restore"}'),
+          mediaType: 'application/json',
+        },
+        source: 'human',
+      })
+      const approved = yield* content.approveRevision(
+        application.id,
+        entry.id,
+        {
+          expectedVersion: appended.entry.version,
+          revisionId: appended.revision.id,
+        }
+      )
+      const staged = yield* publications.stage(application.id, entry.id, {
+        operationId: crypto.randomUUID(),
+        expectedContentVersion: approved.entry.version,
+        publicBaseUrl: 'https://cv.example.test/c',
+        revisionId: appended.revision.id,
+      })
+      yield* publications.setAvailability(application.id, entry.id, {
+        operationId: crypto.randomUUID(),
+        enabled: true,
+        expectedPublicationVersion: staged.publicationVersion,
+      })
+      const pending = yield* pdfs.ensureAttempt(
+        RegistryEventSchema.cases.PdfGenerationRequested.make({
+          applicationId: application.id,
+          contentEntryId: entry.id,
+          contentRevisionId: staged.currentRevisionId,
+          correlationId: 'publication-restore-pdf',
+          cvLinkId: staged.id,
+          eventId: 'publication-restore-pdf',
+          occurredAt: staged.updatedAt,
+          publicationVersion: staged.publicationVersion,
+          version: 1,
+        })
+      )
+
+      const rejected = yield* applications.update(application.id, {
+        applicationStatus: 'rejected',
+        expectedVersion: application.version,
+        idempotencyKey: 'publication-rejected',
+      })
+      yield* publications.disableForApplication(
+        application.id,
+        'application_rejected'
+      )
+      const reopened = yield* applications.update(application.id, {
+        applicationStatus: 'preparing',
+        expectedVersion: rejected.application.version,
+        idempotencyKey: 'publication-reopened',
+      })
+      const restoredWhilePending = yield* publications.restoreAfterRejection(
+        application.id
+      )
+      const linkWhilePending = yield* publications.findByEntry(
+        application.id,
+        entry.id
+      )
+
+      const ready = yield* pdfs.complete(
+        application.id,
+        pending.id,
+        'renderer-v1',
+        pdf
+      )
+      const restoredWhenReady = yield* publications.restoreAfterRejection(
+        application.id
+      )
+      const restoredLink = yield* publications.findByEntry(
+        application.id,
+        entry.id
+      )
+      return {
+        linkWhilePending,
+        ready,
+        reopened,
+        restoredLink,
+        restoredWhenReady,
+        restoredWhilePending,
       }
-      const final = yield* listingChecks.submitFindings({
-        ...common,
-        finalBatch: true,
-        findings: [finding(secondApplication, 'out-of-order:second')],
-      })
-      yield* Effect.sleep(Duration.millis(5))
-      const replayedFinal = yield* listingChecks.submitFindings({
-        ...common,
-        finalBatch: true,
-        findings: [finding(secondApplication, 'out-of-order:second')],
-      })
-      const earlier = yield* listingChecks.submitFindings({
-        ...common,
-        finalBatch: false,
-        findings: [finding(firstApplication, 'out-of-order:first')],
-      })
-      return { earlier, final, replayedFinal }
     })
   )
 
-  assert.equal(result.final.run.state, 'completed')
-  assert.equal(result.final.run.checkedCount, 1)
-  assert.equal(result.final.run.errorCount, 2)
-  assert.equal(result.replayedFinal.replayedCount, 1)
-  assert.equal(
-    result.replayedFinal.run.completedAt,
-    result.final.run.completedAt
-  )
-  assert.equal(result.earlier.run.state, 'completed')
-  assert.equal(result.earlier.run.checkedCount, 2)
-  assert.equal(result.earlier.run.errorCount, 1)
-})
-
-test('replays note and capture commands and rejects operation conflicts', async () => {
-  const result = await runtime.runPromise(noteAndCaptureWorkflow)
-
-  assert.equal(result.noteReplayed, false)
-  assert.equal(result.replayedNote, true)
-  assert.equal(result.noteIdsMatch, true)
-  assert.equal(result.noteConflictTag, 'RegistryConflictError')
-  assert.equal(result.captureReplayed, false)
-  assert.equal(result.replayedCapture, true)
-  assert.equal(result.captureIdsMatch, true)
-  assert.equal(result.storedNoteCount, 1)
-  assert.equal(result.storedCaptureCount, 1)
-
-  const receipts = await harness.query<{ count: number }>(
-    `select count(*) as count
-       from command_receipts
-      where operation_id in (?1, ?2)`,
-    ['service:note:1', 'service:capture:1']
-  )
-  assert.deepEqual(receipts, [{ count: 2 }])
-})
-
-test('converts stored compensation through an injected FX service', async () => {
-  const result = await runtime.runPromise(compensationWorkflow)
-
-  assert.equal(result.originalCurrency, 'EUR')
-  assert.deepEqual(result.conversion, {
-    currencyCode: 'USD',
-    maximumMinor: 24_000_000,
-    minimumMinor: 20_000_000,
-    observedAt: '2026-07-12T12:00:00.000Z',
-    provider: 'service-integration',
-    rate: 2,
-  })
-})
-
-test('resolves concurrent identical note operations to one write and one replay', async () => {
-  const result = await runtime.runPromise(concurrentNoteWorkflow)
-
-  assert.deepEqual([...result.replayed].sort(), [false, true])
-  assert.equal(result.noteIds[0], result.noteIds[1])
-  assert.equal(result.storedNoteCount, 1)
-  assert.equal(result.storedNoteEventCount, 1)
-
-  const receipts = await harness.query<{ count: number }>(
-    `select count(*) as count
-       from command_receipts
-      where operation_id = ?1`,
-    ['service:concurrent-note']
-  )
-  assert.deepEqual(receipts, [{ count: 1 }])
-})
-
-test('converges concurrent captures on one job and replays each operation', async () => {
-  const result = await runtime.runPromise(concurrentCapturesWorkflow)
-
-  assert.equal(result.firstReplayed, false)
-  assert.equal(result.secondReplayed, false)
-  assert.equal(result.applicationIds[0], result.applicationIds[1])
-  assert.notEqual(result.captureIds[0], result.captureIds[1])
-  assert.equal(result.replayed, true)
-  assert.equal(result.replayCaptureId, result.captureIds[0])
-  assert.equal(result.storedCaptureCount, 2)
-
-  const applications = await harness.query<{ count: number }>(
-    'select count(*) as count from applications where job_key = ?1',
-    ['service:concurrent-capture']
-  )
-  const receipts = await harness.query<{ operationId: string }>(
-    `select operation_id as operationId
-       from command_receipts
-      where operation_id like 'service:capture-race:%'
-      order by operation_id`
-  )
-  assert.deepEqual(applications, [{ count: 1 }])
-  assert.deepEqual(receipts, [
-    { operationId: 'service:capture-race:a' },
-    { operationId: 'service:capture-race:b' },
-  ])
-})
-
-test('keeps child replacements consistent with the concurrent job-key winner', async () => {
-  const results = await runtime.runPromise(concurrentUpsertsWorkflow)
-
-  assert.equal(results.length, 6)
-  for (const result of results) {
-    assert.equal(result.childStateMatchesWinner, true)
-    assert.deepEqual(result.responseApplicationIds, [
-      result.storedApplicationId,
-      result.storedApplicationId,
-    ])
-  }
-
-  const applications = await harness.query<{ count: number }>(
-    `select count(*) as count
-       from applications
-      where job_key like 'service:concurrent-upsert-%'`
-  )
-  assert.deepEqual(applications, [{ count: 6 }])
-})
-
-test('merges non-destructive captures while explicit upserts still replace fields', async () => {
-  const result = await runtime.runPromise(captureMergeWorkflow)
-
-  assert.equal(result.captured.id, result.existingId)
-  assert.equal(result.captured.location, 'Existing enriched location')
-  assert.equal(result.captured.sourceJobId, 'existing-source-job-id')
-  assert.equal(result.captured.targetStage, 'verify_first')
-  assert.equal(result.promoted.id, result.backlogId)
-  assert.equal(result.promoted.targetStage, 'apply_next')
-  assert.deepEqual(result.explicitlyReplaced, {
-    location: null,
-    sourceJobId: null,
-    targetStage: 'secondary',
-  })
-})
-
-test('uses database defaults for applications and capture-created applications', async () => {
-  const result = await runtime.runPromise(defaultsWorkflow)
-
-  assert.deepEqual(result.created, {
-    applicationStatus: 'not_started',
-    category: null,
-    fitScore: null,
-    targetStage: 'backlog',
-    version: 1,
-  })
-  assert.equal(result.captureStatus, 'preparing')
-})
-
-test('preserves omitted patch fields and clears explicit nulls', async () => {
-  const result = await runtime.runPromise(patchNullabilityWorkflow)
-
-  assert.equal(result.partiallyUpdated.fitScore, 42)
-  assert.equal(result.partiallyUpdated.category, 'Backend')
-  assert.equal(result.partiallyUpdated.followUpAt, '2026-07-20T12:00:00.000Z')
-  assert.equal(result.partiallyUpdated.personalPriority, 'high')
-  assert.deepEqual(result.partiallyUpdated.details, {
-    applyFromAbroad: 'Yes',
-    countryCode: 'JP',
-    employmentType: 'full-time',
-    languageRequirements: ['English'],
-    region: 'Kanto',
-    relocationSupport: 'Available',
-    remoteRegion: 'Worldwide',
-    residenceRequirement: null,
-    timezoneOverlap: 'JST overlap',
-    visaSponsorship: 'Case by case',
-    workAuthorization: 'Not required when applying',
-    workMode: 'remote',
-  })
-  assert.deepEqual(result.cleared, {
-    category: null,
-    details: null,
-    fitScore: 42,
-    followUpAt: null,
-    personalPriority: null,
-  })
-})
-
-test('allows exactly one winner in a concurrent optimistic-version race', async () => {
-  const result = await runtime.runPromise(optimisticPatchRaceWorkflow)
-
-  assert.equal(result.successCount, 1)
-  assert.deepEqual(result.failureTags, ['RegistryConflictError'])
-  assert.equal(result.currentVersion, result.initialVersion + 1)
-  assert.ok(
-    result.currentStatus === 'applied' || result.currentStatus === 'rejected'
-  )
-})
-
-test('commits one explicit lifecycle transition and replays its winner', async () => {
-  const result = await runtime.runPromise(lifecycleRaceWorkflow)
-
-  assert.equal(result.successCount, 1)
-  assert.deepEqual(result.failureTags, ['RegistryConflictError'])
-  assert.equal(result.currentVersion, result.initialVersion + 1)
-  assert.ok(
-    result.currentStatus === 'applied' || result.currentStatus === 'rejected'
-  )
-  assert.equal(result.replayed, true)
-  assert.deepEqual(result.storedOperationIds, [result.winningOperationId])
-})
-
-test('rolls back every write when an atomic operation receipt cannot commit', async () => {
-  const result = await runtime.runPromise(rollbackWorkflow(harness.database))
-
-  assert.equal(result.failureTag, 'RegistryDatabaseError')
-  assert.equal(result.noteCount, 0)
-  assert.equal(result.receiptCount, 0)
-  assert.equal(result.eventCount, 0)
-  assert.equal(result.afterRevision, result.beforeRevision)
+  assert.equal(result.reopened.application.applicationStatus, 'preparing')
+  assert.equal(result.restoredWhilePending, 0)
+  assert.equal(result.linkWhilePending.enabled, false)
+  assert.equal(result.ready.status, 'ready')
+  assert.equal(result.restoredWhenReady, 1)
+  assert.equal(result.restoredLink.enabled, true)
 })

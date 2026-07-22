@@ -1,0 +1,36 @@
+{
+  "name": "@cv/test-infrastructure",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./minio": {
+      "types": "./dist/minio.d.ts",
+      "default": "./dist/minio.js"
+    },
+    "./nats": {
+      "types": "./dist/nats.d.ts",
+      "default": "./dist/nats.js"
+    },
+    "./postgres": {
+      "types": "./dist/postgres.d.ts",
+      "default": "./dist/postgres.js"
+    }
+  },
+  "dependencies": {
+    "@nats-io/jetstream": "3.4.0",
+    "@nats-io/transport-node": "3.4.0",
+    "@testcontainers/postgresql": "11.14.0",
+    "testcontainers": "11.14.0"
+  }
+}

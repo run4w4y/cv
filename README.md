@@ -1,216 +1,110 @@
-# CV Workspace
+# CV workspace
 
-This repository is an Nx/Bun workspace for building and operating a static,
-content-driven CV site. It separates a reusable content pipeline from the
-concrete CV application that consumes it:
+Personal application-registry and tailored-CV system. Stateful services run on
+the Nomad/Consul/Vault cluster; Cloudflare remains the DNS, Tunnel, Access,
+analytics, CDN, and public-CV edge.
 
-- the workspace libraries discover, compose, validate, encrypt, and publish
-  content artifacts;
-- `apps/cv` owns the CV schema, rendering, routes, i18n, and print layout;
-- optional private profiles are delivered from static hosting as encrypted
-  browser-opened payloads;
-- analytics are derived from Cloudflare request data through a small Worker, so
-  the public CV does not need client-side analytics scripts;
-- application campaigns can write to a synchronized, event-backed Cloudflare
-  D1 registry through a separate authenticated Worker and offline-first client;
-- production infrastructure is described with Terraform/Terragrunt for
-  Infisical, Cloudflare, and Grafana.
+The frozen legacy profile remains on its existing Cloudflare Pages deployment.
+The `cv-public` Worker overlays only `/c/*`, so the Pages deployment and all
+other routes remain untouched.
 
-The original deployment keeps authored CV content in a separate private content
-repository. Forks can use the checked-in fixture content for development, then
-point `CONTENT_ROOT` at their own content repository when they are ready to
-publish.
+## Runtime surfaces
 
-## What This Solves
+- `apps/application-registry-api` is the single Bun API/BFF service. It uses
+  PostgreSQL, MinIO, and Cloudflare GraphQL analytics and exposes the public
+  publication resolver consumed by `cv-public` over the Tunnel.
+- `apps/application-registry-listing-check-runner` is a one-shot Effect/Bun
+  program started by a periodic Nomad job.
+- `apps/application-registry-pdf-worker` consumes publication and PDF-request
+  events one at a time, renders with Playwright/Chromium, stores the PDF in
+  MinIO, updates PostgreSQL, and emits completion or failure events.
+- `apps/application-registry` is the shared management React application;
+  `apps/application-registry-desktop` is its Electron/Codex host.
+- `apps/cv` is the retained Next.js/OpenNext Cloudflare Worker for `/c/*`.
 
-A normal public CV site is easy to host, but awkward to tailor. You often want a
-clean public version, private role-specific versions, downloadable PDFs, and
-some visibility into which shared links are being viewed, without moving the CV
-behind an application server.
+PostgreSQL and MinIO users and buckets, the NATS server and authorization,
+shared Consul intentions, Vault secrets, and global sidecar defaults belong to
+the adjacent `~/infrastructure` repository. This repository owns the database
+migrations and JetStream application topology alongside each CV application
+image, its Nomad Pack, project-specific Cloudflare policy, and release workflow.
 
-This workspace keeps the deployed site static:
+## Storage and messaging
 
-- public pages are built as Astro static output;
-- private profile data and private files are encrypted at build time;
-- each private link carries a compact bearer token for one encrypted profile;
-- Cloudflare logs provide analytics data without adding browser trackers;
-- Grafana reads sanitized analytics tables from a Cloudflare Worker connector.
+- PostgreSQL is the sole registry database. Its Drizzle history starts from one
+  clean baseline in `libs/application-registry/entity/drizzle`.
+- MinIO is the sole object store for reviewed facts, source artifacts, and
+  generated PDFs.
+- NATS JetStream is the durable fan-out transport for versioned registry domain
+  events. Its `REGISTRY_EVENTS` stream and `registry-pdf-worker` consumer are
+  Terraform-managed; runtime applications only publish or bind. PostgreSQL
+  remains the source of application and artifact state.
+- `tools/application-registry-migration` is the intentionally temporary,
+  one-time D1-export importer. Remove it and the final Terraform `removed`
+  block after the production import has been verified.
 
-## Architecture
+There is no R2 importer because the retired R2 buckets contain no application
+data.
 
-- `apps/cv`: Astro application for the concrete CV experience. It owns the CV
-  content contract, schema registry, app-specific composition, React/Astro
-  rendering, private unlock UI, public routes, and print/PDF presentation.
-- `apps/analytics-connector`: Cloudflare Worker that queries Cloudflare
-  Analytics GraphQL, sanitizes the result, decodes private audience ids when
-  configured, and exposes Grafana-friendly JSON endpoints.
-- `apps/application-registry-api`: authenticated Effect `HttpApi` Worker backed
-  by D1. It translates HTTP requests into registry service calls and does not
-  own persistence or business rules.
-- `libs/application-registry/entity`: canonical TS-first Drizzle tables and
-  inferred models, plus select/insert/update Effect codecs derived with
-  Drizzle's official Effect integration.
-- `libs/application-registry/crud`: database-operation contracts at the package
-  root, D1/Drizzle implementations under `/d1`, and reusable Miniflare test
-  support.
-- `libs/application-registry/service`: database-independent service contracts at
-  the package root and registry workflow implementations under `/live`, covering
-  replay/conflict handling, explicit lifecycle changes, and pagination.
-- `libs/application-registry/fx`: Frankfurter exchange-rate access plus
-  isolate-local and D1-backed 24-hour caching.
-- `libs/application-registry/api-contract`: Effect `HttpApi`, transport schemas,
-  errors, authorization declaration, and OpenAPI document.
-- `libs/application-registry/api-client`: typed Effect client and layer derived
-  directly from the registry `HttpApi` declaration.
-- `libs/content-core`: shared content vocabulary, schema primitives, variables,
-  overlays, and file-index types. It does not define the CV app's final content
-  schema.
-- `libs/content-composer`: generic repository discovery and composition helpers
-  for TS/JS/MDX content modules under profile/locale folders.
-- `libs/content-build`: build-time artifact generation, public id mangling,
-  private runtime inference, static file copying, encrypted private file
-  emission, and private link helpers.
-- `libs/content-astro`: Astro integration that wires the content pipeline into
-  Vite virtual modules and emits generated content files during dev/build.
-- `libs/private-content-*`: crypto, token, runtime manifest, config, and browser
-  session packages for static private content.
-- `libs/analytics-*` and `libs/cloudflare-analytics-client`: sanitized analytics
-  data model, Cloudflare client, and Grafana table adapter.
-- `libs/ui`, `libs/color-scheme`, `libs/browser-stream-save`, and
-  `libs/handlebars-css-template`: small reusable UI/runtime utilities used by
-  the app and tools.
-- `tools/*`: operator tools for content declaration generation, private link
-  minting, PDF export, application-campaign drafting, and querying/updating the
-  synchronized application registry.
-- `terraform/*`: Terragrunt live stacks and Terraform modules for Infisical
-  secret folders, Cloudflare Pages/D1/routing resources, and Grafana dashboards.
+## Local development
 
-## Workspace Boundary
+Enter the repository's zsh/direnv/Nix shell and install the workspaces:
 
-The key boundary is that most packages are intentionally not CV-schema-aware.
-They know how to discover a content repository, load modules, merge profile
-overrides, generate static artifacts, encrypt private runtime payloads, and
-serve those artifacts to an app. They do not decide what a CV section is, what
-fields an experience item has, or how any section should render.
-
-`apps/cv` owns those app-specific decisions through:
-
-- `apps/cv/src/cv-content/contract.ts`: default locale/profile, schema version,
-  authoring module, and composition entrypoint;
-- `apps/cv/src/cv-content/schema/*`: the concrete CV content schemas;
-- `apps/cv/src/cv-content/compose/*`: how discovered sections become CV data;
-- `apps/cv/src/components/cv/*`: rendering for the final CV document;
-- `apps/cv/src/pages/*`: public and private Astro routes.
-
-If you fork this as a different portfolio or document site, this is the part you
-replace first. The content, private-runtime, analytics, and tooling packages can
-stay mostly as platform code.
-
-## Local Development
-
-Prerequisites are Bun, Nx through the workspace install, and either a normal
-local toolchain or the provided Nix dev shell. The `.envrc` file loads
-`.env.local`, disables Astro telemetry, tries to export Infisical secrets when
-available, and supplies deterministic local defaults for `CONTENT_ID_SALT` and
-`PRIVATE_CONTENT_AUDIENCE_KEY`.
-
-Run against the checked-in fixture content:
-
-```bash
-direnv allow
+```sh
 bun install
-CONTENT_ROOT="$PWD/fixtures/cv-content-e2e" bunx nx run cv:dev
 ```
 
-For your own content, point `CONTENT_ROOT` at a repository root that contains
-`content.config.ts`:
+Run the Bun registry and the public CV renderer in separate shells:
 
-```bash
-CONTENT_ROOT=/path/to/your-content bunx nx run cv:dev
+```sh
+bun x nx run application-registry-api:build
+bun apps/application-registry-api/dist/main.js
+bun x nx run cv:dev
 ```
 
-Private profile builds and local private link minting also need
-`PRIVATE_CONTENT_ROOT_KEY`. Use a 32-byte root key encoded in the format accepted
-by `@cv/private-content-crypto`, for example the `base64url:...` form used by
-the fixture and Terraform-generated production secret.
+The API reads its PostgreSQL, MinIO, registry-token, analytics, and server
+configuration from the variables documented in
+`apps/application-registry-api/README.md`. The CV Worker reads the API origin
+from `CV_PUBLIC_RESOLVER_URL`.
 
-Useful commands:
+For a self-contained public-renderer preview:
 
-```bash
-bunx nx run cv:build
-bunx nx run cv:test:e2e
-bunx nx run analytics-connector:build
-bunx nx run pdf-export:public
-bunx nx run private-content-link:link -- \
-  --profile frontend \
-  --audience acme \
-  --locale en \
-  --base-url https://cv.example.com
-bunx nx run content-types:generate
-bunx nx run application-registry:registry -- application list
+```sh
+bun x nx run cv:dev:fixture
 ```
 
-See [apps/cv/README.md](apps/cv/README.md) for the app content model, route
-shape, private unlock flow, and PDF behavior.
+## Tests
 
-## Deployment Model
+`@cv/test-infrastructure` supplies pinned PostgreSQL, MinIO, and NATS
+Testcontainers. Infrastructure-backed suites run with Node's test runner; the
+registry system suite launches the production Bun bundle and shares one
+PostgreSQL/MinIO pair across its API scenarios.
 
-The production setup is designed around three managed services:
+```sh
+bun run quality:biome
+bun x nx run-many -t typecheck test:unit --parallel=6
+bun x nx run application-registry-api:test:integration
+bun x nx run application-registry-events-nats:test:integration
+bun x nx run application-registry-crud:test:integration
+bun x nx run cv:test:e2e
+```
 
-- Infisical stores build, deploy, analytics, and Grafana secrets under `/cv/*`.
-  Terraform creates the folder shape and generated secrets such as
-  `CONTENT_ID_SALT`, `PRIVATE_CONTENT_AUDIENCE_KEY`,
-  `PRIVATE_CONTENT_ROOT_KEY`, and `GRAFANA_CONNECTOR_TOKEN`.
-- Cloudflare hosts the static CV through Pages, the analytics connector Worker,
-  and the application registry Worker/D1 database. Terraform creates the
-  resources and enables the Workers' `workers.dev` endpoints; Wrangler deploys
-  Worker code, bindings, migrations, and runtime secrets in CI.
-- Grafana reads the analytics and application-registry Workers through separate
-  Infinity datasources. Terraform provisions both folders and dashboards from
-  `terraform/grafana/dashboards/cv-analytics.json.tftpl` and
-  `terraform/grafana/dashboards/cv-applications.json.tftpl`.
+## Deployment
 
-The included GitHub workflows are split by responsibility:
+The safe cutover order is:
 
-- `CI` runs formatting, linting, typechecking, unit tests, migration drift
-  detection, Miniflare integration suites for registry persistence, services,
-  and API behavior, Worker builds/e2e tests, and browser e2e tests against
-  checked-in fixture content.
-- `Deploy CV` fetches Infisical secrets, checks out the private content
-  repository, builds the static app, exports public PDFs, publishes release PDF
-  assets, and deploys Cloudflare Pages.
-- `Deploy Analytics` builds and deploys the Cloudflare Worker when the analytics
-  project is affected or the workflow is run manually.
-- `Deploy Application Registry` builds the Worker, applies D1 migrations,
-  uploads its bearer token, and deploys the authenticated API.
+1. apply the shared infrastructure changes from `~/infrastructure` and verify
+   PostgreSQL, MinIO, NATS, Vault credentials, and reduced sidecar allocations;
+2. apply `terraform/live/prod/jetstream` after the NATS service is healthy;
+3. deploy the disabled Nomad API, listing-check runner, and PDF event worker
+   from this repository, then verify them on the Tunnel origin;
+4. freeze writes to D1, export it once, import and validate PostgreSQL with
+   `tools/application-registry-migration`;
+5. enable the API/BFF and background jobs, configure the public Worker with
+   `CV_PUBLIC_RESOLVER_URL`, and apply the Cloudflare Access and `/c/*` route
+   overlay changes;
+6. remove the old registry Worker deployment, the temporary D1 importer, and
+   the D1 state-transition block after the cutover is accepted.
 
-Forks should review `.github/workflows/deploy-cv.yml` before production use. The
-content checkout step needs to point at the fork's content repository or another
-private source that matches the `apps/cv` content contract.
-
-See [terraform/README.md](terraform/README.md) for the exact bootstrap order,
-secret folders, Cloudflare permissions, and Grafana prerequisites.
-
-## Documentation Map
-
-- [apps/cv/README.md](apps/cv/README.md): concrete CV app, content schema,
-  routes, private access, and PDF export.
-- [apps/analytics-connector/README.md](apps/analytics-connector/README.md):
-  Worker configuration and Grafana endpoints.
-- [apps/application-registry-api/README.md](apps/application-registry-api/README.md):
-  D1 schema, Worker API, local development, and deployment ownership.
-- [terraform/README.md](terraform/README.md): Infisical, Cloudflare, and Grafana
-  infrastructure.
-- [tools/content-types/README.md](tools/content-types/README.md): generate
-  portable `virtual:content` declarations for a content repository.
-- [tools/private-content-link/README.md](tools/private-content-link/README.md):
-  mint private audience/profile links.
-- [tools/pdf-export/README.md](tools/pdf-export/README.md): generate public and
-  private PDFs with Playwright.
-- [tools/application-campaign/README.md](tools/application-campaign/README.md):
-  draft application campaign artifacts from a job posting.
-- [tools/application-registry/README.md](tools/application-registry/README.md):
-  cross-device registry CLI and durable outbox.
-
-Package-level READMEs under `libs/*` describe smaller library boundaries and
-public imports.
+Cloudflare DNS, Tunnel, Access, the public Worker, the frozen Pages site, and
+analytics intentionally remain. See `terraform/README.md` and the READMEs under
+`nomad/packs` for the concrete deployment contracts.

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
 import type {
-  UpdateManagedApplicationRequest,
-  UpdateManagedApplicationResponse,
+  UpdateApplicationRequest,
+  UpdateApplicationResponse,
 } from '@cv/application-registry-api-contract'
 import type { Application } from '@cv/application-registry-entity'
 import { useAtom, useAtomValue } from '@effect/atom-react'
@@ -21,16 +21,11 @@ afterEach(() => {
 const application: Application = {
   applicationStatus: 'not_started',
   appliedAt: null,
-  canonicalUrl: 'https://example.test/jobs/one',
-  category: null,
+  postingUrl: 'https://example.test/jobs/one',
   company: 'Example',
   createdAt: '2026-07-16T09:00:00.000Z',
-  details: null,
-  fitScore: null,
   followUpAt: null,
   id: 'application-1',
-  jobKey: 'web:one',
-  lastContactAt: null,
   listingAvailability: 'open',
   listingCheckedAt: '2026-07-16T09:30:00.000Z',
   listingClosedCandidateAt: null,
@@ -38,23 +33,15 @@ const application: Application = {
   listingConsecutiveClosedChecks: 0,
   listingReasonCode: null,
   location: null,
-  openStatus: null,
   personalPriority: null,
-  recommendedAction: null,
-  remotePolicy: null,
-  researchPriority: null,
   role: 'Staff Engineer',
-  source: 'web',
-  sourceConfidence: null,
-  sourceJobId: 'one',
   targetStage: 'apply_next',
-  technologyStack: null,
   updatedAt: '2026-07-16T09:30:00.000Z',
   updatedRevision: 2,
   version: 2,
 }
 
-const input: UpdateManagedApplicationRequest = {
+const input: UpdateApplicationRequest = {
   annualCompensation: {
     currencyCode: 'USD',
     maximumMinor: 16_000_000,
@@ -63,10 +50,9 @@ const input: UpdateManagedApplicationRequest = {
   applicationStatus: 'preparing',
   expectedVersion: 2,
   labels: ['Remote'],
-  operationId: 'management-operation-1',
 }
 
-const response: UpdateManagedApplicationResponse = {
+const response: UpdateApplicationResponse = {
   annualCompensation: input.annualCompensation ?? null,
   application: {
     ...application,
@@ -117,10 +103,11 @@ describe('application mutation atoms', () => {
     await waitFor(() =>
       expect(hook.result.current.application._tag).toBe('Success')
     )
-    let result: UpdateManagedApplicationResponse | undefined
+    let result: UpdateApplicationResponse | undefined
     await act(async () => {
       result = await hook.result.current.save({
         applicationId: application.id,
+        idempotencyKey: 'management-operation-1',
         input,
       })
     })
@@ -132,10 +119,9 @@ describe('application mutation atoms', () => {
 
     expect(result).toEqual(response)
     const patch = requests.find(({ method }) => method === 'PATCH')
-    expect(patch?.url).toEndWith(
-      '/api/registry/v1/applications/application-1/management'
-    )
+    expect(patch?.url).toEndWith('/api/registry/applications/application-1')
     expect(await patch?.json()).toEqual(input)
+    expect(patch?.headers.get('idempotency-key')).toBe('management-operation-1')
     expect(requests.filter(({ method }) => method === 'GET')).toHaveLength(2)
   })
 
@@ -167,6 +153,7 @@ describe('application mutation atoms', () => {
       try {
         await hook.result.current.save({
           applicationId: application.id,
+          idempotencyKey: 'management-operation-1',
           input,
         })
       } catch (reason) {

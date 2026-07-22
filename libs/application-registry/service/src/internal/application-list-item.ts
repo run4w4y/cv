@@ -52,13 +52,11 @@ const annualCompensationFrom = (
 }
 
 export const toApplicationListItem = (
-  record: ApplicationListRecord,
-  displayedCompensations?: readonly ApplicationCompensation[]
+  record: ApplicationListRecord
 ): ApplicationListItem => {
   const { compensations, ...application } = record
-  const visibleCompensations = displayedCompensations ?? compensations
   return {
     ...application,
-    annualCompensation: annualCompensationFrom(visibleCompensations),
+    annualCompensation: annualCompensationFrom(compensations),
   }
 }

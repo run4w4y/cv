@@ -1,4 +1,13 @@
-import { Effect } from 'effect'
+import { type Crypto, Effect, Schema } from 'effect'
+
+export class ListingFetchError extends Schema.TaggedErrorClass<ListingFetchError>()(
+  'ListingFetchError',
+  {
+    cause: Schema.Defect(),
+    message: Schema.String,
+    url: Schema.String,
+  }
+) {}
 
 export type ListingFetch = (
   input: RequestInfo | URL,
@@ -28,17 +37,19 @@ export const fetchListingPage = (url: string, fetcher: ListingFetch) =>
         status: response.status,
       }
     },
-    catch: (cause) => cause,
+    catch: (cause) =>
+      new ListingFetchError({
+        cause,
+        message: `Could not fetch listing ${url}.`,
+        url,
+      }),
   })
 
-export const hashListingContent = (value: string) =>
-  Effect.tryPromise({
-    try: () => crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)),
-    catch: (cause) => cause,
-  }).pipe(
-    Effect.map((digest) =>
-      [...new Uint8Array(digest)]
-        .map((byte) => byte.toString(16).padStart(2, '0'))
-        .join('')
+export const hashListingContent = (crypto: Crypto.Crypto, value: string) =>
+  crypto
+    .digest('SHA-256', new TextEncoder().encode(value))
+    .pipe(
+      Effect.map((digest) =>
+        [...digest].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+      )
     )
-  )

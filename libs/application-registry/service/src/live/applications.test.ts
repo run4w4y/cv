@@ -4,8 +4,8 @@ import type {
   PersistedApplication,
   PersistedManagedApplicationUpdate,
 } from '@cv/application-registry-crud'
-import { FxRates } from '@cv/application-registry-fx'
-import { SQLiteDialect } from 'drizzle-orm/sqlite-core'
+import { RegistryEventPublisherNoop } from '@cv/application-registry-events'
+import { PgDialect } from 'drizzle-orm/pg-core'
 import { Effect, Layer } from 'effect'
 import { TestClock } from 'effect/testing'
 import {
@@ -18,7 +18,7 @@ import {
   annotationsCrudLayer,
   applicationsCrudLayer,
   compensationsCrudLayer,
-  operationsCrudLayer,
+  idempotencyCrudLayer,
 } from '../../test/support/layers'
 import { ApplicationsService } from '../services/applications'
 import { ApplicationsServiceLive } from './applications'
@@ -28,20 +28,8 @@ const live = (applicationLayer = applicationsCrudLayer()) =>
     Layer.provide(applicationLayer),
     Layer.provide(annotationsCrudLayer()),
     Layer.provide(compensationsCrudLayer()),
-    Layer.provide(operationsCrudLayer()),
-    Layer.provide(
-      Layer.succeed(FxRates, {
-        get: (baseCurrency, quoteCurrency) =>
-          Effect.succeed({
-            baseCurrency,
-            fetchedAt: recordedAt,
-            observedAt: recordedAt,
-            provider: 'test',
-            quoteCurrency,
-            rate: 2,
-          }),
-      })
-    )
+    Layer.provide(idempotencyCrudLayer()),
+    Layer.provide(RegistryEventPublisherNoop)
   )
 
 describe('ApplicationsService', () => {
@@ -135,9 +123,10 @@ describe('ApplicationsService', () => {
       throw new Error('Expected the query to contain a filtering expression')
     }
 
-    const dialect = new SQLiteDialect()
+    const dialect = new PgDialect()
     const rendered = dialect.sqlToQuery(where)
 
+    expect(rendered.sql).toContain(' ilike ')
     expect(rendered.params).toContain('%principal%')
     expect(rendered.params).toContain('rejected')
   })
@@ -206,9 +195,7 @@ describe('ApplicationsService', () => {
 
   test('decorates list rows for the dashboard', async () => {
     const page = await Effect.runPromise(
-      ApplicationsService.use((service) =>
-        service.list({ currency: 'USD' })
-      ).pipe(
+      ApplicationsService.use((service) => service.list({})).pipe(
         Effect.provide(
           live(
             applicationsCrudLayer({
@@ -218,11 +205,11 @@ describe('ApplicationsService', () => {
                     {
                       ...applicationListRecord,
                       compensations: [compensation],
-                      counts: { captures: 1, notes: 2 },
+                      counts: { notes: 2 },
                       followUpAt: '2026-07-12T11:00:00.000Z',
                       labels: ['priority'],
-                      latestEvent: {
-                        kind: 'stage_changed',
+                      latestActivity: {
+                        kind: 'status_changed',
                         occurredAt: recordedAt,
                       },
                     },
@@ -243,45 +230,21 @@ describe('ApplicationsService', () => {
 
     expect(page.items[0]).toMatchObject({
       annualCompensation: {
-        currencyCode: 'USD',
-        maximumMinor: 24_000_000,
-        minimumMinor: 20_000_000,
+        currencyCode: 'EUR',
+        maximumMinor: 12_000_000,
+        minimumMinor: 10_000_000,
       },
       labels: ['priority'],
-      latestEvent: { kind: 'stage_changed', occurredAt: recordedAt },
-      counts: { captures: 1, notes: 2 },
+      latestActivity: { kind: 'status_changed', occurredAt: recordedAt },
+      counts: { notes: 2 },
     })
-  })
-
-  test('rejects stale versions before calling CRUD', async () => {
-    let patched = false
-    const error = await Effect.runPromise(
-      ApplicationsService.use((service) =>
-        service.patch(application.id, { expectedVersion: 9, fitScore: 42 })
-      ).pipe(
-        Effect.flip,
-        Effect.provide(
-          live(
-            applicationsCrudLayer({
-              patch: () => {
-                patched = true
-                return Effect.succeed(application)
-              },
-            })
-          )
-        )
-      )
-    )
-
-    expect(error._tag).toBe('RegistryConflictError')
-    expect(patched).toBe(false)
   })
 
   test('owns status audit semantics for one managed update', async () => {
     let persisted: PersistedManagedApplicationUpdate | undefined
     const result = await Effect.runPromise(
       ApplicationsService.use((service) =>
-        service.updateManaged(application.id, {
+        service.update(application.id, {
           annualCompensation: {
             currencyCode: 'USD',
             maximumMinor: 20_000_000,
@@ -290,7 +253,7 @@ describe('ApplicationsService', () => {
           applicationStatus: 'offer',
           expectedVersion: application.version,
           labels: ['priority'],
-          operationId: 'managed-update-1',
+          idempotencyKey: 'managed-update-1',
         })
       ).pipe(
         Effect.provide(
@@ -306,7 +269,10 @@ describe('ApplicationsService', () => {
       )
     )
 
-    expect(persisted?.patch).toEqual({ applicationStatus: 'offer' })
+    expect(persisted?.patch).toMatchObject({
+      applicationStatus: 'offer',
+      appliedAt: expect.any(String),
+    })
     expect(persisted?.labels).toEqual(['priority'])
     expect(persisted?.annualCompensation?.replacement).toMatchObject({
       currencyCode: 'USD',
@@ -315,13 +281,11 @@ describe('ApplicationsService', () => {
       minimumMinor: 18_000_000,
       source: 'manual',
     })
-    expect(persisted?.event).toMatchObject({
-      kind: 'offer_received',
-      operationId: 'managed-update-1',
+    expect(persisted?.activity).toMatchObject({
+      kind: 'status_changed',
       payload: {
-        source: 'application_registry_management',
-        previousApplicationStatus: application.applicationStatus,
-        nextApplicationStatus: 'offer',
+        from: application.applicationStatus,
+        to: 'offer',
       },
     })
     expect(result).toEqual({
@@ -335,10 +299,15 @@ describe('ApplicationsService', () => {
     let persisted: PersistedApplication | undefined
     let stored: typeof application | undefined
     const applicationLayer = applicationsCrudLayer({
-      findByJobKey: () => Effect.succeed(stored),
+      findByIdentifier: () => Effect.succeed(stored),
+      findByPostingFingerprint: () => Effect.succeed(undefined),
       persist: (input) => {
         persisted = input
-        stored = { ...application, id: input.applicationId }
+        stored = {
+          ...application,
+          id: input.applicationId,
+          postingUrl: input.postingUrl,
+        }
         return Effect.void
       },
     })
@@ -348,14 +317,11 @@ describe('ApplicationsService', () => {
       Effect.gen(function* () {
         yield* TestClock.setTime(Date.parse(recordedAt))
         return yield* ApplicationsService.use((service) =>
-          service.upsert({
-            canonicalUrl: application.canonicalUrl,
+          service.create({
             company: application.company,
-            jobKey: application.jobKey,
             location: null,
+            postingUrl: application.postingUrl,
             role: application.role,
-            source: application.source,
-            sourceJobId: null,
           })
         )
       }).pipe(Effect.provide([testLayer, TestClock.layer()]))

@@ -1,13 +1,8 @@
-import type {
-  CreateCampaignCaptureRequest,
-  UpsertApplicationRequest,
-} from '@cv/application-registry-api-contract'
+import type { CreateApplicationRequest } from '@cv/application-registry-api-contract'
 
-export const applicationInput: UpsertApplicationRequest = {
+export const applicationInput = {
   applicationStatus: 'not_started',
   appliedAt: null,
-  canonicalUrl: 'https://example.com/jobs/e2e-registry',
-  category: 'Backend',
   company: 'Example Company',
   compensations: [
     {
@@ -20,80 +15,11 @@ export const applicationInput: UpsertApplicationRequest = {
       source: 'e2e',
     },
   ],
-  details: {
-    applyFromAbroad: 'Yes',
-    countryCode: 'JP',
-    employmentType: 'full-time',
-    languageRequirements: ['English', 'Japanese optional'],
-    region: 'Kanto',
-    relocationSupport: 'Available',
-    remoteRegion: 'Worldwide',
-    residenceRequirement: null,
-    timezoneOverlap: 'JST with four hours of European overlap',
-    visaSponsorship: 'Case by case',
-    workAuthorization: 'Not required when applying',
-    workMode: 'remote',
-  },
-  fitScore: 88,
   followUpAt: null,
-  jobKey: 'url:https://example.com/jobs/e2e-registry',
   labels: ['e2e', 'remote'],
-  lastContactAt: null,
   location: 'Tokyo or remote',
-  openStatus: 'Open in the integration fixture',
   personalPriority: 'high',
-  recommendedAction: 'Apply',
-  remotePolicy: 'Remote worldwide',
-  researchPriority: 'Top target',
+  postingUrl: 'https://example.com/jobs/e2e-registry',
   role: 'Integration Engineer',
-  source: 'e2e',
-  sourceConfidence: 'High',
-  sourceJobId: null,
   targetStage: 'apply_next',
-  technologyStack: 'Effect, TypeScript, D1',
-}
-
-export const captureInput: CreateCampaignCaptureRequest = {
-  ...applicationInput,
-  artifacts: [],
-  applicationUrl: 'https://example.com/jobs/e2e-registry/apply',
-  audience: null,
-  campaignRunId: 'e2e-run',
-  capturedAt: '2026-07-10T12:00:00.000Z',
-  confidence: 0.8,
-  deviceId: 'miniflare',
-  fitAssessment: {
-    dimensions: {
-      coreExperience: 22,
-      hardRequirements: 36,
-      practicalEligibility: 9,
-      preferredSignals: 8,
-      seniorityAndScope: 13,
-    },
-    gaps: ['One preferred signal is not documented.'],
-    hardBlockers: [],
-    rationale: 'The authored evidence supports the core requirements.',
-    rubricVersion: 'application-fit-v1',
-    score: 88,
-    strengths: ['Directly relevant implementation experience.'],
-  },
-  jobContentHash: null,
-  operationId: 'e2e:capture:1',
-  profile: 'default',
-  submissionDetails: {
-    additionalInstructions: null,
-    applicationMethod: 'web form',
-    applicationQuestions: [],
-    contactEmail: null,
-    coverLetterInstructions: null,
-    deadline: null,
-    employmentType: 'full-time',
-    languageRequirements: ['English'],
-    locationRestrictions: null,
-    relocation: null,
-    requiredDocuments: ['CV'],
-    salary: null,
-    visaRequirements: null,
-    workMode: 'remote',
-  },
-}
+} satisfies CreateApplicationRequest

@@ -1,400 +1,90 @@
 import { describe, expect, test } from 'bun:test'
-import { Option, Schema } from 'effect'
+import { Schema } from 'effect'
+
 import {
-  AddApplicationNoteCommandSchema,
-  AppendApplicationEventCommandSchema,
-  DeleteApplicationQuerySchema as CommandDeleteApplicationQuerySchema,
-  ListApplicationsQuerySchema as CommandListApplicationsQuerySchema,
-  ListEventsQuerySchema as CommandListEventsQuerySchema,
-  CreateCampaignCaptureCommandSchema,
-  decodeListApplicationsSearchParams,
-  decodeListEventsSearchParams,
-  encodeListApplicationsSearchParams,
-  encodeListEventsSearchParams,
-  PatchApplicationCommandSchema,
-  RegistryApplicationInputSchema,
-  UpdateManagedApplicationCommandSchema,
-} from './commands'
-import { applicationRegistryOpenApi } from './openapi'
-import {
-  AddApplicationNoteRequestSchema,
-  AppendApplicationEventRequestSchema,
+  BinaryBodySchema,
   CreateApplicationRequestSchema,
-  CreateCampaignCaptureRequestSchema,
-  DeleteApplicationQuerySchema,
-  ListApplicationsQuerySchema,
-  ListApplicationsResponseSchema,
-  ListEventsQuerySchema,
-  ListEventsResponseSchema,
-  PatchApplicationRequestSchema,
-  ReplaceAnnualCompensationRequestSchema,
-  UpdateManagedApplicationRequestSchema,
-  UpsertApplicationRequestSchema,
-} from './schemas'
+  decodeListActivitiesSearchParams,
+  decodeListApplicationsSearchParams,
+  encodeListApplicationsSearchParams,
+  FactsReleaseBundleBodySchema,
+  IdempotencyHeadersSchema,
+  UpdateApplicationRequestSchema,
+} from './index'
+import { applicationRegistryOpenApi } from './openapi'
 
-describe('application registry HTTP contract', () => {
-  test('reuses the canonical request schemas by identity', () => {
-    expect(UpsertApplicationRequestSchema).toBe(RegistryApplicationInputSchema)
-    expect(CreateApplicationRequestSchema).toBe(RegistryApplicationInputSchema)
-    expect(PatchApplicationRequestSchema).toBe(PatchApplicationCommandSchema)
-    expect(UpdateManagedApplicationRequestSchema).toBe(
-      UpdateManagedApplicationCommandSchema
-    )
-    expect(AddApplicationNoteRequestSchema).toBe(
-      AddApplicationNoteCommandSchema
-    )
-    expect(AppendApplicationEventRequestSchema).toBe(
-      AppendApplicationEventCommandSchema
-    )
-    expect(CreateCampaignCaptureRequestSchema).toBe(
-      CreateCampaignCaptureCommandSchema
-    )
-    expect(ListApplicationsQuerySchema).toBe(CommandListApplicationsQuerySchema)
-    expect(ListEventsQuerySchema).toBe(CommandListEventsQuerySchema)
-    expect(DeleteApplicationQuerySchema).toBe(
-      CommandDeleteApplicationQuerySchema
-    )
-  })
-
-  test('uses standard query pages for list responses', () => {
-    const input = {
-      items: [],
-      pageInfo: {
-        kind: 'cursor',
-        size: 50,
-        hasNextPage: false,
-        hasPreviousPage: false,
-        nextCursor: null,
-      },
-    } as const
-
-    const applications = Schema.decodeUnknownSync(
-      ListApplicationsResponseSchema
-    )(input)
-    const events = Schema.decodeUnknownSync(ListEventsResponseSchema)(input)
-
-    expect(applications).toEqual(input)
-    expect(events).toEqual(input)
-  })
-
-  test('accepts zero as an optimistic expected version', () => {
-    const patch = Schema.decodeUnknownSync(PatchApplicationRequestSchema)({
-      expectedVersion: 0,
-    })
-    const deletion = Schema.decodeUnknownSync(DeleteApplicationQuerySchema)({
-      expectedVersion: '0',
-    })
-
-    expect(patch.expectedVersion).toBe(0)
-    expect(deletion.expectedVersion).toBe(0)
-  })
-
-  test('requires managed update concurrency and operation identities', () => {
-    expect(
-      Option.isNone(
-        Schema.decodeUnknownOption(UpdateManagedApplicationRequestSchema)({
-          company: 'Example',
-        })
-      )
-    ).toBe(true)
-    expect(
-      Schema.decodeUnknownSync(UpdateManagedApplicationRequestSchema)({
-        company: 'Example',
-        expectedVersion: 2,
-        operationId: 'managed-update-1',
+describe('application registry API contract', () => {
+  test('derives application and activity queries from drizzle-query', () => {
+    const applications = decodeListApplicationsSearchParams(
+      new URLSearchParams({
+        filter: 'applicationStatus:in:[applied,technical_screen]',
+        sort: 'updatedRevision:desc',
+        size: '50',
       })
-    ).toEqual({
-      company: 'Example',
-      expectedVersion: 2,
-      operationId: 'managed-update-1',
-    })
-    expect(
-      Option.isNone(
-        Schema.decodeUnknownOption(UpdateManagedApplicationRequestSchema)({
-          annualCompensation: {
-            currencyCode: 'USD',
-            maximumMinor: 1,
-            minimumMinor: 2,
-          },
-          expectedVersion: 2,
-          operationId: 'managed-update-2',
-        })
-      )
-    ).toBe(true)
-    expect(
-      Option.isNone(
-        Schema.decodeUnknownOption(ReplaceAnnualCompensationRequestSchema)({
-          annualCompensation: {
-            currencyCode: 'USD',
-            maximumMinor: 1,
-            minimumMinor: 2,
-          },
-          expectedVersion: 2,
-        })
-      )
-    ).toBe(true)
-  })
+    )
+    const activities = decodeListActivitiesSearchParams(
+      new URLSearchParams({
+        filter: 'kind:in:[status_changed,note_added]',
+      })
+    )
 
-  test('derives typed filters, ordering, and pagination from query definitions', () => {
-    const applicationFilters = [
-      {
-        type: 'condition',
-        field: 'applicationStatus',
-        operator: 'in',
-        value: ['applied', 'technical_screen'],
-      },
-      {
-        type: 'group',
-        combinator: 'or',
-        children: [
-          {
-            type: 'condition',
-            field: 'company',
-            operator: 'contains',
-            value: 'Acme',
-          },
-          {
-            type: 'condition',
-            field: 'q',
-            operator: 'matches',
-            value: 'effect engineer',
-          },
-        ],
-      },
-    ] as const
-    const applications = Schema.decodeUnknownSync(ListApplicationsQuerySchema)({
-      filters: JSON.stringify(applicationFilters),
-      orderBy: JSON.stringify([
-        { field: 'fitScore', direction: 'desc', nulls: 'last' },
-      ]),
-      currency: 'USD',
-      q: 'platform systems',
-      size: '100',
-    })
-    const events = Schema.decodeUnknownSync(ListEventsQuerySchema)({
-      filters: JSON.stringify([
-        {
-          type: 'condition',
-          field: 'occurredAt',
-          operator: 'gte',
-          value: '2026-07-01T00:00:00.000Z',
-        },
-        {
-          type: 'condition',
-          field: 'kind',
-          operator: 'in',
-          value: ['stage_changed', 'research_updated'],
-        },
-      ]),
-    })
-
-    expect(applications.filters).toEqual(applicationFilters)
+    expect(applications.filters).toHaveLength(1)
     expect(applications.orderBy).toEqual([
-      { field: 'fitScore', direction: 'desc', nulls: 'last' },
+      { field: 'updatedRevision', direction: 'desc' },
     ])
-    expect(applications.pagination).toEqual({ size: 100 })
-    expect(applications.currency).toBe('USD')
-    expect(applications.q).toBe('platform systems')
-    expect(events.filters).toHaveLength(2)
-
-    expect(
-      Option.isNone(
-        Schema.decodeUnknownOption(ListApplicationsQuerySchema)({
-          size: '101',
-        })
-      )
-    ).toBe(true)
-    expect(
-      Option.isNone(
-        Schema.decodeUnknownOption(ListApplicationsQuerySchema)({
-          currency: 'usd',
-        })
-      )
-    ).toBe(true)
-    expect(
-      Option.isNone(
-        Schema.decodeUnknownOption(ListApplicationsQuerySchema)({
-          size: 'all',
-        })
-      )
-    ).toBe(true)
-    expect(
-      Option.isNone(
-        Schema.decodeUnknownOption(ListApplicationsQuerySchema)({ q: '  ' })
-      )
-    ).toBe(true)
-    for (const filters of [
-      [{ type: 'condition', field: 'missing', operator: 'eq', value: 'x' }],
-      [{ type: 'condition', field: 'fitScore', operator: 'gte', value: '90' }],
-      [{ type: 'condition', field: 'q', operator: 'eq', value: 'x' }],
-    ]) {
-      expect(
-        Option.isNone(
-          Schema.decodeUnknownOption(ListApplicationsQuerySchema)({
-            filters: JSON.stringify(filters),
-          })
-        )
-      ).toBe(true)
-    }
-  })
-
-  test('owns the exact application filter encoding used by browsers and transports', () => {
-    const filters = [
-      {
-        type: 'group',
-        combinator: 'and',
-        children: [
-          {
-            type: 'condition',
-            field: 'company',
-            operator: 'contains',
-            value: 'R&D / 東京',
-          },
-          {
-            type: 'condition',
-            field: 'applicationStatus',
-            operator: 'in',
-            value: ['applied', 'technical_screen'],
-          },
-          {
-            type: 'group',
-            combinator: 'or',
-            children: [
-              {
-                type: 'condition',
-                field: 'followUpAt',
-                operator: 'isNull',
-              },
-              {
-                type: 'condition',
-                field: 'labels',
-                operator: 'hasAny',
-                value: ['C++', 'удалённая работа'],
-              },
-            ],
-          },
-        ],
-      },
-    ] as const
-    const expectedFilters =
-      '[{"type":"group","combinator":"and","children":[{"type":"condition","field":"company","operator":"contains","value":"R&D / 東京"},{"type":"condition","field":"applicationStatus","operator":"in","value":["applied","technical_screen"]},{"type":"group","combinator":"or","children":[{"type":"condition","field":"followUpAt","operator":"isNull"},{"type":"condition","field":"labels","operator":"hasAny","value":["C++","удалённая работа"]}]}]}]'
-    const request = {
-      filters,
-      currency: 'original',
-      q: 'platform systems',
-    } as const
-
-    const params = encodeListApplicationsSearchParams(request)
-
-    expect(params.get('filters')).toBe(expectedFilters)
-    expect(params.get('q')).toBe('platform systems')
-    expect(expectedFilters).not.toContain('"field":"q"')
-    expect(decodeListApplicationsSearchParams(params)).toEqual(request)
-    expect(
-      encodeListApplicationsSearchParams({ filters: [], orderBy: [] }).size
-    ).toBe(0)
-  })
-
-  test('uses the same contract-owned codec for event filters', () => {
-    const request = {
-      filters: [
-        {
-          type: 'condition',
-          field: 'kind',
-          operator: 'in',
-          value: ['stage_changed', 'research_updated'],
-        },
-      ],
-    } as const
-
-    const params = encodeListEventsSearchParams(request)
-
-    expect(params.get('filters')).toBe(
-      '[{"type":"condition","field":"kind","operator":"in","value":["stage_changed","research_updated"]}]'
+    expect(activities.filters).toHaveLength(1)
+    const encoded = encodeListApplicationsSearchParams(applications)
+    expect(encoded.get('filter')).toBe(
+      'applicationStatus:in:[applied,technical_screen]'
     )
-    expect(decodeListEventsSearchParams(params)).toEqual(request)
+    expect(encoded.get('sort')).toBe('updatedRevision:desc')
+    expect(encoded.has('filters')).toBe(false)
+    expect(encoded.has('orderBy')).toBe(false)
   })
 
-  test('rejects malformed and duplicate canonical filter parameters', () => {
-    const invalidInputs = [
-      'filters=%7Bnot-json',
-      `filters=${encodeURIComponent(JSON.stringify({ combinator: 'and' }))}`,
-      `filters=${encodeURIComponent(
-        JSON.stringify([
-          {
-            type: 'condition',
-            field: 'applicationStatus',
-            operator: 'in',
-            value: ['not-a-status'],
-          },
-        ])
-      )}`,
-      new URLSearchParams([
-        ['filters', '[]'],
-        ['filters', '[]'],
-      ]),
-    ]
-
-    for (const input of invalidInputs) {
-      expect(() => decodeListApplicationsSearchParams(input)).toThrow()
-    }
+  test('ignores obsolete JSON query parameter names', () => {
+    expect(
+      decodeListApplicationsSearchParams('filters=whatever&orderBy=whatever')
+    ).toEqual({})
   })
 
-  test('expresses revision scans through ordinary filters and ordering', () => {
-    for (const [schema, orderingField] of [
-      [ListApplicationsQuerySchema, 'updatedRevision'],
-      [ListEventsQuerySchema, 'revision'],
-    ] as const) {
-      const decoded = Schema.decodeUnknownOption(schema)({
-        filters: JSON.stringify([
-          {
-            type: 'condition',
-            field: orderingField,
-            operator: 'gt',
-            value: 42,
-          },
-        ]),
-        orderBy: JSON.stringify([{ field: orderingField, direction: 'asc' }]),
-      })
+  test('exposes no client-managed identity or event mutation fields', () => {
+    const created = Schema.decodeUnknownSync(CreateApplicationRequestSchema)({
+      company: 'Example',
+      location: null,
+      postingUrl: 'https://example.test/jobs/one',
+      role: 'Engineer',
+    })
+    const updated = Schema.decodeUnknownSync(UpdateApplicationRequestSchema)({
+      applicationStatus: 'applied',
+      expectedVersion: 1,
+    })
+    const headers = Schema.decodeUnknownSync(IdempotencyHeadersSchema)({
+      'idempotency-key': 'request-1',
+    })
 
-      expect(Option.isSome(decoded)).toBe(true)
-    }
+    expect(created).not.toHaveProperty('jobKey')
+    expect(created).not.toHaveProperty('source')
+    expect(updated).not.toHaveProperty('operationId')
+    expect(headers['idempotency-key']).toBe('request-1')
   })
 
-  test('requires lifecycle status changes to be explicit', () => {
-    const base = {
-      deviceId: null,
-      expectedVersion: null,
-      kind: 'stage_changed',
-      occurredAt: '2026-07-12T00:00:00.000Z',
-      operationId: 'operation-1',
-      payload: {},
-    } as const
-
+  test('uses raw Uint8Array transport for blobs', () => {
+    const bytes = new Uint8Array([1, 2, 3])
+    expect(Schema.decodeUnknownSync(BinaryBodySchema)(bytes)).toEqual(bytes)
     expect(
-      Option.isNone(
-        Schema.decodeUnknownOption(AppendApplicationEventCommandSchema)(base)
-      )
-    ).toBe(true)
-    expect(
-      Option.isSome(
-        Schema.decodeUnknownOption(AppendApplicationEventCommandSchema)({
-          ...base,
-          nextApplicationStatus: 'technical_screen',
-        })
-      )
-    ).toBe(true)
+      Schema.decodeUnknownSync(FactsReleaseBundleBodySchema)(bytes)
+    ).toEqual(bytes)
   })
 
-  test('exports OpenAPI from the same HttpApi declaration', () => {
-    expect(applicationRegistryOpenApi.openapi).toBe('3.1.0')
-    expect(applicationRegistryOpenApi.paths['/v1/applications']).toBeDefined()
-    expect(
-      applicationRegistryOpenApi.paths['/v1/applications/facets']
-    ).toBeDefined()
-    expect(
-      applicationRegistryOpenApi.paths['/v1/applications/{id}/management']
-    ).toBeDefined()
-    expect(applicationRegistryOpenApi.paths['/v1/captures']).toBeDefined()
+  test('publishes one unversioned registry surface', () => {
+    const paths = Object.keys(applicationRegistryOpenApi.paths)
+    expect(paths).toContain('/api/registry/applications')
+    expect(paths).toContain('/api/registry/activities')
+    expect(paths).toContain('/api/registry/blobs/{sha256}')
+    expect(paths).toContain('/machine/api/registry/facts/releases/{releaseId}')
+    expect(paths).toContain('/machine/api/registry/facts/current')
+    expect(paths).not.toContain('/v1/applications')
+    expect(paths.some((path) => path.includes('/events'))).toBeFalse()
   })
 })

@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
-import type { ApplicationListItem } from '@cv/application-registry-api-contract'
+import {
+  type ApplicationListItem,
+  decodeListApplicationsSearchParams,
+} from '@cv/application-registry-api-contract'
 import { cleanup, fireEvent, waitFor } from '@testing-library/react'
 import { NuqsAdapter } from 'nuqs/adapters/react-router/v7'
 import { BrowserRouter } from 'react-router'
@@ -33,28 +36,15 @@ const renderApplicationsPage = (path: string) => {
 
 const application: ApplicationListItem = {
   id: 'application-1',
-  jobKey: 'web:one',
-  source: 'web',
-  sourceJobId: 'one',
-  canonicalUrl: 'https://example.test/jobs/one',
+  postingUrl: 'https://example.test/jobs/one',
   company: 'Example',
   role: 'Staff Engineer',
   location: 'Remote',
   applicationStatus: 'not_started',
   targetStage: 'apply_next',
   personalPriority: 'high',
-  fitScore: 91,
-  category: null,
-  remotePolicy: null,
-  details: null,
-  openStatus: null,
-  sourceConfidence: null,
-  technologyStack: null,
-  recommendedAction: null,
-  researchPriority: null,
   followUpAt: null,
   appliedAt: null,
-  lastContactAt: null,
   listingAvailability: 'open',
   listingCheckedAt: null,
   listingClosedCandidateAt: null,
@@ -66,11 +56,9 @@ const application: ApplicationListItem = {
   createdAt: '2026-07-01T09:30:00.000Z',
   updatedAt: '2026-07-16T09:30:00.000Z',
   annualCompensation: null,
-  counts: { captures: 0, notes: 0 },
-  identityAliases: [],
+  counts: { notes: 0 },
   labels: [],
-  latestCapture: null,
-  latestEvent: null,
+  latestActivity: null,
 }
 
 describe('ApplicationsPage', () => {
@@ -80,10 +68,12 @@ describe('ApplicationsPage', () => {
       resolveFacets = resolve
     })
     let listRequests = 0
+    let listRequestUrl = ''
     globalThis.fetch = mock(async (input: string | URL | Request) => {
       const url = String(input)
       if (url.endsWith('/facets')) return facetsResponse
       listRequests += 1
+      listRequestUrl = url
       return Response.json({
         items: [application],
         pageInfo: {
@@ -99,6 +89,8 @@ describe('ApplicationsPage', () => {
     const view = renderApplicationsPage('/applications')
 
     await waitFor(() => expect(listRequests).toBe(1))
+    expect(new URL(listRequestUrl).searchParams.has('sort')).toBe(false)
+    expect(new URLSearchParams(window.location.search).has('sort')).toBe(false)
     expect(await view.findByText('1 loaded')).toBeTruthy()
     resolveFacets?.(
       Response.json({
@@ -160,7 +152,7 @@ describe('ApplicationsPage', () => {
     )
   })
 
-  test('keeps a malformed canonical filter visible and blocks the list request', async () => {
+  test('ignores obsolete JSON filter parameters', async () => {
     const applicationRequests: string[] = []
     globalThis.fetch = mock(async (input: string | URL | Request) => {
       const url = String(input)
@@ -185,11 +177,10 @@ describe('ApplicationsPage', () => {
 
     const view = renderApplicationsPage('/applications?filters=not-json')
 
+    await waitFor(() => expect(applicationRequests).toHaveLength(1))
     expect(
-      await view.findByText('Invalid filters URL; the table request is blocked')
-    ).toBeTruthy()
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(applicationRequests).toEqual([])
+      view.queryByText('Invalid query URL; the table request is blocked')
+    ).toBeNull()
     expect(view.queryByRole('button', { name: 'Try again' })).toBeNull()
     expect(
       (
@@ -197,7 +188,7 @@ describe('ApplicationsPage', () => {
           name: 'Refresh applications',
         }) as HTMLButtonElement
       ).disabled
-    ).toBe(true)
+    ).toBe(false)
     expect(new URLSearchParams(window.location.search).get('filters')).toBe(
       'not-json'
     )
@@ -287,8 +278,15 @@ describe('ApplicationsPage', () => {
       },
     ])
     const applicationRequests: string[] = []
+    let fxRequests = 0
     globalThis.fetch = mock(async (input: string | URL | Request) => {
       const url = String(input)
+      if (url.startsWith('https://api.frankfurter.dev/')) {
+        fxRequests += 1
+        return Response.json([
+          { base: 'JPY', date: '2026-07-20', quote: 'USD', rate: 0.0067 },
+        ])
+      }
       if (url.endsWith('/facets')) {
         return Response.json({
           companies: [],
@@ -315,7 +313,9 @@ describe('ApplicationsPage', () => {
       applicationRequests[0] ?? '',
       'https://registry.test'
     )
-    expect(JSON.parse(request.searchParams.get('filters') ?? '[]')).toEqual([
+    expect(
+      decodeListApplicationsSearchParams(request.searchParams).filters
+    ).toEqual([
       {
         type: 'condition',
         field: 'applicationStatus',
@@ -323,19 +323,20 @@ describe('ApplicationsPage', () => {
         value: 'applied',
       },
     ])
-    expect(new URLSearchParams(window.location.search).get('filters')).toBe(
-      request.searchParams.get('filters')
+    expect(new URLSearchParams(window.location.search).get('filter')).toBe(
+      request.searchParams.get('filter')
     )
     expect(request.searchParams.get('q')).toBe('platform')
-    expect(JSON.parse(request.searchParams.get('orderBy') ?? '[]')).toEqual([
-      { field: 'company', direction: 'asc' },
-    ])
-    expect(window.location.search).toContain('filters=')
+    expect(
+      decodeListApplicationsSearchParams(request.searchParams).orderBy
+    ).toEqual([{ field: 'company', direction: 'asc' }])
+    expect(window.location.search).toContain('filter=')
     expect(window.location.search).toContain('q=platform')
-    expect(new URLSearchParams(window.location.search).get('filters')).toBe(
-      request.searchParams.get('filters')
+    expect(new URLSearchParams(window.location.search).get('filter')).toBe(
+      request.searchParams.get('filter')
     )
-    expect(request.searchParams.get('currency')).toBe('JPY')
+    expect(request.searchParams.get('currency')).toBeNull()
+    expect(fxRequests).toBe(1)
   })
 
   test('preserves nested workspace filters and requires explicit replacement', async () => {
@@ -390,11 +391,11 @@ describe('ApplicationsPage', () => {
       applicationRequests[0] ?? '',
       'https://registry.test'
     )
-    expect(JSON.parse(request.searchParams.get('filters') ?? '[]')).toEqual(
-      nestedFilters
-    )
-    expect(new URLSearchParams(window.location.search).get('filters')).toBe(
-      request.searchParams.get('filters')
+    expect(
+      decodeListApplicationsSearchParams(request.searchParams).filters
+    ).toEqual(nestedFilters)
+    expect(new URLSearchParams(window.location.search).get('filter')).toBe(
+      request.searchParams.get('filter')
     )
     expect(
       view.getByRole('button', { name: 'Replace URL filters' })
@@ -426,14 +427,7 @@ describe('ApplicationsPage', () => {
     }) as unknown as typeof fetch
 
     const search = new URLSearchParams({
-      filters: JSON.stringify([
-        {
-          type: 'condition',
-          field: 'applicationStatus',
-          operator: 'eq',
-          value: 'preparing',
-        },
-      ]),
+      filter: 'applicationStatus:eq:preparing',
     })
     const view = renderApplicationsPage(`/applications?${search.toString()}`)
 
@@ -442,7 +436,9 @@ describe('ApplicationsPage', () => {
       applicationRequests[0] ?? '',
       'https://registry.test'
     )
-    expect(JSON.parse(request.searchParams.get('filters') ?? '[]')).toEqual([
+    expect(
+      decodeListApplicationsSearchParams(request.searchParams).filters
+    ).toEqual([
       {
         type: 'condition',
         field: 'applicationStatus',
@@ -455,10 +451,15 @@ describe('ApplicationsPage', () => {
     expect(view.getByLabelText('Application status value')).toBeTruthy()
   })
 
-  test('requests and exposes the selected compensation currency', async () => {
+  test('keeps the selected compensation currency out of registry requests', async () => {
     const applicationRequests: string[] = []
     globalThis.fetch = mock(async (input: string | URL | Request) => {
       const url = String(input)
+      if (url.startsWith('https://api.frankfurter.dev/')) {
+        return Response.json([
+          { base: 'JPY', date: '2026-07-20', quote: 'USD', rate: 0.0067 },
+        ])
+      }
       if (url.endsWith('/facets')) {
         return Response.json({
           companies: [],
@@ -485,7 +486,7 @@ describe('ApplicationsPage', () => {
       applicationRequests[0] ?? '',
       'https://registry.test'
     )
-    expect(request.searchParams.get('currency')).toBe('JPY')
+    expect(request.searchParams.get('currency')).toBeNull()
     expect(
       view.getByRole('combobox', { name: 'Compensation display currency' })
         .textContent
@@ -523,7 +524,7 @@ describe('ApplicationsPage', () => {
         value: 'platform',
       },
     ]
-    const search = new URLSearchParams({ filters: JSON.stringify(filters) })
+    const search = new URLSearchParams({ filter: 'q:matches:platform' })
     const view = renderApplicationsPage(`/applications?${search.toString()}`)
 
     await waitFor(() => expect(applicationRequests).toHaveLength(1))
@@ -531,9 +532,9 @@ describe('ApplicationsPage', () => {
       applicationRequests[0] ?? '',
       'https://registry.test'
     )
-    expect(JSON.parse(request.searchParams.get('filters') ?? '[]')).toEqual(
-      filters
-    )
+    expect(
+      decodeListApplicationsSearchParams(request.searchParams).filters
+    ).toEqual(filters)
     expect(view.getByRole('alert').textContent).toContain(
       'URL filters are applied, but this editor cannot display them yet'
     )
@@ -561,21 +562,12 @@ describe('ApplicationsPage', () => {
         },
       })
     }) as unknown as typeof fetch
-    const filters = JSON.stringify([
-      {
-        type: 'condition',
-        field: 'q',
-        operator: 'matches',
-        value: { unexpected: true },
-      },
-    ])
-
     const view = renderApplicationsPage(
-      `/applications?${new URLSearchParams({ filters }).toString()}`
+      '/applications?filter=q:matches:{unexpected:true}'
     )
 
     expect(
-      await view.findByText('Invalid filters URL; the table request is blocked')
+      await view.findByText('Invalid query URL; the table request is blocked')
     ).toBeTruthy()
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(applicationRequests).toEqual([])
@@ -600,20 +592,12 @@ describe('ApplicationsPage', () => {
         },
       })
     }) as unknown as typeof fetch
-    const filters = JSON.stringify([
-      {
-        type: 'condition',
-        field: 'company',
-        operator: 'contains',
-        value: 'Example',
-      },
-    ])
-    const path = `/applications?${new URLSearchParams({ filters }).toString()}`
+    const path = '/applications?filter=company:contains:Example'
     const view = renderApplicationsPage(path)
 
     await waitFor(() => expect(applicationRequests).toHaveLength(1))
     const appliedFilter = new URLSearchParams(window.location.search).get(
-      'filters'
+      'filter'
     )
     fireEvent.click(view.getByRole('button', { name: /^Show filters/ }))
     const valueInput = view.getByLabelText('Company value')
@@ -623,7 +607,7 @@ describe('ApplicationsPage', () => {
     expect(await view.findByText(/before applying changes/)).toBeTruthy()
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(applicationRequests).toHaveLength(1)
-    expect(new URLSearchParams(window.location.search).get('filters')).toBe(
+    expect(new URLSearchParams(window.location.search).get('filter')).toBe(
       appliedFilter
     )
   })
@@ -706,10 +690,8 @@ describe('ApplicationsPage', () => {
       applicationRequests[0] ?? '',
       'https://registry.test'
     )
-    const orderBy = JSON.parse(request.searchParams.get('orderBy') ?? '[]') as {
-      readonly field: string
-      readonly direction: string
-    }[]
+    const orderBy =
+      decodeListApplicationsSearchParams(request.searchParams).orderBy ?? []
     expect(orderBy).toHaveLength(1)
     expect(orderBy[0]?.field).toBe('company')
     expect(['asc', 'desc']).toContain(orderBy[0]?.direction)
@@ -753,7 +735,9 @@ describe('ApplicationsPage', () => {
       applicationRequests[1] ?? '',
       'https://registry.test'
     )
-    expect(JSON.parse(request.searchParams.get('orderBy') ?? '[]')).toEqual([
+    expect(
+      decodeListApplicationsSearchParams(request.searchParams).orderBy
+    ).toEqual([
       { field: 'company', direction: 'desc' },
       { field: 'role', direction: 'desc' },
     ])
@@ -787,16 +771,8 @@ describe('ApplicationsPage', () => {
       })
     }) as unknown as typeof fetch
 
-    const filters = JSON.stringify([
-      {
-        type: 'condition',
-        field: 'updatedAt',
-        operator: 'gte',
-        value: '2026-07-01T09:30:00.000Z',
-      },
-    ])
     const view = renderApplicationsPage(
-      `/applications?filters=${encodeURIComponent(filters)}`
+      '/applications?filter=updatedAt:gte:2026-07-01T09:30:00.000Z'
     )
 
     const tableScroller = view.container.querySelector(

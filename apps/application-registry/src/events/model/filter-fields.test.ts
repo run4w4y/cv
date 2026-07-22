@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { applicationEventKindValues } from '@cv/application-registry-entity'
-import { eventListQuery } from '@cv/application-registry-entity/query'
+import { applicationActivityKindValues } from '@cv/application-registry-entity'
+import { activityListQuery } from '@cv/application-registry-entity/query'
 import {
   createQueryFilterFields,
   descriptorForOperator,
@@ -11,16 +11,15 @@ import { eventFilterFieldPresentation } from './filter-fields'
 describe('eventFilterFieldPresentation', () => {
   test('uses query metadata for event kinds and presentation for timestamp defaults', () => {
     const fields = createQueryFilterFields(
-      eventListQuery,
+      activityListQuery,
       eventFilterFieldPresentation
     )
     const kind = fields.find((field) => field.name === 'kind')
 
     expect(kind && descriptorForOperator(kind, 'eq')).toEqual({
       type: 'enum',
-      values: applicationEventKindValues,
+      values: applicationActivityKindValues,
     })
     expect(eventFilterFieldPresentation.occurredAt?.defaultOperator).toBe('gte')
-    expect(eventFilterFieldPresentation.recordedAt?.defaultOperator).toBe('gte')
   })
 })

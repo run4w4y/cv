@@ -1,10 +1,7 @@
 export {
-  maxCanonicalQueryFiltersLength,
   maxQueryFilterDepth,
   maxQueryFilterNodes,
   normalizeQueryFilterNodes,
-  parseQueryFilterNodes,
-  serializeQueryFilterNodes,
 } from './filter-nodes'
 export {
   decodeFlatQueryParams,

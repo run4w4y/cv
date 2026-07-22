@@ -1,6 +1,6 @@
 variable "cloudflare_account_id" {
   type        = string
-  description = "Cloudflare account ID that owns the Worker."
+  description = "Cloudflare account ID that owns the retained Workers and Access applications."
 
   validation {
     condition     = length(trimspace(var.cloudflare_account_id)) > 0
@@ -10,7 +10,7 @@ variable "cloudflare_account_id" {
 
 variable "cloudflare_api_token" {
   type        = string
-  description = "Cloudflare deploy token with Account Workers Scripts, D1 Write, Pages Write, and Zone DNS Write permissions."
+  description = "Cloudflare token with Workers Routes, Access, and Zone write permissions."
   sensitive   = true
 
   validation {
@@ -39,28 +39,6 @@ variable "zone_name" {
   }
 }
 
-variable "pages_project_name" {
-  type        = string
-  description = "Cloudflare Pages project name for the public CV site."
-  default     = "cv"
-
-  validation {
-    condition     = length(trimspace(var.pages_project_name)) > 0
-    error_message = "pages_project_name must be set."
-  }
-}
-
-variable "pages_production_branch" {
-  type        = string
-  description = "Production branch for the Cloudflare Pages project."
-  default     = "main"
-
-  validation {
-    condition     = length(trimspace(var.pages_production_branch)) > 0
-    error_message = "pages_production_branch must be set."
-  }
-}
-
 variable "worker_name" {
   type        = string
   description = "Analytics connector Worker script name."
@@ -69,12 +47,12 @@ variable "worker_name" {
 
 variable "workers_dev_account_subdomain" {
   type        = string
-  description = "Cloudflare account-level workers.dev subdomain label used to construct Worker URLs."
+  description = "Account-level workers.dev label used for retained Worker URLs."
   default     = ""
 
   validation {
     condition = (
-      (!var.enable_worker_dev_subdomain && !var.enable_application_registry_worker_dev_subdomain) ||
+      (!var.enable_worker_dev_subdomain && !var.enable_cv_public_worker_dev_subdomain) ||
       length(trimspace(var.workers_dev_account_subdomain)) > 0
     )
     error_message = "workers_dev_account_subdomain must be set when a Worker is exposed on workers.dev."
@@ -91,7 +69,7 @@ variable "workers_dev_account_subdomain" {
 
 variable "cv_web_host" {
   type        = string
-  description = "Hostname whose Cloudflare analytics should be queried, for example cv.example.com."
+  description = "Public CV hostname backed by frozen Pages except for the /c/* Worker overlay."
 
   validation {
     condition     = length(trimspace(var.cv_web_host)) > 0
@@ -99,15 +77,48 @@ variable "cv_web_host" {
   }
 }
 
+variable "cv_public_worker_name" {
+  type        = string
+  description = "Public SSR CV Worker script name."
+  default     = "cv-public"
+
+  validation {
+    condition     = length(trimspace(var.cv_public_worker_name)) > 0
+    error_message = "cv_public_worker_name must be set."
+  }
+}
+
+variable "cv_public_resolver_url" {
+  type        = string
+  description = "Cloudflare Tunnel origin used by the public CV Worker to resolve publication capabilities."
+
+  validation {
+    condition     = can(regex("^https://[^/]+/?$", trimspace(var.cv_public_resolver_url)))
+    error_message = "cv_public_resolver_url must be an HTTPS origin URL without a path."
+  }
+}
+
+variable "enable_cv_public_route_overlay" {
+  type        = bool
+  description = "Attach the /c/* Worker route overlay after the public SSR Worker is deployed."
+  default     = true
+}
+
+variable "enable_cv_public_worker_dev_subdomain" {
+  type        = bool
+  description = "Expose the public SSR CV Worker on workers.dev."
+  default     = false
+}
+
 variable "worker_custom_domain_hostname" {
   type        = string
-  description = "Optional Worker Custom Domain hostname, for example analytics.example.com."
+  description = "Optional analytics Worker Custom Domain hostname."
   default     = ""
 }
 
 variable "worker_route_pattern" {
   type        = string
-  description = "Optional Worker route pattern, for example analytics.example.com/*. Prefer custom domains for the connector."
+  description = "Optional analytics Worker route pattern."
   default     = ""
 }
 
@@ -117,75 +128,45 @@ variable "enable_worker_dev_subdomain" {
   default     = false
 }
 
-variable "application_registry_worker_name" {
+variable "application_registry_api_url" {
   type        = string
-  description = "Application registry Worker script name."
-  default     = "cv-application-registry"
+  description = "Cloudflare Tunnel URL for the self-hosted registry API and management UI."
 
   validation {
-    condition     = length(trimspace(var.application_registry_worker_name)) > 0
-    error_message = "application_registry_worker_name must be set."
+    condition     = can(regex("^https://[^/]+/?$", trimspace(var.application_registry_api_url)))
+    error_message = "application_registry_api_url must be an HTTPS origin URL without a path."
   }
 }
 
-variable "application_registry_database_name" {
+variable "application_registry_management_access_email" {
   type        = string
-  description = "D1 database name used by the application registry Worker."
-  default     = "cv-application-registry"
+  description = "Email allowed through Cloudflare Access to the registry management UI. Empty disables Access."
+  default     = ""
 
   validation {
-    condition     = length(trimspace(var.application_registry_database_name)) > 0
-    error_message = "application_registry_database_name must be set."
-  }
-}
-
-variable "application_registry_database_primary_location_hint" {
-  type        = string
-  description = "Cloudflare D1 primary location hint. Leave empty to let Cloudflare choose."
-  default     = "weur"
-
-  validation {
-    condition = contains(
-      ["", "wnam", "enam", "weur", "eeur", "apac", "oc"],
-      trimspace(var.application_registry_database_primary_location_hint)
+    condition = (
+      trimspace(var.application_registry_management_access_email) == "" ||
+      can(regex("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", trimspace(var.application_registry_management_access_email)))
     )
-    error_message = "application_registry_database_primary_location_hint must be empty or one of wnam, enam, weur, eeur, apac, or oc."
+    error_message = "application_registry_management_access_email must be empty or a valid email address."
   }
-}
-
-variable "application_registry_worker_custom_domain_hostname" {
-  type        = string
-  description = "Optional application registry Worker Custom Domain hostname, for example applications.example.com."
-  default     = ""
-}
-
-variable "application_registry_worker_route_pattern" {
-  type        = string
-  description = "Optional application registry Worker route pattern, for example applications.example.com/*. Prefer a custom domain."
-  default     = ""
-}
-
-variable "enable_application_registry_worker_dev_subdomain" {
-  type        = bool
-  description = "Expose the application registry Worker on workers.dev."
-  default     = false
 }
 
 variable "infisical_sync_enabled" {
   type        = bool
-  description = "Whether to write Cloudflare-derived analytics and application registry values back into Infisical."
+  description = "Whether to write derived Cloudflare and tunnel deployment values to Infisical."
   default     = false
 }
 
 variable "infisical_host" {
   type        = string
-  description = "Infisical API host. Defaults to Infisical Cloud."
+  description = "Infisical API host."
   default     = "https://app.infisical.com"
 }
 
 variable "infisical_project_id" {
   type        = string
-  description = "Infisical project ID that receives Cloudflare-derived deployment values."
+  description = "Infisical project ID that receives deployment values."
   default     = ""
 
   validation {
@@ -196,13 +177,13 @@ variable "infisical_project_id" {
 
 variable "infisical_env_slug" {
   type        = string
-  description = "Infisical environment slug that receives Cloudflare-derived analytics values."
+  description = "Infisical environment slug."
   default     = "prod"
 }
 
 variable "infisical_analytics_folder_path" {
   type        = string
-  description = "Infisical folder path that receives Cloudflare-derived analytics values."
+  description = "Infisical folder receiving analytics values."
   default     = "/cv/analytics"
 
   validation {
@@ -213,11 +194,33 @@ variable "infisical_analytics_folder_path" {
 
 variable "infisical_application_registry_folder_path" {
   type        = string
-  description = "Infisical folder path that receives Cloudflare-derived application registry deployment values."
+  description = "Infisical folder receiving registry deployment values."
   default     = "/cv/application-registry"
 
   validation {
     condition     = startswith(var.infisical_application_registry_folder_path, "/")
     error_message = "infisical_application_registry_folder_path must start with '/'."
+  }
+}
+
+variable "infisical_cv_public_folder_path" {
+  type        = string
+  description = "Infisical folder receiving public CV Worker deployment values."
+  default     = "/cv/deploy"
+
+  validation {
+    condition     = startswith(var.infisical_cv_public_folder_path, "/")
+    error_message = "infisical_cv_public_folder_path must start with '/'."
+  }
+}
+
+variable "infisical_facts_publication_folder_path" {
+  type        = string
+  description = "Infisical folder receiving the facts-publication registry endpoint."
+  default     = "/cv/facts-publication"
+
+  validation {
+    condition     = startswith(var.infisical_facts_publication_folder_path, "/")
+    error_message = "infisical_facts_publication_folder_path must start with '/'."
   }
 }

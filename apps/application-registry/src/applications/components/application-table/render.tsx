@@ -26,6 +26,10 @@ import { ArrowDown, ArrowUp, ArrowUpDown, Inbox } from 'lucide-react'
 import * as React from 'react'
 import { HeaderActions } from '../../../shell/header-actions'
 import { useInfiniteScroll } from '../../../table-workspace/use-infinite-scroll'
+import type {
+  CompensationDisplayCurrency,
+  CompensationFxRateTable,
+} from '../../model/currency'
 import { createApplicationColumns } from './columns'
 import { ApplicationRowEditor } from './row-editor'
 import { type TableDensity, TableSettings } from './settings'
@@ -53,6 +57,8 @@ export const ApplicationsTable = ({
   headerActions,
   renderViewControl,
   availableLabels,
+  compensationDisplayCurrency = 'original',
+  compensationFxRateTable,
 }: {
   readonly data: ApplicationListItem[]
   readonly loading: boolean
@@ -70,6 +76,8 @@ export const ApplicationsTable = ({
     table: TanStackTable<ApplicationListItem>
   ) => React.ReactNode
   readonly availableLabels: readonly string[]
+  readonly compensationDisplayCurrency?: CompensationDisplayCurrency
+  readonly compensationFxRateTable?: CompensationFxRateTable
 }) => {
   const [editingRowId, setEditingRowId] = React.useState<string>()
   const effectiveEditingRowId = data.some(
@@ -81,6 +89,8 @@ export const ApplicationsTable = ({
   const tableColumns = [
     ...createApplicationColumns({
       availableLabels,
+      compensationDisplayCurrency,
+      compensationFxRateTable,
       editingRowId: effectiveEditingRowId,
       onBeginEditing: (application) => setEditingRowId(application.id),
     }),

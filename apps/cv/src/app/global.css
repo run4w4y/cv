@@ -1,0 +1,101 @@
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+:root {
+  color-scheme: light;
+  --cv-background: #f5f5f4;
+  --cv-card: #fafaf9;
+  --cv-foreground: #020617;
+  --cv-muted: #64748b;
+  --cv-subtle: #334155;
+  --cv-border: #e2e8f0;
+  --cv-primary: #2563eb;
+  --cv-primary-soft: rgb(37 99 235 / 8%);
+  --cv-grid: rgb(37 99 235 / 18%);
+  --cv-texture: rgb(2 6 23 / 2%);
+  --cv-header: rgb(245 245 244 / 94%);
+  --cv-font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --cv-font-mono:
+    "Geist Mono Variable", "SFMono-Regular", "Roboto Mono", "Cascadia Code",
+    "Liberation Mono", monospace;
+}
+
+html.dark {
+  color-scheme: dark;
+  --cv-background: #020617;
+  --cv-card: #0f172a;
+  --cv-foreground: #f8fafc;
+  --cv-muted: #94a3b8;
+  --cv-subtle: #cbd5e1;
+  --cv-border: #1e293b;
+  --cv-primary: #60a5fa;
+  --cv-primary-soft: rgb(96 165 250 / 10%);
+  --cv-grid: rgb(96 165 250 / 18%);
+  --cv-texture: rgb(248 250 252 / 4%);
+  --cv-header: rgb(2 6 23 / 92%);
+}
+
+html,
+body {
+  min-height: 100%;
+  margin: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5.5rem;
+}
+
+body {
+  color: var(--cv-foreground);
+  background: var(--cv-background);
+  font-family: var(--cv-font-sans);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  color: #ffffff;
+  background: #2563eb;
+}
+
+.cv-public-message {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 2rem;
+  font-family: var(--cv-font-sans);
+  text-align: center;
+}
+
+.cv-preview-shell {
+  display: flex;
+  box-sizing: border-box;
+  min-width: max-content;
+  min-height: 100dvh;
+  justify-content: center;
+  padding: 1.5rem;
+  background: #e2e8f0;
+}
+
+@media print {
+  html,
+  html.dark {
+    color-scheme: light;
+    --cv-background: #ffffff;
+    --cv-foreground: #111827;
+  }
+
+  body {
+    background: #ffffff;
+  }
+
+  .cv-preview-shell {
+    display: block;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    background: #ffffff;
+  }
+}

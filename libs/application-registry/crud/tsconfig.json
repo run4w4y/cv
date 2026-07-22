@@ -8,7 +8,7 @@
     "noFallthroughCasesInSwitch": true,
     "noImplicitOverride": true,
     "noImplicitReturns": true,
-    "types": ["bun-types", "@cloudflare/workers-types"],
+    "types": ["bun-types"],
     "verbatimModuleSyntax": true
   },
   "include": ["src/**/*.ts", "test/**/*.ts"]

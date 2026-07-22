@@ -1,0 +1,27 @@
+{
+  "name": "@cv/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./document": {
+      "types": "./dist/document/index.d.ts",
+      "default": "./dist/document/index.js"
+    },
+    "./facts": {
+      "types": "./dist/facts/index.d.ts",
+      "default": "./dist/facts/index.js"
+    },
+    "./delivery": {
+      "types": "./dist/delivery/index.d.ts",
+      "default": "./dist/delivery/index.js"
+    }
+  },
+  "dependencies": {
+    "effect": "4.0.0-beta.99"
+  }
+}

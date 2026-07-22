@@ -1154,7 +1154,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "canonicalUrl"
+              "options": "postingUrl"
             },
             "properties": [
               {
@@ -1191,7 +1191,7 @@
                   {
                     "targetBlank": true,
                     "title": "Open job listing",
-                    "url": "$${__data.fields.canonicalUrl}"
+                    "url": "$${__data.fields.postingUrl}"
                   }
                 ]
               },
@@ -1426,73 +1426,6 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "fitScore"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Fit"
-              },
-              {
-                "id": "decimals",
-                "value": 0
-              },
-              {
-                "id": "min",
-                "value": 0
-              },
-              {
-                "id": "max",
-                "value": 100
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "red",
-                      "value": null
-                    },
-                    {
-                      "color": "yellow",
-                      "value": 60
-                    },
-                    {
-                      "color": "green",
-                      "value": 80
-                    }
-                  ]
-                }
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "mode": "gradient",
-                  "type": "gauge"
-                }
-              },
-              {
-                "id": "custom.width",
-                "value": 90
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "workMode"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Work mode"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
               "options": "location"
             },
             "properties": [
@@ -1610,26 +1543,6 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "lastContactAt"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Last contact"
-              },
-              {
-                "id": "unit",
-                "value": "dateTimeAsLocal"
-              },
-              {
-                "id": "custom.width",
-                "value": 165
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
               "options": "updatedAt"
             },
             "properties": [
@@ -1650,39 +1563,19 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "recommendedAction"
+              "options": "latestActivityKind"
             },
             "properties": [
               {
                 "id": "displayName",
-                "value": "Recommended action"
-              },
-              {
-                "id": "custom.wrapText",
-                "value": true
-              },
-              {
-                "id": "custom.width",
-                "value": 300
+                "value": "Latest activity"
               }
             ]
           },
           {
             "matcher": {
               "id": "byName",
-              "options": "latestEventKind"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Latest event"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "latestEventAt"
+              "options": "latestActivityAt"
             },
             "properties": [
               {
@@ -1692,18 +1585,6 @@
               {
                 "id": "unit",
                 "value": "dateTimeAsLocal"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "captureCount"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Captures"
               }
             ]
           },
@@ -1749,17 +1630,12 @@
                   {
                     "title": "Change status",
                     "type": "fetch",
-                    "confirmation": "Record $eventKind and move $${__data.fields[\"company\"]} — $${__data.fields[\"role\"]} to $nextStatus?",
+                    "confirmation": "Move $${__data.fields[\"company\"]} — $${__data.fields[\"role\"]} to $nextStatus?",
                     "oneClick": false,
                     "style": {
                       "backgroundColor": "#1f60c4"
                     },
                     "variables": [
-                      {
-                        "key": "eventKind",
-                        "name": "Event kind",
-                        "type": "string"
-                      },
                       {
                         "key": "nextStatus",
                         "name": "Next lifecycle status",
@@ -1767,16 +1643,20 @@
                       }
                     ],
                     "fetch": {
-                      "method": "POST",
-                      "url": "/api/datasources/proxy/uid/${application_registry_datasource_uid}/v1/applications/$${__data.fields[\"id\"]}/events",
+                      "method": "PATCH",
+                      "url": "/api/datasources/proxy/uid/${application_registry_datasource_uid}/machine/api/registry/applications/$${__data.fields[\"id\"]}",
                       "headers": [
                         [
                           "Content-Type",
                           "application/json"
+                        ],
+                        [
+                          "idempotency-key",
+                          "grafana-status-$${__data.fields[\"id\"]}-$${__data.fields[\"version\"]}-$nextStatus"
                         ]
                       ],
                       "queryParams": [],
-                      "body": "{\n  \"deviceId\": null,\n  \"expectedVersion\": $${__data.fields[\"version\"]},\n  \"kind\": \"$eventKind\",\n  \"nextApplicationStatus\": \"$nextStatus\",\n  \"occurredAt\": \"$${__to:date:iso}\",\n  \"operationId\": \"grafana-status-$${__data.fields[\"id\"]}-$${__data.fields[\"version\"]}-$eventKind-$nextStatus\",\n  \"payload\": {}\n}"
+                      "body": "{\n  \"applicationStatus\": \"$nextStatus\",\n  \"expectedVersion\": $${__data.fields[\"version\"]}\n}"
                     }
                   },
                   {
@@ -1802,19 +1682,28 @@
                         "key": "noteSourceJson",
                         "name": "Source as a JSON string or null",
                         "type": "string"
+                      },
+                      {
+                        "key": "noteRequestId",
+                        "name": "Unique request ID",
+                        "type": "string"
                       }
                     ],
                     "fetch": {
                       "method": "POST",
-                      "url": "/api/datasources/proxy/uid/${application_registry_datasource_uid}/v1/applications/$${__data.fields[\"id\"]}/notes",
+                      "url": "/api/datasources/proxy/uid/${application_registry_datasource_uid}/machine/api/registry/applications/$${__data.fields[\"id\"]}/notes",
                       "headers": [
                         [
                           "Content-Type",
                           "application/json"
+                        ],
+                        [
+                          "idempotency-key",
+                          "grafana-note-$${__data.fields[\"id\"]}-$${__data.fields[\"version\"]}-$noteKind-$noteRequestId"
                         ]
                       ],
                       "queryParams": [],
-                      "body": "{\n  \"body\": $noteBodyJson,\n  \"kind\": \"$noteKind\",\n  \"operationId\": \"grafana-note-$${__data.fields[\"id\"]}-$${__data.fields[\"version\"]}-$noteKind\",\n  \"source\": $noteSourceJson\n}"
+                      "body": "{\n  \"body\": $noteBodyJson,\n  \"kind\": \"$noteKind\",\n  \"source\": $noteSourceJson\n}"
                     }
                   },
                   {
@@ -1833,60 +1722,20 @@
                       }
                     ],
                     "fetch": {
-                      "method": "PUT",
-                      "url": "/api/datasources/proxy/uid/${application_registry_datasource_uid}/v1/applications/$${__data.fields[\"id\"]}/labels",
+                      "method": "PATCH",
+                      "url": "/api/datasources/proxy/uid/${application_registry_datasource_uid}/machine/api/registry/applications/$${__data.fields[\"id\"]}",
                       "headers": [
                         [
                           "Content-Type",
                           "application/json"
-                        ]
-                      ],
-                      "queryParams": [],
-                      "body": "{\n  \"labels\": $labelsJson\n}"
-                    }
-                  },
-                  {
-                    "title": "Log contact",
-                    "type": "fetch",
-                    "confirmation": "Record contact for $${__data.fields[\"company\"]} — $${__data.fields[\"role\"]}?",
-                    "oneClick": false,
-                    "style": {
-                      "backgroundColor": "#2e7d32"
-                    },
-                    "variables": [],
-                    "fetch": {
-                      "method": "POST",
-                      "url": "/api/datasources/proxy/uid/${application_registry_datasource_uid}/v1/applications/$${__data.fields[\"id\"]}/events",
-                      "headers": [
+                        ],
                         [
-                          "Content-Type",
-                          "application/json"
+                          "idempotency-key",
+                          "grafana-labels-$${__data.fields[\"id\"]}-$${__data.fields[\"version\"]}"
                         ]
                       ],
                       "queryParams": [],
-                      "body": "{\n  \"deviceId\": null,\n  \"expectedVersion\": $${__data.fields[\"version\"]},\n  \"kind\": \"contact_logged\",\n  \"occurredAt\": \"$${__to:date:iso}\",\n  \"operationId\": \"grafana-contact-$${__data.fields[\"id\"]}-$${__data.fields[\"version\"]}\",\n  \"payload\": {}\n}"
-                    }
-                  },
-                  {
-                    "title": "Research updated",
-                    "type": "fetch",
-                    "confirmation": "Record a research update for $${__data.fields[\"company\"]} — $${__data.fields[\"role\"]}?",
-                    "oneClick": false,
-                    "style": {
-                      "backgroundColor": "#6b21a8"
-                    },
-                    "variables": [],
-                    "fetch": {
-                      "method": "POST",
-                      "url": "/api/datasources/proxy/uid/${application_registry_datasource_uid}/v1/applications/$${__data.fields[\"id\"]}/events",
-                      "headers": [
-                        [
-                          "Content-Type",
-                          "application/json"
-                        ]
-                      ],
-                      "queryParams": [],
-                      "body": "{\n  \"deviceId\": null,\n  \"expectedVersion\": $${__data.fields[\"version\"]},\n  \"kind\": \"research_updated\",\n  \"occurredAt\": \"$${__to:date:iso}\",\n  \"operationId\": \"grafana-research-$${__data.fields[\"id\"]}-$${__data.fields[\"version\"]}\",\n  \"payload\": {}\n}"
+                      "body": "{\n  \"expectedVersion\": $${__data.fields[\"version\"]},\n  \"labels\": $labelsJson\n}"
                     }
                   },
                   {
@@ -1906,11 +1755,15 @@
                     ],
                     "fetch": {
                       "method": "PATCH",
-                      "url": "/api/datasources/proxy/uid/${application_registry_datasource_uid}/v1/applications/$${__data.fields[\"id\"]}",
+                      "url": "/api/datasources/proxy/uid/${application_registry_datasource_uid}/machine/api/registry/applications/$${__data.fields[\"id\"]}",
                       "headers": [
                         [
                           "Content-Type",
                           "application/json"
+                        ],
+                        [
+                          "idempotency-key",
+                          "grafana-follow-up-$${__data.fields[\"id\"]}-$${__data.fields[\"version\"]}"
                         ]
                       ],
                       "queryParams": [],
@@ -1954,8 +1807,8 @@
               "type": "string"
             },
             {
-              "selector": "canonicalUrl",
-              "text": "canonicalUrl",
+              "selector": "postingUrl",
+              "text": "postingUrl",
               "type": "string"
             },
             {
@@ -1984,18 +1837,8 @@
               "type": "string"
             },
             {
-              "selector": "fitScore",
-              "text": "fitScore",
-              "type": "number"
-            },
-            {
               "selector": "location",
               "text": "location",
-              "type": "string"
-            },
-            {
-              "selector": "details.workMode",
-              "text": "workMode",
               "type": "string"
             },
             {
@@ -2019,34 +1862,19 @@
               "type": "timestamp"
             },
             {
-              "selector": "lastContactAt",
-              "text": "lastContactAt",
-              "type": "timestamp"
-            },
-            {
               "selector": "updatedAt",
               "text": "updatedAt",
               "type": "timestamp"
             },
             {
-              "selector": "recommendedAction",
-              "text": "recommendedAction",
+              "selector": "latestActivity.kind",
+              "text": "latestActivityKind",
               "type": "string"
             },
             {
-              "selector": "latestEvent.kind",
-              "text": "latestEventKind",
-              "type": "string"
-            },
-            {
-              "selector": "latestEvent.occurredAt",
-              "text": "latestEventAt",
+              "selector": "latestActivity.occurredAt",
+              "text": "latestActivityAt",
               "type": "timestamp"
-            },
-            {
-              "selector": "counts.captures",
-              "text": "captureCount",
-              "type": "number"
             },
             {
               "selector": "counts.notes",
@@ -2076,10 +1904,10 @@
           "pagination_param_size_value": 100,
           "parser": "backend",
           "refId": "A",
-          "root_selector": "($reference := $${__to}; $minimum := \"$${fitScoreMin}\"; $maximum := \"$${fitScoreMax}\"; $minimumValue := $minimum = \"\" ? null : $number($minimum); $maximumValue := $maximum = \"\" ? null : $number($maximum); $rows := items[($minimumValue = null ? true : (fitScore != null ? fitScore >= $minimumValue : false)) and ($maximumValue = null ? true : (fitScore != null ? fitScore <= $maximumValue : false))]; $count($rows) > 0 ? $map($rows, function($item) { $merge([$item, {\"followUpTiming\": $item.followUpAt = null or $not($exists($item.followUpAt)) ? \"none\" : $toMillis($item.followUpAt) <= $reference ? \"overdue\" : \"upcoming\"}]) }) : [{\"id\":\"__grafana_empty__\"}])",
+          "root_selector": "($reference := $${__to}; $count(items) > 0 ? $map(items, function($item) { $merge([$item, {\"followUpTiming\": $item.followUpAt = null or $not($exists($item.followUpAt)) ? \"none\" : $toMillis($item.followUpAt) <= $reference ? \"overdue\" : \"upcoming\"}]) }) : [{\"id\":\"__grafana_empty__\"}])",
           "source": "url",
           "type": "json",
-          "url": "${registry_api_url}/v1/applications",
+          "url": "${registry_api_url}/machine/api/registry/applications",
           "url_options": {
             "data": "",
             "method": "GET",
@@ -2190,24 +2018,19 @@
               "applicationStatus": 3,
               "targetStage": 4,
               "personalPriority": 5,
-              "fitScore": 6,
-              "location": 7,
-              "workMode": 8,
-              "labels": 9,
-              "followUpTiming": 10,
-              "followUpAt": 11,
-              "appliedAt": 12,
-              "lastContactAt": 13,
-              "updatedAt": 14,
-              "recommendedAction": 15,
-              "latestEventKind": 16,
-              "latestEventAt": 17,
-              "captureCount": 18,
-              "noteCount": 19,
-              "canonicalUrl": 20,
-              "updatedRevision": 21,
-              "version": 22,
-              "id": 23
+              "location": 6,
+              "labels": 7,
+              "followUpTiming": 8,
+              "followUpAt": 9,
+              "appliedAt": 10,
+              "updatedAt": 11,
+              "latestActivityKind": 12,
+              "latestActivityAt": 13,
+              "noteCount": 14,
+              "postingUrl": 15,
+              "updatedRevision": 16,
+              "version": 17,
+              "id": 18
             },
             "renameByName": {}
           }
@@ -2246,7 +2069,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "canonicalUrl"
+              "options": "postingUrl"
             },
             "properties": [
               {
@@ -2271,7 +2094,7 @@
                   {
                     "targetBlank": true,
                     "title": "Open job listing",
-                    "url": "$${__data.fields.canonicalUrl}"
+                    "url": "$${__data.fields.postingUrl}"
                   }
                 ]
               }
@@ -2505,7 +2328,7 @@
           "options": {
             "include": {
               "names": [
-                "canonicalUrl",
+                "postingUrl",
                 "company",
                 "role",
                 "applicationStatus",
@@ -2574,7 +2397,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "canonicalUrl"
+              "options": "postingUrl"
             },
             "properties": [
               {
@@ -2599,7 +2422,7 @@
                   {
                     "targetBlank": true,
                     "title": "Open job listing",
-                    "url": "$${__data.fields.canonicalUrl}"
+                    "url": "$${__data.fields.postingUrl}"
                   }
                 ]
               }
@@ -2689,8 +2512,8 @@
               "type": "string"
             },
             {
-              "selector": "canonicalUrl",
-              "text": "canonicalUrl",
+              "selector": "postingUrl",
+              "text": "postingUrl",
               "type": "string"
             },
             {
@@ -2724,7 +2547,7 @@
           "root_selector": "$count(items) > 0 ? items : [{\"id\":\"__grafana_empty__\"}]",
           "source": "url",
           "type": "json",
-          "url": "${registry_api_url}/v1/events",
+          "url": "${registry_api_url}/machine/api/registry/activities",
           "url_options": {
             "data": "",
             "method": "GET",
@@ -2792,7 +2615,7 @@
             "indexByName": {
               "id": 0,
               "applicationId": 1,
-              "canonicalUrl": 2,
+              "postingUrl": 2,
               "company": 3,
               "role": 4,
               "kind": 5,
@@ -2854,7 +2677,7 @@
             "value": "interest",
             "properties": {
               "filters": "[{\"type\":\"group\",\"combinator\":\"and\",\"children\":[{\"type\":\"condition\",\"field\":\"applicationStatus\",\"operator\":\"in\",\"value\":[\"not_started\",\"preparing\",\"applied\",\"recruiter_screen\",\"technical_screen\",\"take_home\",\"interview_loop\",\"paused\",\"offer\"]},{\"type\":\"condition\",\"field\":\"targetStage\",\"operator\":\"in\",\"value\":[\"apply_next\",\"verify_first\",\"secondary\",\"backlog\",\"watch_after_move\"]}]}]",
-              "orderBy": "[{\"field\":\"fitScore\",\"direction\":\"desc\",\"nulls\":\"last\"}]"
+              "orderBy": "[{\"field\":\"updatedAt\",\"direction\":\"desc\"}]"
             }
           },
           {
@@ -2863,7 +2686,7 @@
             "value": "to-apply",
             "properties": {
               "filters": "[{\"type\":\"group\",\"combinator\":\"and\",\"children\":[{\"type\":\"condition\",\"field\":\"applicationStatus\",\"operator\":\"eq\",\"value\":\"not_started\"},{\"type\":\"condition\",\"field\":\"targetStage\",\"operator\":\"in\",\"value\":[\"apply_next\",\"verify_first\",\"secondary\",\"backlog\",\"watch_after_move\"]}]}]",
-              "orderBy": "[{\"field\":\"fitScore\",\"direction\":\"desc\",\"nulls\":\"last\"}]"
+              "orderBy": "[{\"field\":\"updatedAt\",\"direction\":\"desc\"}]"
             }
           },
           {
@@ -2876,7 +2699,7 @@
             }
           }
         ],
-        "query": "[{\"value\":\"all\",\"text\":\"All\",\"filters\":\"[]\",\"orderBy\":\"[{\\\"field\\\":\\\"updatedAt\\\",\\\"direction\\\":\\\"desc\\\"}]\"},{\"value\":\"active\",\"text\":\"Active\",\"filters\":\"[{\\\"type\\\":\\\"condition\\\",\\\"field\\\":\\\"applicationStatus\\\",\\\"operator\\\":\\\"in\\\",\\\"value\\\":[\\\"applied\\\",\\\"recruiter_screen\\\",\\\"technical_screen\\\",\\\"take_home\\\",\\\"interview_loop\\\",\\\"paused\\\",\\\"offer\\\"]}]\",\"orderBy\":\"[{\\\"field\\\":\\\"updatedAt\\\",\\\"direction\\\":\\\"desc\\\"}]\"},{\"value\":\"interest\",\"text\":\"Interest\",\"filters\":\"[{\\\"type\\\":\\\"group\\\",\\\"combinator\\\":\\\"and\\\",\\\"children\\\":[{\\\"type\\\":\\\"condition\\\",\\\"field\\\":\\\"applicationStatus\\\",\\\"operator\\\":\\\"in\\\",\\\"value\\\":[\\\"not_started\\\",\\\"preparing\\\",\\\"applied\\\",\\\"recruiter_screen\\\",\\\"technical_screen\\\",\\\"take_home\\\",\\\"interview_loop\\\",\\\"paused\\\",\\\"offer\\\"]},{\\\"type\\\":\\\"condition\\\",\\\"field\\\":\\\"targetStage\\\",\\\"operator\\\":\\\"in\\\",\\\"value\\\":[\\\"apply_next\\\",\\\"verify_first\\\",\\\"secondary\\\",\\\"backlog\\\",\\\"watch_after_move\\\"]}]}]\",\"orderBy\":\"[{\\\"field\\\":\\\"fitScore\\\",\\\"direction\\\":\\\"desc\\\",\\\"nulls\\\":\\\"last\\\"}]\"},{\"value\":\"to-apply\",\"text\":\"To apply\",\"filters\":\"[{\\\"type\\\":\\\"group\\\",\\\"combinator\\\":\\\"and\\\",\\\"children\\\":[{\\\"type\\\":\\\"condition\\\",\\\"field\\\":\\\"applicationStatus\\\",\\\"operator\\\":\\\"eq\\\",\\\"value\\\":\\\"not_started\\\"},{\\\"type\\\":\\\"condition\\\",\\\"field\\\":\\\"targetStage\\\",\\\"operator\\\":\\\"in\\\",\\\"value\\\":[\\\"apply_next\\\",\\\"verify_first\\\",\\\"secondary\\\",\\\"backlog\\\",\\\"watch_after_move\\\"]}]}]\",\"orderBy\":\"[{\\\"field\\\":\\\"fitScore\\\",\\\"direction\\\":\\\"desc\\\",\\\"nulls\\\":\\\"last\\\"}]\"},{\"value\":\"archive\",\"text\":\"Archive\",\"filters\":\"[{\\\"type\\\":\\\"group\\\",\\\"combinator\\\":\\\"or\\\",\\\"children\\\":[{\\\"type\\\":\\\"condition\\\",\\\"field\\\":\\\"applicationStatus\\\",\\\"operator\\\":\\\"in\\\",\\\"value\\\":[\\\"rejected\\\",\\\"withdrawn\\\",\\\"archived\\\"]},{\\\"type\\\":\\\"condition\\\",\\\"field\\\":\\\"targetStage\\\",\\\"operator\\\":\\\"eq\\\",\\\"value\\\":\\\"closed_skip\\\"}]}]\",\"orderBy\":\"[{\\\"field\\\":\\\"updatedAt\\\",\\\"direction\\\":\\\"desc\\\"}]\"}]",
+        "query": "[{\"value\":\"all\",\"text\":\"All\",\"filters\":\"[]\",\"orderBy\":\"[{\\\"field\\\":\\\"updatedAt\\\",\\\"direction\\\":\\\"desc\\\"}]\"},{\"value\":\"active\",\"text\":\"Active\",\"filters\":\"[{\\\"type\\\":\\\"condition\\\",\\\"field\\\":\\\"applicationStatus\\\",\\\"operator\\\":\\\"in\\\",\\\"value\\\":[\\\"applied\\\",\\\"recruiter_screen\\\",\\\"technical_screen\\\",\\\"take_home\\\",\\\"interview_loop\\\",\\\"paused\\\",\\\"offer\\\"]}]\",\"orderBy\":\"[{\\\"field\\\":\\\"updatedAt\\\",\\\"direction\\\":\\\"desc\\\"}]\"},{\"value\":\"interest\",\"text\":\"Interest\",\"filters\":\"[{\\\"type\\\":\\\"group\\\",\\\"combinator\\\":\\\"and\\\",\\\"children\\\":[{\\\"type\\\":\\\"condition\\\",\\\"field\\\":\\\"applicationStatus\\\",\\\"operator\\\":\\\"in\\\",\\\"value\\\":[\\\"not_started\\\",\\\"preparing\\\",\\\"applied\\\",\\\"recruiter_screen\\\",\\\"technical_screen\\\",\\\"take_home\\\",\\\"interview_loop\\\",\\\"paused\\\",\\\"offer\\\"]},{\\\"type\\\":\\\"condition\\\",\\\"field\\\":\\\"targetStage\\\",\\\"operator\\\":\\\"in\\\",\\\"value\\\":[\\\"apply_next\\\",\\\"verify_first\\\",\\\"secondary\\\",\\\"backlog\\\",\\\"watch_after_move\\\"]}]}]\",\"orderBy\":\"[{\\\"field\\\":\\\"updatedAt\\\",\\\"direction\\\":\\\"desc\\\"}]\"},{\"value\":\"to-apply\",\"text\":\"To apply\",\"filters\":\"[{\\\"type\\\":\\\"group\\\",\\\"combinator\\\":\\\"and\\\",\\\"children\\\":[{\\\"type\\\":\\\"condition\\\",\\\"field\\\":\\\"applicationStatus\\\",\\\"operator\\\":\\\"eq\\\",\\\"value\\\":\\\"not_started\\\"},{\\\"type\\\":\\\"condition\\\",\\\"field\\\":\\\"targetStage\\\",\\\"operator\\\":\\\"in\\\",\\\"value\\\":[\\\"apply_next\\\",\\\"verify_first\\\",\\\"secondary\\\",\\\"backlog\\\",\\\"watch_after_move\\\"]}]}]\",\"orderBy\":\"[{\\\"field\\\":\\\"updatedAt\\\",\\\"direction\\\":\\\"desc\\\"}]\"},{\"value\":\"archive\",\"text\":\"Archive\",\"filters\":\"[{\\\"type\\\":\\\"group\\\",\\\"combinator\\\":\\\"or\\\",\\\"children\\\":[{\\\"type\\\":\\\"condition\\\",\\\"field\\\":\\\"applicationStatus\\\",\\\"operator\\\":\\\"in\\\",\\\"value\\\":[\\\"rejected\\\",\\\"withdrawn\\\",\\\"archived\\\"]},{\\\"type\\\":\\\"condition\\\",\\\"field\\\":\\\"targetStage\\\",\\\"operator\\\":\\\"eq\\\",\\\"value\\\":\\\"closed_skip\\\"}]}]\",\"orderBy\":\"[{\\\"field\\\":\\\"updatedAt\\\",\\\"direction\\\":\\\"desc\\\"}]\"}]",
         "skipUrlSync": false,
         "type": "custom",
         "valuesFormat": "json"
@@ -2924,46 +2747,6 @@
         "type": "custom"
       },
       {
-        "current": {
-          "selected": true,
-          "text": "",
-          "value": ""
-        },
-        "hide": 0,
-        "label": "Minimum fit",
-        "name": "fitScoreMin",
-        "options": [
-          {
-            "selected": true,
-            "text": "",
-            "value": ""
-          }
-        ],
-        "query": "",
-        "skipUrlSync": false,
-        "type": "textbox"
-      },
-      {
-        "current": {
-          "selected": true,
-          "text": "",
-          "value": ""
-        },
-        "hide": 0,
-        "label": "Maximum fit",
-        "name": "fitScoreMax",
-        "options": [
-          {
-            "selected": true,
-            "text": "",
-            "value": ""
-          }
-        ],
-        "query": "",
-        "skipUrlSync": false,
-        "type": "textbox"
-      },
-      {
         "allValue": ".*",
         "current": {
           "selected": true,
@@ -2991,7 +2774,7 @@
             "root_selector": "$count(companies) > 0 ? companies : [\"__grafana_empty__\"]",
             "source": "url",
             "type": "json",
-            "url": "${registry_api_url}/v1/applications/facets",
+            "url": "${registry_api_url}/machine/api/registry/applications/facets",
             "url_options": {
               "data": "",
               "method": "GET"
@@ -3031,10 +2814,10 @@
             "format": "table",
             "parser": "backend",
             "refId": "variable",
-            "root_selector": "$count(applicationStatuses) > 0 ? applicationStatuses : [\"__grafana_empty__\"]",
+            "root_selector": "[\"not_started\",\"preparing\",\"applied\",\"recruiter_screen\",\"technical_screen\",\"take_home\",\"interview_loop\",\"paused\",\"offer\",\"rejected\",\"withdrawn\",\"archived\"]",
             "source": "url",
             "type": "json",
-            "url": "${registry_api_url}/v1/applications/facets",
+            "url": "${registry_api_url}/machine/api/registry/applications/facets",
             "url_options": {
               "data": "",
               "method": "GET"
@@ -3074,10 +2857,10 @@
             "format": "table",
             "parser": "backend",
             "refId": "variable",
-            "root_selector": "$count(targetStages) > 0 ? targetStages : [\"__grafana_empty__\"]",
+            "root_selector": "[\"apply_next\",\"verify_first\",\"secondary\",\"backlog\",\"watch_after_move\",\"closed_skip\"]",
             "source": "url",
             "type": "json",
-            "url": "${registry_api_url}/v1/applications/facets",
+            "url": "${registry_api_url}/machine/api/registry/applications/facets",
             "url_options": {
               "data": "",
               "method": "GET"
@@ -3117,10 +2900,10 @@
             "format": "table",
             "parser": "backend",
             "refId": "variable",
-            "root_selector": "$count(personalPriorities) > 0 ? personalPriorities : [\"__grafana_empty__\"]",
+            "root_selector": "[\"high\",\"medium\",\"low\",\"pass\"]",
             "source": "url",
             "type": "json",
-            "url": "${registry_api_url}/v1/applications/facets",
+            "url": "${registry_api_url}/machine/api/registry/applications/facets",
             "url_options": {
               "data": "",
               "method": "GET"
@@ -3163,7 +2946,7 @@
             "root_selector": "$count(labels) > 0 ? labels : [\"__grafana_empty__\"]",
             "source": "url",
             "type": "json",
-            "url": "${registry_api_url}/v1/applications/facets",
+            "url": "${registry_api_url}/machine/api/registry/applications/facets",
             "url_options": {
               "data": "",
               "method": "GET"

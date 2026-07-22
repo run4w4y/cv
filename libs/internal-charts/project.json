@@ -1,0 +1,60 @@
+{
+  "name": "internal-charts",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/internal-charts/src",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "main": "libs/internal-charts/src/index.ts",
+        "outputPath": "libs/internal-charts/dist",
+        "rootDir": "libs/internal-charts/src",
+        "tsConfig": "libs/internal-charts/tsconfig.build.json",
+        "generatePackageJson": false,
+        "assets": [
+          {
+            "input": "libs/internal-charts/src",
+            "glob": "theme.css",
+            "output": "."
+          }
+        ]
+      }
+    },
+    "format": {},
+    "format:check": {},
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun test libs/internal-charts/src"
+      }
+    },
+    "typecheck": {},
+    "storybook:dev": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "storybook dev --config-dir libs/internal-charts/.storybook --port 4402"
+      }
+    },
+    "storybook:build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{projectRoot}/storybook-static"],
+      "options": {
+        "command": "storybook build --config-dir libs/internal-charts/.storybook --output-dir libs/internal-charts/storybook-static"
+      }
+    },
+    "storybook:static": {
+      "executor": "@nx/web:file-server",
+      "dependsOn": ["storybook:build"],
+      "options": {
+        "buildTarget": "internal-charts:storybook:build",
+        "staticFilePath": "libs/internal-charts/storybook-static",
+        "spa": true
+      }
+    }
+  }
+}

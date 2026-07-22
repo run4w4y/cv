@@ -1,15 +1,14 @@
 import {
   ApplicationsCrud,
   CompensationsCrud,
-  RegistryDatabaseError,
 } from '@cv/application-registry-crud'
-import type { CurrencyCode } from '@cv/application-registry-entity'
-import { FxRates } from '@cv/application-registry-fx'
+import {
+  RegistryEventPublisher,
+  RegistryEventSchema,
+} from '@cv/application-registry-events'
 import { Effect, Layer } from 'effect'
-import { uniq } from 'es-toolkit'
 import { RegistryConflictError } from '../errors'
 import { selectAnnualCompensation } from '../internal/application-list-item'
-import { convertCompensation } from '../internal/compensation-conversion'
 import {
   findRequiredApplication,
   newRegistryId,
@@ -28,7 +27,7 @@ import type {
 const make = Effect.gen(function* () {
   const applications = yield* ApplicationsCrud
   const compensations = yield* CompensationsCrud
-  const fxRates = yield* FxRates
+  const events = yield* RegistryEventPublisher
 
   const findApplication = Effect.fn('CompensationsService.findApplication')(
     (identifier: string) => findRequiredApplication(applications, identifier)
@@ -36,7 +35,7 @@ const make = Effect.gen(function* () {
 
   return {
     listByApplication: Effect.fn('CompensationsService.listByApplication')(
-      (identifier: string, quoteCurrency?: CurrencyCode) =>
+      (identifier: string) =>
         Effect.gen(function* () {
           const application = yield* findRequiredApplication(
             applications,
@@ -46,37 +45,7 @@ const make = Effect.gen(function* () {
             application.id
           )
 
-          if (quoteCurrency === undefined) {
-            return {
-              items: originals.map((original) => ({
-                conversion: null,
-                original,
-              })),
-            } satisfies ApplicationCompensationsResult
-          }
-
-          const rateEntries = yield* Effect.forEach(
-            uniq(originals.map(({ currencyCode }) => currencyCode)),
-            (baseCurrency) =>
-              fxRates
-                .get(baseCurrency, quoteCurrency)
-                .pipe(Effect.map((rate) => [baseCurrency, rate] as const))
-          )
-          const rates = new Map(rateEntries)
-          const items = yield* Effect.forEach(originals, (original) =>
-            Effect.gen(function* () {
-              const rate = rates.get(original.currencyCode)
-              if (!rate) {
-                return yield* new RegistryDatabaseError({
-                  cause: new Error('Resolved compensation rate disappeared.'),
-                  message: 'Could not resolve a compensation exchange rate.',
-                })
-              }
-              return yield* convertCompensation(original, quoteCurrency, rate)
-            })
-          )
-
-          return { items } satisfies ApplicationCompensationsResult
+          return { items: originals } satisfies ApplicationCompensationsResult
         })
     ),
     replaceAnnual: Effect.fn('CompensationsService.replaceAnnual')(
@@ -118,6 +87,16 @@ const make = Effect.gen(function* () {
           }
 
           const updated = yield* findApplication(application.id)
+          const eventId = `compensation-changed:${application.id}:${updated.version}`
+          yield* events.publish(
+            RegistryEventSchema.cases.CompensationChanged.make({
+              applicationId: application.id,
+              correlationId: eventId,
+              eventId,
+              occurredAt: updated.updatedAt,
+              version: 1,
+            })
+          )
           return {
             annualCompensation: input.annualCompensation,
             application: updated,

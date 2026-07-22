@@ -1,10 +1,12 @@
 import { ConflictError } from '@cv/application-registry-api-contract'
 import type { Application } from '@cv/application-registry-entity'
 import { useAtom, useAtomSet } from '@effect/atom-react'
+import { Schema } from 'effect'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import * as Atom from 'effect/unstable/reactivity/Atom'
 import * as React from 'react'
 
+import { asyncResultError } from '@/lib/async-result'
 import {
   reloadLatestApplication,
   resolveApplicationListingAvailability,
@@ -55,14 +57,9 @@ export const useListingAvailabilityReview = ({
     | undefined
   >(undefined)
 
-  const listingFailure = AsyncResult.matchWithError(listingResult, {
-    onInitial: () => undefined,
-    onError: (error) => error,
-    onDefect: (defect) => defect,
-    onSuccess: () => undefined,
-  })
+  const listingFailure = asyncResultError(listingResult)
   const mutationFailure = listingFailure ?? overrideFailure
-  const conflict = mutationFailure instanceof ConflictError
+  const conflict = Schema.is(ConflictError)(mutationFailure)
   const error =
     recoveryError ??
     (mutationFailure === undefined
@@ -110,9 +107,9 @@ export const useListingAvailabilityReview = ({
       saveResolution === undefined
         ? saveListingResolution({
             applicationId: activeSession.applicationId,
+            idempotencyKey: operationId,
             input: {
               expectedVersion: activeSession.expectedVersion,
-              operationId,
               resolution,
             },
           }).then((response) => response.application)

@@ -1,11 +1,10 @@
 import {
+  ActivitiesCrud,
   AnnotationsCrud,
   type ApplicationsCrud,
   ApplicationsCrud as ApplicationsCrudTag,
-  CapturesCrud,
   CompensationsCrud,
-  EventsCrud,
-  OperationsCrud,
+  IdempotencyCrud,
 } from '@cv/application-registry-crud'
 import { Effect, Layer } from 'effect'
 
@@ -20,8 +19,8 @@ export const applicationsCrud = (
       labels: [],
     }),
   findByIdentifier: () => Effect.succeed(application),
-  findByCanonicalUrl: () => Effect.succeed([]),
-  findByJobKey: () => Effect.succeed(application),
+  findByPostingFingerprint: () => Effect.succeed(undefined),
+  findByPostingUrl: () => Effect.succeed([]),
   list: () =>
     Effect.succeed({
       items: [applicationListRecord],
@@ -34,10 +33,9 @@ export const applicationsCrud = (
       },
     }),
   patch: () => Effect.succeed(application),
-  updateManaged: () => Effect.succeed(true),
   persist: () => Effect.void,
-  persistEvent: () => Effect.succeed(true),
   remove: () => Effect.succeed(true),
+  updateManaged: () => Effect.succeed(true),
   ...overrides,
 })
 
@@ -57,14 +55,6 @@ export const annotationsCrudLayer = (
     ...overrides,
   })
 
-export const capturesCrudLayer = (overrides: Partial<CapturesCrud> = {}) =>
-  Layer.succeed(CapturesCrud, {
-    findByOperation: () => Effect.succeed(undefined),
-    listByApplication: () => Effect.succeed([]),
-    persist: () => Effect.void,
-    ...overrides,
-  })
-
 export const compensationsCrudLayer = (
   overrides: Partial<CompensationsCrud> = {}
 ) =>
@@ -74,9 +64,8 @@ export const compensationsCrudLayer = (
     ...overrides,
   })
 
-export const eventsCrudLayer = (overrides: Partial<EventsCrud> = {}) =>
-  Layer.succeed(EventsCrud, {
-    findByOperation: () => Effect.succeed(undefined),
+export const activitiesCrudLayer = (overrides: Partial<ActivitiesCrud> = {}) =>
+  Layer.succeed(ActivitiesCrud, {
     list: () =>
       Effect.succeed({
         items: [],
@@ -92,8 +81,10 @@ export const eventsCrudLayer = (overrides: Partial<EventsCrud> = {}) =>
     ...overrides,
   })
 
-export const operationsCrudLayer = (overrides: Partial<OperationsCrud> = {}) =>
-  Layer.succeed(OperationsCrud, {
+export const idempotencyCrudLayer = (
+  overrides: Partial<IdempotencyCrud> = {}
+) =>
+  Layer.succeed(IdempotencyCrud, {
     find: () => Effect.succeed(undefined),
     ...overrides,
   })

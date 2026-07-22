@@ -1,11 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import type { PersistedNote } from '@cv/application-registry-crud'
+import { RegistryEventPublisherNoop } from '@cv/application-registry-events'
 import { Effect, Layer } from 'effect'
 import { application, note, receipt } from '../../test/support/fixtures'
 import {
   annotationsCrudLayer,
   applicationsCrudLayer,
-  operationsCrudLayer,
+  idempotencyCrudLayer,
 } from '../../test/support/layers'
 import { operationRequestSignature } from '../internal/operation-request-signature'
 import { AnnotationsService } from '../services/annotations'
@@ -14,18 +15,19 @@ import { AnnotationsServiceLive } from './annotations'
 const request = {
   body: note.body,
   kind: note.kind,
-  operationId: 'note-operation-1',
+  idempotencyKey: 'note-operation-1',
   source: note.source,
 } as const
 
 const live = (
   annotationLayer = annotationsCrudLayer(),
-  operationLayer = operationsCrudLayer()
+  operationLayer = idempotencyCrudLayer()
 ) =>
   AnnotationsServiceLive.pipe(
     Layer.provide(annotationLayer),
     Layer.provide(applicationsCrudLayer()),
-    Layer.provide(operationLayer)
+    Layer.provide(operationLayer),
+    Layer.provide(RegistryEventPublisherNoop)
   )
 
 describe('AnnotationsService', () => {
@@ -51,8 +53,8 @@ describe('AnnotationsService', () => {
 
     expect(result).toEqual({ note, replayed: false })
     expect(persisted?.noteId).toMatch(/^[\da-f-]{36}$/u)
-    expect(persisted?.eventId).toMatch(/^[\da-f-]{36}$/u)
-    expect(persisted?.eventId).not.toBe(persisted?.noteId)
+    expect(persisted?.activityId).toMatch(/^[\da-f-]{36}$/u)
+    expect(persisted?.activityId).not.toBe(persisted?.noteId)
   })
 
   test('loads an existing note without writing during replay', async () => {
@@ -74,11 +76,8 @@ describe('AnnotationsService', () => {
                 return Effect.void
               },
             }),
-            operationsCrudLayer({
-              find: () =>
-                Effect.succeed(
-                  receipt({ operationRequestSignature: signature })
-                ),
+            idempotencyCrudLayer({
+              find: () => Effect.succeed(receipt({ requestHash: signature })),
             })
           )
         )
@@ -98,11 +97,9 @@ describe('AnnotationsService', () => {
         Effect.provide(
           live(
             annotationsCrudLayer(),
-            operationsCrudLayer({
+            idempotencyCrudLayer({
               find: () =>
-                Effect.succeed(
-                  receipt({ operationRequestSignature: 'another-request' })
-                ),
+                Effect.succeed(receipt({ requestHash: 'another-request' })),
             })
           )
         )

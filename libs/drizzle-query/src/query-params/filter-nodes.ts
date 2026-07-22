@@ -1,6 +1,5 @@
 import type { FilterNode } from '../filtering/types'
 
-export const maxCanonicalQueryFiltersLength = 64 * 1024
 export const maxQueryFilterNodes = 100
 export const maxQueryFilterDepth = 12
 
@@ -71,26 +70,3 @@ export const normalizeQueryFilterNodes = (
   value: unknown
 ): readonly FilterNode[] | undefined =>
   isFilterNodeArray(value) ? value : undefined
-
-/** Parses the canonical `filters=<JSON FilterNode[]>` wire value. */
-export const parseQueryFilterNodes = (
-  value: string | null | undefined
-): readonly FilterNode[] | undefined => {
-  if (value === null || value === undefined) return undefined
-  if (value.length > maxCanonicalQueryFiltersLength) return undefined
-  try {
-    return normalizeQueryFilterNodes(JSON.parse(value))
-  } catch {
-    return undefined
-  }
-}
-
-/** Serializes filter nodes exactly as the query protocol expects them. */
-export const serializeQueryFilterNodes = (
-  nodes: readonly FilterNode[]
-): string | undefined =>
-  nodes.length === 0
-    ? undefined
-    : JSON.stringify(nodes, (_, value: unknown) =>
-        typeof value === 'bigint' ? value.toString() : value
-      )

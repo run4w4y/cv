@@ -1,10 +1,9 @@
-import type { D1Database } from '@cloudflare/workers-types'
-import { type Effect, Layer } from 'effect'
-import { withRegistryConnections } from '../internal/connection'
+import { Layer } from 'effect'
+import type { RegistryDatabase } from '../internal/connection'
 import {
   findApplicationByIdentifier,
-  findApplicationByJobKey,
-  findApplicationsByCanonicalUrl,
+  findApplicationByPostingFingerprint,
+  findApplicationsByPostingUrl,
   listApplicationFacets,
   listApplications,
   patchApplication,
@@ -12,60 +11,23 @@ import {
   removeApplication,
   updateManagedApplication,
 } from '../persistence/applications'
-import { persistEvent } from '../persistence/event-write'
 import { ApplicationsCrud } from '../services/applications'
 
-export const makeApplicationsCrudLive = (database: Effect.Effect<D1Database>) =>
+export const makeApplicationsCrudLive = (database: RegistryDatabase) =>
   Layer.succeed(ApplicationsCrud, {
-    facets: () =>
-      withRegistryConnections(database, ({ query }) =>
-        listApplicationFacets(query)
-      ),
+    facets: () => listApplicationFacets(database),
     findByIdentifier: (identifier) =>
-      withRegistryConnections(database, ({ query }) =>
-        findApplicationByIdentifier(query, identifier)
-      ),
-    findByJobKey: (jobKey) =>
-      withRegistryConnections(database, ({ query }) =>
-        findApplicationByJobKey(query, jobKey)
-      ),
-    findByCanonicalUrl: (canonicalUrl) =>
-      withRegistryConnections(database, ({ query }) =>
-        findApplicationsByCanonicalUrl(query, canonicalUrl)
-      ),
-    list: (resolved) =>
-      withRegistryConnections(database, ({ query }) =>
-        listApplications(query, resolved)
-      ),
+      findApplicationByIdentifier(database, identifier),
+    findByPostingFingerprint: (fingerprint) =>
+      findApplicationByPostingFingerprint(database, fingerprint),
+    findByPostingUrl: (postingUrlNormalized) =>
+      findApplicationsByPostingUrl(database, postingUrlNormalized),
+    list: (resolved) => listApplications(database, resolved),
     patch: (applicationId, patch, recordedAt) =>
-      withRegistryConnections(database, (connections) =>
-        patchApplication(connections, applicationId, patch, recordedAt)
-      ),
+      patchApplication(database, applicationId, patch, recordedAt),
     updateManaged: (applicationId, input) =>
-      withRegistryConnections(database, (connections) =>
-        updateManagedApplication(connections, applicationId, input)
-      ),
-    persist: (input, options) =>
-      withRegistryConnections(database, (connections) =>
-        persistApplication(connections, input, options)
-      ),
-    persistEvent: (
-      applicationId,
-      expectedVersion,
-      nextApplicationStatus,
-      input
-    ) =>
-      withRegistryConnections(database, (connections) =>
-        persistEvent(
-          connections,
-          applicationId,
-          expectedVersion,
-          nextApplicationStatus,
-          input
-        )
-      ),
+      updateManagedApplication(database, applicationId, input),
+    persist: (input, options) => persistApplication(database, input, options),
     remove: (applicationId, expectedVersion) =>
-      withRegistryConnections(database, ({ query }) =>
-        removeApplication(query, applicationId, expectedVersion)
-      ),
+      removeApplication(database, applicationId, expectedVersion),
   })

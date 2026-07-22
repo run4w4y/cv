@@ -1,0 +1,24 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "application-registry-pdf-worker",
+  "projectType": "application",
+  "sourceRoot": "apps/application-registry-pdf-worker/src",
+  "tags": ["scope:application-registry", "type:service", "visibility:private"],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "color": true,
+        "command": "bun build apps/application-registry-pdf-worker/src/main.ts --target=node --external playwright --outfile=apps/application-registry-pdf-worker/dist/main.mjs"
+      }
+    },
+    "format": {},
+    "format:check": {},
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {}
+  }
+}

@@ -87,7 +87,7 @@ export const ListingAvailabilityReviewDialog = ({
           </div>
 
           <a
-            href={application.canonicalUrl}
+            href={application.postingUrl}
             target="_blank"
             rel="noreferrer"
             className={cn(

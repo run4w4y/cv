@@ -8,8 +8,6 @@ import type { ApplicationRegistryError } from '../errors'
 import type {
   CheckListingResult,
   ResolveListingAvailabilityInput,
-  RunDueListingChecksInput,
-  RunDueListingChecksResult,
   SubmitListingCheckFindingsInput,
   SubmitListingCheckFindingsResult,
 } from '../types'
@@ -28,9 +26,6 @@ export interface ListingChecksService {
     identifier: string,
     input: ResolveListingAvailabilityInput
   ) => Effect.Effect<CheckListingResult, ApplicationRegistryError>
-  readonly runDue: (
-    input: RunDueListingChecksInput
-  ) => Effect.Effect<RunDueListingChecksResult, ApplicationRegistryError>
   readonly submitFindings: (
     input: SubmitListingCheckFindingsInput
   ) => Effect.Effect<SubmitListingCheckFindingsResult, ApplicationRegistryError>

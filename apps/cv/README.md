@@ -1,239 +1,74 @@
-# @cv/cv
+# Public CV Worker
 
-Astro application for the public and private CV site.
+Next.js App Router/OpenNext application for the exact `/c/:token` public CV
+surface. Cloudflare routes only `/c/*` to this Worker; the frozen Pages project
+continues serving every legacy route.
 
-This app is the schema-aware edge of the workspace. It consumes the generic
-content pipeline from `@cv/content-astro`, but it owns the concrete CV content
-contract, localized routes, rendering components, private unlock flow, print
-layout, and social metadata.
+The Worker resolves enabled publications over HTTPS through
+`CV_PUBLIC_RESOLVER_URL`. The self-hosted registry returns opaque document bytes
+and publication metadata from PostgreSQL/MinIO; this application validates the
+code-owned `cv.document.v1` contract and renders it. No management bearer token,
+database credential, MinIO credential, or Worker service binding is present.
 
-## App Boundary
-
-Most workspace packages are reusable content and runtime infrastructure. They
-discover content modules, compose profiles, emit artifacts, encrypt private
-payloads, and resolve generated files. They do not know what fields a CV needs
-or how the document should look.
-
-This app owns those decisions:
-
-- `src/cv-content/contract.ts`: the `ContentContract` passed to
-  `@cv/content-astro`. It sets the content schema and version, authoring module,
-  composition function, and private variable collection. Repository layout and
-  defaults live in `content.config.ts`.
-- `src/cv-content/schema/*`: Effect schemas for the concrete CV source modules
-  and final `CvContent` manifest.
-- `src/cv-content/compose/*`: app-specific logic that turns discovered
-  profile/locale sections into `about`, `experience`, `projects`, `skills`, and
-  `education` sections.
-- `src/cv-content/authoring/*`: MDX authoring components and block extractors
-  exposed to authored content through `virtual:content`.
-- `src/components/cv/*`: React presentation components for the CV document.
-- `src/components/private-cv/*` and `src/lib/private-content-session/*`:
-  browser unlock state, private file access, and public/private fallbacks.
-- `src/pages/*`: static Astro routes for public and private entry points.
-
-To reuse the workspace for another structured document, replace the app-owned
-schema, composer, authoring components, and renderers while keeping the generic
-content libraries.
-
-## Content Repository Shape
-
-`CONTENT_ROOT` must point at a content repository root that contains
-`content.config.ts`. The checked-in fixture at `fixtures/cv-content-e2e` is the
-smallest local example used by tests.
-
-A full content repository usually looks like this:
-
-```text
-content-repo/
-  content.config.ts
-  content/
-    variables.ts
-    profiles/
-      default/
-        en/
-          profile.ts
-          about.mdx
-          experience/
-            index.tsx
-            acme.mdx
-        ru/
-          profile.ts
-      frontend/
-        _files/
-          frontend-only-private.pdf
-        en/
-          profile.ts
-          experience/acme.mdx
-    files/
-      public/
-      private/
-```
-
-`content.config.ts` defines:
-
-- `contentDir`: the repository-relative authored content directory;
-- `defaultLocale`: the locale inherited by generic consumers;
-- `defaultProfile`: the base profile used for section inheritance;
-- `locales`: the locale ids the repository supports;
-- `publicProfiles`: optional, defaults to the configured default profile.
-
-This repository uses `en` and `default`. The repository loader discovers profile
-ids dynamically from `content/profiles/<profile>/<locale>/`; the app contract
-only defines how those generic sections become a validated CV document.
-
-## Sections And Composition
-
-Any `.ts`, `.tsx`, `.js`, `.jsx`, or `.mdx` file under
-`content/profiles/<profile>/<locale>/` is a content section. `index.*` represents
-the containing directory section, and nested directories become nested section
-paths. Declaration files and `*.test.*` or `*.spec.*` files are ignored.
-
-The generic content composer only discovers that tree. This app decides what
-section paths mean:
-
-- `profile` supplies profile metadata.
-- `about` becomes the introductory profile section.
-- `experience` combines structured entries with MDX body content.
-- `projects` combines structured entries with MDX summaries and links.
-- `skills` can merge app-specific structured skill content.
-- `education` combines structured entries with MDX thesis/callout content.
-
-Profile variants inherit from the default profile by section path. A
-profile-local section replaces or extends the default profile according to the
-CV composer rules in `src/cv-content/compose/profile.ts`. If two source files
-resolve to the same profile/locale/section path, the build fails.
-
-Authored MDX and TS/TSX modules can import app-owned authoring helpers from
-`virtual:content`. The portable declaration file for an external content
-repository is generated by:
-
-```bash
-bunx nx run content-types:generate
-```
-
-See `tools/content-types/README.md` when wiring a different app-owned schema or
-authoring module.
-
-## Public And Private Content
-
-Public builds include public profiles and redacted fallbacks. Private profiles
-and redacted values are encrypted into static runtime payloads when
-`PRIVATE_CONTENT_ROOT_KEY` is available during build.
-
-Generated ids are intentionally opaque:
-
-- public profile ids are deterministic salted hashes derived from authored
-  profile slugs and `CONTENT_ID_SALT`;
-- private profile content keys are derived from the generated profile id and
-  `PRIVATE_CONTENT_ROOT_KEY`;
-- audience labels are encoded into reversible compact path segments with
-  `PRIVATE_CONTENT_AUDIENCE_KEY`.
-
-Private links have this shape:
-
-```text
-https://cv.example.com/en/a/<compact-encrypted-audience-id>/?p=<profile-token>
-```
-
-The `p` token is a compact bearer capability for one encrypted profile payload.
-The browser also accepts `p` from the URL hash for local preview/export tooling.
-Anyone with the full link can open that private profile for supported locales;
-changing encrypted content or rotating the root key requires rebuilding the
-private runtime artifacts.
-
-In development, `__dev/profiles` is available only under `import.meta.env.DEV`.
-It lists generated private profile routes and can mint local links when
-`CONTENT_ID_SALT`, `PRIVATE_CONTENT_AUDIENCE_KEY`, and
-`PRIVATE_CONTENT_ROOT_KEY` are present.
-
-## Generated Files
-
-Content files use two roots inside the content repository:
-
-- `content/files/public/`: copied to `/files/...` unchanged.
-- `content/files/private/`: encrypted separately for every composed profile.
-
-Profile-local files live under `content/profiles/<profile>/_files/`. A
-profile-local file with the same relative path overrides the shared private file
-for that profile. Encrypted private files are emitted below `/_content/files/...`
-and are opened through the private-content session runtime after unlock.
-
-## Routes
-
-- `/`: static redirect shell to the default locale.
-- `/<locale>/`: public CV route for each discovered locale.
-- `/<locale>/a/`: static private access entrypoint generated for each locale.
-- `/<locale>/a/<audience-id>/`: clean private audience URL used by minted links.
-  In dev, Vite rewrites this shape back to `/<locale>/a/`. In production,
-  `public/_redirects` asks Cloudflare Pages to serve the static private
-  entrypoint for nested audience paths.
-- `/__dev/profiles`: development-only private profile index.
-
-The app reads locale data from the generated content runtime and keeps app label
-translations under `src/i18n`.
-
-## Environment
-
-Required to build or run the app:
-
-- `CONTENT_ROOT`: path to the content repository root.
-- `CONTENT_ID_SALT`: deterministic salt for opaque public content ids. `.envrc`
-  supplies a local dummy value when none is set.
-
-Required for private runtime artifacts and private link tooling:
-
-- `PRIVATE_CONTENT_ROOT_KEY`: 32-byte private content root key.
-- `PRIVATE_CONTENT_AUDIENCE_KEY`: key for reversible audience path ids. `.envrc`
-  supplies a local dummy value when none is set.
-
-Public URL and display settings:
-
-- `CV_WEB_BASE_URL`: canonical public site URL used for absolute URLs and QR
-  codes.
-- `PUBLIC_CV_WEB_BASE_URL`: browser-public fallback for the same value.
-- `PUBLIC_CV_FULL_ACCESS_EMAIL`: contact address shown in public redaction
-  notices.
-
-Local/test-only knobs:
-
-- `CV_ASTRO_OUT_DIR`: override Astro output directory.
-- `CV_E2E_PORT`, `PLAYWRIGHT_OUTPUT_DIR`, `CV_E2E_TRACE`: e2e test settings.
-- `CV_CHROME_PATH` or `CHROME_PATH`: Chromium executable override for
-  Playwright-based tests and PDF export.
+The public and print layouts are intentionally separate. The public route is a
+responsive website, while the A4 renderer is deterministic and used by both
+the isolated management preview and the Playwright PDF event worker.
 
 ## Development
 
-Run the app with fixture content:
+Run a registry API origin and this app in separate shells:
 
-```bash
-CONTENT_ROOT="$PWD/fixtures/cv-content-e2e" bunx nx run cv:dev
+```sh
+bun x nx run application-registry-api:build
+bun apps/application-registry-api/dist/main.js
+bun x nx run cv:dev
 ```
 
-Run checks:
+The checked-in Wrangler config points `CV_PUBLIC_RESOLVER_URL` at
+`http://127.0.0.1:3000`. For a self-contained renderer instead:
 
-```bash
-bunx nx run cv:typecheck
-bunx nx run cv:test:e2e
-bunx nx run cv:build
+```sh
+bun x nx run cv:dev:fixture
 ```
 
-The production build emits static Astro output to `apps/cv/dist`.
+Fixture mode serves representative documents at `/c/fixture` and
+`/c/_preview/fixture?access=fixture-preview`; it cannot activate in production.
 
-## PDF Export
+## Testing
 
-The website includes an in-browser `Export PDF` action that opens the print
-dialog with print-specific styling.
-
-Operator PDF exports live in `tools/pdf-export`:
-
-```bash
-bunx nx run pdf-export:public
-bunx nx run pdf-export:public -- --locale en
-bunx nx run pdf-export:profile -- --locale en --audience <audience-id> --token <profile-token>
+```sh
+bun x nx run cv:test:e2e
 ```
 
-Public PDFs are written to `apps/cv/dist/pdf/`. Private profile PDFs are local
-operator artifacts written to `apps/cv/dist/private-pdf/`. The exporter starts
-Astro preview, opens the route with Playwright, waits for print QR readiness,
-and lets the app fail invalid private routes or tokens.
+Playwright exercises the public and preview routes, responsive behavior, print
+layout, actual PDF generation, overflow detection, theme persistence, routing,
+security headers, and visual baselines.
+
+## Production deployment
+
+Builds produce an OpenNext Worker and immutable assets under `.open-next`.
+
+```sh
+bun x nx run cv:build
+bun apps/cv/scripts/write-wrangler-config.ts apps/cv/wrangler.deploy.jsonc
+bun apps/cv/scripts/deploy.ts apps/cv/wrangler.deploy.jsonc
+```
+
+The generated config reads:
+
+- `CV_PUBLIC_WORKER_NAME`, default `cv-public`;
+- `CV_PUBLIC_RESOLVER_URL`, required HTTPS Cloudflare Tunnel origin;
+- `CV_PUBLIC_COMPATIBILITY_DATE`, default `2026-07-19`;
+- `CV_REVALIDATION_SECRET`, required by the authenticated compatibility purge
+  endpoint.
+
+Publication and preview resolver paths are capability-token endpoints. The
+Cloudflare Access module bypasses only `/cv-*` at the resolver origin, while the
+management UI remains owner-only and `/machine/*` continues to require its
+registry bearer token.
+
+Public and preview pages currently render dynamically with
+`Cache-Control: private, no-store`. The API still sends best-effort invalidation
+requests to `/c/_internal/revalidate`; this keeps the boundary ready for a
+future bounded-staleness CDN policy without coupling the self-hosted API to a
+Cloudflare Worker binding.

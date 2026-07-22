@@ -1,48 +1,71 @@
 import type * as Redacted from 'effect/Redacted'
 
-export const CLOUDFLARE_GRAPHQL_ENDPOINT =
-  'https://api.cloudflare.com/client/v4/graphql'
+export const defaultEndpoint = 'https://api.cloudflare.com/client/v4/graphql'
 
-export type CloudflareAnalyticsEnv = Readonly<
-  Record<string, string | undefined>
->
-
-export type CloudflareAnalyticsConfig = {
+export interface Configuration {
   readonly apiToken: Redacted.Redacted<string>
-  readonly endpoint: string
+  readonly endpoint: URL
   readonly host?: string
   readonly zoneId: string
 }
 
-export type CloudflareAnalyticsRange = {
+export interface Range {
   readonly from: string
   readonly host?: string
   readonly to: string
 }
 
-export type CloudflareAnalyticsFetch = (
-  input: string | URL,
-  init?: RequestInit
-) => Promise<Response>
-
-export type FetchCloudflareAnalyticsOptions = {
-  readonly config: CloudflareAnalyticsConfig
-  readonly fetch?: CloudflareAnalyticsFetch
-  readonly range: CloudflareAnalyticsRange
+export interface DatasetLimits {
+  readonly maxDurationMs: number
+  readonly maxPageSize: number
+  readonly retentionMs: number
 }
 
-export type FetchCloudflareAnalyticsFromEnvOptions = {
-  readonly endpoint?: string
-  readonly env?: CloudflareAnalyticsEnv
-  readonly fetch?: CloudflareAnalyticsFetch
-  readonly range: CloudflareAnalyticsRange
+/**
+ * Exact provider path mapped to an application-owned identifier. The raw path
+ * is accepted only at the Cloudflare adapter boundary and is never returned
+ * from the client.
+ */
+export interface PathAlias {
+  readonly key: string
+  readonly path: string
 }
 
-export type GraphqlFilter = {
+export interface AliasedPathRecord {
+  readonly countries: Readonly<Record<string, number>>
+  readonly key: string
+  readonly series: ReadonlyArray<{
+    readonly at: string
+    readonly pageViews: number
+    readonly visits: number
+  }>
+  readonly totals: {
+    readonly pageViews: number
+    readonly visits: number
+  }
+}
+
+export interface AliasedPathData {
+  readonly generatedAt: string
+  readonly range: {
+    readonly from: string
+    readonly granularity: 'day'
+    readonly to: string
+  }
+  readonly records: ReadonlyArray<AliasedPathRecord>
+}
+
+export interface ReadAliasedPathsOptions {
+  readonly aliases: ReadonlyArray<PathAlias>
+  readonly pathLike?: string
+  readonly range: Range
+}
+
+export interface GraphqlFilter {
   readonly AND: ReadonlyArray<Readonly<Record<string, string>>>
 }
 
-export type GraphqlVariables = {
+export interface GraphqlVariables {
   readonly filter: GraphqlFilter
   readonly zoneTag: string
 }

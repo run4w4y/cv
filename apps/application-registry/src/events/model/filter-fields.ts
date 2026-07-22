@@ -12,20 +12,13 @@ const timestamp = (
 export const eventFilterFieldPresentation: Readonly<
   Record<string, QueryFilterFieldPresentation>
 > = {
-  id: { label: 'Event ID' },
+  id: { label: 'Activity ID' },
   applicationId: { label: 'Application ID' },
   kind: {
-    label: 'Event kind',
+    label: 'Activity kind',
   },
   revision: { label: 'Registry revision' },
-  occurredAt: timestamp(
-    'Occurred time',
-    'When the event happened at its source'
-  ),
-  recordedAt: timestamp(
-    'Recorded time',
-    'When the event was committed to the registry'
-  ),
-  deviceId: { label: 'Device ID' },
-  operationId: { label: 'Operation ID' },
+  occurredAt: timestamp('Occurred time', 'When the activity was issued'),
+  actor: { label: 'Actor' },
+  source: { label: 'Source' },
 }

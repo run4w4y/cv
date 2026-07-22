@@ -1,0 +1,34 @@
+{
+  "name": "@cv/facts-reader",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./http": {
+      "types": "./dist/http.d.ts",
+      "default": "./dist/http.js"
+    },
+    "./reader": {
+      "types": "./dist/reader.d.ts",
+      "default": "./dist/reader.js"
+    }
+  },
+  "dependencies": {
+    "@cv/contracts": "workspace:*",
+    "@cv/facts-release": "workspace:*",
+    "effect": "4.0.0-beta.99"
+  },
+  "devDependencies": {
+    "@effect/platform-browser": "4.0.0-beta.99"
+  }
+}

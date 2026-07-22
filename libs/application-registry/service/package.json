@@ -20,18 +20,18 @@
     }
   },
   "dependencies": {
+    "@cv/application-registry-artifact-store": "workspace:*",
     "@cv/application-registry-crud": "workspace:*",
     "@cv/application-registry-entity": "workspace:*",
-    "@cv/application-registry-fx": "workspace:*",
+    "@cv/application-registry-events": "workspace:*",
     "@cv/application-registry-listing-check": "workspace:*",
     "@cv/drizzle-query": "workspace:*",
     "@cv/drizzle-query-effect": "workspace:*",
-    "effect": "4.0.0-beta.91",
-    "es-toolkit": "^1.43.0"
+    "effect": "4.0.0-beta.99",
+    "es-toolkit": "^1.43.0",
+    "htmlparser2": "^12.0.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "4.20260511.1",
-    "drizzle-orm": "1.0.0-rc.4",
-    "miniflare": "4.20260708.1"
+    "drizzle-orm": "1.0.0-rc.4"
   }
 }

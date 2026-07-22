@@ -1,5 +1,0 @@
-const contentLocales = {{{locales}}}
-export const privateContentRoutes = {{{privateRoutes}}}
-
-export const getLocales = () => contentLocales
-export const getPrivateRoutes = () => privateContentRoutes
