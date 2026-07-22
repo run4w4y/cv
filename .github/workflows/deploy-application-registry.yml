@@ -87,7 +87,7 @@ jobs:
         env:
           NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
           NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
-          RUNNER_ENABLED: ${{ vars.CV_LISTING_CHECKS_ENABLED || 'false' }}
+          RUNNER_ENABLED: "true"
           RUNNER_IMAGE_DIGEST: ${{ inputs.listing_check_runner_image_digest }}
         run: |
           nomad-pack run nomad/packs/application-registry-listing-check-runner \
@@ -119,7 +119,7 @@ jobs:
         env:
           NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
           NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
-          WORKER_ENABLED: ${{ vars.CV_PDF_WORKER_ENABLED || 'false' }}
+          WORKER_ENABLED: "true"
           WORKER_IMAGE_DIGEST: ${{ inputs.pdf_worker_image_digest }}
         run: |
           nomad-pack run nomad/packs/application-registry-pdf-worker \
