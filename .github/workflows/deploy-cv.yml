@@ -13,6 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  CV_PUBLIC_RESOLVER_URL: https://registry-origin.4w4y.run
   INFISICAL_ENV: ${{ vars.INFISICAL_ENV || 'prod' }}
   INFISICAL_HOST: ${{ vars.INFISICAL_HOST || 'https://app.infisical.com' }}
 
