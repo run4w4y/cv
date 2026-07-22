@@ -1,0 +1,112 @@
+name: Publish Application Registry Images
+
+permissions:
+  contents: read
+  packages: write
+
+on:
+  workflow_call:
+    outputs:
+      api_image_digest:
+        description: Immutable registry API image digest.
+        value: ${{ jobs.publish-registry-api.outputs.digest }}
+      listing_check_runner_image_digest:
+        description: Immutable listing-check runner image digest.
+        value: ${{ jobs.publish-listing-check-runner.outputs.digest }}
+      pdf_worker_image_digest:
+        description: Immutable PDF worker image digest.
+        value: ${{ jobs.publish-pdf-worker.outputs.digest }}
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  publish-registry-api:
+    name: Publish registry API image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.image.outputs.digest }}
+    env:
+      IMAGE_NAME: ${{ github.repository_owner }}/cv-application-registry-api
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push immutable API image
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/application-registry-api/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+  publish-listing-check-runner:
+    name: Publish listing-check runner image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.image.outputs.digest }}
+    env:
+      IMAGE_NAME: ${{ github.repository_owner }}/cv-listing-check-runner
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push immutable runner image
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/application-registry-listing-check-runner/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+  publish-pdf-worker:
+    name: Publish PDF worker image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.image.outputs.digest }}
+    env:
+      IMAGE_NAME: ${{ github.repository_owner }}/application-registry-pdf-worker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push immutable PDF worker image
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/application-registry-pdf-worker/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}

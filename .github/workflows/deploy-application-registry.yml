@@ -3,46 +3,43 @@ name: Deploy Application Registry
 permissions:
   actions: read
   contents: read
-  id-token: write
 
 on:
   workflow_call:
+    inputs:
+      api_image_digest:
+        description: Immutable registry API image digest.
+        required: true
+        type: string
+      listing_check_runner_image_digest:
+        description: Immutable listing-check runner image digest.
+        required: true
+        type: string
+      pdf_worker_image_digest:
+        description: Immutable PDF worker image digest.
+        required: true
+        type: string
 
 concurrency:
   group: application-registry-production
   cancel-in-progress: false
 
+env:
+  REGISTRY: ghcr.io
+
 jobs:
   deploy-registry-api-server:
-    name: Publish and register self-hosted registry API
+    name: Register self-hosted registry API
     if: ${{ vars.CV_NOMAD_API_DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     environment: production
     permissions:
       contents: read
-      packages: write
     env:
-      REGISTRY: ghcr.io
       IMAGE_NAME: ${{ github.repository_owner }}/cv-application-registry-api
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push immutable API image
-        id: image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: apps/application-registry-api/Dockerfile
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
       - name: Install Nomad Pack
         run: |
@@ -52,11 +49,11 @@ jobs:
           unzip -q "$archive" -d /tmp/nomad-pack
           sudo install /tmp/nomad-pack/nomad-pack /usr/local/bin/nomad-pack
 
-      - name: Register disabled-by-default API service
+      - name: Register registry API service
         env:
           API_BFF_ENABLED: ${{ vars.CV_REGISTRY_BFF_ENABLED || 'false' }}
           API_ENABLED: ${{ vars.CV_REGISTRY_NOMAD_ENABLED || 'false' }}
-          API_IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          API_IMAGE_DIGEST: ${{ inputs.api_image_digest }}
           API_SUBDOMAIN: ${{ vars.CV_REGISTRY_ORIGIN_SUBDOMAIN || 'registry-origin' }}
           NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
           NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
@@ -72,35 +69,17 @@ jobs:
             --var "traefik_subdomain=${API_SUBDOMAIN}"
 
   deploy-listing-check-runner:
-    name: Publish and register listing-check runner
+    name: Register listing-check runner
     if: ${{ vars.CV_NOMAD_DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     environment: production
     permissions:
       contents: read
-      packages: write
     env:
-      REGISTRY: ghcr.io
       IMAGE_NAME: ${{ github.repository_owner }}/cv-listing-check-runner
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push immutable runner image
-        id: image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: apps/application-registry-listing-check-runner/Dockerfile
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
       - name: Install Nomad Pack
         run: |
@@ -110,13 +89,13 @@ jobs:
           unzip -q "$archive" -d /tmp/nomad-pack
           sudo install /tmp/nomad-pack/nomad-pack /usr/local/bin/nomad-pack
 
-      - name: Register disabled-by-default periodic job
+      - name: Register periodic listing-check job
         env:
           NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
           NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
           REGISTRY_PULL_TOKEN: ${{ secrets.REGISTRY_PULL_TOKEN }}
           RUNNER_ENABLED: ${{ vars.CV_LISTING_CHECKS_ENABLED || 'false' }}
-          RUNNER_IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          RUNNER_IMAGE_DIGEST: ${{ inputs.listing_check_runner_image_digest }}
         run: |
           nomad-pack run nomad/packs/application-registry-listing-check-runner \
             --parser-v1 \
@@ -126,35 +105,17 @@ jobs:
             --var "enabled=${RUNNER_ENABLED}"
 
   deploy-self-hosted-pdf:
-    name: Publish and register PDF event worker
+    name: Register PDF event worker
     if: ${{ vars.CV_NOMAD_PDF_DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     environment: production
     permissions:
       contents: read
-      packages: write
     env:
-      REGISTRY: ghcr.io
       IMAGE_NAME: ${{ github.repository_owner }}/application-registry-pdf-worker
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push immutable PDF worker image
-        id: image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: apps/application-registry-pdf-worker/Dockerfile
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
       - name: Install Nomad Pack
         run: |
@@ -164,13 +125,13 @@ jobs:
           unzip -q "$archive" -d /tmp/nomad-pack
           sudo install /tmp/nomad-pack/nomad-pack /usr/local/bin/nomad-pack
 
-      - name: Register disabled-by-default PDF worker
+      - name: Register PDF worker service
         env:
           NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
           NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
           REGISTRY_PULL_TOKEN: ${{ secrets.REGISTRY_PULL_TOKEN }}
           WORKER_ENABLED: ${{ vars.CV_PDF_WORKER_ENABLED || 'false' }}
-          WORKER_IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          WORKER_IMAGE_DIGEST: ${{ inputs.pdf_worker_image_digest }}
         run: |
           nomad-pack run nomad/packs/application-registry-pdf-worker \
             --parser-v1 \

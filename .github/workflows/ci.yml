@@ -165,6 +165,25 @@ jobs:
       - name: Run CV browser end-to-end tests
         run: ./node_modules/.bin/nx run cv:test:e2e --skip-nx-cache
 
+  publish-application-registry-images:
+    name: Publish application registry images
+    needs:
+      - quality
+      - application-registry-build
+      - application-registry-tests
+    if: >-
+      ${{
+        (github.event_name == 'push' &&
+          (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v2')) ||
+        (github.event_name == 'workflow_dispatch' &&
+          github.ref == 'refs/heads/main' &&
+          inputs.deploy_target != 'none')
+      }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-application-registry-images.yml
+
   deploy-cv:
     name: Deploy production CV
     needs:
@@ -190,9 +209,7 @@ jobs:
   deploy-application-registry:
     name: Deploy production application registry
     needs:
-      - quality
-      - application-registry-build
-      - application-registry-tests
+      - publish-application-registry-images
     if: >-
       ${{
         (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
@@ -203,10 +220,10 @@ jobs:
             inputs.deploy_target == 'registry'))
       }}
     permissions:
-      actions: read
       contents: read
-      deployments: write
-      id-token: write
-      packages: write
     secrets: inherit
+    with:
+      api_image_digest: ${{ needs.publish-application-registry-images.outputs.api_image_digest }}
+      listing_check_runner_image_digest: ${{ needs.publish-application-registry-images.outputs.listing_check_runner_image_digest }}
+      pdf_worker_image_digest: ${{ needs.publish-application-registry-images.outputs.pdf_worker_image_digest }}
     uses: ./.github/workflows/deploy-application-registry.yml
