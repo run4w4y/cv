@@ -1,9 +1,9 @@
 # CV project infrastructure
 
 This directory owns project-specific JetStream resources, Infisical entries,
-Cloudflare Access/cache policy, and Grafana dashboards. Cluster-wide Nomad,
-Consul, Vault, PostgreSQL, MinIO, NATS, Chromium, DNS, Tunnel, and Traefik
-configuration belongs to `~/infrastructure`.
+and Cloudflare Access/cache policy. Cluster-wide Nomad, Consul, Vault,
+PostgreSQL, MinIO, NATS, Chromium, DNS, Tunnel, and Traefik configuration
+belongs to `~/infrastructure`.
 
 ## JetStream topology
 
@@ -45,12 +45,6 @@ The production inputs are `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`,
 `CLOUDFLARE_ZONE_ID`, `DOMAIN_NAME`, `CV_WEB_HOST`,
 `APPLICATION_REGISTRY_MANAGEMENT_ACCESS_EMAIL`, and the Infisical settings.
 The Terraform token needs Access and zone Cache Rules write permissions.
-
-## Grafana
-
-`terraform/live/prod/grafana` points both CV dashboards at the self-hosted
-registry API. The analytics dashboard queries the registry's Cloudflare-backed
-analytics endpoint; no connector service exists.
 
 ## Validation
 

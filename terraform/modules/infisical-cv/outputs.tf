@@ -7,7 +7,6 @@ output "paths" {
     content              = local.content_path
     deploy               = local.deploy_path
     facts_publication    = local.facts_publication_path
-    grafana              = local.grafana_path
   }
 }
 

@@ -2,10 +2,10 @@
 export const applicationRegistryApiPrefix = '/api/registry' as const
 
 /**
- * Bearer-only transport namespace for CLI, automation, and Grafana callers.
+ * Bearer-only transport namespace for CLI and automation callers.
  *
- * The Worker strips this prefix before invoking the canonical HTTP API. Keeping
- * it outside `/api/registry` lets Cloudflare Access bypass only machine
+ * The API server strips this prefix before invoking the canonical HTTP API.
+ * Keeping it outside `/api/registry` lets Cloudflare Access bypass only machine
  * traffic without exposing the browser BFF's server-side token injection.
  */
 export const applicationRegistryMachinePrefix = '/machine' as const

@@ -69,34 +69,6 @@ describe('cloudflare analytics range chunking', () => {
     })
   })
 
-  test('accepts Grafana Infinity time macros as epoch milliseconds', async () => {
-    const resolved = await Effect.runPromise(
-      resolveRange(
-        {
-          from: String(Date.parse('2026-06-21T00:00:00.000Z')),
-          to: String(Date.parse('2026-06-22T00:00:00.000Z')),
-        },
-        limits(),
-        {
-          now: new Date('2026-06-23T00:00:00.000Z'),
-        }
-      )
-    )
-
-    expect(resolved).toEqual({
-      chunks: [
-        {
-          from: '2026-06-21T00:00:00.000Z',
-          to: '2026-06-22T00:00:00.000Z',
-        },
-      ],
-      effectiveRange: {
-        from: '2026-06-21T00:00:00.000Z',
-        to: '2026-06-22T00:00:00.000Z',
-      },
-    })
-  })
-
   test('rejects ranges older than provider retention instead of clipping', async () => {
     const exit = await Effect.runPromiseExit(
       resolveRange(

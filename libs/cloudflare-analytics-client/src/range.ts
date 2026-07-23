@@ -26,28 +26,8 @@ export const makeRange = (
   }
 }
 
-const epochTimestampPattern = /^-?\d+$/u
-
-const parseEpochTimestamp = (value: string) => {
-  const timestamp = Number(value)
-
-  if (!Number.isSafeInteger(timestamp)) {
-    return undefined
-  }
-
-  const timestampMs =
-    Math.abs(timestamp) < 1_000_000_000_000 ? timestamp * 1000 : timestamp
-
-  return Number.isFinite(new Date(timestampMs).getTime())
-    ? timestampMs
-    : undefined
-}
-
 const parseTimestamp = (value: string) => {
-  const trimmed = value.trim()
-  const timestamp = epochTimestampPattern.test(trimmed)
-    ? parseEpochTimestamp(trimmed)
-    : Date.parse(trimmed)
+  const timestamp = Date.parse(value.trim())
 
   return Number.isFinite(timestamp) ? timestamp : undefined
 }

@@ -5,7 +5,6 @@ locals {
   content_path              = "${local.root_path}/content"
   deploy_path               = "${local.root_path}/deploy"
   facts_publication_path    = "${local.root_path}/facts-publication"
-  grafana_path              = "${local.root_path}/grafana"
 
   placeholder_value = "TODO_FILL_ME"
 
@@ -40,11 +39,6 @@ locals {
       name        = "facts-publication"
       path        = local.facts_publication_path
       description = "Production registry credentials used only by reviewed-facts publication CI."
-    }
-    grafana = {
-      name        = "grafana"
-      path        = local.grafana_path
-      description = "Grafana API provisioning settings."
     }
   }
 
@@ -87,17 +81,6 @@ locals {
       DOMAIN_NAME = {
         value       = local.placeholder_value
         description = "Cloudflare zone name, for example example.com."
-      }
-    }
-
-    (local.grafana_path) = {
-      GRAFANA_AUTH = {
-        value       = local.placeholder_value
-        description = "Grafana provider auth token, usually a service-account token."
-      }
-      GRAFANA_URL = {
-        value       = local.placeholder_value
-        description = "Grafana base URL."
       }
     }
   }
