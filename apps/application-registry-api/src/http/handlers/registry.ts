@@ -66,7 +66,7 @@ const invalidatePublicationCache = (
 ) =>
   invalidator.invalidate(invalidation).pipe(
     Effect.catch((error) =>
-      Effect.logWarning('CV cache compatibility purge failed.', {
+      Effect.logWarning('Cloudflare CV cache purge failed.', {
         message: error.message,
       })
     )

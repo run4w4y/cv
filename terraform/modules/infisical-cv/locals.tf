@@ -29,7 +29,7 @@ locals {
     content = {
       name        = "content"
       path        = local.content_path
-      description = "Reviewed facts publication and frozen analytics compatibility secrets."
+      description = "Private CV content credentials."
     }
     deploy = {
       name        = "deploy"
@@ -64,13 +64,6 @@ locals {
       CLOUDFLARE_GRAPHQL_ENDPOINT = {
         value       = "https://api.cloudflare.com/client/v4/graphql"
         description = "Cloudflare GraphQL endpoint override for the analytics connector."
-      }
-    }
-
-    (local.content_path) = {
-      PUBLIC_CV_FULL_ACCESS_EMAIL = {
-        value       = local.placeholder_value
-        description = "Frozen v1 redaction-contact value retained only to preserve existing Infisical state; CV v2 does not consume it."
       }
     }
 

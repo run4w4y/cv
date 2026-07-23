@@ -97,8 +97,3 @@ resource "infisical_secret" "facts_publish_token" {
     prevent_destroy = true
   }
 }
-
-moved {
-  from = infisical_secret.this["/cv/deploy:CV_ANALYTICS_CONNECTOR_HOSTNAME"]
-  to   = infisical_secret.this["/cv/deploy:CLOUDFLARE_WORKERS_DEV_ACCOUNT_SUBDOMAIN"]
-}
