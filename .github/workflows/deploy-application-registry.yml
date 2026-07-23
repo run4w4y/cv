@@ -32,7 +32,7 @@ env:
 
 jobs:
   deploy-registry-api-server:
-    name: Register private registry API
+    name: Register registry API
     runs-on: ubuntu-latest
     environment: production
     permissions:
@@ -53,9 +53,10 @@ jobs:
 
       - name: Register registry API service
         env:
-          API_BFF_ENABLED: "true"
+          API_CORS_ALLOWED_ORIGINS: ${{ vars.CV_REGISTRY_WEB_ORIGIN || 'https://cv-registry.4w4y.run' }}
           API_ENABLED: "true"
           API_IMAGE_DIGEST: ${{ inputs.api_image_digest }}
+          API_SUBDOMAIN: ${{ vars.CV_API_SUBDOMAIN || 'cv-api' }}
           NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
           NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
         run: |
@@ -63,7 +64,8 @@ jobs:
             --parser-v1 \
             --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${API_IMAGE_DIGEST}" \
             --var "enabled=${API_ENABLED}" \
-            --var "bff_enabled=${API_BFF_ENABLED}"
+            --var "cors_allowed_origins=${API_CORS_ALLOWED_ORIGINS}" \
+            --var "traefik_subdomain=${API_SUBDOMAIN}"
 
   deploy-registry-web:
     name: Register registry management web
@@ -92,7 +94,7 @@ jobs:
           NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
           WEB_ENABLED: "true"
           WEB_IMAGE_DIGEST: ${{ inputs.web_image_digest }}
-          WEB_SUBDOMAIN: ${{ vars.CV_REGISTRY_ORIGIN_SUBDOMAIN || 'registry-origin' }}
+          WEB_SUBDOMAIN: ${{ vars.CV_REGISTRY_WEB_SUBDOMAIN || 'cv-registry' }}
         run: |
           nomad-pack run nomad/packs/application-registry-web \
             --parser-v1 \

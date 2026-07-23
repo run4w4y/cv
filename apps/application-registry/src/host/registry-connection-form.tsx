@@ -1,4 +1,3 @@
-import type { DesktopRegistryConfiguration } from '@cv/application-registry-desktop-contract'
 import {
   Alert,
   AlertDescription,
@@ -9,17 +8,24 @@ import {
 import { CircleAlert, LoaderCircle } from 'lucide-react'
 import * as React from 'react'
 
-import { desktopBridge } from './desktop'
+import type {
+  RegistryConnection,
+  RegistryConnectionConfiguration,
+} from './registry-connection'
 
 export const RegistryConnectionForm = ({
+  connection,
   configuration,
   onCancel,
   onConfigured,
   submitLabel,
 }: {
-  readonly configuration: DesktopRegistryConfiguration
+  readonly configuration: RegistryConnectionConfiguration
+  readonly connection: RegistryConnection
   readonly onCancel?: () => void
-  readonly onConfigured: (configuration: DesktopRegistryConfiguration) => void
+  readonly onConfigured: (
+    configuration: RegistryConnectionConfiguration
+  ) => void
   readonly submitLabel: string
 }) => {
   const originId = React.useId()
@@ -27,55 +33,57 @@ export const RegistryConnectionForm = ({
   const [origin, setOrigin] = React.useState(configuration.origin ?? '')
   const [token, setToken] = React.useState('')
   const [error, setError] = React.useState<string | null>(null)
-  const [saving, setSaving] = React.useState(false)
-  const tokenRequired = configuration.source === 'unconfigured'
+  const [operation, setOperation] = React.useState<'reset' | 'save' | null>(
+    null
+  )
+  const busy = operation !== null
+  const resetConnection = connection.reset
+  const tokenRequired = !configuration.tokenConfigured
+
+  const run = (
+    kind: 'reset' | 'save',
+    action: () => Promise<RegistryConnectionConfiguration>
+  ) => {
+    if (busy) return
+    setError(null)
+    setOperation(kind)
+    void action()
+      .then((nextConfiguration) => {
+        setToken('')
+        onConfigured(nextConfiguration)
+      })
+      .catch((cause: unknown) => {
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : 'The Registry connection could not be updated.'
+        )
+      })
+      .finally(() => setOperation(null))
+  }
 
   return (
     <form
       className="grid gap-4"
       onSubmit={(event) => {
         event.preventDefault()
-        const bridge = desktopBridge()
-        if (bridge === null || saving) return
-
-        setError(null)
-        setSaving(true)
         const replacementToken = token.trim()
-        void bridge.registry
-          .configure({
+        run('save', () =>
+          connection.configure({
             origin,
             ...(replacementToken.length > 0 ? { token: replacementToken } : {}),
           })
-          .then((result) => {
-            if (result.ok && result.value.configured) {
-              setToken('')
-              onConfigured(result.value)
-              return
-            }
-            setError(
-              result.ok
-                ? 'The Registry configuration was not saved.'
-                : result.error.message
-            )
-          })
-          .catch((cause: unknown) => {
-            setError(
-              cause instanceof Error
-                ? cause.message
-                : 'The desktop host did not answer.'
-            )
-          })
-          .finally(() => setSaving(false))
+        )
       }}
     >
       <div className="grid gap-2 text-sm">
         <label className="font-medium" htmlFor={originId}>
-          Registry API origin
+          Registry API base URL
         </label>
         <Input
           aria-describedby={`${originId}-description`}
           autoComplete="url"
-          disabled={saving}
+          disabled={busy}
           id={originId}
           placeholder="https://registry.example.com"
           required
@@ -87,19 +95,21 @@ export const RegistryConnectionForm = ({
           className="text-xs text-muted-foreground"
           id={`${originId}-description`}
         >
-          Use HTTPS, except for localhost development.
+          Requests use this Registry&apos;s authenticated API.
         </span>
       </div>
       <div className="grid gap-2 text-sm">
         <label className="font-medium" htmlFor={tokenId}>
-          {tokenRequired ? 'Machine API token' : 'New machine API token'}
+          {tokenRequired
+            ? 'Registry bearer token'
+            : 'New Registry bearer token'}
         </label>
         <Input
           aria-describedby={
             tokenRequired ? undefined : `${tokenId}-description`
           }
           autoComplete="new-password"
-          disabled={saving}
+          disabled={busy}
           id={tokenId}
           required={tokenRequired}
           type="password"
@@ -111,7 +121,7 @@ export const RegistryConnectionForm = ({
             className="text-xs text-muted-foreground"
             id={`${tokenId}-description`}
           >
-            Leave blank to keep the currently encrypted token.
+            Leave blank to keep the current token.
           </span>
         )}
       </div>
@@ -131,7 +141,7 @@ export const RegistryConnectionForm = ({
       >
         {onCancel === undefined ? null : (
           <Button
-            disabled={saving}
+            disabled={busy}
             onClick={onCancel}
             type="button"
             variant="outline"
@@ -139,8 +149,25 @@ export const RegistryConnectionForm = ({
             Cancel
           </Button>
         )}
-        <Button disabled={saving} type="submit">
-          {saving ? (
+        {configuration.resettable && resetConnection !== undefined ? (
+          <Button
+            disabled={busy}
+            onClick={() => run('reset', resetConnection)}
+            type="button"
+            variant="outline"
+          >
+            {operation === 'reset' ? (
+              <>
+                <LoaderCircle className="animate-spin" />
+                Restoring default…
+              </>
+            ) : (
+              'Use default configuration'
+            )}
+          </Button>
+        ) : null}
+        <Button disabled={busy} type="submit">
+          {operation === 'save' ? (
             <>
               <LoaderCircle className="animate-spin" />
               Testing and saving…

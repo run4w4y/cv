@@ -1,8 +1,9 @@
 output "application_registry" {
-  description = "Self-hosted registry endpoint protected by Cloudflare Access."
+  description = "Self-hosted registry web and API endpoints."
   value = {
     api_url             = local.application_registry_api_url
     public_resolver_url = local.application_registry_api_url
+    web_url             = local.application_registry_web_url
   }
 }
 

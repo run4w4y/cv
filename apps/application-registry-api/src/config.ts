@@ -9,12 +9,14 @@ export interface ApiServerConfiguration {
     readonly zoneId: string
   }
   readonly authentication: {
-    readonly bffEnabled: boolean
     readonly factsPublishToken: Redacted.Redacted<string>
     readonly registryApiToken: Redacted.Redacted<string>
   }
   readonly cacheInvalidation: {
     readonly endpoint: URL
+  }
+  readonly cors: {
+    readonly allowedOrigins: ReadonlyArray<string>
   }
   readonly http: {
     readonly host: string
@@ -55,6 +57,37 @@ const url = (name: string, fallback?: string) =>
     )
   )
 
+const corsAllowedOrigins = Config.nonEmptyString(
+  'REGISTRY_CORS_ALLOWED_ORIGINS'
+).pipe(
+  Config.withDefault('http://localhost:4300,http://127.0.0.1:4300'),
+  Effect.flatMap((value) =>
+    Effect.forEach(value.split(','), (candidate) =>
+      Effect.try({
+        try: () => {
+          const origin = new URL(candidate.trim())
+          if (
+            !['http:', 'https:'].includes(origin.protocol) ||
+            origin.username !== '' ||
+            origin.password !== '' ||
+            origin.pathname !== '/' ||
+            origin.search !== '' ||
+            origin.hash !== ''
+          ) {
+            throw new Error('Origin must contain only scheme, host, and port.')
+          }
+          return origin.origin
+        },
+        catch: () =>
+          new Error(
+            'REGISTRY_CORS_ALLOWED_ORIGINS must be a comma-separated list of HTTP(S) origins.'
+          ),
+      })
+    )
+  ),
+  Effect.map((origins) => [...new Set(origins)])
+)
+
 export const readApiServerConfiguration: Effect.Effect<
   ApiServerConfiguration,
   unknown
@@ -69,9 +102,6 @@ export const readApiServerConfiguration: Effect.Effect<
     zoneId: Config.nonEmptyString('CLOUDFLARE_ZONE_ID'),
   }),
   authentication: Effect.all({
-    bffEnabled: Config.boolean('REGISTRY_BFF_ENABLED').pipe(
-      Config.withDefault(false)
-    ),
     factsPublishToken: Config.redacted('FACTS_PUBLISH_TOKEN'),
     registryApiToken: Config.redacted('REGISTRY_API_TOKEN'),
   }),
@@ -80,6 +110,9 @@ export const readApiServerConfiguration: Effect.Effect<
       'CLOUDFLARE_API_ENDPOINT',
       'https://api.cloudflare.com/client/v4/'
     ),
+  }),
+  cors: Effect.all({
+    allowedOrigins: corsAllowedOrigins,
   }),
   http: Effect.all({
     host: Config.nonEmptyString('SERVER_HOST').pipe(

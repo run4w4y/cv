@@ -1,10 +1,5 @@
-import {
-  type CvDocumentV1,
-  CvDocumentV1Schema,
-  cvDocumentV1ContractId,
-  cvDocumentV1Version,
-} from '@cv/contracts/document'
-import { Crypto, Effect, Schema } from 'effect'
+import { type CvDocumentV1, CvDocumentV1Schema } from '@cv/contracts/document'
+import { Effect, Schema } from 'effect'
 
 export interface CvPublicResolverBinding {
   readonly fetch: (request: Request) => Promise<Response>
@@ -37,8 +32,6 @@ export type CvPublicationLoadResult =
   | { readonly tag: 'not-found' }
   | { readonly tag: 'unavailable' }
 
-export const maximumCvPublicationBytes = 256 * 1024
-
 class InvalidCvPublication extends Schema.TaggedErrorClass<InvalidCvPublication>()(
   'InvalidCvPublication',
   { message: Schema.String }
@@ -57,14 +50,7 @@ class CvPublicationUnavailable extends Schema.TaggedErrorClass<CvPublicationUnav
   }
 ) {}
 
-const headers = {
-  byteLength: 'x-cv-content-byte-length',
-  contractId: 'x-cv-contract-id',
-  contractVersion: 'x-cv-contract-version',
-  locale: 'x-cv-document-locale',
-  publicUrl: 'x-cv-public-url',
-  sha256: 'x-cv-content-sha256',
-} as const
+const publicUrlHeader = 'x-cv-public-url'
 
 const invalidPublication = (message: string) =>
   new InvalidCvPublication({ message })
@@ -72,15 +58,9 @@ const invalidPublication = (message: string) =>
 const unavailablePublication = (message: string, cause: unknown) =>
   new CvPublicationUnavailable({ cause, message })
 
-const bytesToHex = (bytes: Uint8Array): string =>
-  Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
-
-const decodeDocument = (bytes: Uint8Array) =>
+const decodeDocument = (text: string) =>
   Effect.try({
-    try: () => {
-      const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
-      return JSON.parse(text) as unknown
-    },
+    try: () => JSON.parse(text) as unknown,
     catch: () => invalidPublication('The publication body is not valid JSON.'),
   }).pipe(
     Effect.flatMap((json) =>
@@ -91,27 +71,8 @@ const decodeDocument = (bytes: Uint8Array) =>
     )
   )
 
-const validPublicUrl = (value: string, token: string): boolean => {
-  try {
-    const url = new URL(value)
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') return false
-    if (url.hash || url.search) return false
-    const expectedSuffix = `/c/${encodeURIComponent(token)}`
-    return url.pathname === expectedSuffix
-  } catch {
-    return false
-  }
-}
-
-const positiveInteger = (value: string | null): number | null => {
-  if (!value || !/^\d+$/u.test(value)) return null
-  const parsed = Number.parseInt(value, 10)
-  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null
-}
-
 const loadCvDocument = Effect.fn('CvPublication.load')(function* (
   binding: CvPublicResolverBinding,
-  token: string,
   resolverUrl: string
 ) {
   const response = yield* Effect.tryPromise({
@@ -129,78 +90,19 @@ const loadCvDocument = Effect.fn('CvPublication.load')(function* (
     )
   }
 
-  const contractId = response.headers.get(headers.contractId)
-  const contractVersion = response.headers.get(headers.contractVersion)
-  const locale = response.headers.get(headers.locale)
-  const publicUrl = response.headers.get(headers.publicUrl)
-  const expectedSha256 = response.headers.get(headers.sha256)
-  const expectedByteLength = positiveInteger(
-    response.headers.get(headers.byteLength)
-  )
-  const contentLength = positiveInteger(response.headers.get('content-length'))
-  const mediaType = response.headers.get('content-type')?.split(';', 1)[0]
-
-  if (
-    contractId !== cvDocumentV1ContractId ||
-    contractVersion !== cvDocumentV1Version.toString(10) ||
-    mediaType !== 'application/json' ||
-    !locale ||
-    !publicUrl ||
-    !validPublicUrl(publicUrl, token) ||
-    !expectedSha256 ||
-    !/^[a-f0-9]{64}$/u.test(expectedSha256) ||
-    expectedByteLength === null
-  ) {
-    return yield* invalidPublication('The publication metadata is invalid.')
-  }
-
-  if (
-    expectedByteLength > maximumCvPublicationBytes ||
-    (contentLength !== null && contentLength > maximumCvPublicationBytes)
-  ) {
-    return yield* invalidPublication('The publication body is too large.')
-  }
-
-  const buffer = yield* Effect.tryPromise({
-    try: () => response.arrayBuffer(),
+  const text = yield* Effect.tryPromise({
+    try: () => response.text(),
     catch: (cause) =>
       unavailablePublication(
         'The CV publication body could not be read.',
         cause
       ),
   })
-  const bytes = new Uint8Array(buffer)
-
-  if (
-    bytes.byteLength > maximumCvPublicationBytes ||
-    bytes.byteLength !== expectedByteLength
-  ) {
+  const document = yield* decodeDocument(text)
+  const publicUrl = response.headers.get(publicUrlHeader)
+  if (publicUrl === null) {
     return yield* invalidPublication(
-      'The publication body length does not match its metadata.'
-    )
-  }
-
-  const crypto = yield* Crypto.Crypto
-  const digest = yield* crypto
-    .digest('SHA-256', bytes)
-    .pipe(
-      Effect.mapError((cause) =>
-        unavailablePublication(
-          'The CV publication integrity check failed.',
-          cause
-        )
-      )
-    )
-  if (bytesToHex(digest) !== expectedSha256) {
-    return yield* invalidPublication(
-      'The publication body does not match its integrity metadata.'
-    )
-  }
-
-  const document = yield* decodeDocument(bytes)
-  if (document.locale !== locale) {
-    return yield* invalidPublication(
-      'The publication locale does not match its metadata.'
+      'The CV publication resolver omitted its public URL.'
     )
   }
 
@@ -213,7 +115,6 @@ export const loadCvPublication = (
 ) =>
   loadCvDocument(
     binding,
-    token,
     `https://registry.internal/cv-publications/${encodeURIComponent(token)}`
   )
 
@@ -226,7 +127,7 @@ export const loadCvPreview = (
     `https://registry.internal/cv-previews/${encodeURIComponent(token)}`
   )
   url.searchParams.set('access', previewToken)
-  return loadCvDocument(binding, token, url.toString())
+  return loadCvDocument(binding, url.toString())
 }
 
 export const asCvPublicationLoadResult = <R>(

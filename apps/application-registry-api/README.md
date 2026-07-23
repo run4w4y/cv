@@ -1,13 +1,13 @@
 # Self-hosted application registry API
 
-Private Bun service for the typed application-registry API. It uses PostgreSQL
-for state, MinIO for objects, NATS JetStream for domain events, and Cloudflare's
-GraphQL and cache-purge APIs for retained edge capabilities.
+Publicly routed Bun service for the typed application-registry API. It uses
+PostgreSQL for state, MinIO for objects, NATS JetStream for domain events, and
+Cloudflare's GraphQL and cache-purge APIs for retained edge capabilities.
 
-The separate management-web allocation proxies same-origin browser requests to
-this service over Consul Connect. `REGISTRY_BFF_ENABLED` permits those
-Access-protected browser requests to use the server-held registry credential;
-direct `/machine/*` clients must continue presenting that bearer credential.
+Every `/api/registry/*` request presents the configured registry bearer token.
+The management web app calls those canonical routes directly; there is no BFF,
+credential injection, or alternate API transport. `HttpRouter.cors`
+restricts browser access to `REGISTRY_CORS_ALLOWED_ORIGINS`.
 Capability-token publication and preview resolvers are exposed at
 `/cv-publications/:token` and `/cv-previews/:token`.
 
@@ -19,6 +19,8 @@ Runtime dependencies:
 
 - `POSTGRES_*`, `MINIO_*`, and `NATS_*` connection values;
 - `REGISTRY_API_TOKEN` and `FACTS_PUBLISH_TOKEN`;
+- `REGISTRY_CORS_ALLOWED_ORIGINS`, as a comma-separated list of HTTPS web
+  origins;
 - `CLOUDFLARE_ANALYTICS_API_TOKEN`, `CLOUDFLARE_ZONE_ID`, and `CV_WEB_HOST`.
   The Cloudflare token needs analytics-read and cache-purge permissions.
 

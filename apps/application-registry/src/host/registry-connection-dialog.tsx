@@ -1,7 +1,3 @@
-import type {
-  DesktopHostBridge,
-  DesktopRegistryConfiguration,
-} from '@cv/application-registry-desktop-contract'
 import {
   Alert,
   AlertDescription,
@@ -25,25 +21,11 @@ import {
 } from 'lucide-react'
 import * as React from 'react'
 
-import { desktopBridge } from './desktop'
+import {
+  type RegistryConnectionConfiguration,
+  registryConnection,
+} from './registry-connection'
 import { RegistryConnectionForm } from './registry-connection-form'
-
-const originLabel = (configuration: DesktopRegistryConfiguration | null) => {
-  if (configuration?.origin === null || configuration === null) {
-    return 'Configure connection'
-  }
-  try {
-    return new URL(configuration.origin).host
-  } catch {
-    return configuration.origin
-  }
-}
-
-const loadConfiguration = async (bridge: DesktopHostBridge) => {
-  const result = await bridge.registry.status()
-  if (!result.ok) throw new Error(result.error.message)
-  return result.value
-}
 
 const defaultReload = () => globalThis.location.reload()
 
@@ -52,21 +34,23 @@ export const RegistryConnectionControl = ({
 }: {
   readonly reload?: () => void
 } = {}) => {
-  const bridge = desktopBridge()
+  const connection = React.useMemo(registryConnection, [])
   const requestId = React.useRef(0)
   const [open, setOpen] = React.useState(false)
   const [configuration, setConfiguration] =
-    React.useState<DesktopRegistryConfiguration | null>(null)
-  const [loading, setLoading] = React.useState(bridge !== null)
+    React.useState<RegistryConnectionConfiguration | null>(() =>
+      connection.current()
+    )
+  const [loading, setLoading] = React.useState(configuration === null)
   const [error, setError] = React.useState<string | null>(null)
 
   const refresh = React.useCallback(() => {
-    if (bridge === null) return
     const activeRequest = requestId.current + 1
     requestId.current = activeRequest
     setLoading(true)
     setError(null)
-    void loadConfiguration(bridge)
+    void connection
+      .status()
       .then((nextConfiguration) => {
         if (requestId.current !== activeRequest) return
         setConfiguration(nextConfiguration)
@@ -76,13 +60,13 @@ export const RegistryConnectionControl = ({
         setError(
           cause instanceof Error
             ? cause.message
-            : 'The desktop host did not answer.'
+            : 'The Registry connection could not be loaded.'
         )
       })
       .finally(() => {
         if (requestId.current === activeRequest) setLoading(false)
       })
-  }, [bridge])
+  }, [connection])
 
   React.useEffect(() => {
     refresh()
@@ -92,13 +76,11 @@ export const RegistryConnectionControl = ({
   }, [refresh])
 
   const secondaryLabel =
-    bridge === null
-      ? 'Managed by web host'
-      : error !== null && configuration === null
-        ? 'Connection unavailable'
-        : loading && configuration === null
-          ? 'Loading connection…'
-          : originLabel(configuration)
+    error !== null && configuration === null
+      ? 'Connection unavailable'
+      : loading && configuration === null
+        ? 'Loading connection…'
+        : (configuration?.origin ?? 'Configure connection')
 
   return (
     <Dialog
@@ -122,7 +104,10 @@ export const RegistryConnectionControl = ({
               <span className="block truncate text-sm font-semibold">
                 Registry
               </span>
-              <span className="block truncate text-xs text-muted-foreground">
+              <span
+                className="block truncate text-xs text-muted-foreground"
+                title={configuration?.origin ?? undefined}
+              >
                 {secondaryLabel}
               </span>
             </span>
@@ -135,22 +120,13 @@ export const RegistryConnectionControl = ({
           <DialogTitle>Registry connection</DialogTitle>
           <DialogDescription>
             Choose the Registry API used for authenticated application data.
-            Stored tokens remain inside the desktop main process.
+            {connection.kind === 'desktop'
+              ? ' Stored tokens remain inside the desktop main process.'
+              : ' Browser overrides are saved in this browser.'}
           </DialogDescription>
         </DialogHeader>
 
-        {bridge === null ? (
-          <Alert>
-            <LockKeyhole />
-            <AlertTitle>Managed by the web host</AlertTitle>
-            <AlertDescription>
-              This browser build uses the host&apos;s authenticated same-origin
-              proxy. Change the Registry endpoint and token in the deployment
-              environment; they are intentionally unavailable to browser
-              JavaScript.
-            </AlertDescription>
-          </Alert>
-        ) : loading && configuration === null ? (
+        {loading && configuration === null ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
             <LoaderCircle className="size-4 animate-spin" />
             Loading Registry settings…
@@ -172,7 +148,7 @@ export const RegistryConnectionControl = ({
           <div className="grid gap-4">
             <div className="grid gap-1 rounded-md border border-border bg-muted/30 p-3">
               <span className="text-xs font-medium text-muted-foreground">
-                Registry API origin
+                Registry API base URL
               </span>
               <span className="break-all text-sm">{configuration.origin}</span>
             </div>
@@ -203,6 +179,7 @@ export const RegistryConnectionControl = ({
             </Alert>
             <RegistryConnectionForm
               key={`${configuration.source}:${configuration.origin ?? ''}`}
+              connection={connection}
               configuration={configuration}
               onCancel={() => setOpen(false)}
               onConfigured={(nextConfiguration) => {

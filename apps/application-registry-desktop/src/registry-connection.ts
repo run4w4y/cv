@@ -11,7 +11,7 @@ import {
   type RegistryCredentials,
 } from './settings'
 
-const MachineHealthSchema = Schema.Struct({ ok: Schema.Boolean })
+const RegistryHealthSchema = Schema.Struct({ ok: Schema.Boolean })
 
 export class DesktopRegistryConnectionError extends Schema.TaggedErrorClass<DesktopRegistryConnectionError>()(
   'DesktopRegistryConnectionError',
@@ -52,7 +52,7 @@ export const desktopRegistryConnectionLayer = Layer.effect(
       credentials: RegistryCredentials
     ) {
       const request = HttpClientRequest.get(
-        new URL('/machine/health', credentials.origin)
+        new URL('/api/registry/health', credentials.origin)
       ).pipe(
         HttpClientRequest.acceptJson,
         HttpClientRequest.bearerToken(Redacted.value(credentials.token))
@@ -72,7 +72,7 @@ export const desktopRegistryConnectionLayer = Layer.effect(
         return yield* Effect.fail(
           connectionError(
             'registry_unauthorized',
-            'The Registry API rejected the machine token.',
+            'The Registry API rejected the bearer token.',
             new Error(String(response.status))
           )
         )
@@ -88,7 +88,7 @@ export const desktopRegistryConnectionLayer = Layer.effect(
       }
 
       const payload = yield* response.json.pipe(
-        Effect.flatMap(Schema.decodeUnknownEffect(MachineHealthSchema)),
+        Effect.flatMap(Schema.decodeUnknownEffect(RegistryHealthSchema)),
         Effect.mapError((cause) =>
           connectionError(
             'network_failed',

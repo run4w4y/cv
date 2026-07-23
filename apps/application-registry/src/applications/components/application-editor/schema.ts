@@ -3,6 +3,7 @@ import {
   type Application,
   ApplicationSchema,
   CurrencyCodeSchema,
+  HttpUrlSchema,
   NonEmptyTrimmedStringSchema,
   UtcIsoTimestampSchema,
 } from '@cv/application-registry-entity'
@@ -183,12 +184,10 @@ export const applicationRowEditDefaults = (
   }
 }
 
-const PostingUrlSchema = Schema.Trim.pipe(Schema.decodeTo(Schema.URLFromString))
-
 export const ApplicationDetailEditFormSchema = Schema.Struct({
   company: requiredText('Company'),
   role: requiredText('Role'),
-  postingUrl: PostingUrlSchema,
+  postingUrl: HttpUrlSchema,
   location: NullableTextFromString,
   applicationStatus: ApplicationSchema.fields.applicationStatus,
   targetStage: ApplicationSchema.fields.targetStage,

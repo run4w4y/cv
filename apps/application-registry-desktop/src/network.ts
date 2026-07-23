@@ -148,7 +148,7 @@ export const desktopNetworkLayer = Layer.effect(
             )
           )
         }
-        target = new URL(`/machine${input.url}`, credentials.origin)
+        target = new URL(input.url, credentials.origin)
         request.headers.authorization = `Bearer ${Redacted.value(credentials.token)}`
       } else {
         target = yield* Effect.try({

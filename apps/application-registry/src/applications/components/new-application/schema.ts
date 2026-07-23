@@ -1,6 +1,7 @@
 import type { CreateApplicationRequest } from '@cv/application-registry-api-contract'
 import {
   ApplicationStatusSchema,
+  HttpUrlSchema,
   TargetStageSchema,
 } from '@cv/application-registry-entity'
 import { Schema } from 'effect'
@@ -16,17 +17,6 @@ const optionalText = (value: string) => {
   const trimmed = value.trim()
   return trimmed.length === 0 ? null : trimmed
 }
-
-const validUrl = Schema.makeFilter((value: string) => {
-  try {
-    const protocol = new URL(value).protocol
-    return protocol === 'http:' || protocol === 'https:'
-      ? true
-      : 'Posting URL must use HTTP or HTTPS.'
-  } catch {
-    return 'Enter a valid posting URL.'
-  }
-})
 
 const compensationIssues = (value: {
   readonly currencyCode: string
@@ -75,7 +65,7 @@ const compensationIssues = (value: {
 }
 
 export const NewApplicationFormSchema = Schema.Struct({
-  postingUrl: requiredText('Posting URL').pipe(Schema.check(validUrl)),
+  postingUrl: HttpUrlSchema,
   company: requiredText('Company'),
   role: requiredText('Role'),
   location: Schema.String,

@@ -20,6 +20,8 @@ import {
   pdfGenerationFailedDisableReason,
 } from '@cv/application-registry-entity'
 import {
+  RegistryEventPublishError,
+  RegistryEventPublisher,
   RegistryEventPublisherNoop,
   RegistryEventSchema,
 } from '@cv/application-registry-events'
@@ -487,12 +489,12 @@ const makeMemoryCrudLayer = () => {
   return { layer, state }
 }
 
-const makeHarness = () => {
+const makeHarness = (eventPublisherLayer = RegistryEventPublisherNoop) => {
   const memory = makeMemoryCrudLayer()
   const live = RegistryContentServicesLive.pipe(
     Layer.provide(memory.layer),
     Layer.provide(makeInMemoryArtifactStoreLayer()),
-    Layer.provide(RegistryEventPublisherNoop)
+    Layer.provide(eventPublisherLayer)
   )
   const run = <A, E>(
     effect: Effect.Effect<
@@ -744,6 +746,84 @@ describe('content domain services', () => {
     expect(new TextDecoder().decode(result.resolved.bytes)).toBe(
       '{"revision":2}'
     )
+  })
+
+  test('keeps publication state changes when event delivery fails', async () => {
+    const attemptedEventIds: Array<string> = []
+    const eventPublisherLayer = Layer.succeed(
+      RegistryEventPublisher,
+      RegistryEventPublisher.of({
+        publish: Effect.fn('RegistryEventPublisher.failForTest')(
+          function* (event) {
+            if (
+              event._tag !== 'CvPublicationStaged' &&
+              event._tag !== 'CvPublicationAvailabilityChanged'
+            ) {
+              return
+            }
+            attemptedEventIds.push(event.eventId)
+            return yield* new RegistryEventPublishError({
+              cause: new Error('event transport unavailable'),
+              eventId: event.eventId,
+              message: 'Event transport unavailable.',
+            })
+          }
+        ),
+      })
+    )
+    const { run } = makeHarness(eventPublisherLayer)
+    const result = await run(
+      Effect.gen(function* () {
+        const content = yield* ContentEntriesService
+        const publications = yield* CvPublicationsService
+        const entry = yield* content.ensure(application.id, {
+          kind: 'cv',
+          locale: 'en',
+        })
+        const appended = yield* content.appendRevision(
+          application.id,
+          entry.id,
+          appendInput(
+            new TextEncoder().encode('{"publication":"best-effort-events"}'),
+            entry.version,
+            'best-effort-event-revision'
+          )
+        )
+        const approved = yield* content.approveRevision(
+          application.id,
+          entry.id,
+          {
+            expectedVersion: appended.entry.version,
+            revisionId: appended.revision.id,
+          }
+        )
+        const staged = yield* publications.stage(application.id, entry.id, {
+          operationId: 'best-effort-stage',
+          expectedContentVersion: approved.entry.version,
+          publicBaseUrl: 'https://cv.example.test/cv',
+          revisionId: appended.revision.id,
+        })
+        const enabled = yield* publications.setAvailability(
+          application.id,
+          entry.id,
+          {
+            operationId: 'best-effort-availability',
+            enabled: true,
+            expectedPublicationVersion: staged.publicationVersion,
+          }
+        )
+        const stored = yield* publications.findByEntry(application.id, entry.id)
+        return { enabled, staged, stored }
+      })
+    )
+
+    expect(result.staged.enabled).toBe(false)
+    expect(result.enabled.enabled).toBe(true)
+    expect(result.stored.enabled).toBe(true)
+    expect(attemptedEventIds).toEqual([
+      'cv-publication-staged:best-effort-stage',
+      'cv-publication-availability-changed:best-effort-availability',
+    ])
   })
 
   test('reports a conflict when content changes after the staging preflight', async () => {

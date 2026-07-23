@@ -54,7 +54,7 @@ const responseClient = (
   )
 
 describe('desktop Registry configuration', () => {
-  test('verifies the machine token before storing it', async () => {
+  test('verifies the bearer token before storing it', async () => {
     const requests: Array<HttpClientRequest.HttpClientRequest> = []
     let writes = 0
     const layer = desktopRegistryConnectionLayer.pipe(
@@ -86,7 +86,7 @@ describe('desktop Registry configuration', () => {
 
     expect(result).toMatchObject({ configured: true, source: 'stored' })
     expect(requests[0]?.url).toBe(
-      'https://registry.example.test/machine/health'
+      'https://registry.example.test/api/registry/health'
     )
     expect(requests[0]?.headers.authorization).toBe('Bearer machine-token')
     expect(writes).toBe(1)

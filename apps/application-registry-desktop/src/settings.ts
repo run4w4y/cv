@@ -379,7 +379,7 @@ export const desktopSettingsLayer = (options: {
             return yield* Effect.fail(
               settingsError(
                 'configuration_invalid',
-                'The Registry machine token is required.',
+                'The Registry bearer token is required.',
                 new Error('Missing token')
               )
             )
@@ -407,7 +407,7 @@ export const desktopSettingsLayer = (options: {
           return yield* Effect.fail(
             settingsError(
               'configuration_invalid',
-              'The Registry machine token is required.',
+              'The Registry bearer token is required.',
               new Error('Empty token')
             )
           )

@@ -5,12 +5,10 @@ one unversioned Effect `HttpApi`, generates its OpenAPI document, and supplies
 the schemas used by the Bun API, browser management app, and CLI client. There
 is no parallel legacy API.
 
-The public health endpoint is `GET /health`. Registry resources live under
-`/api/registry` and require bearer authentication. Browser callers reach those
-paths through the same-origin BFF. Direct clients use the service's
-`/machine/api/registry` transport, which validates the explicitly supplied
-bearer credential and strips `/machine` before invoking this contract. Missing
-machine credentials are never replaced with the server's configured token.
+The public liveness endpoint is `GET /health`. Registry resources, including
+the authenticated health check at `GET /api/registry/health`, live under
+`/api/registry` and require bearer authentication. Browsers, desktop clients,
+automation, and the MCP server all use those same canonical paths.
 
 The contract is grouped internally by responsibility while remaining one API:
 
@@ -42,11 +40,10 @@ only `{ sha256, mediaType }` references, avoiding base64 expansion and keeping
 content metadata separate from transport.
 
 The typed `factsPublication` group accepts a strict binary release bundle under
-`/machine/api/registry/facts`, registers immutable objects, and activates with
-an expected-current compare-and-set. It uses a dedicated publication bearer
-credential. Browser reads remain behind the authenticated, read-only
-same-origin object proxy, and the registry contract carries a facts release ID
-as content-revision provenance.
+`/api/registry/facts`, registers immutable objects, and activates with an
+expected-current compare-and-set. It uses a dedicated publication bearer
+credential. Browser reads use the authenticated read-only object route, and the
+registry contract carries a facts release ID as content-revision provenance.
 
 Mutations that can be retried take `idempotency-key` in the HTTP header. The
 payload contains domain data and optimistic `expectedVersion` values; it does

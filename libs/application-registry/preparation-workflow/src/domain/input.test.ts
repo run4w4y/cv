@@ -16,15 +16,27 @@ describe('preparation workflow inputs', () => {
     ).toBe('https://jobs.example.test/role')
   })
 
-  test('rejects credential-bearing URLs and malformed locales', async () => {
+  test('accepts any HTTP host and rejects non-HTTP URLs', async () => {
     await expect(
       Effect.runPromise(
         PreparationBatchUrlsSchema.makeEffect([
           'https://user:secret@jobs.example.test/role',
+          'http://127.0.0.1/internal-listing',
         ])
       )
-    ).rejects.toBeDefined()
+    ).resolves.toEqual([
+      'https://user:secret@jobs.example.test/role',
+      'http://127.0.0.1/internal-listing',
+    ])
 
+    await expect(
+      Effect.runPromise(
+        PreparationBatchUrlsSchema.makeEffect(['file:///private/job.html'])
+      )
+    ).rejects.toBeDefined()
+  })
+
+  test('rejects malformed locales', async () => {
     await expect(
       Effect.runPromise(
         Schema.decodeUnknownEffect(PreparationWorkflowInputSchema)({

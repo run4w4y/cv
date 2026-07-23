@@ -1,4 +1,4 @@
-import { Effect, Match, Option, Predicate, Schema } from 'effect'
+import { Effect, Match, Predicate, Schema } from 'effect'
 
 import type { PersistJobPostingSnapshotInput } from '../types'
 
@@ -8,10 +8,9 @@ import {
 } from './job-posting-normalize'
 
 export const jobPostingCaptureFetcherVersion =
-  'application-registry-job-posting-fetch/v2'
+  'application-registry-job-posting-fetch/v3'
 export const jobPostingCaptureMaxBytes = 4 * 1_024 * 1_024
 export const jobPostingCaptureTimeoutMilliseconds = 20_000
-export const jobPostingCaptureMaxRedirects = 5
 
 type FetchJobPosting = (
   input: string | URL | Request,
@@ -57,52 +56,6 @@ const failedCapture = (
   requestedUrl,
   status: 'failed',
 })
-
-const HttpUrlSchema = Schema.URL.pipe(
-  Schema.check(
-    Schema.makeFilter((url) =>
-      url.protocol === 'http:' || url.protocol === 'https:'
-        ? true
-        : 'The application canonical URL must use HTTP or HTTPS.'
-    )
-  ),
-  Schema.check(
-    Schema.makeFilter((url) =>
-      url.username === '' && url.password === ''
-        ? true
-        : 'URLs containing credentials are not allowed.'
-    )
-  )
-)
-
-const parseHttpUrl = (value: string): URL | null => {
-  let parsed: URL
-  try {
-    parsed = new URL(value)
-  } catch {
-    return null
-  }
-
-  const decoded = Schema.decodeUnknownOption(HttpUrlSchema)(parsed)
-  if (Option.isNone(decoded)) return null
-
-  const url = decoded.value
-  // Fragments are not sent in HTTP requests. Normalizing them also makes a
-  // fragment-only redirect compare equal to the URL already visited.
-  url.hash = ''
-  return new URL(url.href.endsWith('#') ? url.href.slice(0, -1) : url.href)
-}
-
-const cancelResponseBody = async (response: Response): Promise<void> => {
-  try {
-    await response.body?.cancel()
-  } catch {
-    // A redirect response body is intentionally discarded. Some fetch
-    // implementations report cancellation as a rejection after doing so.
-  }
-}
-
-const redirectStatuses = new Set([301, 302, 303, 307, 308])
 
 const responseMediaType = (value: string): string =>
   value.split(';', 1)[0]?.trim().toLowerCase() ?? ''
@@ -169,125 +122,38 @@ const capture = async (
   requestedUrl: string,
   options: CaptureOptions
 ): Promise<PersistJobPostingSnapshotInput> => {
-  const url = parseHttpUrl(requestedUrl)
-  if (url === null) {
-    return failedCapture(
-      requestedUrl,
-      'invalid_url',
-      'The application canonical URL must use HTTP or HTTPS.'
-    )
-  }
-
   const fetcher = options.fetcher ?? globalThis.fetch
   const maxBytes = options.maxBytes ?? jobPostingCaptureMaxBytes
   const timeoutMilliseconds =
     options.timeoutMilliseconds ?? jobPostingCaptureTimeoutMilliseconds
 
   const timeoutSignal = AbortSignal.timeout(timeoutMilliseconds)
-  const visitedUrls = new Set([url.href])
-  let currentUrl = url
-  let followedRedirects = 0
   let response: Response
-
-  while (true) {
-    try {
-      response = await fetcher(currentUrl, {
-        headers: {
-          accept:
-            'text/html,application/xhtml+xml,text/plain,application/json;q=0.9,*/*;q=0.5',
-        },
-        redirect: 'manual',
-        signal: timeoutSignal,
-      })
-    } catch (cause) {
-      const timedOut =
-        timeoutSignal.aborted ||
-        (cause instanceof DOMException &&
-          (cause.name === 'TimeoutError' || cause.name === 'AbortError'))
-      return failedCapture(
-        requestedUrl,
-        timedOut ? 'request_timed_out' : 'fetch_failed',
-        timedOut
-          ? `The job posting request timed out after ${timeoutMilliseconds}ms.`
-          : `The job posting request failed: ${errorMessage(cause, 'Unknown request failure.')}`,
-        currentUrl.href
-      )
-    }
-
-    if (response.redirected) {
-      await cancelResponseBody(response)
-      return failedCapture(
-        requestedUrl,
-        'redirect_policy_bypassed',
-        'The fetch implementation followed a redirect before it could be validated.',
-        currentUrl.href
-      )
-    }
-
-    if (!redirectStatuses.has(response.status)) break
-
-    const location = response.headers.get('location')?.trim()
-    if (!location) {
-      await cancelResponseBody(response)
-      return failedCapture(
-        requestedUrl,
-        'redirect_missing_location',
-        `The job posting request returned HTTP ${response.status} without a Location header.`,
-        currentUrl.href
-      )
-    }
-
-    let resolvedLocation: string
-    try {
-      resolvedLocation = new URL(location, currentUrl).href
-    } catch {
-      await cancelResponseBody(response)
-      return failedCapture(
-        requestedUrl,
-        'invalid_redirect_url',
-        'The job posting redirect contains an invalid URL.',
-        currentUrl.href
-      )
-    }
-
-    const nextUrl = parseHttpUrl(resolvedLocation)
-    if (nextUrl === null) {
-      await cancelResponseBody(response)
-      return failedCapture(
-        requestedUrl,
-        'invalid_redirect_url',
-        'The job posting redirect must use HTTP or HTTPS.',
-        currentUrl.href
-      )
-    }
-
-    if (visitedUrls.has(nextUrl.href)) {
-      await cancelResponseBody(response)
-      return failedCapture(
-        requestedUrl,
-        'redirect_loop',
-        'The job posting request entered a redirect loop.',
-        currentUrl.href
-      )
-    }
-
-    if (followedRedirects >= jobPostingCaptureMaxRedirects) {
-      await cancelResponseBody(response)
-      return failedCapture(
-        requestedUrl,
-        'too_many_redirects',
-        `The job posting request exceeded the ${jobPostingCaptureMaxRedirects}-redirect limit.`,
-        currentUrl.href
-      )
-    }
-
-    await cancelResponseBody(response)
-    visitedUrls.add(nextUrl.href)
-    currentUrl = nextUrl
-    followedRedirects += 1
+  try {
+    response = await fetcher(requestedUrl, {
+      headers: {
+        accept:
+          'text/html,application/xhtml+xml,text/plain,application/json;q=0.9,*/*;q=0.5',
+      },
+      redirect: 'follow',
+      signal: timeoutSignal,
+    })
+  } catch (cause) {
+    const timedOut =
+      timeoutSignal.aborted ||
+      (cause instanceof DOMException &&
+        (cause.name === 'TimeoutError' || cause.name === 'AbortError'))
+    return failedCapture(
+      requestedUrl,
+      timedOut ? 'request_timed_out' : 'fetch_failed',
+      timedOut
+        ? `The job posting request timed out after ${timeoutMilliseconds}ms.`
+        : `The job posting request failed: ${errorMessage(cause, 'Unknown request failure.')}`,
+      requestedUrl
+    )
   }
 
-  const finalUrl = currentUrl.href
+  const finalUrl = response.url || requestedUrl
   const mediaType =
     response.headers.get('content-type')?.trim() || 'application/octet-stream'
 

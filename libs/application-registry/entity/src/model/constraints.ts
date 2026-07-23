@@ -1,10 +1,34 @@
-import { Schema } from 'effect'
+import { Option, Schema } from 'effect'
 
 export type JsonValue = Schema.Schema.Type<typeof Schema.Json>
 
 export const NonEmptyTrimmedStringSchema = Schema.Trim.pipe(
   Schema.check(Schema.isNonEmpty())
 )
+
+const ParsedHttpUrlSchema = Schema.URLFromString.pipe(
+  Schema.check(
+    Schema.makeFilter((url) =>
+      url.protocol === 'http:' || url.protocol === 'https:'
+        ? true
+        : 'URL must use HTTP or HTTPS.'
+    )
+  )
+)
+
+const decodeHttpUrl = Schema.decodeUnknownOption(ParsedHttpUrlSchema)
+
+export const HttpUrlSchema = Schema.Trim.pipe(
+  Schema.check(
+    Schema.makeFilter((value) =>
+      Option.isSome(decodeHttpUrl(value))
+        ? true
+        : 'URL must be valid and use HTTP or HTTPS.'
+    )
+  )
+)
+
+export type HttpUrl = Schema.Schema.Type<typeof HttpUrlSchema>
 
 const utcIsoTimestampPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u
 

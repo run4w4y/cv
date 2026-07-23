@@ -17,10 +17,8 @@ resource "infisical_secret" "registry_api_url" {
   folder_path  = var.infisical_application_registry_folder_path
 
   metadata = merge(local.infisical_metadata, {
-    description = "Cloudflare Tunnel base URL for the self-hosted registry."
+    description = "Public Cloudflare Tunnel base URL for the self-hosted registry API."
   })
-
-  depends_on = [cloudflare_zero_trust_access_application.application_registry_management]
 }
 
 resource "infisical_secret" "facts_publication_registry_api_url" {

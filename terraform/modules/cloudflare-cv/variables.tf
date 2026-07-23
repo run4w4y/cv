@@ -41,11 +41,21 @@ variable "cv_web_host" {
 
 variable "application_registry_api_url" {
   type        = string
-  description = "Cloudflare Tunnel URL for the self-hosted registry web allocation."
+  description = "Public Cloudflare Tunnel URL for the self-hosted registry API."
 
   validation {
     condition     = can(regex("^https://[^/]+/?$", trimspace(var.application_registry_api_url)))
     error_message = "application_registry_api_url must be an HTTPS origin URL without a path."
+  }
+}
+
+variable "application_registry_web_url" {
+  type        = string
+  description = "Cloudflare Access-protected URL for the self-hosted registry web allocation."
+
+  validation {
+    condition     = can(regex("^https://[^/]+/?$", trimspace(var.application_registry_web_url)))
+    error_message = "application_registry_web_url must be an HTTPS origin URL without a path."
   }
 }
 

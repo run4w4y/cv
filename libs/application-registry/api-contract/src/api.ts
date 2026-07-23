@@ -116,6 +116,15 @@ export const PublicApi = HttpApiGroup.make('public', {
   })
 )
 
+export const RegistryHealthApi = HttpApiGroup.make('registryHealth')
+  .add(
+    HttpApiEndpoint.get('authenticatedHealth', '/health', {
+      success: HealthResponseSchema,
+    })
+  )
+  .prefix(applicationRegistryApiPrefix)
+  .middleware(RegistryAuthorization)
+
 const applicationEndpoints = [
   HttpApiEndpoint.post('createApplication', '/applications', {
     error: endpointErrors,
@@ -515,6 +524,7 @@ export const FactsPublicationApi = HttpApiGroup.make('factsPublication')
 
 export const ApplicationRegistryApi = HttpApi.make('applicationRegistry').add(
   PublicApi,
+  RegistryHealthApi,
   ApplicationsApi,
   ContentApi,
   PublicationsApi,

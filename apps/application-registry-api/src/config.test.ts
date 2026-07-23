@@ -36,7 +36,10 @@ describe('application registry API server configuration', () => {
   test('uses safe resource and exposure defaults', async () => {
     const configuration = await readWith({})
 
-    expect(configuration.authentication.bffEnabled).toBe(false)
+    expect(configuration.cors.allowedOrigins).toEqual([
+      'http://localhost:4300',
+      'http://127.0.0.1:4300',
+    ])
     expect(configuration.http.host).toBe('0.0.0.0')
     expect(configuration.http.port).toBe(3000)
     expect(configuration.minio.forcePathStyle).toBe(true)
@@ -62,5 +65,10 @@ describe('application registry API server configuration', () => {
     await expect(readWith({ POSTGRES_MAX_CONNECTIONS: '21' })).rejects.toThrow(
       'POSTGRES_MAX_CONNECTIONS'
     )
+    await expect(
+      readWith({
+        REGISTRY_CORS_ALLOWED_ORIGINS: 'https://cv-registry.example.test/path',
+      })
+    ).rejects.toThrow('REGISTRY_CORS_ALLOWED_ORIGINS')
   })
 })

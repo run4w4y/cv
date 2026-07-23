@@ -63,6 +63,22 @@ export const ApplicationCompensationInputSchema = Schema.Struct(
     'id',
     'updatedAt',
   ])
+).pipe(
+  Schema.check(
+    Schema.makeFilter((value) =>
+      value.minimumMinor === undefined ||
+      value.maximumMinor === undefined ||
+      value.minimumMinor === null ||
+      value.maximumMinor === null ||
+      value.minimumMinor <= value.maximumMinor
+        ? undefined
+        : {
+            path: ['maximumMinor'],
+            issue:
+              'Maximum compensation must be greater than or equal to minimum compensation.',
+          }
+    )
+  )
 )
 
 export type ApplicationCompensationInput = Schema.Schema.Type<

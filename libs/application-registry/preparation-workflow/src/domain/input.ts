@@ -1,29 +1,12 @@
+import { HttpUrlSchema } from '@cv/application-registry-entity'
 import { CvGenerationGuidanceV1Schema } from '@cv/contracts/document'
 import { CvLocaleSchema } from '@cv/contracts/facts'
 import { Schema } from 'effect'
 
+export { HttpUrlSchema } from '@cv/application-registry-entity'
+
 export const DocumentKindSchema = Schema.Literals(['cv', 'cover_letter'])
 export type DocumentKind = typeof DocumentKindSchema.Type
-
-export const HttpUrlSchema = Schema.String.pipe(
-  Schema.check(Schema.isMaxLength(2_048)),
-  Schema.check(
-    Schema.makeFilter((value) => {
-      try {
-        const url = new URL(value)
-        if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-          return 'Only HTTP(S) job URLs can be prepared.'
-        }
-        if (url.username !== '' || url.password !== '') {
-          return 'Job URLs containing credentials cannot be prepared.'
-        }
-        return true
-      } catch {
-        return 'Enter a valid absolute job URL.'
-      }
-    })
-  )
-)
 
 export const canonicalPreparationUrl = (value: string): string => {
   const url = new URL(value.trim())

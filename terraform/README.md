@@ -32,7 +32,8 @@ ephemeral provider values are not persisted in Terraform state.
 in front of the self-hosted services:
 
 - owner-only Access for the registry management UI;
-- bypass policies for bearer/capability-token API routes;
+- a public Tunnel route for the bearer-authenticated registry API, without an
+  Access application;
 - a cache rule for public `/c/*` pages while excluding previews, internals,
   Next.js assets, non-GET requests, and query strings;
 - synchronized self-hosted registry and public-CV URLs.

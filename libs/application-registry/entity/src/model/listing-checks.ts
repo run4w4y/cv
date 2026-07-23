@@ -1,6 +1,7 @@
 import { Schema } from 'effect'
 
 import {
+  HttpUrlSchema,
   NonEmptyTrimmedStringSchema as NonEmptyString,
   UtcIsoTimestampSchema,
 } from './constraints'
@@ -23,7 +24,7 @@ export type ListingCheckEvidence = Schema.Schema.Type<
 export const ListingCheckTargetSchema = Schema.Struct({
   company: NonEmptyString,
   role: NonEmptyString,
-  url: NonEmptyString,
+  url: HttpUrlSchema,
 })
 
 export type ListingCheckTarget = Schema.Schema.Type<

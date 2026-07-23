@@ -43,6 +43,7 @@ export const registerApplicationRegistryE2eTests = (
     assert.equal(openApi.openapi, '3.1.0')
     assert.ok(openApi.paths['/api/registry/applications'])
     assert.ok(openApi.paths['/api/registry/blobs/{sha256}'])
+    assert.ok(openApi.paths['/api/registry/health'])
     assert.ok(openApi.paths['/api/registry/applications/{id}/activities'])
     assert.equal(
       Object.keys(openApi.paths).some((path) => path.startsWith('/v1')),
@@ -56,19 +57,43 @@ export const registerApplicationRegistryE2eTests = (
     assert.equal(unauthorized.status, 401)
     assert.equal(unauthorized.headers.get('cache-control'), 'private, no-store')
 
-    const missingMachineCredential = await fetch(
-      new URL('/machine/health', harness.url)
+    const missingRegistryCredential = await fetch(
+      new URL('/api/registry/health', harness.url)
     )
-    assert.equal(missingMachineCredential.status, 401)
+    assert.equal(missingRegistryCredential.status, 401)
 
-    const machineHealth = await fetch(new URL('/machine/health', harness.url), {
-      headers: { authorization: `Bearer ${registryTestToken}` },
-    })
-    assert.equal(machineHealth.status, 200)
-    assert.deepEqual(await machineHealth.json(), { ok: true })
+    const registryHealth = await fetch(
+      new URL('/api/registry/health', harness.url),
+      {
+        headers: { authorization: `Bearer ${registryTestToken}` },
+      }
+    )
+    assert.equal(registryHealth.status, 200)
+    assert.deepEqual(await registryHealth.json(), { ok: true })
     assert.equal(
-      machineHealth.headers.get('cache-control'),
+      registryHealth.headers.get('cache-control'),
       'private, no-store'
+    )
+
+    const preflight = await fetch(
+      new URL('/api/registry/facts/objects/releases/current.json', harness.url),
+      {
+        headers: {
+          'access-control-request-headers': 'authorization,content-type',
+          'access-control-request-method': 'POST',
+          origin: 'https://cv-registry.example.test',
+        },
+        method: 'OPTIONS',
+      }
+    )
+    assert.equal(preflight.status, 204)
+    assert.equal(
+      preflight.headers.get('access-control-allow-origin'),
+      'https://cv-registry.example.test'
+    )
+    assert.match(
+      preflight.headers.get('access-control-allow-headers') ?? '',
+      /authorization/u
     )
   })
 

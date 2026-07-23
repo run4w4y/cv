@@ -1,7 +1,7 @@
 # Application registry MCP server
 
 Local stdio MCP server for discovering, creating, and updating application
-listings through the registry machine API. It is implemented with
+listings through the registry API. It is implemented with
 `effect/unstable/ai/McpServer` and deliberately does not expose notes,
 activities, listing checks, content, publications, or analytics.
 
@@ -22,11 +22,10 @@ reading the listing again rather than retrying blindly.
 
 ## Configuration
 
-The process requires two machine-client environment variables:
+The process requires two client environment variables:
 
-- `REGISTRY_API_URL`: registry origin. The client adds the machine transport
-  prefix.
-- `REGISTRY_API_TOKEN`: bearer token for the registry machine API.
+- `REGISTRY_API_URL`: registry origin.
+- `REGISTRY_API_TOKEN`: bearer token for the registry API.
 
 The server sends mutations directly to the registry and reports transport
 failures to the caller immediately.

@@ -69,6 +69,28 @@ describe('application registry API contract', () => {
     expect(headers['idempotency-key']).toBe('request-1')
   })
 
+  test('rejects inverted compensation ranges before persistence', () => {
+    expect(() =>
+      Schema.decodeUnknownSync(CreateApplicationRequestSchema)({
+        company: 'Example',
+        compensations: [
+          {
+            kind: 'base_salary',
+            currencyCode: 'USD',
+            minimumMinor: 200_000,
+            maximumMinor: 150_000,
+            period: 'year',
+            rawText: '$200k–$150k',
+            source: 'job-board',
+          },
+        ],
+        location: null,
+        postingUrl: 'https://example.test/jobs/one',
+        role: 'Engineer',
+      })
+    ).toThrow()
+  })
+
   test('uses raw Uint8Array transport for blobs', () => {
     const bytes = new Uint8Array([1, 2, 3])
     expect(Schema.decodeUnknownSync(BinaryBodySchema)(bytes)).toEqual(bytes)
@@ -82,8 +104,10 @@ describe('application registry API contract', () => {
     expect(paths).toContain('/api/registry/applications')
     expect(paths).toContain('/api/registry/activities')
     expect(paths).toContain('/api/registry/blobs/{sha256}')
-    expect(paths).toContain('/machine/api/registry/facts/releases/{releaseId}')
-    expect(paths).toContain('/machine/api/registry/facts/current')
+    expect(paths).toContain('/api/registry/health')
+    expect(paths).toContain('/api/registry/facts/releases/{releaseId}')
+    expect(paths).toContain('/api/registry/facts/current')
+    expect(paths.some((path) => path.startsWith('/machine'))).toBeFalse()
     expect(paths).not.toContain('/v1/applications')
     expect(paths.some((path) => path.includes('/events'))).toBeFalse()
   })

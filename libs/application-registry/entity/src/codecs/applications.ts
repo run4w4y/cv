@@ -9,6 +9,7 @@ import { omit, pick } from 'es-toolkit/object'
 
 import {
   ApplicationVersionSchema,
+  HttpUrlSchema,
   UtcIsoTimestampSchema,
 } from '../model/constraints'
 import { applications } from '../tables/applications'
@@ -25,6 +26,7 @@ const applicationSelectRefinements = {
 }
 
 const applicationInsertRefinements = {
+  postingUrl: HttpUrlSchema,
   followUpAt: optionalNullableInsertField(UtcIsoTimestampSchema),
   appliedAt: optionalNullableInsertField(UtcIsoTimestampSchema),
   createdAt: UtcIsoTimestampSchema,
@@ -32,6 +34,7 @@ const applicationInsertRefinements = {
 }
 
 const applicationUpdateRefinements = {
+  postingUrl: () => HttpUrlSchema,
   followUpAt: () => UtcIsoTimestampSchema,
   appliedAt: () => UtcIsoTimestampSchema,
   createdAt: () => UtcIsoTimestampSchema,

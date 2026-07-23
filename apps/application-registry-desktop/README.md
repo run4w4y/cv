@@ -7,12 +7,12 @@ narrow preload bridge.
 The main process owns two capabilities that are deliberately absent from the
 web build:
 
-- authenticated calls to the deployed `/machine/api/registry/*` transport;
+- authenticated calls to the deployed canonical `/api/registry/*` routes;
 - one-shot, schema-constrained generation through the official
   `@openai/codex-sdk` package and a matching packaged Codex executable.
 
 The registry bearer token crosses the narrow preload bridge only when entered,
-is checked against the API's authenticated machine health endpoint, and is
+is checked against the API's authenticated Registry health endpoint, and is
 only then stored with Electron `safeStorage`. The API reads reviewed facts from
 private MinIO; no object-store credential is shipped to either renderer.
 
@@ -32,7 +32,8 @@ values locally.
 The Registry control at the top of the application sidebar shows the active
 origin and opens the connection settings. Locally stored connections can change
 their origin and optionally replace the encrypted token. The desktop main
-process verifies proposed credentials against authenticated `/machine/health`
+process verifies proposed credentials against authenticated
+`/api/registry/health`
 before saving them, then reloads the renderer so cached data from different
 registries cannot be mixed. Environment-provided connections are shown as
 read-only; update both variables and restart the app to change them.
@@ -66,7 +67,7 @@ from the normal `%USERPROFILE%\.codex` directory, so the desktop app uses the
 account and model configuration already owned by the native Codex installation.
 It does not implement another sign-in or model-discovery flow. Because Windows
 does not inherit the WSL direnv environment, the first application launch still
-asks for the deployed registry API origin and machine token.
+asks for the deployed registry API origin and bearer token.
 
 Each generation starts a new SDK thread and does not resume it. The Codex SDK
 may keep its normal local session record under `%USERPROFILE%\.codex`; the

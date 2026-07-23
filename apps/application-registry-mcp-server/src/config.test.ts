@@ -12,7 +12,7 @@ const withEnv = (env: Record<string, string>) =>
   )
 
 describe('application registry MCP config', () => {
-  test('loads the registry origin and machine token', async () => {
+  test('loads the registry origin and bearer token', async () => {
     const config = await Effect.runPromise(
       withEnv({
         REGISTRY_API_TOKEN: 'test-token',
@@ -20,7 +20,7 @@ describe('application registry MCP config', () => {
       })
     )
 
-    expect(config.apiUrl.href).toBe('https://registry.example.test/machine/')
+    expect(config.apiUrl.href).toBe('https://registry.example.test/')
     expect(Redacted.value(config.token)).toBe('test-token')
   })
 

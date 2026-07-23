@@ -3,18 +3,14 @@ import {
   makeNatsRegistryEventPublisherLayer,
   makeRegistryEventPublisherConfiguration,
 } from '@cv/application-registry-events-nats'
-import {
-  ListingAvailabilityChecker,
-  makeListingAvailabilityChecker,
-} from '@cv/application-registry-listing-check'
+import { ListingAvailabilityCheckerLive } from '@cv/application-registry-listing-check'
 import { ScheduledListingChecksRunner } from '@cv/application-registry-service'
 import { ScheduledListingChecksRunnerLive } from '@cv/application-registry-service/live'
 import { BunRuntime, BunServices } from '@effect/platform-bun'
 import { PgClient } from '@effect/sql-pg'
-import { Console, Crypto, Effect, Layer, Redacted } from 'effect'
+import { Console, Effect, Layer, Redacted } from 'effect'
 
 import { type RunnerConfiguration, readRunnerConfiguration } from './config'
-import { makeSafeListingFetch } from './safe-fetch'
 
 const makeRuntimeLayer = (configuration: RunnerConfiguration) => {
   const postgres = PgClient.layer({
@@ -28,14 +24,7 @@ const makeRuntimeLayer = (configuration: RunnerConfiguration) => {
     username: configuration.postgres.username,
   })
   const platform = BunServices.layer
-  const checker = Layer.effect(
-    ListingAvailabilityChecker,
-    Crypto.Crypto.pipe(
-      Effect.map((crypto) =>
-        makeListingAvailabilityChecker(makeSafeListingFetch(), crypto)
-      )
-    )
-  ).pipe(Layer.provide(platform))
+  const checker = ListingAvailabilityCheckerLive.pipe(Layer.provide(platform))
   const crud = RegistryCrudLive.pipe(Layer.provide(postgres))
   const events = makeNatsRegistryEventPublisherLayer(
     makeRegistryEventPublisherConfiguration({

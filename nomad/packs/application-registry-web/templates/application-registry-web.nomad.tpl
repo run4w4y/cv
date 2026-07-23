@@ -24,7 +24,6 @@ job [[ .my.job_name | quote ]] {
 
       tags = [
         "traefik.enable=true",
-        "traefik.consulcatalog.connect=true",
         "traefik.subdomain=[[ .my.traefik_subdomain ]]",
         "traefik.http.routers.[[ .my.job_name ]].entrypoints=web"
       ]
@@ -38,25 +37,6 @@ job [[ .my.job_name | quote ]] {
         path     = "/_health"
         interval = "15s"
         timeout  = "3s"
-      }
-
-      connect {
-        sidecar_service {
-          proxy {
-            upstreams {
-              destination_name = "cv-registry"
-              local_bind_port  = 3000
-            }
-          }
-        }
-
-        sidecar_task {
-          resources {
-            cpu        = [[ .my.sidecar_resources.cpu ]]
-            memory     = [[ .my.sidecar_resources.memory ]]
-            memory_max = [[ .my.sidecar_resources.memory_max ]]
-          }
-        }
       }
     }
 

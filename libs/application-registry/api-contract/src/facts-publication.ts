@@ -16,12 +16,12 @@ import {
   ServiceUnavailableErrorSchema,
   UnauthorizedErrorSchema,
 } from './errors'
-import { applicationRegistryMachinePrefix } from './transport'
+import { applicationRegistryApiPrefix } from './transport'
 
 export const factsPublicationProtocolV1ContractId =
   'cv.facts-publication.v1' as const
 export const factsPublicationApiPrefix =
-  `${applicationRegistryMachinePrefix}/api/registry/facts` as const
+  `${applicationRegistryApiPrefix}/facts` as const
 
 export class FactsPublisherAuthorization extends HttpApiMiddleware.Service<FactsPublisherAuthorization>()(
   '@cv/application-registry-api-contract/FactsPublisherAuthorization',

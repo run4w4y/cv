@@ -27,20 +27,29 @@ import {
   makeFactsPublisherAuthorizationLayer,
   makeRegistryAuthorizationLayer,
 } from './http/middleware/auth'
+import { makeFactsObjectRoutesLayer } from './http/routes/facts-objects'
 import { CvPublicResolverRoutesLayer } from './internal/cv-public-resolver'
-import { makeS3FactsStorageLayer } from './s3-facts-storage'
+import { makeS3FactsStorage, makeS3FactsStorageLayer } from './s3-facts-storage'
 
-const ApiHandlersLayer = Layer.provide(
-  HttpApiBuilder.layer(ApplicationRegistryApi, {
-    openapiPath: '/openapi.json',
-  }),
-  [
-    HealthHandlersLayer,
-    FactsPublicationHandlersLayer,
-    CvPublicResolverRoutesLayer,
-    ...RegistryHandlersLayers,
-  ]
-)
+const makeApiHandlersLayer = (
+  configuration: ApiServerConfiguration,
+  s3: S3Client
+) =>
+  Layer.provide(
+    HttpApiBuilder.layer(ApplicationRegistryApi, {
+      openapiPath: '/openapi.json',
+    }),
+    [
+      HealthHandlersLayer,
+      FactsPublicationHandlersLayer,
+      makeFactsObjectRoutesLayer(
+        makeS3FactsStorage(s3, configuration.minio.factsBucket),
+        configuration.authentication.registryApiToken
+      ),
+      CvPublicResolverRoutesLayer,
+      ...RegistryHandlersLayers,
+    ]
+  )
 
 const makeCloudflareClientLayer = (configuration: ApiServerConfiguration) =>
   CloudflareAnalytics.layer.pipe(
@@ -122,7 +131,7 @@ export const makeApiWebHandler = (
   configuration: ApiServerConfiguration,
   s3: S3Client
 ) => {
-  const api = Layer.provide(ApiHandlersLayer, [
+  const api = Layer.provide(makeApiHandlersLayer(configuration, s3), [
     makeRegistryServicesLayer(configuration, s3),
     makeCvCacheInvalidatorLayer({
       apiToken: configuration.analytics.apiToken,
@@ -137,6 +146,15 @@ export const makeApiWebHandler = (
       configuration.authentication.registryApiToken
     ),
   ])
+  const app = Layer.merge(
+    api,
+    HttpRouter.cors({
+      allowedHeaders: ['authorization', 'content-type', 'idempotency-key'],
+      allowedMethods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
+      allowedOrigins: configuration.cors.allowedOrigins,
+      maxAge: 86_400,
+    })
+  )
 
-  return HttpRouter.toWebHandler(Layer.provide(api, HttpServer.layerServices))
+  return HttpRouter.toWebHandler(Layer.provide(app, HttpServer.layerServices))
 }

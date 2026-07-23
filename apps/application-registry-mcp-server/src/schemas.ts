@@ -1,13 +1,11 @@
 import { ListApplicationsResponseSchema } from '@cv/application-registry-api-contract'
 import {
+  ApplicationCompensationInputSchema,
   ApplicationSchema,
   ApplicationStatusSchema,
-  CompensationKindSchema,
-  CompensationPeriodSchema,
-  CurrencyCodeSchema,
   ExpectedApplicationVersionSchema,
+  HttpUrlSchema,
   NonEmptyTrimmedStringSchema,
-  NonNegativeMinorAmountSchema,
   PersonalPrioritySchema,
   TargetStageSchema,
   UtcIsoTimestampSchema,
@@ -50,34 +48,10 @@ export const GetApplicationParametersSchema = Schema.Struct({
   }),
 })
 
-export const ApplicationCompensationInputSchema = Schema.Struct({
-  kind: CompensationKindSchema,
-  currencyCode: CurrencyCodeSchema,
-  minimumMinor: Schema.optionalKey(Schema.NullOr(NonNegativeMinorAmountSchema)),
-  maximumMinor: Schema.optionalKey(Schema.NullOr(NonNegativeMinorAmountSchema)),
-  period: CompensationPeriodSchema,
-  rawText: Schema.optionalKey(Schema.NullOr(Schema.String)),
-  source: NonEmptyTrimmedStringSchema,
-}).pipe(
-  Schema.check(
-    Schema.makeFilter((value) =>
-      value.minimumMinor === undefined ||
-      value.maximumMinor === undefined ||
-      value.minimumMinor === null ||
-      value.maximumMinor === null ||
-      value.minimumMinor <= value.maximumMinor
-        ? undefined
-        : {
-            path: ['maximumMinor'],
-            issue:
-              'Maximum compensation must be greater than or equal to minimum compensation.',
-          }
-    )
-  )
-)
+export { ApplicationCompensationInputSchema }
 
 export const CreateApplicationParametersSchema = Schema.Struct({
-  postingUrl: NonEmptyTrimmedStringSchema,
+  postingUrl: HttpUrlSchema,
   company: NonEmptyTrimmedStringSchema,
   role: NonEmptyTrimmedStringSchema,
   location: Schema.NullOr(NonEmptyTrimmedStringSchema).annotate({
@@ -102,7 +76,7 @@ export const UpdateApplicationParametersSchema = Schema.Struct({
     description:
       'Current application version returned by get_application or search_applications. Updates fail on stale versions.',
   }),
-  postingUrl: Schema.optionalKey(NonEmptyTrimmedStringSchema),
+  postingUrl: Schema.optionalKey(HttpUrlSchema),
   company: Schema.optionalKey(NonEmptyTrimmedStringSchema),
   role: Schema.optionalKey(NonEmptyTrimmedStringSchema),
   location: Schema.optionalKey(Schema.NullOr(NonEmptyTrimmedStringSchema)),

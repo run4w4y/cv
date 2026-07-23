@@ -1,10 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { Effect } from 'effect'
 
-import {
-  jobPostingCaptureMaxRedirects,
-  prepareJobPostingCapture,
-} from './job-posting-capture'
+import { prepareJobPostingCapture } from './job-posting-capture'
 import {
   normalizedJobPostingMediaType,
   normalizeJobPostingHtml,
@@ -121,120 +118,32 @@ Design reliable systems.`
     expect(new TextDecoder().decode(result.raw?.bytes)).toBe('Posting removed')
   })
 
-  test('rejects non-HTTP canonical URLs without making a request', async () => {
-    let fetched = false
-    const result = await Effect.runPromise(
-      prepareJobPostingCapture('file:///private/job.html', {
-        fetcher: async () => {
-          fetched = true
-          return new Response('not reached')
-        },
-      })
-    )
-
-    expect(fetched).toBe(false)
-    expect(result).toMatchObject({
-      errorCode: 'invalid_url',
-      finalUrl: null,
-      status: 'failed',
-    })
-  })
-
-  test('rejects credentials at the URL boundary', async () => {
-    let fetched = false
-    const result = await Effect.runPromise(
-      prepareJobPostingCapture('https://user:secret@jobs.example.test/role', {
-        fetcher: async () => {
-          fetched = true
-          return new Response('not reached')
-        },
-      })
-    )
-
-    expect(fetched).toBe(false)
-    expect(result).toMatchObject({
-      errorCode: 'invalid_url',
-      finalUrl: null,
-      status: 'failed',
-    })
-  })
-
-  test('follows a relative public redirect with one shared timeout signal', async () => {
-    const urls: string[] = []
-    const signals: Array<AbortSignal | null | undefined> = []
+  test('delegates redirect handling to fetch and records its final URL', async () => {
     const redirectUrl = 'https://jobs.example.test/roles/platform?page=2'
 
     const result = await Effect.runPromise(
       prepareJobPostingCapture(requestedUrl, {
         fetcher: async (input, init) => {
-          urls.push(input instanceof Request ? input.url : input.toString())
-          signals.push(init?.signal)
-          expect(init?.redirect).toBe('manual')
-          return urls.length === 1
-            ? new Response(null, {
-                headers: { location: '/roles/platform?page=2' },
-                status: 302,
-              })
-            : new Response('<html><body>Platform role</body></html>', {
-                headers: { 'content-type': 'text/html' },
-                status: 200,
-              })
+          expect(input.toString()).toBe(requestedUrl)
+          expect(init?.redirect).toBe('follow')
+          expect(init?.signal).toBeInstanceOf(AbortSignal)
+          const response = new Response(
+            '<html><body>Platform role</body></html>',
+            {
+              headers: { 'content-type': 'text/html' },
+              status: 200,
+            }
+          )
+          Object.defineProperty(response, 'url', { value: redirectUrl })
+          return response
         },
       })
     )
 
-    expect(urls).toEqual([requestedUrl, redirectUrl])
-    expect(signals[0]).toBe(signals[1])
     expect(result).toMatchObject({
       finalUrl: redirectUrl,
       requestedUrl,
       status: 'fetched',
-    })
-  })
-
-  test('detects redirect loops before repeating a request', async () => {
-    let requests = 0
-    const result = await Effect.runPromise(
-      prepareJobPostingCapture(requestedUrl, {
-        fetcher: async () => {
-          requests += 1
-          return new Response(null, {
-            headers: { location: requestedUrl },
-            status: 302,
-          })
-        },
-      })
-    )
-
-    expect(requests).toBe(1)
-    expect(result).toMatchObject({
-      errorCode: 'redirect_loop',
-      finalUrl: requestedUrl,
-      status: 'failed',
-    })
-  })
-
-  test('bounds redirect chains by a small fixed hop limit', async () => {
-    let requests = 0
-    const result = await Effect.runPromise(
-      prepareJobPostingCapture(requestedUrl, {
-        fetcher: async () => {
-          requests += 1
-          return new Response(null, {
-            headers: {
-              location: `https://jobs.example.test/hop/${requests}`,
-            },
-            status: 302,
-          })
-        },
-      })
-    )
-
-    expect(requests).toBe(jobPostingCaptureMaxRedirects + 1)
-    expect(result).toMatchObject({
-      errorCode: 'too_many_redirects',
-      finalUrl: `https://jobs.example.test/hop/${jobPostingCaptureMaxRedirects}`,
-      status: 'failed',
     })
   })
 

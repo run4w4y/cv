@@ -5,7 +5,6 @@ import { Console, Effect, Redacted } from 'effect'
 import { readApiServerConfiguration } from './config'
 import { makeApiServerRequestHandler } from './request-handler'
 import { makeApiWebHandler } from './runtime'
-import { makeS3FactsStorage } from './s3-facts-storage'
 
 const program = Effect.scoped(
   Effect.gen(function* () {
@@ -31,11 +30,8 @@ const program = Effect.scoped(
       Effect.sync(() => makeApiWebHandler(configuration, s3)),
       (handler) => Effect.promise(handler.dispose)
     )
-    const factsStorage = makeS3FactsStorage(s3, configuration.minio.factsBucket)
     const fetch = makeApiServerRequestHandler({
       apiHandler: api.handler,
-      configuration,
-      factsStorage,
     })
     const server = yield* Effect.acquireRelease(
       Effect.sync(() =>
@@ -51,7 +47,6 @@ const program = Effect.scoped(
     yield* Console.log(
       JSON.stringify({
         address: server.url.href,
-        bffEnabled: configuration.authentication.bffEnabled,
         service: 'application-registry-api',
       })
     )

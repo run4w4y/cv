@@ -278,7 +278,7 @@ export class RegistryApiHarness {
         POSTGRES_PORT: String(this.#postgres.port),
         POSTGRES_USER: this.#postgres.username,
         REGISTRY_API_TOKEN: registryTestToken,
-        REGISTRY_BFF_ENABLED: 'false',
+        REGISTRY_CORS_ALLOWED_ORIGINS: 'https://cv-registry.example.test',
         SERVER_HOST: '127.0.0.1',
         SERVER_PORT: String(port),
       },

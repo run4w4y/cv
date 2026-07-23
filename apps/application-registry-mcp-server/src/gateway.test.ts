@@ -55,7 +55,7 @@ const withGateway = <A, E>(
   )
   const platformLayer = Layer.merge(BunServices.layer, fetchLayer)
   const clientLayer = makeApplicationRegistryHttpClientLayer({
-    baseUrl: new URL('https://registry.example.test/machine/'),
+    baseUrl: new URL('https://registry.example.test/'),
     token: Redacted.make('test-token'),
   }).pipe(Layer.provide(platformLayer))
 
@@ -67,7 +67,7 @@ const withGateway = <A, E>(
 }
 
 describe('application registry MCP gateway', () => {
-  test('uses the generated create and update routes with machine credentials', async () => {
+  test('uses the generated create and update routes with bearer credentials', async () => {
     const requests: Request[] = []
     const updateResponse: UpdateApplicationResponse = {
       annualCompensation: null,
@@ -107,11 +107,11 @@ describe('application registry MCP gateway', () => {
     expect(requests.map(({ method, url }) => ({ method, url }))).toEqual([
       {
         method: 'POST',
-        url: 'https://registry.example.test/machine/api/registry/applications',
+        url: 'https://registry.example.test/api/registry/applications',
       },
       {
         method: 'PATCH',
-        url: 'https://registry.example.test/machine/api/registry/applications/application-1',
+        url: 'https://registry.example.test/api/registry/applications/application-1',
       },
     ])
     expect(requests[0]?.headers.get('authorization')).toBe('Bearer test-token')

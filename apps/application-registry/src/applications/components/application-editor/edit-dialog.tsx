@@ -82,7 +82,6 @@ export const ApplicationEditDialog = ({
     try {
       const input = {
         ...values,
-        postingUrl: values.postingUrl.toString(),
         expectedVersion: activeDraft.expectedVersion,
       }
       activeDraft.submission = operationSubmissionFor(

@@ -11,6 +11,7 @@ import type {
   CvLink,
 } from '@cv/application-registry-entity'
 import {
+  type RegistryEvent,
   RegistryEventPublisher,
   RegistryEventSchema,
 } from '@cv/application-registry-events'
@@ -78,10 +79,23 @@ const make = Effect.gen(function* () {
   const store = yield* ArtifactStore
   const events = yield* RegistryEventPublisher
 
+  const publishBestEffort = Effect.fn(
+    'CvPublicationsService.publishBestEffort'
+  )((event: RegistryEvent) =>
+    events.publish(event).pipe(
+      Effect.catch((error) =>
+        Effect.logWarning('CV publication event could not be published.', {
+          eventId: event.eventId,
+          message: error.message,
+        })
+      )
+    )
+  )
+
   const publishAvailabilityChanged = Effect.fn(
     'CvPublicationsService.publishAvailabilityChanged'
   )((link: CvLink, operationId: string) =>
-    events.publish(
+    publishBestEffort(
       RegistryEventSchema.cases.CvPublicationAvailabilityChanged.make({
         applicationId: link.applicationId,
         contentEntryId: link.contentEntryId,
@@ -329,7 +343,7 @@ const make = Effect.gen(function* () {
                 'The CV page changed while its draft revision was being staged.',
             })
           }
-          yield* events.publish(
+          yield* publishBestEffort(
             RegistryEventSchema.cases.CvPublicationStaged.make({
               applicationId: staged.applicationId,
               contentEntryId: staged.contentEntryId,

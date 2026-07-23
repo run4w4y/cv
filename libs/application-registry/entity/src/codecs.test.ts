@@ -8,6 +8,7 @@ import {
   ApplicationWritableSchema,
   ContentRevisionSchema,
   CvLinkSchema,
+  HttpUrlSchema,
   normalizeApplicationPostingUrl,
 } from './index'
 import { applicationActivityKindValues } from './model/values'
@@ -65,6 +66,20 @@ describe('application registry database schemas', () => {
     expect(compensation.currencyCode).toBe('JPY')
   })
 
+  test('rejects inverted compensation ranges at the shared input boundary', () => {
+    expect(() =>
+      Schema.decodeUnknownSync(ApplicationCompensationInputSchema)({
+        kind: 'base_salary',
+        currencyCode: 'JPY',
+        minimumMinor: 14_000_000,
+        maximumMinor: 10_000_000,
+        period: 'year',
+        rawText: 'JPY 14M–10M',
+        source: 'job-board',
+      })
+    ).toThrow()
+  })
+
   test('preserves Drizzle insert and update optionality around refinements', () => {
     const writable = Schema.decodeUnknownSync(ApplicationWritableSchema)({
       postingUrl: 'https://example.test/jobs/two',
@@ -116,6 +131,31 @@ describe('application registry database schemas', () => {
         'https://example.test/jobs/one?utm_source=mail#'
       )
     ).toBe('https://example.test/jobs/one')
+  })
+
+  test('uses one HTTP URL schema for application submission boundaries', () => {
+    expect(
+      Schema.decodeUnknownSync(HttpUrlSchema)(
+        ' HTTPS://EXAMPLE.TEST/jobs/one#apply '
+      )
+    ).toBe('HTTPS://EXAMPLE.TEST/jobs/one#apply')
+    expect(
+      Schema.decodeUnknownSync(HttpUrlSchema)(
+        'http://127.0.0.1/internal-listing'
+      )
+    ).toBe('http://127.0.0.1/internal-listing')
+    expect(() =>
+      Schema.decodeUnknownSync(ApplicationWritableSchema)({
+        company: 'Example',
+        postingUrl: 'file:///tmp/job.html',
+        role: 'Engineer',
+      })
+    ).toThrow(/HTTP or HTTPS/u)
+    expect(() =>
+      Schema.decodeUnknownSync(ApplicationMutableSchema)({
+        postingUrl: 'mailto:jobs@example.test',
+      })
+    ).toThrow(/HTTP or HTTPS/u)
   })
 
   test('models document revisions as opaque versioned object descriptors', () => {

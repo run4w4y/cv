@@ -1,4 +1,11 @@
+import { beforeEach } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
+
+import {
+  invalidateWebRegistryConnection,
+  WEB_REGISTRY_CONNECTION_SCHEMA_VERSION,
+  WEB_REGISTRY_CONNECTION_STORAGE_KEY,
+} from '../src/host/web-registry-connection'
 
 if (!GlobalRegistrator.isRegistered) {
   GlobalRegistrator.register({
@@ -24,3 +31,15 @@ if (!globalThis.ResizeObserver) {
     disconnect() {}
   }
 }
+
+beforeEach(() => {
+  window.localStorage.setItem(
+    WEB_REGISTRY_CONNECTION_STORAGE_KEY,
+    JSON.stringify({
+      origin: 'http://localhost',
+      schemaVersion: WEB_REGISTRY_CONNECTION_SCHEMA_VERSION,
+      token: 'test-registry-token',
+    })
+  )
+  invalidateWebRegistryConnection()
+})

@@ -20,10 +20,15 @@ bun apps/application-registry-api/dist/main.js
 bunx nx run application-registry-management:dev
 ```
 
-The Vite development server proxies `/api/registry` to `REGISTRY_API_URL` and
-adds `REGISTRY_API_TOKEN` server-side. The token is never included in the
-browser bundle. A production host must provide the same authenticated reverse
-proxy path, or rewrite it to an equivalent same-origin backend-for-frontend.
+The web build is static and has no API proxy or bundled bearer token. On first
+use, the browser asks for the Registry API origin and bearer token, verifies
+them against `GET /api/registry/health`, and stores them in local storage.
+Subsequent requests go directly to the configured canonical
+`/api/registry/*` routes with that bearer token.
+
+`VITE_REGISTRY_API_URL` may provide a token-free suggested origin; it defaults
+to `https://cv-api.4w4y.run`. There is intentionally no build-time token
+variable. The API must allow the web origin through CORS.
 
 Reviewed facts are loaded through the authenticated registry API and its
 private MinIO adapter. No permanent storage credential is embedded in the
@@ -40,7 +45,7 @@ client or authentication session.
 
 `apps/application-registry-desktop` builds this same source in desktop mode.
 It uses hash routing and a context-isolated Electron preload bridge. The main
-process injects the machine bearer token for registry and facts requests, and
+process injects the configured bearer token for registry and facts requests, and
 runs schema-constrained AI turns through the packaged Codex runtime.
 
 ## Application preparation workflows

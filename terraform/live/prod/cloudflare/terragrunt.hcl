@@ -8,7 +8,8 @@ inputs = {
   cloudflare_zone_id    = get_env("CLOUDFLARE_ZONE_ID")
   cv_web_host           = get_env("CV_WEB_HOST")
 
-  application_registry_api_url                 = "https://registry-origin.${get_env("DOMAIN_NAME")}"
+  application_registry_api_url                 = "https://cv-api.${get_env("DOMAIN_NAME")}"
+  application_registry_web_url                 = "https://cv-registry.${get_env("DOMAIN_NAME")}"
   application_registry_management_access_email = get_env("APPLICATION_REGISTRY_MANAGEMENT_ACCESS_EMAIL")
 
   infisical_sync_enabled                     = get_env("INFISICAL_PROJECT_ID", "") != ""

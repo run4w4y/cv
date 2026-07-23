@@ -1,14 +1,12 @@
 # Application Registry web
 
 This pack deploys the management SPA in an unprivileged Nginx allocation. It
-owns the public `registry-origin` Traefik hostname and proxies registry API,
-machine transport, public CV resolver, health, and OpenAPI paths to the private
-`cv-registry` service over Consul Connect.
+owns the `cv-registry` Traefik hostname and serves only static application
+assets. It has no registry API upstream and therefore needs no Envoy sidecar.
 
-The browser keeps using same-origin requests and never receives the registry
-bearer token. Cloudflare Access remains the external authorization boundary;
-the API performs its existing BFF token injection after the request reaches the
-private service.
+Cloudflare Access protects this hostname. The browser separately asks the user
+for an API origin and bearer token, then calls `cv-api` directly through the
+API's CORS boundary.
 
 Render before registering:
 

@@ -1,4 +1,3 @@
-import { applicationRegistryMachineBaseUrl } from '@cv/application-registry-api-contract'
 import { Config, Effect, type Redacted, Schema } from 'effect'
 
 export const registryApiUrlEnv = 'REGISTRY_API_URL'
@@ -29,14 +28,14 @@ export const readApplicationRegistryMcpConfig: Effect.Effect<
   )
 
   return {
-    apiUrl: applicationRegistryMachineBaseUrl(apiOrigin),
+    apiUrl: apiOrigin,
     token,
   }
 }).pipe(
   Effect.mapError(
     () =>
       new ApplicationRegistryMcpConfigError({
-        message: `Application registry MCP configuration is invalid; set ${registryApiUrlEnv} to the registry origin and ${registryApiTokenEnv} to a non-empty machine API token.`,
+        message: `Application registry MCP configuration is invalid; set ${registryApiUrlEnv} to the registry origin and ${registryApiTokenEnv} to a non-empty bearer token.`,
       })
   )
 )

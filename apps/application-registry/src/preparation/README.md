@@ -92,15 +92,16 @@ preview; unsaved browser state is never a second rendering protocol. After the
 publication is enabled, the PDF worker renders the literal public URL that it
 also embeds in the document's QR code.
 
-The publication Workflow accepts an approved staged revision, temporarily
-enables the exact page URL required by Chromium. That state change publishes a
-`CvPublicationAvailabilityChanged` event; the PDF worker consumes it and owns
-artifact creation, rendering, and completion. Management treats the publication
-as shareable only when that page is still enabled and its matching artifact is
-`ready`. An asynchronous generation failure disables the page only when the
-failed artifact still identifies the current revision, publication version,
-and URL. An explicit retry publishes `PdfGenerationRequested` for the current
-publication without introducing another orchestration path.
+The publication Workflow accepts an approved staged revision and enables the
+exact page URL required by Chromium. That state change is authoritative even if
+the best-effort `CvPublicationAvailabilityChanged` event cannot be published.
+When delivered, the PDF worker consumes it and owns artifact creation,
+rendering, and completion. Management treats the publication as shareable only
+when that page is still enabled and its matching artifact is `ready`. An
+asynchronous generation failure disables the page only when the failed artifact
+still identifies the current revision, publication version, and URL. An
+explicit retry publishes `PdfGenerationRequested` for the current publication
+without introducing another orchestration path.
 
 Publication execution is also memory-backed. The registry page record and every
 artifact attempt remain authoritative and survive browser runtime loss.

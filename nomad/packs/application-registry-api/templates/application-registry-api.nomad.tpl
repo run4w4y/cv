@@ -22,6 +22,13 @@ job [[ .my.job_name | quote ]] {
       task = "api"
       port = "3000"
 
+      tags = [
+        "traefik.enable=true",
+        "traefik.consulcatalog.connect=true",
+        "traefik.subdomain=[[ .my.traefik_subdomain ]]",
+        "traefik.http.routers.[[ .my.job_name ]].entrypoints=web"
+      ]
+
       check {
         name     = "registry-api-live"
         type     = "http"
@@ -74,15 +81,15 @@ job [[ .my.job_name | quote ]] {
       }
 
       env {
-        MINIO_ENDPOINT            = "http://127.0.0.1:9000"
-        MINIO_FORCE_PATH_STYLE    = "true"
-        NATS_SERVER               = "nats://127.0.0.1:4222"
-        POSTGRES_HOST             = "127.0.0.1"
-        POSTGRES_MAX_CONNECTIONS  = [[ .my.postgres_max_connections | quote ]]
-        POSTGRES_PORT             = "5432"
-        REGISTRY_BFF_ENABLED      = [[ .my.bff_enabled | quote ]]
-        SERVER_HOST               = "0.0.0.0"
-        SERVER_PORT               = "3000"
+        REGISTRY_CORS_ALLOWED_ORIGINS = [[ .my.cors_allowed_origins | quote ]]
+        MINIO_ENDPOINT                  = "http://127.0.0.1:9000"
+        MINIO_FORCE_PATH_STYLE          = "true"
+        NATS_SERVER                     = "nats://127.0.0.1:4222"
+        POSTGRES_HOST                   = "127.0.0.1"
+        POSTGRES_MAX_CONNECTIONS        = [[ .my.postgres_max_connections | quote ]]
+        POSTGRES_PORT                   = "5432"
+        SERVER_HOST                     = "0.0.0.0"
+        SERVER_PORT                     = "3000"
       }
 
       template {

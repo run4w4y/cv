@@ -7,11 +7,12 @@ Pages.
 
 ## Runtime applications
 
-- `apps/application-registry-api`: private Bun API using PostgreSQL, MinIO,
-  NATS JetStream, and the Cloudflare analytics and cache-purge APIs.
+- `apps/application-registry-api`: bearer-authenticated Bun API exposed at
+  `cv-api.4w4y.run`, using PostgreSQL, MinIO, NATS JetStream, and the
+  Cloudflare analytics and cache-purge APIs.
 - `apps/application-registry`: management React SPA served by its own
-  unprivileged Nginx allocation. Nginx proxies API routes to the private API
-  through Consul Connect.
+  unprivileged Nginx allocation at `cv-registry.4w4y.run`. Cloudflare Access
+  protects the SPA; users configure the API origin and bearer token at runtime.
 - `apps/application-registry-listing-check-runner`: one-shot Effect program
   started by a periodic Nomad job.
 - `apps/application-registry-pdf-worker`: durable NATS consumer that connects
@@ -60,6 +61,8 @@ through their Nomad Packs. The generic Chromium service and Consul intentions
 must already be applied from `~/infrastructure`; the JetStream stack under
 `terraform/live/prod/jetstream` must also exist.
 
-Cloudflare routes `registry-origin` and `cv` through the existing Tunnel to
-Traefik. Its project stack manages Access and the public-CV cache rule. See
-`terraform/README.md` and the pack READMEs for the concrete contracts.
+Cloudflare routes `cv-api`, `cv-registry`, and `cv` through the existing Tunnel
+to Traefik. Access applies only to `cv-registry`; the public `cv-api` service
+enforces bearer authentication itself. The project stack also manages the
+public-CV cache rule. See `terraform/README.md` and the pack READMEs for the
+concrete contracts.

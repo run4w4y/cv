@@ -7,6 +7,7 @@ export {
   FactsPublicationApi,
   PublicApi,
   PublicationsApi,
+  RegistryHealthApi,
 } from './api'
 export { RegistryAuthorization } from './auth'
 export * from './commands'
@@ -31,8 +32,4 @@ export * from './event-commands'
 export * from './facts-publication'
 export { applicationRegistryOpenApi } from './openapi'
 export * from './schemas'
-export {
-  applicationRegistryApiPrefix,
-  applicationRegistryMachineBaseUrl,
-  applicationRegistryMachinePrefix,
-} from './transport'
+export { applicationRegistryApiPrefix } from './transport'

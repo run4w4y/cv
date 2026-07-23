@@ -16,15 +16,21 @@ variable "enabled" {
   default     = false
 }
 
-variable "bff_enabled" {
-  description = "Inject browser API credentials; enable only behind Cloudflare Access"
-  type        = bool
-  default     = false
-}
-
 variable "docker_image" {
   description = "Immutable API image reference, including sha256 digest"
   type        = string
+}
+
+variable "traefik_subdomain" {
+  description = "Cloudflare Tunnel/Traefik hostname label"
+  type        = string
+  default     = "cv-api"
+}
+
+variable "cors_allowed_origins" {
+  description = "Comma-separated browser origins permitted to call the authenticated API"
+  type        = string
+  default     = "https://cv-registry.4w4y.run"
 }
 
 variable "postgres_max_connections" {

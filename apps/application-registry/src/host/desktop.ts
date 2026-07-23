@@ -2,6 +2,7 @@ import type {
   DesktopFetchRequest,
   DesktopHostBridge,
 } from '@cv/application-registry-desktop-contract'
+import { webRegistryConnection } from './web-registry-connection'
 
 declare global {
   interface Window {
@@ -57,7 +58,7 @@ const headerEntries = (headers: Headers) => {
 export const hostFetch = Object.assign(
   async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const bridge = desktopBridge()
-    if (bridge === null) return globalThis.fetch(input, init)
+    if (bridge === null) return webRegistryConnection().fetch(input, init)
 
     const result = await bridge.network.fetch(
       await serializeRequest(input, init)

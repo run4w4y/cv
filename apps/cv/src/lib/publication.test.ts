@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test'
-import * as BrowserCrypto from '@effect/platform-browser/BrowserCrypto'
 import { Effect } from 'effect'
 
 import {
@@ -7,7 +6,6 @@ import {
   type CvPublicResolverBinding,
   loadCvPreview,
   loadCvPublication,
-  maximumCvPublicationBytes,
 } from './publication'
 
 const validDocument = {
@@ -34,45 +32,25 @@ const validDocument = {
   additionalSections: [],
 }
 
-const sha256Hex = async (bytes: Uint8Array): Promise<string> => {
-  const digest = await crypto.subtle.digest(
-    'SHA-256',
-    Uint8Array.from(bytes).buffer
-  )
-  return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, '0')
-  ).join('')
-}
-
-const responseFor = async (
+const responseFor = (
   document: unknown,
   overrides: Readonly<Record<string, string>> = {}
-): Promise<Response> => {
-  const bytes = new TextEncoder().encode(JSON.stringify(document))
-  return new Response(bytes, {
-    headers: {
-      'Content-Type': 'application/json',
-      'x-cv-content-byte-length': bytes.byteLength.toString(10),
-      'x-cv-content-sha256': await sha256Hex(bytes),
-      'x-cv-contract-id': 'cv.document.v1',
-      'x-cv-contract-version': '1',
-      'x-cv-document-locale': 'en',
-      'x-cv-public-url': 'https://cv.example.test/c/stable-token',
-      ...overrides,
-    },
-  })
-}
+): Promise<Response> =>
+  Promise.resolve(
+    new Response(JSON.stringify(document), {
+      headers: {
+        'x-cv-public-url': 'https://cv.example.test/c/stable-token',
+        ...overrides,
+      },
+    })
+  )
 
 const bindingFor = (
   response: () => Promise<Response>
 ): CvPublicResolverBinding => ({ fetch: response })
 
 const runPublication = (effect: ReturnType<typeof loadCvPublication>) =>
-  effect.pipe(
-    asCvPublicationLoadResult,
-    Effect.provide(BrowserCrypto.layer),
-    Effect.runPromise
-  )
+  effect.pipe(asCvPublicationLoadResult, Effect.runPromise)
 
 describe('public CV publication loader', () => {
   test('validates and returns a v1 document with its exact public URL', async () => {
@@ -114,34 +92,48 @@ describe('public CV publication loader', () => {
     expect(result).toEqual({ tag: 'invalid-publication' })
   })
 
-  test('rejects mismatched integrity, locale, contract, and QR URL metadata', async () => {
-    const invalidMetadata: ReadonlyArray<Readonly<Record<string, string>>> = [
-      { 'x-cv-content-sha256': '0'.repeat(64) },
-      { 'x-cv-contract-version': '2' },
-      { 'x-cv-document-locale': 'ru' },
-      { 'x-cv-public-url': 'https://cv.example.test/c/another-token' },
-    ]
-
-    for (const overrides of invalidMetadata) {
-      const result = await runPublication(
-        loadCvPublication(
-          bindingFor(() => responseFor(validDocument, overrides)),
-          'stable-token'
-        )
+  test('rejects a body that is not valid JSON', async () => {
+    const result = await runPublication(
+      loadCvPublication(
+        bindingFor(() =>
+          Promise.resolve(
+            new Response('not-json', {
+              headers: {
+                'x-cv-public-url': 'https://cv.example.test/c/stable-token',
+              },
+            })
+          )
+        ),
+        'stable-token'
       )
-      expect(result).toEqual({ tag: 'invalid-publication' })
-    }
+    )
+
+    expect(result).toEqual({ tag: 'invalid-publication' })
   })
 
-  test('rejects a declared body above the small publication limit', async () => {
+  test('trusts the public URL supplied by the internal resolver', async () => {
     const result = await runPublication(
       loadCvPublication(
         bindingFor(() =>
           responseFor(validDocument, {
-            'x-cv-content-byte-length': (
-              maximumCvPublicationBytes + 1
-            ).toString(10),
+            'x-cv-public-url': 'internal-resolver-value',
           })
+        ),
+        'stable-token'
+      )
+    )
+
+    expect(result).toMatchObject({
+      publicUrl: 'internal-resolver-value',
+      tag: 'success',
+    })
+  })
+
+  test('rejects a resolver response without its required public URL', async () => {
+    const result = await runPublication(
+      loadCvPublication(
+        bindingFor(() =>
+          Promise.resolve(new Response(JSON.stringify(validDocument)))
         ),
         'stable-token'
       )

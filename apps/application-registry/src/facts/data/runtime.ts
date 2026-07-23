@@ -6,7 +6,7 @@ import * as Atom from 'effect/unstable/reactivity/Atom'
 
 import { hostHttpClientLayer } from '@/lib/registry-client'
 
-/** Acquires verified facts through the authenticated same-origin Worker proxy. */
+/** Acquires verified facts through the configured authenticated Registry API. */
 export const factsReaderBrowserLayer = factsReaderLayer.pipe(
   Layer.provide(
     Layer.merge(
