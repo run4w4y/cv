@@ -281,5 +281,4 @@ jobs:
       listing_check_runner_image_digest: ${{ needs.publish-application-registry-images.outputs.listing_check_runner_image_digest }}
       pdf_worker_image_digest: ${{ needs.publish-application-registry-images.outputs.pdf_worker_image_digest }}
       cache_invalidator_image_digest: ${{ needs.publish-application-registry-images.outputs.cache_invalidator_image_digest }}
-      cache_invalidator_enabled: ${{ vars.CV_CACHE_INVALIDATOR_ENABLED == 'true' }}
     uses: ./.github/workflows/deploy-application-registry.yml

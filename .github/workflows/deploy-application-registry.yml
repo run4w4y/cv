@@ -26,11 +26,6 @@ on:
         description: Immutable cache invalidator image digest.
         required: true
         type: string
-      cache_invalidator_enabled:
-        default: false
-        description: Run the cache invalidator after its infrastructure prerequisites are installed.
-        required: false
-        type: boolean
 
 concurrency:
   group: application-registry-production
@@ -178,11 +173,9 @@ jobs:
         env:
           NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
           NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
-          WORKER_ENABLED: ${{ inputs.cache_invalidator_enabled }}
           WORKER_IMAGE_DIGEST: ${{ inputs.cache_invalidator_image_digest }}
         run: |
           nomad-pack run nomad/packs/application-registry-cache-invalidator \
             --detach \
             --parser-v1 \
-            --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${WORKER_IMAGE_DIGEST}" \
-            --var "enabled=${WORKER_ENABLED}"
+            --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${WORKER_IMAGE_DIGEST}"

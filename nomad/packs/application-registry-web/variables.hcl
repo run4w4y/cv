@@ -40,3 +40,17 @@ variable "resources" {
     memory_max = 64
   }
 }
+
+variable "sidecar_resources" {
+  description = "Envoy resources for Traefik ingress"
+  type = object({
+    cpu        = number
+    memory     = number
+    memory_max = number
+  })
+  default = {
+    cpu        = 50
+    memory     = 64
+    memory_max = 128
+  }
+}

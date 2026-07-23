@@ -68,10 +68,9 @@ them through their Nomad Packs. The generic Chromium service and Consul
 intentions must already be applied from `~/infrastructure`; the JetStream stack
 under `terraform/live/prod/jetstream` must also exist.
 
-The cache invalidator remains at zero allocations until the repository variable
-`CV_CACHE_INVALIDATOR_ENABLED` is set to `true`. Apply its JetStream consumer
-and the adjacent NATS/Consul changes, populate its documented Vault runtime
-secret, then enable the variable.
+The cache invalidator pack always declares one allocation. Apply its JetStream
+consumer and the adjacent NATS/Consul changes, then populate its documented
+Vault runtime secret before deployment.
 
 Cloudflare routes `cv-api`, `cv-registry`, and `cv` through the existing Tunnel
 to Traefik. Access applies only to `cv-registry`; the public `cv-api` service

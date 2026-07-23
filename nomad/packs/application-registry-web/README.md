@@ -2,7 +2,8 @@
 
 This pack deploys the management SPA in an unprivileged Nginx allocation. It
 owns the `cv-registry` Traefik hostname and serves only static application
-assets. It has no registry API upstream and therefore needs no Envoy sidecar.
+assets. Traefik reaches it through a Consul Connect sidecar. The sidecar has no
+registry API upstream because the SPA does not proxy API requests.
 
 Cloudflare Access protects this hostname. The browser separately asks the user
 for an API origin and bearer token, then calls `cv-api` directly through the

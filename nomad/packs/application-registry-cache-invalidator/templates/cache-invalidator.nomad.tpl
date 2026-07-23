@@ -3,11 +3,7 @@ job [[ .my.job_name | quote ]] {
   type        = "service"
 
   group "worker" {
-    [[ if .my.enabled ]]
     count = 1
-    [[ else ]]
-    count = 0
-    [[ end ]]
 
     network {
       mode = "bridge"

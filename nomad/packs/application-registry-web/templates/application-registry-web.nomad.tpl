@@ -24,6 +24,7 @@ job [[ .my.job_name | quote ]] {
 
       tags = [
         "traefik.enable=true",
+        "traefik.consulcatalog.connect=true",
         "traefik.subdomain=[[ .my.traefik_subdomain ]]",
         "traefik.http.routers.[[ .my.job_name ]].entrypoints=web"
       ]
@@ -31,11 +32,24 @@ job [[ .my.job_name | quote ]] {
       check {
         name     = "registry-web-live"
         type     = "http"
+        expose   = true
         port     = "http"
         method   = "GET"
         path     = "/_health"
         interval = "15s"
         timeout  = "3s"
+      }
+
+      connect {
+        sidecar_service {}
+
+        sidecar_task {
+          resources {
+            cpu        = [[ .my.sidecar_resources.cpu ]]
+            memory     = [[ .my.sidecar_resources.memory ]]
+            memory_max = [[ .my.sidecar_resources.memory_max ]]
+          }
+        }
       }
     }
 

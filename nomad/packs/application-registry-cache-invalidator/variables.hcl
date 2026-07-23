@@ -10,12 +10,6 @@ variable "datacenters" {
   default     = ["dc1"]
 }
 
-variable "enabled" {
-  description = "Whether the service group has one running allocation"
-  type        = bool
-  default     = false
-}
-
 variable "docker_image" {
   description = "Immutable cache invalidator image reference, including sha256 digest"
   type        = string
