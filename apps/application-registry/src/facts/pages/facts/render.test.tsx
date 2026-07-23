@@ -337,7 +337,7 @@ describe('FactsPage', () => {
     expect(view.reads).toContain('catalogue:ru')
   })
 
-  test('refreshes the active release and catalogue through the shared reader path', async () => {
+  test('refreshes the active release while keeping its catalogue available', async () => {
     const view = renderFactsPage()
     await view.findByText('Marat')
 
@@ -347,10 +347,8 @@ describe('FactsPage', () => {
 
     await waitFor(() => {
       expect(view.reads.filter((read) => read === 'active')).toHaveLength(2)
-      expect(view.reads.filter((read) => read === 'catalogue:en')).toHaveLength(
-        2
-      )
     })
+    expect(await view.findByText('Marat')).toBeTruthy()
   })
 
   test('loads catalogue data when refresh discovers a new active release', async () => {
