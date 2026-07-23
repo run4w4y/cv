@@ -3,7 +3,7 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "projectType": "application",
   "sourceRoot": "apps/cv/src",
-  "tags": ["scope:cv", "type:worker", "visibility:public"],
+  "tags": ["scope:cv", "type:service", "visibility:public"],
   "targets": {
     "dev": {
       "executor": "nx:run-commands",
@@ -25,32 +25,9 @@
     "build": {
       "executor": "nx:run-commands",
       "dependsOn": ["^build"],
-      "outputs": ["{projectRoot}/.next", "{projectRoot}/.open-next"],
+      "outputs": ["{projectRoot}/.next"],
       "options": {
-        "command": "./node_modules/.bin/opennextjs-cloudflare build",
-        "cwd": "apps/cv",
-        "color": true
-      }
-    },
-    "deploy": {
-      "executor": "nx:run-commands",
-      "dependsOn": ["build"],
-      "outputs": [],
-      "options": {
-        "commands": [
-          "bun apps/cv/scripts/write-wrangler-config.ts apps/cv/wrangler.deploy.jsonc",
-          "bun apps/cv/scripts/deploy.ts apps/cv/wrangler.deploy.jsonc"
-        ],
-        "parallel": false,
-        "cwd": ".",
-        "color": true
-      }
-    },
-    "preview": {
-      "executor": "nx:run-commands",
-      "dependsOn": ["build"],
-      "options": {
-        "command": "./node_modules/.bin/opennextjs-cloudflare preview",
+        "command": "bun run build",
         "cwd": "apps/cv",
         "color": true
       }

@@ -91,7 +91,7 @@ jobs:
       - name: Set up workspace runtime
         uses: ./.github/actions/setup-runtime
 
-      - name: Build public CV Worker
+      - name: Build public CV service
         run: ./node_modules/.bin/nx run cv:build --skip-nx-cache
 
   application-registry-build:
@@ -112,6 +112,9 @@ jobs:
 
       - name: Build self-hosted application registry API
         run: ./node_modules/.bin/nx run application-registry-api:build --skip-nx-cache
+
+      - name: Build application registry management web
+        run: ./node_modules/.bin/nx run application-registry-management:build --skip-nx-cache
 
       - name: Build listing-check runner
         run: ./node_modules/.bin/nx run application-registry-listing-check-runner:build --skip-nx-cache
@@ -140,9 +143,6 @@ jobs:
 
       - name: Run registry CRUD integration tests
         run: ./node_modules/.bin/nx run application-registry-crud:test:integration --skip-nx-cache
-
-      - name: Run registry D1-to-PostgreSQL migration integration tests
-        run: ./node_modules/.bin/nx run application-registry-migration:test:integration --skip-nx-cache
 
       - name: Run registry service integration tests
         run: ./node_modules/.bin/nx run application-registry-service:test:integration --skip-nx-cache
@@ -184,6 +184,25 @@ jobs:
       packages: write
     uses: ./.github/workflows/publish-application-registry-images.yml
 
+  publish-cv-image:
+    name: Publish CV image
+    needs:
+      - quality
+      - cv-build
+      - cv-e2e
+    if: >-
+      ${{
+        (github.event_name == 'push' &&
+          (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v2')) ||
+        (github.event_name == 'workflow_dispatch' &&
+          github.ref == 'refs/heads/main' &&
+          inputs.deploy_target != 'none')
+      }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-cv-image.yml
+
   deploy-cv:
     name: Deploy production CV
     needs:
@@ -191,6 +210,7 @@ jobs:
       - cv-build
       - cv-e2e
       - deploy-application-registry
+      - publish-cv-image
     if: >-
       ${{
         (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
@@ -198,12 +218,9 @@ jobs:
           github.ref == 'refs/heads/main' &&
           (inputs.deploy_target == 'all' || inputs.deploy_target == 'cv'))
       }}
-    permissions:
-      actions: read
-      contents: read
-      deployments: write
-      id-token: write
     secrets: inherit
+    with:
+      image_digest: ${{ needs.publish-cv-image.outputs.image_digest }}
     uses: ./.github/workflows/deploy-cv.yml
 
   deploy-application-registry:
@@ -224,6 +241,7 @@ jobs:
     secrets: inherit
     with:
       api_image_digest: ${{ needs.publish-application-registry-images.outputs.api_image_digest }}
+      web_image_digest: ${{ needs.publish-application-registry-images.outputs.web_image_digest }}
       listing_check_runner_image_digest: ${{ needs.publish-application-registry-images.outputs.listing_check_runner_image_digest }}
       pdf_worker_image_digest: ${{ needs.publish-application-registry-images.outputs.pdf_worker_image_digest }}
     uses: ./.github/workflows/deploy-application-registry.yml

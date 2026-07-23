@@ -6,6 +6,7 @@ import { readPdfWorkerConfiguration } from './config'
 const provider = ConfigProvider.layer(
   ConfigProvider.fromEnv({
     env: {
+      BROWSER_CDP_URL: 'http://chromium:9222',
       MINIO_ACCESS_KEY_ID: 'cv-registry',
       MINIO_ENDPOINT: 'http://minio:9000',
       MINIO_OBJECTS_BUCKET: 'cv-objects',
@@ -27,6 +28,7 @@ describe('PDF worker configuration', () => {
     )
 
     expect(configuration.heartbeatMilliseconds).toBe(30_000)
+    expect(configuration.browser.cdpUrl.href).toBe('http://chromium:9222/')
     expect(configuration.postgres.maxConnections).toBe(3)
     expect(configuration.minio.forcePathStyle).toBe(true)
   })

@@ -1,8 +1,7 @@
 import 'server-only'
 
 import * as BrowserCrypto from '@effect/platform-browser/BrowserCrypto'
-import { getCloudflareContext } from '@opennextjs/cloudflare'
-import { Effect } from 'effect'
+import { Config, Effect } from 'effect'
 import { cache } from 'react'
 
 import {
@@ -12,15 +11,27 @@ import {
   makeHttpCvPublicResolver,
 } from '@/lib/publication'
 
+const resolverUrl = () =>
+  Config.nonEmptyString('CV_PUBLIC_RESOLVER_URL').pipe(
+    Config.withDefault('http://127.0.0.1:3001'),
+    Effect.flatMap((value) =>
+      Effect.try({
+        try: () => new URL(value),
+        catch: () =>
+          new Error('CV_PUBLIC_RESOLVER_URL must be an absolute URL.'),
+      })
+    ),
+    Effect.orDie
+  )
+
 export const loadCvPublicationForToken = cache(async (token: string) => {
   const fixtures = await fixturePublications()
   if (fixtures) return fixtures.loadCvFixturePublication(token)
 
-  const { env } = await getCloudflareContext({ async: true })
-  return loadCvPublication(
-    makeHttpCvPublicResolver(env.CV_PUBLIC_RESOLVER_URL),
-    token
-  ).pipe(
+  return Effect.gen(function* () {
+    const origin = yield* resolverUrl()
+    return yield* loadCvPublication(makeHttpCvPublicResolver(origin), token)
+  }).pipe(
     asCvPublicationLoadResult,
     Effect.provide(BrowserCrypto.layer),
     Effect.runPromise
@@ -32,12 +43,14 @@ export const loadCvPreviewForToken = cache(
     const fixtures = await fixturePublications()
     if (fixtures) return fixtures.loadCvFixturePreview(token, previewToken)
 
-    const { env } = await getCloudflareContext({ async: true })
-    return loadCvPreview(
-      makeHttpCvPublicResolver(env.CV_PUBLIC_RESOLVER_URL),
-      token,
-      previewToken
-    ).pipe(
+    return Effect.gen(function* () {
+      const origin = yield* resolverUrl()
+      return yield* loadCvPreview(
+        makeHttpCvPublicResolver(origin),
+        token,
+        previewToken
+      )
+    }).pipe(
       asCvPublicationLoadResult,
       Effect.provide(BrowserCrypto.layer),
       Effect.runPromise

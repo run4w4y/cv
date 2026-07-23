@@ -1,9 +1,4 @@
 .next/
-.open-next/
-.wrangler/
 *.tsbuildinfo
 dist/
 node_modules/
-worker-configuration.d.ts
-wrangler.deploy.json
-wrangler.deploy.jsonc

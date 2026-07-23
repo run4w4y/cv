@@ -77,7 +77,7 @@ export const contentRevisions = pgTable(
     byteLength: integer('byte_length').notNull(),
     mediaType: text('media_type').notNull(),
     source: text('source', { enum: contentRevisionSourceValues }).notNull(),
-    // Provenance only: facts live in a private immutable R2 publication, not in
+    // Provenance only: facts live in the private immutable object store, not in
     // the application registry database.
     factsReleaseId: text('facts_release_id'),
     jobSnapshotId: text('job_snapshot_id').references(

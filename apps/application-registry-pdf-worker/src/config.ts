@@ -1,6 +1,9 @@
 import { Config, Effect, type Redacted } from 'effect'
 
 export interface PdfWorkerConfiguration {
+  readonly browser: {
+    readonly cdpUrl: URL
+  }
   readonly heartbeatMilliseconds: number
   readonly minio: {
     readonly accessKeyId: Redacted.Redacted<string>
@@ -39,6 +42,9 @@ export const readPdfWorkerConfiguration: Effect.Effect<
   PdfWorkerConfiguration,
   unknown
 > = Effect.all({
+  browser: Effect.all({
+    cdpUrl: url('BROWSER_CDP_URL'),
+  }),
   heartbeatMilliseconds: Config.int('PDF_HEARTBEAT_MILLISECONDS').pipe(
     Config.withDefault(30_000)
   ),

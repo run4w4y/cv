@@ -170,7 +170,7 @@ builder without resolving the request twice.
 
 ### Ordinary select
 
-For SQLite or D1, one statement can join the one-to-one company and project
+For SQLite, one statement can join the one-to-one company and project
 tags with a correlated JSON aggregate without multiplying application rows:
 
 ```ts

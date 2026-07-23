@@ -5,10 +5,9 @@ This package is the sole physical-schema source of truth and owns the PostgreSQL
 migration history.
 
 The current application model has one opaque text identity and one external
-`postingUrl`. Keeping identifiers as text preserves the existing D1 records
-during the one-time import; new identifiers can still use UUID values. Private
-normalized URL and fingerprint columns support lookup and deduplication; there
-are no public job keys, source IDs, or identity aliases.
+`postingUrl`. Identifiers remain opaque text so callers can choose stable IDs or
+UUID values. Private normalized URL and fingerprint columns support lookup and
+deduplication; there are no public job keys, source IDs, or identity aliases.
 Related tables cover labels, notes, backend-issued activities, compensation,
 listing checks, opaque content revisions, publications, PDF
 artifacts and idempotency receipts.
@@ -36,10 +35,8 @@ ordering, joins, or projection remain typed columns.
 Compensation minor-unit amounts use PostgreSQL `bigint` while remaining bounded
 to exact JavaScript safe integers at the codec boundary.
 
-The PostgreSQL history starts with one clean baseline. Historical D1 migrations
-are neither copied nor replayed. The one-shot migration tool reconstructs a
-frozen D1 export at its supported final version and maps the data directly into
-this final schema.
+The PostgreSQL history starts with one clean baseline and is the only active
+database migration history.
 
 After changing tables, generate and inspect the migration and run the drift
 check:

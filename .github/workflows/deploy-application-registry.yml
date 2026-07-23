@@ -10,6 +10,10 @@ on:
         description: Immutable registry API image digest.
         required: true
         type: string
+      web_image_digest:
+        description: Immutable registry management web image digest.
+        required: true
+        type: string
       listing_check_runner_image_digest:
         description: Immutable listing-check runner image digest.
         required: true
@@ -28,7 +32,7 @@ env:
 
 jobs:
   deploy-registry-api-server:
-    name: Register self-hosted registry API
+    name: Register private registry API
     runs-on: ubuntu-latest
     environment: production
     permissions:
@@ -49,10 +53,9 @@ jobs:
 
       - name: Register registry API service
         env:
-          API_BFF_ENABLED: ${{ vars.CV_REGISTRY_BFF_ENABLED || 'false' }}
+          API_BFF_ENABLED: "true"
           API_ENABLED: "true"
           API_IMAGE_DIGEST: ${{ inputs.api_image_digest }}
-          API_SUBDOMAIN: ${{ vars.CV_REGISTRY_ORIGIN_SUBDOMAIN || 'registry-origin' }}
           NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
           NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
         run: |
@@ -60,8 +63,42 @@ jobs:
             --parser-v1 \
             --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${API_IMAGE_DIGEST}" \
             --var "enabled=${API_ENABLED}" \
-            --var "bff_enabled=${API_BFF_ENABLED}" \
-            --var "traefik_subdomain=${API_SUBDOMAIN}"
+            --var "bff_enabled=${API_BFF_ENABLED}"
+
+  deploy-registry-web:
+    name: Register registry management web
+    needs: deploy-registry-api-server
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    env:
+      IMAGE_NAME: ${{ github.repository_owner }}/cv-application-registry-web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Nomad Pack
+        run: |
+          version=0.3.0
+          archive="nomad-pack_${version}_linux_amd64.zip"
+          curl -fsSL "https://releases.hashicorp.com/nomad-pack/${version}/${archive}" -o "$archive"
+          unzip -q "$archive" -d /tmp/nomad-pack
+          sudo install /tmp/nomad-pack/nomad-pack /usr/local/bin/nomad-pack
+
+      - name: Register registry management web service
+        env:
+          NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
+          NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
+          WEB_ENABLED: "true"
+          WEB_IMAGE_DIGEST: ${{ inputs.web_image_digest }}
+          WEB_SUBDOMAIN: ${{ vars.CV_REGISTRY_ORIGIN_SUBDOMAIN || 'registry-origin' }}
+        run: |
+          nomad-pack run nomad/packs/application-registry-web \
+            --parser-v1 \
+            --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${WEB_IMAGE_DIGEST}" \
+            --var "enabled=${WEB_ENABLED}" \
+            --var "traefik_subdomain=${WEB_SUBDOMAIN}"
 
   deploy-listing-check-runner:
     name: Register listing-check runner

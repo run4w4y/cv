@@ -4,6 +4,6 @@ app {
 
 pack {
   name        = "application-registry-api"
-  description = "Self-hosted application registry API and management SPA"
+  description = "Private self-hosted application registry API"
   version     = "0.1.0"
 }

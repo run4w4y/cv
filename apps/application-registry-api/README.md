@@ -1,31 +1,26 @@
 # Self-hosted application registry API
 
-This Bun application is the canonical PostgreSQL/MinIO runtime for the typed
-application registry API and management SPA. It does not replace Cloudflare
-DNS, Tunnel, CDN, Access, analytics, the public `/c/*` Worker overlay, or the
-frozen Pages deployment.
+Private Bun service for the typed application-registry API. It uses PostgreSQL
+for state, MinIO for objects, NATS JetStream for domain events, and Cloudflare's
+GraphQL and cache-purge APIs for retained edge capabilities.
+
+The separate management-web allocation proxies same-origin browser requests to
+this service over Consul Connect. `REGISTRY_BFF_ENABLED` permits those
+Access-protected browser requests to use the server-held registry credential;
+direct `/machine/*` clients must continue presenting that bearer credential.
+Capability-token publication and preview resolvers are exposed at
+`/cv-publications/:token` and `/cv-previews/:token`.
+
+Mutation services publish versioned domain events directly to the existing
+JetStream topology. Enabling a publication and requesting a PDF are consumed by
+the PDF worker; applications never create streams or consumers at runtime.
 
 Runtime dependencies:
 
-- PostgreSQL through `POSTGRES_*`;
-- path-style S3/MinIO through `MINIO_*`;
-- NATS JetStream through `NATS_*`;
-- Cloudflare GraphQL analytics through `CLOUDFLARE_*`;
-- registry and facts-publication bearer credentials;
-- optional HTTP cache invalidation through the paired `CV_REVALIDATION_URL`
-  and `CV_REVALIDATION_SECRET` values.
-
-The capability-token publication and preview resolvers are served over HTTP at
-`/cv-publications/:token` and `/cv-previews/:token`. The retained public CV
-Worker reaches these routes through `CV_PUBLIC_RESOLVER_URL`; no registry Worker
-service binding remains.
-
-`REGISTRY_BFF_ENABLED` defaults to `false`. Enable it only after Cloudflare
-Access protects the management hostname.
-
-Mutation services publish versioned domain events directly to NATS JetStream.
-Enabling a CV publication emits the event consumed by the PDF worker; explicit
-regeneration requests use the same event transport.
+- `POSTGRES_*`, `MINIO_*`, and `NATS_*` connection values;
+- `REGISTRY_API_TOKEN` and `FACTS_PUBLISH_TOKEN`;
+- `CLOUDFLARE_ANALYTICS_API_TOKEN`, `CLOUDFLARE_ZONE_ID`, and `CV_WEB_HOST`.
+  The Cloudflare token needs analytics-read and cache-purge permissions.
 
 Build and verify:
 
@@ -37,5 +32,5 @@ bunx nx run application-registry-api:build
 docker build -f apps/application-registry-api/Dockerfile .
 ```
 
-Integration tests start isolated PostgreSQL, MinIO, and NATS containers through
-`@cv/test-infrastructure`; no external test services or Miniflare are required.
+Integration tests use PostgreSQL, MinIO, and NATS through
+`@cv/test-infrastructure`; no external test services are required.

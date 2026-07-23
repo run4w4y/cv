@@ -29,17 +29,11 @@ output "generated_secrets" {
     (local.content_path) = [
       infisical_secret.private_audience_key.name,
     ]
-    (local.analytics_path) = [
-      infisical_secret.grafana_connector_token.name,
-    ]
     (local.application_registry_path) = [
       infisical_secret.registry_api_token.name,
     ]
     (local.facts_publication_path) = [
       infisical_secret.facts_publish_token.name,
-    ]
-    (local.deploy_path) = [
-      infisical_secret.cv_revalidation_secret.name,
     ]
   }
 }

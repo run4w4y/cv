@@ -122,17 +122,14 @@ export const makeApiWebHandler = (
   configuration: ApiServerConfiguration,
   s3: S3Client
 ) => {
-  const cacheInvalidation =
-    configuration.cacheInvalidation.url === undefined ||
-    configuration.cacheInvalidation.secret === undefined
-      ? undefined
-      : {
-          origin: configuration.cacheInvalidation.url,
-          secret: configuration.cacheInvalidation.secret,
-        }
   const api = Layer.provide(ApiHandlersLayer, [
     makeRegistryServicesLayer(configuration, s3),
-    makeCvCacheInvalidatorLayer(cacheInvalidation),
+    makeCvCacheInvalidatorLayer({
+      apiToken: configuration.analytics.apiToken,
+      endpoint: configuration.cacheInvalidation.endpoint,
+      host: configuration.analytics.host,
+      zoneId: configuration.analytics.zoneId,
+    }),
     makeFactsPublisherAuthorizationLayer(
       configuration.authentication.factsPublishToken
     ),

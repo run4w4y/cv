@@ -199,7 +199,7 @@ describe('sortable field validation', () => {
     }
   })
 
-  test('keeps a 12-value enum continuation below the D1 parameter budget', async () => {
+  test('keeps a 12-value enum continuation below the SQLite parameter budget', async () => {
     const sqlite = new Database(':memory:')
     sqlite.exec(`
       create table sortable_parameter_applications (

@@ -47,13 +47,12 @@ describe('application registry API server configuration', () => {
     )
   })
 
-  test('requires cache invalidation URL and secret together', async () => {
-    await expect(
-      readWith({ CV_REVALIDATION_URL: 'https://cv.example.test' })
-    ).rejects.toThrow('configured together')
-    await expect(
-      readWith({ CV_REVALIDATION_SECRET: 'cache-secret' })
-    ).rejects.toThrow('configured together')
+  test('uses the Cloudflare API cache-purge endpoint by default', async () => {
+    const configuration = await readWith({})
+
+    expect(configuration.cacheInvalidation.endpoint.toString()).toBe(
+      'https://api.cloudflare.com/client/v4/'
+    )
   })
 
   test('rejects malformed URLs and excessive PostgreSQL pools', async () => {

@@ -2,13 +2,16 @@
 
 This pack deploys the single Application Registry consumer responsible for PDF
 generation. It listens to the durable `registry-pdf-worker` JetStream consumer
-for publication-availability and explicit PDF-generation events. The process
-reuses one Chromium instance, opens a fresh page for each event, and limits the
-durable consumer to one in-flight delivery.
+for publication-availability and explicit PDF-generation events. For each
+event, the process connects to the separately deployed generic `chromium`
+service over CDP, creates an isolated browser context, and disconnects after
+rendering. The durable consumer remains limited to one in-flight delivery.
 
 The pack is safe to register before cutover because `enabled` defaults to
-`false`. Default reservations are 200 CPU / 512 MiB for the worker (bursting to
-1 GiB) and 50 CPU / 64 MiB for its shared Envoy sidecar.
+`false`. Default reservations are 100 CPU / 256 MiB for the worker (bursting to
+512 MiB) and 50 CPU / 64 MiB for its shared Envoy sidecar. Chromium and its
+shared-memory allocation are owned by the infrastructure repository, not this
+pack or the worker image.
 
 Required Vault paths are:
 
@@ -22,7 +25,9 @@ Required Vault paths are:
 Apply `terraform/live/prod/jetstream` before enabling the allocation. The
 worker binds to the existing `registry-pdf-worker` durable consumer and fails
 startup if the Terraform-managed consumer is unavailable; it never creates or
-updates JetStream resources.
+updates JetStream resources. The infrastructure repository must also have the
+`chromium` Nomad allocation and the `cv-pdf-worker -> chromium` Consul intention
+applied before enabling this worker.
 
 Render before registering:
 

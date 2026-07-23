@@ -9,17 +9,12 @@ RUN bunx nx run application-registry-pdf-worker:build --skip-nx-cache
 FROM node:24.17.0-bookworm-slim
 
 ENV NODE_ENV=production
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 WORKDIR /app
 
-# PDF rendering only needs Chromium's headless shell. Installing the complete
-# Playwright browser set more than doubles the runtime image on the Nomad node.
 RUN DEBIAN_FRONTEND=noninteractive npm init -y \
   && npm install --omit=dev --ignore-scripts playwright@1.61.1 \
-  && npx --no-install playwright install --with-deps --only-shell chromium \
-  && npm cache clean --force \
-  && rm -rf /var/lib/apt/lists/*
+  && npm cache clean --force
 
 COPY --from=build /workspace/apps/application-registry-pdf-worker/dist/main.mjs ./pdf-worker.mjs
 

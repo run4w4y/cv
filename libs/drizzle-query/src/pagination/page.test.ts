@@ -2,7 +2,6 @@ import { Database } from 'bun:sqlite'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import type { EffectSQLiteD1Database } from 'drizzle-orm/effect-d1'
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 import { defineQuery, pagePagination, QueryError } from '../index'
@@ -55,15 +54,6 @@ const pageRecords = defineQuery(
     pagination: pagePagination({ defaultSize: 2, maxSize: 10 }),
   }
 )
-
-const preserveEffectBuilder = (database: EffectSQLiteD1Database) => {
-  const dynamic = database.select().from(records).$dynamic()
-  const applied = pageRecords.resolve().apply(dynamic)
-  const exact: typeof dynamic = applied
-  return exact
-}
-
-void preserveEffectBuilder
 
 const pageTypeContracts = (): void => {
   // @ts-expect-error Page pagination does not accept a cursor.

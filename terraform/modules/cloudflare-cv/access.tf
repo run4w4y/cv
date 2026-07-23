@@ -22,14 +22,15 @@ resource "cloudflare_zero_trust_access_application" "application_registry_manage
   }]
 }
 
-# Publication and preview tokens are capability URLs. The public CV Worker
-# resolves them through the Tunnel without holding an Access service token.
+# Publication and preview tokens are capability URLs. The CV web allocation
+# resolves them through Consul, while browsers and rendering workers can use
+# the public Tunnel endpoint without an Access service token.
 resource "cloudflare_zero_trust_access_application" "application_registry_public_resolver" {
   count = local.application_registry_management_access_enabled ? 1 : 0
 
   account_id           = var.cloudflare_account_id
   name                 = "CV public publication resolver"
-  domain               = "${local.cv_public_resolver_access_domain}/cv-*"
+  domain               = "${local.application_registry_access_domain}/cv-*"
   type                 = "self_hosted"
   app_launcher_visible = false
   session_duration     = "24h"

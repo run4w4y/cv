@@ -93,7 +93,7 @@ describe('CV public resolver service-binding handler', () => {
     const handler = makeCvPublicResolverHandler(() =>
       Effect.fail(
         new RegistryArtifactError({
-          cause: 'R2 unavailable',
+          cause: 'object store unavailable',
           message: 'Secret storage detail',
           operation: 'read',
         })

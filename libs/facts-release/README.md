@@ -17,7 +17,7 @@ The static layout is `current.json`,
 `releases/<release-id>/locales/<locale>.json`, and
 `releases/<release-id>/generation/cv.json`, plus
 `assets/sha256/<digest>`. Only the registry service may create immutable
-objects and compare-and-set `current.json`; this package has no network or R2
+objects and compare-and-set `current.json`; this package has no network or object-store
 publisher abstraction.
 
 There is no older-manifest compatibility path.

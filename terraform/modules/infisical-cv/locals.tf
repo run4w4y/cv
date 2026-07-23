@@ -19,7 +19,7 @@ locals {
     analytics = {
       name        = "analytics"
       path        = local.analytics_path
-      description = "Runtime analytics connector secrets and derived deployment outputs."
+      description = "Cloudflare GraphQL analytics credentials consumed by the self-hosted registry API."
     }
     application_registry = {
       name        = "application-registry"
@@ -34,7 +34,7 @@ locals {
     deploy = {
       name        = "deploy"
       path        = local.deploy_path
-      description = "Cloudflare account, zone, and project deployment settings."
+      description = "Cloudflare account, zone, Access, and cache-rule deployment settings."
     }
     facts_publication = {
       name        = "facts-publication"
@@ -44,7 +44,7 @@ locals {
     grafana = {
       name        = "grafana"
       path        = local.grafana_path
-      description = "Grafana API and connector data source provisioning settings."
+      description = "Grafana API provisioning settings."
     }
   }
 
@@ -57,13 +57,9 @@ locals {
     }
 
     (local.analytics_path) = {
-      CACHE_TTL_SECONDS = {
-        value       = "600"
-        description = "Analytics connector response cache TTL in seconds."
-      }
       CLOUDFLARE_ANALYTICS_API_TOKEN = {
         value       = local.placeholder_value
-        description = "Cloudflare token used by the Worker to read GraphQL analytics. Requires Account Analytics Read and Zone Analytics Read for the CV zone."
+        description = "Cloudflare token used by the registry API for GraphQL analytics and CV cache purges. Requires Account Analytics Read, Zone Analytics Read, and Cache Purge for the CV zone."
       }
       CLOUDFLARE_GRAPHQL_ENDPOINT = {
         value       = "https://api.cloudflare.com/client/v4/graphql"
@@ -81,19 +77,15 @@ locals {
     (local.deploy_path) = {
       CLOUDFLARE_ACCOUNT_ID = {
         value       = local.placeholder_value
-        description = "Cloudflare account ID that owns the CV Worker."
+        description = "Cloudflare account ID that owns the retained Access applications."
       }
       CLOUDFLARE_API_TOKEN = {
         value       = local.placeholder_value
-        description = "Cloudflare Terraform token with Workers, D1, Pages, and DNS permissions."
+        description = "Cloudflare Terraform token with Access and Zone Cache Rules write permissions."
       }
       CLOUDFLARE_ZONE_ID = {
         value       = local.placeholder_value
         description = "Cloudflare zone ID that owns the CV public and analytics hostnames."
-      }
-      CLOUDFLARE_WORKERS_DEV_ACCOUNT_SUBDOMAIN = {
-        value       = local.placeholder_value
-        description = "Cloudflare account-level workers.dev subdomain label, without .workers.dev."
       }
       CV_WEB_HOST = {
         value       = local.placeholder_value

@@ -1,8 +1,12 @@
 import 'server-only'
 
-import { getDeploymentId } from '@opennextjs/cloudflare'
+import { Config, Effect } from 'effect'
 
 import { cvRenderContractVersion } from '@/document/version'
 
 export const cvRenderVersion = () =>
-  `${cvRenderContractVersion}:${getDeploymentId()}`
+  `${cvRenderContractVersion}:${Effect.runSync(
+    Config.nonEmptyString('CV_DEPLOYMENT_ID').pipe(
+      Config.withDefault('development')
+    )
+  )}`

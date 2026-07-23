@@ -18,7 +18,7 @@ nomad-pack render nomad/packs/application-registry-listing-check-runner \
 ```
 
 The pack defaults to `enabled = false`. Enable it only after the PostgreSQL
-baseline, the `terraform/live/prod/jetstream` topology, and D1 data import have
+baseline and the `terraform/live/prod/jetstream` topology have
 been rehearsed, the Worker listing cron has
 been removed, and a manual Nomad child exits successfully. Nomad schedules the
 job hourly at minute 17 UTC, prohibits overlap, and does not retry failed

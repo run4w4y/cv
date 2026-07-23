@@ -22,21 +22,21 @@ variable "docker_image" {
 }
 
 variable "resources" {
-  description = "Playwright worker resources"
+  description = "PDF event worker resources; Chromium runs in its own allocation"
   type = object({
     cpu        = number
     memory     = number
     memory_max = number
   })
   default = {
-    cpu        = 200
-    memory     = 512
-    memory_max = 1024
+    cpu        = 100
+    memory     = 256
+    memory_max = 512
   }
 }
 
 variable "sidecar_resources" {
-  description = "Shared Envoy resources for PostgreSQL, MinIO, and NATS"
+  description = "Shared Envoy resources for PostgreSQL, MinIO, NATS, and Chromium"
   type = object({
     cpu        = number
     memory     = number

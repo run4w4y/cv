@@ -1,5 +1,4 @@
 import { timingSafeEqual } from 'node:crypto'
-import { resolve, sep } from 'node:path'
 
 import {
   applicationRegistryApiPrefix,
@@ -28,17 +27,6 @@ const isFactsPublicationRequest = (request: Request) => {
 
 const isMachineTransportRequest = (request: Request) =>
   isPathAt(new URL(request.url).pathname, applicationRegistryMachinePrefix)
-
-const isDirectRegistryRequest = (request: Request) => {
-  const path = new URL(request.url).pathname
-  return (
-    path === '/health' ||
-    path === '/openapi.json' ||
-    isRegistryApiPath(path) ||
-    isPathAt(path, '/cv-publications') ||
-    isPathAt(path, '/cv-previews')
-  )
-}
 
 const isRegistryBffRequest = (request: Request) => {
   const path = new URL(request.url).pathname
@@ -163,56 +151,6 @@ const withPrivateCachePolicy = (request: Request, response: Response) => {
   return response
 }
 
-const safeStaticPath = (root: string, path: string): string | null => {
-  try {
-    const decoded = decodeURIComponent(path)
-    if (decoded.includes('\0')) return null
-    const candidate = resolve(root, `.${decoded}`)
-    const resolvedRoot = resolve(root)
-    return candidate === resolvedRoot ||
-      candidate.startsWith(`${resolvedRoot}${sep}`)
-      ? candidate
-      : null
-  } catch {
-    return null
-  }
-}
-
-const staticResponse = async (
-  request: Request,
-  root: string
-): Promise<Response> => {
-  if (request.method !== 'GET' && request.method !== 'HEAD') {
-    return new Response('Not found', { status: 404 })
-  }
-  const path = new URL(request.url).pathname
-  const candidate = safeStaticPath(root, path)
-  if (candidate === null) return new Response('Not found', { status: 404 })
-
-  const requested = Bun.file(candidate)
-  const exact = path !== '/' && (await requested.exists()) ? requested : null
-  if (path.startsWith('/assets/') && exact === null) {
-    return new Response('Not found', { status: 404 })
-  }
-  const file = exact ?? Bun.file(resolve(root, 'index.html'))
-  if (!(await file.exists())) {
-    return new Response('Management application is not installed.', {
-      status: 404,
-    })
-  }
-
-  const headers = new Headers({
-    'Cache-Control':
-      exact !== null && path.startsWith('/assets/')
-        ? 'public, max-age=31536000, immutable'
-        : 'no-cache',
-    'X-Content-Type-Options': 'nosniff',
-  })
-  return request.method === 'HEAD'
-    ? new Response(null, { headers })
-    : new Response(file, { headers })
-}
-
 export interface ApiServerRequestHandlerOptions {
   readonly apiHandler: (request: Request) => Promise<Response>
   readonly configuration: ApiServerConfiguration
@@ -269,17 +207,7 @@ export const makeApiServerRequestHandler = (
         )
       }
 
-      if (isDirectRegistryRequest(request)) {
-        return withPrivateCachePolicy(
-          request,
-          await options.apiHandler(request)
-        )
-      }
-
-      return await staticResponse(
-        request,
-        options.configuration.http.staticAssetsDirectory
-      )
+      return withPrivateCachePolicy(request, await options.apiHandler(request))
     } catch (cause) {
       const message =
         cause instanceof Error ? cause.message : 'Registry API request failed.'

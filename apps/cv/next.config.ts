@@ -1,7 +1,5 @@
-import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare'
+import { fileURLToPath } from 'node:url'
 import type { NextConfig } from 'next'
-
-initOpenNextCloudflareForDev()
 
 const securityHeaders = [
   { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
@@ -18,6 +16,8 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   devIndicators: false,
   basePath: '/c',
+  output: 'standalone',
+  outputFileTracingRoot: fileURLToPath(new URL('../..', import.meta.url)),
   poweredByHeader: false,
   reactStrictMode: true,
   skipTrailingSlashRedirect: true,
@@ -26,7 +26,15 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/:token((?!_preview$|_internal$)[^/]+)',
-        headers: [...securityHeaders],
+        headers: [
+          ...securityHeaders,
+          { key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' },
+          {
+            key: 'Cloudflare-CDN-Cache-Control',
+            value:
+              'public, max-age=86400, stale-while-revalidate=604800, stale-if-error=2592000',
+          },
+        ],
       },
       {
         source: '/_preview/:path*',

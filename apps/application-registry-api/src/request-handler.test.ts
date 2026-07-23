@@ -16,11 +16,12 @@ const configuration = (bffEnabled = false): ApiServerConfiguration => ({
     factsPublishToken: Redacted.make('facts-token'),
     registryApiToken: Redacted.make('registry-token'),
   },
-  cacheInvalidation: { secret: undefined, url: undefined },
+  cacheInvalidation: {
+    endpoint: new URL('https://api.cloudflare.test/client/v4/'),
+  },
   http: {
     host: '127.0.0.1',
     port: 3000,
-    staticAssetsDirectory: '/missing',
   },
   minio: {
     accessKeyId: Redacted.make('access'),

@@ -22,13 +22,6 @@ job [[ .my.job_name | quote ]] {
       task = "api"
       port = "3000"
 
-      tags = [
-        "traefik.enable=true",
-        "traefik.consulcatalog.connect=true",
-        "traefik.subdomain=[[ .my.traefik_subdomain ]]",
-        "traefik.http.routers.[[ .my.job_name ]].entrypoints=web"
-      ]
-
       check {
         name     = "registry-api-live"
         type     = "http"
@@ -138,8 +131,6 @@ EOH
 CLOUDFLARE_ANALYTICS_API_TOKEN={{ .Data.data.cloudflare_analytics_api_token }}
 CLOUDFLARE_GRAPHQL_ENDPOINT={{ .Data.data.cloudflare_graphql_endpoint }}
 CLOUDFLARE_ZONE_ID={{ .Data.data.cloudflare_zone_id }}
-CV_REVALIDATION_SECRET={{ .Data.data.cv_revalidation_secret }}
-CV_REVALIDATION_URL={{ .Data.data.cv_revalidation_url }}
 CV_WEB_HOST={{ .Data.data.cv_web_host }}
 FACTS_PUBLISH_TOKEN={{ .Data.data.facts_publish_token }}
 REGISTRY_API_TOKEN={{ .Data.data.registry_api_token }}

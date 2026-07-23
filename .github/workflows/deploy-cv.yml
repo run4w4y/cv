@@ -1,104 +1,52 @@
 name: Deploy CV
 
 permissions:
-  actions: read
   contents: read
-  id-token: write
 
 on:
   workflow_call:
+    inputs:
+      image_digest:
+        description: Immutable CV web image digest.
+        required: true
+        type: string
 
 concurrency:
   group: cv-production
   cancel-in-progress: false
 
 env:
-  CV_PUBLIC_RESOLVER_URL: https://registry-origin.4w4y.run
-  INFISICAL_ENV: ${{ vars.INFISICAL_ENV || 'prod' }}
-  INFISICAL_HOST: ${{ vars.INFISICAL_HOST || 'https://app.infisical.com' }}
+  REGISTRY: ghcr.io
 
 jobs:
-  deploy-cv-worker:
-    name: Build and deploy public CV Worker
+  deploy-cv-web:
+    name: Register CV web service
     runs-on: ubuntu-latest
     environment: production
     permissions:
-      actions: read
       contents: read
-      deployments: write
-      id-token: write
+    env:
+      IMAGE_NAME: ${{ github.repository_owner }}/cv-web
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          filter: tree:0
 
-      - name: Fetch Infisical deployment values
-        if: ${{ !env.ACT }}
-        uses: ./.github/actions/fetch-infisical
-        with:
-          identity-id: ${{ secrets.INFISICAL_IDENTITY_ID }}
-          project-slug: ${{ secrets.INFISICAL_PROJECT_SLUG }}
-          env-slug: ${{ env.INFISICAL_ENV }}
-          host: ${{ env.INFISICAL_HOST }}
-
-      - name: Set up workspace runtime
-        uses: ./.github/actions/setup-runtime
-
-      - name: Resolve public CV Worker deployment values
-        env:
-          CONFIGURED_CV_PUBLIC_RESOLVER_URL: ${{ vars.CV_PUBLIC_RESOLVER_URL }}
-          CONFIGURED_CV_PUBLIC_WORKER_NAME: ${{ vars.CV_PUBLIC_WORKER_NAME }}
+      - name: Install Nomad Pack
         run: |
-          worker_name="${CONFIGURED_CV_PUBLIC_WORKER_NAME:-${CV_PUBLIC_WORKER_NAME:-cv-public}}"
-          resolver_url="${CONFIGURED_CV_PUBLIC_RESOLVER_URL:-${CV_PUBLIC_RESOLVER_URL:-}}"
+          version=0.3.0
+          archive="nomad-pack_${version}_linux_amd64.zip"
+          curl -fsSL "https://releases.hashicorp.com/nomad-pack/${version}/${archive}" -o "$archive"
+          unzip -q "$archive" -d /tmp/nomad-pack
+          sudo install /tmp/nomad-pack/nomad-pack /usr/local/bin/nomad-pack
 
-          {
-            printf 'CV_PUBLIC_WORKER_NAME=%s\n' "$worker_name"
-            if [[ -n "$resolver_url" ]]; then
-              printf 'CV_PUBLIC_RESOLVER_URL=%s\n' "$resolver_url"
-            fi
-          } >> "$GITHUB_ENV"
-
-      - name: Validate production CV Worker configuration
-        if: ${{ !env.ACT }}
-        run: |
-          missing=()
-          for name in \
-            CLOUDFLARE_ACCOUNT_ID \
-            CLOUDFLARE_API_TOKEN \
-            CV_PUBLIC_RESOLVER_URL \
-            CV_PUBLIC_WORKER_NAME \
-            CV_REVALIDATION_SECRET
-          do
-            if [[ -z "${!name:-}" ]]; then
-              missing+=("$name")
-            fi
-          done
-
-          if (( ${#missing[@]} > 0 )); then
-            printf '::error title=Missing production CV Worker configuration::Missing: %s\n' "${missing[*]}"
-            exit 1
-          fi
-
-      - name: Build public CV Worker
-        run: ./node_modules/.bin/nx run cv:build --skip-nx-cache
-
-      - name: Generate production Wrangler config
+      - name: Register CV web service
         env:
-          CV_PUBLIC_COMPATIBILITY_DATE: ${{ vars.CV_PUBLIC_COMPATIBILITY_DATE }}
-        run: >-
-          bun apps/cv/scripts/write-wrangler-config.ts
-          apps/cv/wrangler.deploy.jsonc
-
-      - name: Validate deployable Worker artifact
-        run: >-
-          bunx wrangler deploy --dry-run
-          --config apps/cv/wrangler.deploy.jsonc
-          --outdir apps/cv/.open-next/deploy-check
-
-      - name: Deploy public CV Worker
-        if: ${{ !env.ACT }}
-        run: bun scripts/deploy.ts wrangler.deploy.jsonc
-        working-directory: apps/cv
+          CV_IMAGE_DIGEST: ${{ inputs.image_digest }}
+          NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
+          NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
+        run: |
+          nomad-pack run nomad/packs/cv-web \
+            --parser-v1 \
+            --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${CV_IMAGE_DIGEST}" \
+            --var "deployment_id=${GITHUB_SHA}" \
+            --var "enabled=true"

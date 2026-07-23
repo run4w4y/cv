@@ -1,5 +1,5 @@
 import { CloudflareAnalytics } from '@cv/cloudflare-analytics-client'
-import { Config, Effect, Option, type Redacted } from 'effect'
+import { Config, Effect, type Redacted } from 'effect'
 
 export interface ApiServerConfiguration {
   readonly analytics: {
@@ -14,13 +14,11 @@ export interface ApiServerConfiguration {
     readonly registryApiToken: Redacted.Redacted<string>
   }
   readonly cacheInvalidation: {
-    readonly secret: string | undefined
-    readonly url: URL | undefined
+    readonly endpoint: URL
   }
   readonly http: {
     readonly host: string
     readonly port: number
-    readonly staticAssetsDirectory: string
   }
   readonly minio: {
     readonly accessKeyId: Redacted.Redacted<string>
@@ -46,11 +44,6 @@ export interface ApiServerConfiguration {
   }
 }
 
-const optionalString = (name: string) =>
-  Config.option(Config.nonEmptyString(name)).pipe(
-    Config.map(Option.getOrUndefined)
-  )
-
 const url = (name: string, fallback?: string) =>
   Config.nonEmptyString(name).pipe(
     fallback === undefined ? (value) => value : Config.withDefault(fallback),
@@ -59,18 +52,6 @@ const url = (name: string, fallback?: string) =>
         try: () => new URL(value),
         catch: () => new Error(`${name} must be an absolute URL.`),
       })
-    )
-  )
-
-const optionalUrl = (name: string) =>
-  optionalString(name).pipe(
-    Effect.flatMap((value) =>
-      value === undefined
-        ? Effect.succeed<URL | undefined>(undefined)
-        : Effect.try({
-            try: () => new URL(value),
-            catch: () => new Error(`${name} must be an absolute URL.`),
-          })
     )
   )
 
@@ -95,17 +76,16 @@ export const readApiServerConfiguration: Effect.Effect<
     registryApiToken: Config.redacted('REGISTRY_API_TOKEN'),
   }),
   cacheInvalidation: Effect.all({
-    secret: optionalString('CV_REVALIDATION_SECRET'),
-    url: optionalUrl('CV_REVALIDATION_URL'),
+    endpoint: url(
+      'CLOUDFLARE_API_ENDPOINT',
+      'https://api.cloudflare.com/client/v4/'
+    ),
   }),
   http: Effect.all({
     host: Config.nonEmptyString('SERVER_HOST').pipe(
       Config.withDefault('0.0.0.0')
     ),
     port: Config.port('SERVER_PORT').pipe(Config.withDefault(3000)),
-    staticAssetsDirectory: Config.nonEmptyString(
-      'STATIC_ASSETS_DIRECTORY'
-    ).pipe(Config.withDefault('/app/public')),
   }),
   minio: Effect.all({
     accessKeyId: Config.redacted('MINIO_ACCESS_KEY_ID'),
@@ -139,16 +119,6 @@ export const readApiServerConfiguration: Effect.Effect<
   }),
 }).pipe(
   Effect.flatMap((configuration) => {
-    const cachePairIsComplete =
-      (configuration.cacheInvalidation.url === undefined) ===
-      (configuration.cacheInvalidation.secret === undefined)
-    if (!cachePairIsComplete) {
-      return Effect.fail(
-        new Error(
-          'CV_REVALIDATION_URL and CV_REVALIDATION_SECRET must be configured together.'
-        )
-      )
-    }
     if (
       configuration.postgres.maxConnections < 1 ||
       configuration.postgres.maxConnections > 20

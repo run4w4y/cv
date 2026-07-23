@@ -3,20 +3,12 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": {
-          "type": "grafana",
-          "uid": "-- Grafana --"
-        },
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
         "name": "Annotations & Alerts",
-        "target": {
-          "limit": 100,
-          "matchAny": false,
-          "tags": [],
-          "type": "dashboard"
-        },
+        "target": { "limit": 100, "matchAny": false, "tags": [], "type": "dashboard" },
         "type": "dashboard"
       }
     ]
@@ -27,777 +19,288 @@
   "links": [],
   "panels": [
     {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "${datasource_uid}"
-      },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "${datasource_uid}" },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
           "unit": "short"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 0,
-        "y": 0
-      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
       "id": 1,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
         "textMode": "auto",
         "wideLayout": true
       },
       "targets": [
         {
-          "columns": [
-            {
-              "selector": "audience_views",
-              "text": "audience_views",
-              "type": "number"
-            }
-          ],
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "${datasource_uid}"
-          },
+          "columns": [{ "selector": "pageViews", "text": "pageViews", "type": "number" }],
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "${datasource_uid}" },
           "filters": [],
           "format": "table",
-          "global_query_id": "",
           "parser": "backend",
           "refId": "A",
-          "root_selector": "",
+          "root_selector": "summary",
           "source": "url",
           "type": "json",
-          "url": "${connector_base_url}/v1/summary?from=$${__timeFrom}&to=$${__timeTo}",
-          "url_options": {
-            "data": "",
-            "method": "GET"
-          }
+          "url": "${registry_api_url}/machine/api/registry/analytics/cv-links?from=$${__from:date:YYYY-MM-DD}&to=$${__to:date:YYYY-MM-DD}",
+          "url_options": { "data": "", "method": "GET" }
         }
       ],
-      "title": "Audience Views",
+      "title": "Page Views",
       "type": "stat"
     },
     {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "${datasource_uid}"
-      },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "${datasource_uid}" },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
           "unit": "short"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 6,
-        "y": 0
-      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
       "id": 2,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
         "textMode": "auto",
         "wideLayout": true
       },
       "targets": [
         {
-          "columns": [
-            {
-              "selector": "public_views",
-              "text": "public_views",
-              "type": "number"
-            }
-          ],
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "${datasource_uid}"
-          },
+          "columns": [{ "selector": "visits", "text": "visits", "type": "number" }],
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "${datasource_uid}" },
           "filters": [],
           "format": "table",
-          "global_query_id": "",
           "parser": "backend",
           "refId": "A",
-          "root_selector": "",
+          "root_selector": "summary",
           "source": "url",
           "type": "json",
-          "url": "${connector_base_url}/v1/summary?from=$${__timeFrom}&to=$${__timeTo}",
-          "url_options": {
-            "data": "",
-            "method": "GET"
-          }
+          "url": "${registry_api_url}/machine/api/registry/analytics/cv-links?from=$${__from:date:YYYY-MM-DD}&to=$${__to:date:YYYY-MM-DD}",
+          "url_options": { "data": "", "method": "GET" }
         }
       ],
-      "title": "Public Views",
+      "title": "Visits",
       "type": "stat"
     },
     {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "${datasource_uid}"
-      },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "${datasource_uid}" },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
           "unit": "short"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 12,
-        "y": 0
-      },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
       "id": 3,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
         "textMode": "auto",
         "wideLayout": true
       },
       "targets": [
         {
-          "columns": [
-            {
-              "selector": "active_audiences",
-              "text": "active_audiences",
-              "type": "number"
-            }
-          ],
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "${datasource_uid}"
-          },
+          "columns": [{ "selector": "viewedLinks", "text": "viewedLinks", "type": "number" }],
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "${datasource_uid}" },
           "filters": [],
           "format": "table",
-          "global_query_id": "",
           "parser": "backend",
           "refId": "A",
-          "root_selector": "",
+          "root_selector": "summary",
           "source": "url",
           "type": "json",
-          "url": "${connector_base_url}/v1/summary?from=$${__timeFrom}&to=$${__timeTo}",
-          "url_options": {
-            "data": "",
-            "method": "GET"
-          }
+          "url": "${registry_api_url}/machine/api/registry/analytics/cv-links?from=$${__from:date:YYYY-MM-DD}&to=$${__to:date:YYYY-MM-DD}",
+          "url_options": { "data": "", "method": "GET" }
         }
       ],
-      "title": "Active Audiences",
+      "title": "Viewed Links",
       "type": "stat"
     },
     {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "${datasource_uid}"
-      },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "${datasource_uid}" },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
+          "color": { "mode": "thresholds" },
           "thresholds": {
             "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 1
-              }
-            ]
+            "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 1 }]
           },
           "unit": "short"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 18,
-        "y": 0
-      },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
       "id": 4,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
         "textMode": "auto",
         "wideLayout": true
       },
       "targets": [
         {
-          "columns": [
-            {
-              "selector": "zero_visit_audiences",
-              "text": "zero_visit_audiences",
-              "type": "number"
-            }
-          ],
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "${datasource_uid}"
-          },
+          "columns": [{ "selector": "unviewedLinks", "text": "unviewedLinks", "type": "number" }],
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "${datasource_uid}" },
           "filters": [],
           "format": "table",
-          "global_query_id": "",
           "parser": "backend",
           "refId": "A",
-          "root_selector": "",
+          "root_selector": "summary",
           "source": "url",
           "type": "json",
-          "url": "${connector_base_url}/v1/summary?from=$${__timeFrom}&to=$${__timeTo}",
-          "url_options": {
-            "data": "",
-            "method": "GET"
-          }
+          "url": "${registry_api_url}/machine/api/registry/analytics/cv-links?from=$${__from:date:YYYY-MM-DD}&to=$${__to:date:YYYY-MM-DD}",
+          "url_options": { "data": "", "method": "GET" }
         }
       ],
-      "title": "Zero-Visit Audiences",
+      "title": "Unviewed Links",
       "type": "stat"
     },
     {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "${datasource_uid}"
-      },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "${datasource_uid}" },
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
             "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 12,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 2,
             "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
             "showPoints": "never",
             "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
+            "stacking": { "group": "A", "mode": "none" }
           },
           "unit": "short"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 4
-      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 4 },
       "id": 5,
       "options": {
-        "legend": {
-          "calcs": ["sum"],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
+        "legend": { "calcs": ["sum"], "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
       },
       "targets": [
         {
           "columns": [
-            {
-              "selector": "time",
-              "text": "time",
-              "type": "timestamp"
-            },
-            {
-              "selector": "visits",
-              "text": "visits",
-              "type": "number"
-            },
-            {
-              "selector": "page_views",
-              "text": "page_views",
-              "type": "number"
-            }
+            { "selector": "at", "text": "at", "type": "timestamp" },
+            { "selector": "visits", "text": "visits", "type": "number" },
+            { "selector": "pageViews", "text": "pageViews", "type": "number" }
           ],
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "${datasource_uid}"
-          },
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "${datasource_uid}" },
           "filters": [],
           "format": "timeseries",
-          "global_query_id": "",
           "parser": "backend",
           "refId": "A",
-          "root_selector": "",
+          "root_selector": "series",
           "source": "url",
           "type": "json",
-          "url": "${connector_base_url}/v1/audience-daily?from=$${__timeFrom}&to=$${__timeTo}",
-          "url_options": {
-            "data": "",
-            "method": "GET"
-          }
+          "url": "${registry_api_url}/machine/api/registry/analytics/cv-links?from=$${__from:date:YYYY-MM-DD}&to=$${__to:date:YYYY-MM-DD}",
+          "url_options": { "data": "", "method": "GET" }
         }
       ],
-      "title": "Audience Trend",
+      "title": "Traffic Trend",
       "type": "timeseries"
     },
     {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "${datasource_uid}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "visits"
-            },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "mode": "gradient",
-                  "type": "color-background"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 24,
-        "x": 0,
-        "y": 12
-      },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "${datasource_uid}" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 11, "w": 18, "x": 0, "y": 12 },
       "id": 6,
       "options": {
         "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": ["sum"],
-          "show": false
-        },
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
         "showHeader": true,
-        "sortBy": [
-          {
-            "desc": true,
-            "displayName": "visits"
-          }
-        ]
+        "sortBy": [{ "desc": true, "displayName": "visits" }]
       },
       "targets": [
         {
           "columns": [
-            {
-              "selector": "company",
-              "text": "company",
-              "type": "string"
-            },
-            {
-              "selector": "stage",
-              "text": "stage",
-              "type": "string"
-            },
-            {
-              "selector": "role",
-              "text": "role",
-              "type": "string"
-            },
-            {
-              "selector": "locale",
-              "text": "locale",
-              "type": "string"
-            },
-            {
-              "selector": "visits",
-              "text": "visits",
-              "type": "number"
-            },
-            {
-              "selector": "page_views",
-              "text": "page_views",
-              "type": "number"
-            },
-            {
-              "selector": "last_seen",
-              "text": "last_seen",
-              "type": "timestamp"
-            },
-            {
-              "selector": "stacks",
-              "text": "stacks",
-              "type": "string"
-            }
+            { "selector": "application.company", "text": "company", "type": "string" },
+            { "selector": "application.role", "text": "role", "type": "string" },
+            { "selector": "application.applicationStatus", "text": "status", "type": "string" },
+            { "selector": "link.locale", "text": "locale", "type": "string" },
+            { "selector": "totals.visits", "text": "visits", "type": "number" },
+            { "selector": "totals.pageViews", "text": "pageViews", "type": "number" },
+            { "selector": "lastSeenOn", "text": "lastSeenOn", "type": "timestamp" }
           ],
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "${datasource_uid}"
-          },
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "${datasource_uid}" },
           "filters": [],
           "format": "table",
-          "global_query_id": "",
           "parser": "backend",
           "refId": "A",
-          "root_selector": "",
+          "root_selector": "items",
           "source": "url",
           "type": "json",
-          "url": "${connector_base_url}/v1/audiences?from=$${__timeFrom}&to=$${__timeTo}",
-          "url_options": {
-            "data": "",
-            "method": "GET"
-          }
+          "url": "${registry_api_url}/machine/api/registry/analytics/cv-links?from=$${__from:date:YYYY-MM-DD}&to=$${__to:date:YYYY-MM-DD}",
+          "url_options": { "data": "", "method": "GET" }
         }
       ],
-      "title": "Audiences",
+      "title": "Published CV Links",
       "type": "table"
     },
     {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "${datasource_uid}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 22
-      },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "${datasource_uid}" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 11, "w": 6, "x": 18, "y": 12 },
       "id": 7,
       "options": {
         "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": ["sum"],
-          "show": false
-        },
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
         "showHeader": true,
-        "sortBy": [
-          {
-            "desc": true,
-            "displayName": "value"
-          }
-        ]
+        "sortBy": [{ "desc": true, "displayName": "visits" }]
       },
       "targets": [
         {
           "columns": [
-            {
-              "selector": "audience_id",
-              "text": "audience_id",
-              "type": "string"
-            },
-            {
-              "selector": "dimension",
-              "text": "dimension",
-              "type": "string"
-            },
-            {
-              "selector": "label",
-              "text": "label",
-              "type": "string"
-            },
-            {
-              "selector": "value",
-              "text": "value",
-              "type": "number"
-            }
+            { "selector": "name", "text": "country", "type": "string" },
+            { "selector": "visits", "text": "visits", "type": "number" }
           ],
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "${datasource_uid}"
-          },
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "${datasource_uid}" },
           "filters": [],
           "format": "table",
-          "global_query_id": "",
           "parser": "backend",
           "refId": "A",
-          "root_selector": "",
+          "root_selector": "countries",
           "source": "url",
           "type": "json",
-          "url": "${connector_base_url}/v1/audience-dimensions?from=$${__timeFrom}&to=$${__timeTo}",
-          "url_options": {
-            "data": "",
-            "method": "GET"
-          }
+          "url": "${registry_api_url}/machine/api/registry/analytics/cv-links?from=$${__from:date:YYYY-MM-DD}&to=$${__to:date:YYYY-MM-DD}",
+          "url_options": { "data": "", "method": "GET" }
         }
       ],
-      "title": "Audience Dimensions",
-      "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "${datasource_uid}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 22
-      },
-      "id": 8,
-      "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": ["sum"],
-          "show": false
-        },
-        "showHeader": true,
-        "sortBy": [
-          {
-            "desc": true,
-            "displayName": "visits"
-          }
-        ]
-      },
-      "targets": [
-        {
-          "columns": [
-            {
-              "selector": "path",
-              "text": "path",
-              "type": "string"
-            },
-            {
-              "selector": "kind",
-              "text": "kind",
-              "type": "string"
-            },
-            {
-              "selector": "locale",
-              "text": "locale",
-              "type": "string"
-            },
-            {
-              "selector": "visits",
-              "text": "visits",
-              "type": "number"
-            },
-            {
-              "selector": "page_views",
-              "text": "page_views",
-              "type": "number"
-            },
-            {
-              "selector": "top_country",
-              "text": "top_country",
-              "type": "string"
-            },
-            {
-              "selector": "top_referrer",
-              "text": "top_referrer",
-              "type": "string"
-            }
-          ],
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "${datasource_uid}"
-          },
-          "filters": [],
-          "format": "table",
-          "global_query_id": "",
-          "parser": "backend",
-          "refId": "A",
-          "root_selector": "",
-          "source": "url",
-          "type": "json",
-          "url": "${connector_base_url}/v1/paths?from=$${__timeFrom}&to=$${__timeTo}",
-          "url_options": {
-            "data": "",
-            "method": "GET"
-          }
-        }
-      ],
-      "title": "Paths",
+      "title": "Countries",
       "type": "table"
     }
   ],
   "refresh": "5m",
   "schemaVersion": 39,
-  "tags": ["cv", "analytics", "cloudflare"],
-  "templating": {
-    "list": []
-  },
-  "time": {
-    "from": "now-30d",
-    "to": "now"
-  },
+  "tags": ["cv", "analytics", "cloudflare", "registry-api"],
+  "templating": { "list": [] },
+  "time": { "from": "now-7d", "to": "now" },
   "timezone": "browser",
   "title": "CV Analytics",
   "uid": "cv-analytics-overview",

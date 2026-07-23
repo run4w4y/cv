@@ -281,7 +281,6 @@ export class RegistryApiHarness {
         REGISTRY_BFF_ENABLED: 'false',
         SERVER_HOST: '127.0.0.1',
         SERVER_PORT: String(port),
-        STATIC_ASSETS_DIRECTORY: '/missing',
       },
       stdio: ['pipe', 'pipe', 'pipe'],
     })

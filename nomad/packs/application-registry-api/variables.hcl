@@ -16,12 +16,6 @@ variable "enabled" {
   default     = false
 }
 
-variable "traefik_subdomain" {
-  description = "Temporary Cloudflare Tunnel/Traefik hostname label"
-  type        = string
-  default     = "registry-origin"
-}
-
 variable "bff_enabled" {
   description = "Inject browser API credentials; enable only behind Cloudflare Access"
   type        = bool

@@ -19,27 +19,6 @@ variable "grafana_auth" {
   }
 }
 
-variable "connector_base_url" {
-  type        = string
-  description = "Public base URL for the analytics connector Worker."
-
-  validation {
-    condition     = can(regex("^https://", var.connector_base_url))
-    error_message = "connector_base_url must be an https URL."
-  }
-}
-
-variable "grafana_connector_token" {
-  type        = string
-  description = "Bearer token Grafana sends to the analytics connector."
-  sensitive   = true
-
-  validation {
-    condition     = length(trimspace(var.grafana_connector_token)) > 0
-    error_message = "grafana_connector_token must be set."
-  }
-}
-
 variable "registry_api_url" {
   type        = string
   description = "Public base URL for the self-hosted application registry API."
@@ -63,7 +42,7 @@ variable "registry_api_token" {
 
 variable "dashboard_template_path" {
   type        = string
-  description = "Path to the Grafana dashboard JSON template."
+  description = "Path to the CV analytics Grafana dashboard JSON template."
 
   validation {
     condition     = length(trimspace(var.dashboard_template_path)) > 0
@@ -81,27 +60,15 @@ variable "applications_dashboard_template_path" {
   }
 }
 
-variable "datasource_name" {
+variable "analytics_folder_title" {
   type        = string
-  description = "Grafana data source name."
-  default     = "CV Analytics Connector"
-}
-
-variable "datasource_uid" {
-  type        = string
-  description = "Stable Grafana data source UID used by dashboards."
-  default     = "cv-analytics-connector"
-}
-
-variable "folder_title" {
-  type        = string
-  description = "Grafana folder title."
+  description = "Grafana folder title for CV analytics."
   default     = "CV Analytics"
 }
 
-variable "folder_uid" {
+variable "analytics_folder_uid" {
   type        = string
-  description = "Stable Grafana folder UID."
+  description = "Stable Grafana folder UID for CV analytics."
   default     = "cv-analytics"
 }
 

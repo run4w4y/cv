@@ -1,5 +1,5 @@
 # CV v1 used these values to build encrypted static profile payloads. The v2
-# system stores opaque reviewed revisions in R2, so Terraform relinquishes the
+# system stores opaque reviewed revisions in MinIO, so Terraform relinquishes the
 # obsolete values without deleting the historical Infisical secrets.
 removed {
   from = infisical_secret.content_id_salt

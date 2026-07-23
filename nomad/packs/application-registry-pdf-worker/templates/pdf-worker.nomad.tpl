@@ -35,6 +35,11 @@ job [[ .my.job_name | quote ]] {
               destination_name = "nats"
               local_bind_port  = 4222
             }
+
+            upstreams {
+              destination_name = "chromium"
+              local_bind_port  = 9222
+            }
           }
         }
 
@@ -54,11 +59,11 @@ job [[ .my.job_name | quote ]] {
       vault {}
 
       config {
-        image    = [[ .my.docker_image | quote ]]
-        shm_size = 536870912
+        image = [[ .my.docker_image | quote ]]
       }
 
       env {
+        BROWSER_CDP_URL            = "http://127.0.0.1:9222"
         MINIO_ENDPOINT             = "http://127.0.0.1:9000"
         MINIO_FORCE_PATH_STYLE     = "true"
         NATS_SERVER                = "nats://127.0.0.1:4222"

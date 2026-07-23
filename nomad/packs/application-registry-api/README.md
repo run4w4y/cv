@@ -1,13 +1,12 @@
 # Application registry API
 
-This CV-owned pack deploys the Bun application registry API and management SPA.
+This CV-owned pack deploys the private Bun application registry API.
 PostgreSQL, MinIO, Vault, Consul, Traefik, and Cloudflare Tunnel remain owned by
 the adjacent infrastructure repository.
 
 The pack is safe to register before cutover:
 
 - `enabled` defaults to `false`, producing no allocation;
-- the default Traefik hostname is the temporary `registry-origin` subdomain;
 - `bff_enabled` defaults to `false`, so an unprotected origin cannot inject the
   registry bearer token for browser requests;
 - the API/Envoy reservations are deliberately small for the single constrained
@@ -36,7 +35,6 @@ Apply `terraform/live/prod/jetstream` before enabling the allocation. The API
 publishes to the existing `REGISTRY_EVENTS` stream and has no permission to
 create or modify JetStream resources.
 
-Enable one allocation first on the temporary hostname with BFF authentication
-still disabled. Test `/health`, OpenAPI, machine transport, PostgreSQL, MinIO,
-analytics, and cache invalidation through that hostname. Enable BFF injection
-only after the hostname is covered by the intended Cloudflare Access policy.
+The API has no Traefik route. The separate `application-registry-web` pack owns
+the external hostname and proxies API requests over Consul Connect. Enable BFF
+injection only when that frontend hostname is covered by Cloudflare Access.

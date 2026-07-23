@@ -6,7 +6,6 @@ import {
 } from '@cv/application-registry-events-nats'
 import { NodeRuntime } from '@effect/platform-node'
 import { Console, Effect, Layer, Redacted } from 'effect'
-import { chromium } from 'playwright'
 
 import { readPdfWorkerConfiguration } from './config'
 import { runPdfEventConsumer } from './consumer'
@@ -33,13 +32,6 @@ const program = Effect.scoped(
       ),
       (client) => Effect.sync(() => client.destroy())
     )
-    const browser = yield* Effect.acquireRelease(
-      Effect.tryPromise({
-        try: () => chromium.launch({ headless: true }),
-        catch: (cause) => new Error('Could not start Chromium.', { cause }),
-      }),
-      (browser) => Effect.promise(() => browser.close())
-    )
     const topology = makeRegistryEventTopology()
     const source = makeNatsRegistryEventSourceLayer(
       makeRegistryEventConsumerConfiguration({
@@ -57,7 +49,7 @@ const program = Effect.scoped(
     const runtime = Layer.mergeAll(
       source,
       makePdfArtifactPersistenceLayer(configuration, s3),
-      makePlaywrightPdfRendererLayer(browser)
+      makePlaywrightPdfRendererLayer(configuration.browser.cdpUrl)
     )
 
     yield* Console.log(
