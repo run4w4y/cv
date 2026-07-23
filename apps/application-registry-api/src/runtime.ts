@@ -152,7 +152,13 @@ export const makeApiWebHandler = (
   const app = Layer.merge(
     api,
     HttpRouter.cors({
-      allowedHeaders: ['authorization', 'content-type', 'idempotency-key'],
+      allowedHeaders: [
+        'authorization',
+        'b3',
+        'content-type',
+        'idempotency-key',
+        'traceparent',
+      ],
       allowedMethods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
       allowedOrigins: configuration.cors.allowedOrigins,
       maxAge: 86_400,

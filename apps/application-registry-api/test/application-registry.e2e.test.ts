@@ -79,7 +79,8 @@ export const registerApplicationRegistryE2eTests = (
       new URL('/api/registry/facts/objects/releases/current.json', harness.url),
       {
         headers: {
-          'access-control-request-headers': 'authorization,content-type',
+          'access-control-request-headers':
+            'authorization,b3,content-type,traceparent',
           'access-control-request-method': 'POST',
           origin: 'https://cv-registry.example.test',
         },
@@ -91,10 +92,19 @@ export const registerApplicationRegistryE2eTests = (
       preflight.headers.get('access-control-allow-origin'),
       'https://cv-registry.example.test'
     )
-    assert.match(
-      preflight.headers.get('access-control-allow-headers') ?? '',
-      /authorization/u
+    const allowedHeaders = new Set(
+      (preflight.headers.get('access-control-allow-headers') ?? '')
+        .split(',')
+        .map((header) => header.trim())
     )
+    for (const header of [
+      'authorization',
+      'b3',
+      'content-type',
+      'traceparent',
+    ]) {
+      assert.ok(allowedHeaders.has(header), `${header} must be allowed by CORS`)
+    }
   })
 
   test('creates, queries, updates, annotates, and replays through one resource API', async () => {
