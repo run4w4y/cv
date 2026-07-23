@@ -56,5 +56,6 @@ export const useEventsList = (workspace: EventsWorkspace) => {
     refreshDisabled: !requestEnabled || loading || loadingMore,
     refreshing: eventsResult.waiting && !loadingMore && events.length > 0,
     requestEnabled,
+    totalCount: page?.totalItems,
   }
 }

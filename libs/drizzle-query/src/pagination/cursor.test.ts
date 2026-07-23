@@ -520,10 +520,25 @@ describe('cursor pagination', () => {
         __drizzle_query_term_1: 1,
       })
 
-      const page = resolved.finalize(rows)
+      const page = resolved.finalize(rows, 7)
       expect(Object.hasOwn(page.items[0] ?? {}, QUERY_METADATA_KEY)).toBe(false)
       expect(page.items[0]).toEqual({ id: 1, category: 'keep', score: null })
+      expect(page.pageInfo.totalItems).toBe(7)
       expect(page.pageInfo.nextCursor).toBeString()
+    } finally {
+      fixture.sqlite.close()
+    }
+  })
+
+  test('rejects invalid total item counts', async () => {
+    const fixture = await makeFixture()
+
+    try {
+      const resolved = cursorRecords.resolve({ pagination: { size: 2 } })
+      const rows = await executeCursor(fixture, resolved)
+
+      expect(() => resolved.finalize(rows, -1)).toThrow(QueryError)
+      expect(() => resolved.finalize(rows, Number.NaN)).toThrow(QueryError)
     } finally {
       fixture.sqlite.close()
     }

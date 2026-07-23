@@ -29,6 +29,8 @@ export type CursorPageInfo = {
   readonly size: number
   readonly hasNextPage: boolean
   readonly hasPreviousPage: boolean
+  /** Total items matching the filter, when the caller requested a count. */
+  readonly totalItems?: number
   /** Cursor to request the next page, or `null` when this is the final page. */
   readonly nextCursor: string | null
 }

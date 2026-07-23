@@ -116,7 +116,6 @@ export const ApplicationsTable = ({
   return (
     <>
       <HeaderActions>
-        {headerActions}
         {renderViewControl?.(table) ?? (
           <TableSettings
             table={table}
@@ -124,6 +123,7 @@ export const ApplicationsTable = ({
             onDensityChange={onDensityChange}
           />
         )}
+        {headerActions}
       </HeaderActions>
       <div
         ref={rootRef}
@@ -153,6 +153,7 @@ export const ApplicationsTable = ({
                   return (
                     <TableHead
                       key={header.id}
+                      className="normal-case"
                       style={{
                         width: header.getSize(),
                         minWidth: header.getSize(),

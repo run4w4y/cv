@@ -36,13 +36,8 @@ export const ApplicationsPage = () => {
     >
       <QueryWorkspaceToolbar
         title="Applications"
-        description="Search, filter, and review the canonical opportunity registry."
-        entityName="applications"
-        loadedCount={list.applications.length}
+        totalCount={list.totalCount}
         loading={list.loading}
-        refreshing={list.refreshing}
-        refreshDisabled={list.refreshDisabled}
-        onRefresh={list.refresh}
         definition={applicationListQuery}
         presentation={workspace.fieldPresentation}
         filters={workspace.filters}
@@ -59,7 +54,7 @@ export const ApplicationsPage = () => {
             placeholder="Search company, role, source…"
             aria-label="Search applications"
           />
-          <InputGroupAddon className="gap-1 pr-1 pl-0">
+          <InputGroupAddon className="gap-1 pr-2 pl-0">
             {workspace.keywordDraft.length > 0 ? (
               <InputGroupButton
                 type="button"

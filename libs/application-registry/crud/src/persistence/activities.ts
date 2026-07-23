@@ -3,7 +3,7 @@ import {
   applications,
 } from '@cv/application-registry-entity'
 import { finalizeQuery } from '@cv/drizzle-query-effect'
-import { asc, eq, getColumns } from 'drizzle-orm'
+import { asc, count, eq, getColumns } from 'drizzle-orm'
 import { Effect } from 'effect'
 import { databaseFailure, type RegistryDatabaseError } from '../errors'
 import type { RegistryExecutor } from '../internal/connection'
@@ -47,9 +47,27 @@ export const listActivities = (
         .$dynamic()
     )
 
-    const rows = yield* query.pipe(
-      Effect.mapError(databaseFailure('Failed to list registry activities'))
+    const firstPage = resolved.pagination.seekWhere === undefined
+    const { rows, totalItems } = yield* Effect.all(
+      {
+        rows: query.pipe(
+          Effect.mapError(databaseFailure('Failed to list registry activities'))
+        ),
+        totalItems: firstPage
+          ? database
+              .select({ value: count() })
+              .from(applicationActivities)
+              .where(resolved.filtering.where)
+              .pipe(
+                Effect.map((result) => result.at(0)?.value),
+                Effect.mapError(
+                  databaseFailure('Failed to count registry activities')
+                )
+              )
+          : Effect.succeed(undefined),
+      },
+      { concurrency: 'unbounded' }
     )
 
-    return yield* finalizeQuery(resolved, rows).pipe(Effect.orDie)
+    return yield* finalizeQuery(resolved, rows, totalItems).pipe(Effect.orDie)
   })

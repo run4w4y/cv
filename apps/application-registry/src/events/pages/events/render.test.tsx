@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { decodeListActivitiesSearchParams } from '@cv/application-registry-api-contract'
-import { act, cleanup, waitFor } from '@testing-library/react'
+import { act, cleanup, waitFor, within } from '@testing-library/react'
 import { NuqsAdapter } from 'nuqs/adapters/react-router/v7'
 import { BrowserRouter } from 'react-router'
 
@@ -17,6 +17,7 @@ const emptyPage = {
     size: 50,
     hasNextPage: false,
     hasPreviousPage: false,
+    totalItems: 0,
     nextCursor: null,
   },
 }
@@ -70,12 +71,8 @@ describe('ActivitiesPage', () => {
       view.queryByText('Invalid query URL; the table request is blocked')
     ).toBeNull()
     expect(
-      (
-        view.getByRole('button', {
-          name: 'Refresh activities',
-        }) as HTMLButtonElement
-      ).disabled
-    ).toBe(false)
+      view.queryByRole('button', { name: 'Refresh activities' })
+    ).toBeNull()
   })
 
   test('blocks requests when compact ordering is invalid', async () => {
@@ -130,7 +127,13 @@ describe('ActivitiesPage', () => {
     let requestUrl = ''
     globalThis.fetch = mock((input: string | URL | Request) => {
       requestUrl = String(input)
-      return Promise.resolve(Response.json({ ...emptyPage, items: [activity] }))
+      return Promise.resolve(
+        Response.json({
+          ...emptyPage,
+          items: [activity],
+          pageInfo: { ...emptyPage.pageInfo, totalItems: 1 },
+        })
+      )
     }) as unknown as typeof fetch
 
     const view = renderActivitiesPage('/activities')
@@ -139,6 +142,17 @@ describe('ActivitiesPage', () => {
     expect(new URL(requestUrl).searchParams.has('sort')).toBe(false)
     expect(new URLSearchParams(window.location.search).has('sort')).toBe(false)
     expect(view.getByText('Platform Engineer')).toBeTruthy()
+    expect(view.getByText('1 total')).toBeTruthy()
+    expect(
+      view.queryByText(
+        'Inspect backend-issued annotations across every application.'
+      )
+    ).toBeNull()
+    expect(
+      within(view.headerTarget)
+        .getAllByRole('button')
+        .map((button) => button.textContent?.trim())
+    ).toEqual(['Show filters', 'View'])
     expect(view.getByText('Status changed')).toBeTruthy()
     expect(view.getByText('From: preparing · To: applied')).toBeTruthy()
     expect(

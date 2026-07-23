@@ -17,13 +17,8 @@ export const EventsPage = () => {
     >
       <QueryWorkspaceToolbar
         title="Activities"
-        description="Inspect backend-issued annotations across every application."
-        entityName="activities"
-        loadedCount={list.events.length}
+        totalCount={list.totalCount}
         loading={list.loading}
-        refreshing={list.loading}
-        refreshDisabled={list.refreshDisabled}
-        onRefresh={list.refresh}
         definition={activityListQuery}
         presentation={eventFilterFieldPresentation}
         filters={workspace.filters}

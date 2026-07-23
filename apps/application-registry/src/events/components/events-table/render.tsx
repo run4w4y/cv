@@ -170,6 +170,7 @@ export const EventsTable = ({
                   return (
                     <TableHead
                       key={header.id}
+                      className="normal-case"
                       style={{
                         width: header.getSize(),
                         minWidth: header.getSize(),

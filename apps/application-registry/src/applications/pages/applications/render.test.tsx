@@ -3,9 +3,10 @@ import {
   type ApplicationListItem,
   decodeListApplicationsSearchParams,
 } from '@cv/application-registry-api-contract'
-import { cleanup, fireEvent, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, waitFor, within } from '@testing-library/react'
 import { NuqsAdapter } from 'nuqs/adapters/react-router/v7'
 import { BrowserRouter } from 'react-router'
+import { HeaderActionsProvider } from '../../../shell/header-actions'
 import { renderWithRegistry } from '../../../test/render-with-registry'
 import {
   type ApplicationSavedViewState,
@@ -25,13 +26,18 @@ afterEach(() => {
 
 const renderApplicationsPage = (path: string) => {
   window.history.replaceState(null, '', path)
-  return renderWithRegistry(
+  const headerTarget = document.createElement('div')
+  document.body.append(headerTarget)
+  const result = renderWithRegistry(
     <BrowserRouter>
       <NuqsAdapter>
-        <ApplicationsPage />
+        <HeaderActionsProvider target={headerTarget}>
+          <ApplicationsPage />
+        </HeaderActionsProvider>
       </NuqsAdapter>
     </BrowserRouter>
   )
+  return Object.assign(result, { headerTarget })
 }
 
 const application: ApplicationListItem = {
@@ -81,6 +87,7 @@ describe('ApplicationsPage', () => {
           size: 50,
           hasNextPage: false,
           hasPreviousPage: false,
+          totalItems: 1,
           nextCursor: null,
         },
       })
@@ -91,7 +98,22 @@ describe('ApplicationsPage', () => {
     await waitFor(() => expect(listRequests).toBe(1))
     expect(new URL(listRequestUrl).searchParams.has('sort')).toBe(false)
     expect(new URLSearchParams(window.location.search).has('sort')).toBe(false)
-    expect(await view.findByText('1 loaded')).toBeTruthy()
+    expect(await view.findByText('1 total')).toBeTruthy()
+    expect(
+      view.queryByText(
+        'Search, filter, and review the canonical opportunity registry.'
+      )
+    ).toBeNull()
+    expect(
+      within(view.headerTarget)
+        .getAllByRole('button')
+        .map((button) => button.textContent?.trim())
+    ).toEqual(['Show filters', 'View', 'New application'])
+    expect(
+      view.container
+        .querySelector('[data-slot="input-group-addon"]')
+        ?.classList.contains('pr-2')
+    ).toBe(true)
     resolveFacets?.(
       Response.json({
         companies: [],
@@ -100,8 +122,7 @@ describe('ApplicationsPage', () => {
     )
   })
 
-  test('shows the table refresh state while existing rows are reloading', async () => {
-    let resolveRefresh: ((response: Response) => void) | undefined
+  test('omits the manual refresh action', async () => {
     let listRequests = 0
     globalThis.fetch = mock(async (input: string | URL | Request) => {
       const url = String(input)
@@ -109,11 +130,6 @@ describe('ApplicationsPage', () => {
         return Response.json({ companies: [], labels: [] })
       }
       listRequests += 1
-      if (listRequests === 2) {
-        return new Promise<Response>((resolve) => {
-          resolveRefresh = resolve
-        })
-      }
       return Response.json({
         items: [application],
         pageInfo: {
@@ -121,35 +137,18 @@ describe('ApplicationsPage', () => {
           size: 50,
           hasNextPage: false,
           hasPreviousPage: false,
+          totalItems: 1,
           nextCursor: null,
         },
       })
     }) as unknown as typeof fetch
     const view = renderApplicationsPage('/applications')
 
-    expect(await view.findByText('1 loaded')).toBeTruthy()
-    const refreshButton = view.getByRole('button', {
-      name: 'Refresh applications',
-    }) as HTMLButtonElement
-    await waitFor(() => expect(refreshButton.disabled).toBe(false))
-    fireEvent.click(refreshButton)
-
-    await waitFor(() => expect(listRequests).toBe(2))
+    expect(await view.findByText('1 total')).toBeTruthy()
     expect(
-      view.getByRole('status', { name: 'Updating applications' })
-    ).toBeTruthy()
-    resolveRefresh?.(
-      Response.json({
-        items: [application],
-        pageInfo: {
-          kind: 'cursor',
-          size: 50,
-          hasNextPage: false,
-          hasPreviousPage: false,
-          nextCursor: null,
-        },
-      })
-    )
+      view.queryByRole('button', { name: 'Refresh applications' })
+    ).toBeNull()
+    expect(listRequests).toBe(1)
   })
 
   test('ignores obsolete JSON filter parameters', async () => {
@@ -183,12 +182,8 @@ describe('ApplicationsPage', () => {
     ).toBeNull()
     expect(view.queryByRole('button', { name: 'Try again' })).toBeNull()
     expect(
-      (
-        view.getByRole('button', {
-          name: 'Refresh applications',
-        }) as HTMLButtonElement
-      ).disabled
-    ).toBe(false)
+      view.queryByRole('button', { name: 'Refresh applications' })
+    ).toBeNull()
     expect(new URLSearchParams(window.location.search).get('filters')).toBe(
       'not-json'
     )

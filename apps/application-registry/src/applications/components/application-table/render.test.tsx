@@ -87,6 +87,9 @@ describe('ApplicationsTable', () => {
     const cells = within(table).getAllByRole('cell')
 
     expect(headers).toHaveLength(12)
+    expect(
+      headers.every((header) => header.classList.contains('normal-case'))
+    ).toBe(true)
     expect(cells).toHaveLength(12)
     expect(table.style.width).toBe('2610px')
     expect(view.getByText('Annual compensation')).toBeTruthy()

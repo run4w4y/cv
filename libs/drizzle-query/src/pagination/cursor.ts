@@ -1,5 +1,5 @@
 import { QueryError } from '../error'
-import { resolveOptions, resolveSize } from './options'
+import { invalidPagination, resolveOptions, resolveSize } from './options'
 import type {
   CursorPageInfo,
   CursorPaginationRequest,
@@ -56,11 +56,21 @@ export const cursorPagination = (
         ...(cursorValues === undefined ? {} : { cursorValues }),
         finish: <Row>(
           rows: readonly Row[],
-          _totalItems: number | undefined,
+          totalItems: number | undefined,
           finalizeContext: {
             readonly encodeCursor?: (row: unknown) => string
           } = {}
         ) => {
+          if (
+            totalItems !== undefined &&
+            (!Number.isSafeInteger(totalItems) || totalItems < 0)
+          ) {
+            throw invalidPagination(
+              'The total item count must be a non-negative safe integer.',
+              'totalItems'
+            )
+          }
+
           const items = rows.slice(0, size)
           const last = items.at(-1)
           const encodeCursor = finalizeContext.encodeCursor
@@ -84,6 +94,7 @@ export const cursorPagination = (
               size,
               hasNextPage,
               hasPreviousPage: cursorValues !== undefined,
+              ...(totalItems === undefined ? {} : { totalItems }),
               nextCursor: hasNextPage ? nextCursor : null,
             },
           }

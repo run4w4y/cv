@@ -66,6 +66,7 @@ describe('ordering and response schemas', () => {
         size: 1,
         hasNextPage: false,
         hasPreviousPage: false,
+        totalItems: 12,
         nextCursor: null,
       },
     } satisfies {

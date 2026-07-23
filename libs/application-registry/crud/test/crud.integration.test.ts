@@ -158,6 +158,7 @@ test('persists applications with database defaults through slice services', asyn
     ['crud-application-1']
   )
   assert.equal(result.page.pageInfo.hasNextPage, false)
+  assert.equal(result.page.pageInfo.totalItems, 1)
 })
 
 test('updates a managed application aggregate in one version transition', async () => {
@@ -447,6 +448,7 @@ test('filters before pagination and returns dashboard details and facets', async
     result.page.items.map(({ id }) => id),
     [pastFollowUp.applicationId]
   )
+  assert.equal(result.page.pageInfo.totalItems, 1)
   assert.deepEqual(result.page.items[0]?.labels, ['priority', 'remote'])
   assert.deepEqual(result.page.items[0]?.compensations, [
     {
@@ -472,6 +474,7 @@ test('filters before pagination and returns dashboard details and facets', async
     result.upcoming.items.map(({ id }) => id),
     [futureFollowUp.applicationId]
   )
+  assert.equal(result.upcoming.pageInfo.totalItems, 1)
   assert.deepEqual(result.facets, {
     companies: ['Alpha Corp', 'Beta Corp'],
     labels: ['priority', 'remote'],
@@ -566,16 +569,20 @@ test('paginates every application and activity with numeric page sizes', async (
 
   assert.equal(result.firstApplicationPage.items.length, 100)
   assert.equal(result.firstApplicationPage.pageInfo.hasNextPage, true)
+  assert.equal(result.firstApplicationPage.pageInfo.totalItems, itemCount)
   assert.equal(
     result.firstApplicationPage.items[0]?.latestActivity?.kind,
     'details_changed'
   )
   assert.equal(result.secondApplicationPage.items.length, 1)
   assert.equal(result.secondApplicationPage.pageInfo.hasNextPage, false)
+  assert.equal(result.secondApplicationPage.pageInfo.totalItems, undefined)
   assert.equal(result.firstActivityPage.items.length, 100)
   assert.equal(result.firstActivityPage.pageInfo.hasNextPage, true)
+  assert.equal(result.firstActivityPage.pageInfo.totalItems, itemCount)
   assert.equal(result.secondActivityPage.items.length, 1)
   assert.equal(result.secondActivityPage.pageInfo.hasNextPage, false)
+  assert.equal(result.secondActivityPage.pageInfo.totalItems, undefined)
 })
 
 test('rolls back an atomic note write when its operation receipt conflicts', async () => {

@@ -66,7 +66,11 @@ describe('ActivitiesTable', () => {
     )
 
     const table = view.getByRole('table')
-    expect(within(table).getAllByRole('columnheader')).toHaveLength(8)
+    const headers = within(table).getAllByRole('columnheader')
+    expect(headers).toHaveLength(8)
+    expect(
+      headers.every((header) => header.classList.contains('normal-case'))
+    ).toBe(true)
     expect(within(table).getAllByRole('cell')).toHaveLength(8)
     expect(view.getByText('From: backlog · To: interviewing')).toBeTruthy()
     expect(within(target).getByRole('button', { name: /view/i })).toBeTruthy()

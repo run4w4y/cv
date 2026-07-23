@@ -85,5 +85,6 @@ export const useApplicationsList = (workspace: ApplicationsWorkspace) => {
     tableLoading:
       loading ||
       (applicationsResult.waiting && page !== undefined && !loadingMore),
+    totalCount: page?.totalItems,
   }
 }

@@ -56,6 +56,7 @@ const createEventsAtom = (request: EventsListRequest) =>
         items.flatMap((page) => page.items),
         ({ id }) => id
       ),
+      totalItems: items.at(0)?.pageInfo.totalItems,
     })),
     Atom.setIdleTTL('5 minutes')
   )

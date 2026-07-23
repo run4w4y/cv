@@ -4,7 +4,7 @@ import {
   applications,
 } from '@cv/application-registry-entity'
 import { finalizeQuery } from '@cv/drizzle-query-effect'
-import { asc, desc, eq, type SQL } from 'drizzle-orm'
+import { asc, count, desc, eq, type SQL } from 'drizzle-orm'
 import { Effect } from 'effect'
 import { databaseFailure, type RegistryDatabaseError } from '../errors'
 import type { RegistryExecutor } from '../internal/connection'
@@ -82,11 +82,29 @@ export const listApplications = (
       },
     })
 
-    const rows = yield* query.pipe(
-      Effect.mapError(databaseFailure('Failed to list applications'))
+    const firstPage = resolved.pagination.seekWhere === undefined
+    const { rows, totalItems } = yield* Effect.all(
+      {
+        rows: query.pipe(
+          Effect.mapError(databaseFailure('Failed to list applications'))
+        ),
+        totalItems: firstPage
+          ? database
+              .select({ value: count() })
+              .from(applications)
+              .where(resolved.filtering.where)
+              .pipe(
+                Effect.map((result) => result.at(0)?.value),
+                Effect.mapError(databaseFailure('Failed to count applications'))
+              )
+          : Effect.succeed(undefined),
+      },
+      { concurrency: 'unbounded' }
     )
 
-    const page = yield* finalizeQuery(relational, rows).pipe(Effect.orDie)
+    const page = yield* finalizeQuery(relational, rows, totalItems).pipe(
+      Effect.orDie
+    )
     const records = page.items.map((row) => {
       const { compensations, activities, labels, noteCount, ...application } =
         row

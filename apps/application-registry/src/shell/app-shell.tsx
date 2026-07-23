@@ -120,10 +120,7 @@ const AppShellContent = () => {
         <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-border bg-card px-4 lg:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <SidebarTrigger className="lg:hidden" />
-            <div className="flex min-w-0 flex-col gap-1">
-              <p className="text-xs tracking-[0.18em] text-muted-foreground uppercase">
-                Application Registry
-              </p>
+            <div className="min-w-0">
               <Breadcrumb>
                 <BreadcrumbList>
                   <BreadcrumbItem>

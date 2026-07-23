@@ -137,6 +137,7 @@ export const CursorPageInfoSchema = Schema.Struct({
   size: positiveInteger,
   hasNextPage: Schema.Boolean,
   hasPreviousPage: Schema.Boolean,
+  totalItems: Schema.optional(nonNegativeInteger),
   nextCursor: Schema.NullOr(Schema.NonEmptyString),
 }) satisfies Schema.Schema<CursorPageInfo>
 

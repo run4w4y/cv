@@ -6,58 +6,61 @@ import {
   QueryFiltersToggle,
 } from '@cv/drizzle-query-ui'
 import { Badge, Button } from '@cv/internal-ui'
-import { RefreshCw, ShieldAlert } from 'lucide-react'
+import { ShieldAlert } from 'lucide-react'
 import type React from 'react'
 
+import { HeaderActions } from '../shell/header-actions'
 import type { CanonicalQueryFiltersController } from './query-filters'
 
 export const QueryWorkspaceToolbar = ({
   title,
-  description,
-  entityName,
-  loadedCount,
+  totalCount,
   loading,
-  refreshing,
-  refreshDisabled,
-  onRefresh,
   definition,
   presentation,
   filters,
   children,
 }: {
   readonly title: string
-  readonly description: string
-  readonly entityName: string
-  readonly loadedCount: number
+  readonly totalCount?: number
   readonly loading: boolean
-  readonly refreshing: boolean
-  readonly refreshDisabled: boolean
-  readonly onRefresh: () => void
   readonly definition: QueryFilterDefinition
   readonly presentation?: Readonly<Record<string, QueryFilterFieldPresentation>>
   readonly filters: CanonicalQueryFiltersController
   readonly children?: React.ReactNode
 }) => (
-  <header className="w-full min-w-full shrink-0 border-b border-border bg-card px-4 pt-4 pb-3 lg:px-5">
+  <header className="w-full min-w-full shrink-0 border-b border-border bg-card px-4 py-3 lg:px-5">
     <QueryFiltersRoot
       definition={definition}
       value={filters.editorState}
       onValueChange={filters.onEditorStateChange}
       fields={presentation}
     >
+      <HeaderActions>
+        {filters.requiresReplacement ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={filters.replaceUneditable}
+          >
+            {filters.replacementLabel}
+          </Button>
+        ) : (
+          <QueryFiltersToggle />
+        )}
+      </HeaderActions>
       <div className="flex flex-wrap items-center gap-3">
         <div className="mr-auto min-w-0">
           <div className="flex items-center gap-2">
             <h1 className="truncate text-xl font-semibold tracking-tight">
               {title}
             </h1>
-            <Badge variant="outline">
-              {loading && loadedCount === 0
-                ? 'Loading'
-                : `${loadedCount} loaded`}
-            </Badge>
+            {loading && totalCount === undefined ? (
+              <Badge variant="outline">Loading</Badge>
+            ) : totalCount === undefined ? null : (
+              <Badge variant="outline">{totalCount} total</Badge>
+            )}
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">{description}</p>
         </div>
         {children}
         {filters.resolved.hasInvalidConditions &&
@@ -96,27 +99,6 @@ export const QueryWorkspaceToolbar = ({
             URL filters are applied, but this editor cannot display them yet
           </Badge>
         ) : null}
-        {filters.requiresReplacement ? (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={filters.replaceUneditable}
-          >
-            {filters.replacementLabel}
-          </Button>
-        ) : (
-          <QueryFiltersToggle />
-        )}
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          aria-label={`Refresh ${entityName}`}
-          disabled={refreshDisabled}
-          onClick={onRefresh}
-        >
-          <RefreshCw className={refreshing ? 'animate-spin' : undefined} />
-        </Button>
       </div>
       {filters.requiresReplacement ? null : (
         <QueryFiltersPanel className="mt-3" />
