@@ -15,6 +15,7 @@ import * as React from 'react'
 import {
   type RegistryConnection,
   type RegistryConnectionConfiguration,
+  RegistryConnectionError,
   registryConnection,
 } from './registry-connection'
 import { RegistryConnectionForm } from './registry-connection-form'
@@ -26,7 +27,17 @@ type BootstrapState =
   | {
       readonly configuration: RegistryConnectionConfiguration
       readonly kind: 'setup'
+      readonly warning?: string
     }
+
+const repairConfiguration: RegistryConnectionConfiguration = {
+  configured: false,
+  editable: true,
+  origin: null,
+  resettable: false,
+  source: 'unconfigured',
+  tokenConfigured: false,
+}
 
 export const HostBootstrap = ({ children }: React.PropsWithChildren) => {
   const connection = React.useMemo<RegistryConnection>(registryConnection, [])
@@ -50,6 +61,17 @@ export const HostBootstrap = ({ children }: React.PropsWithChildren) => {
       })
       .catch((error: unknown) => {
         if (!active) return
+        if (
+          error instanceof RegistryConnectionError &&
+          error.code === 'settings_corrupt'
+        ) {
+          setState({
+            configuration: repairConfiguration,
+            kind: 'setup',
+            warning: error.message,
+          })
+          return
+        }
         setState({
           error:
             error instanceof Error
@@ -104,13 +126,22 @@ export const HostBootstrap = ({ children }: React.PropsWithChildren) => {
               </Button>
             </div>
           ) : (
-            <RegistryConnectionForm
-              key={`${state.configuration.source}:${state.configuration.origin ?? ''}`}
-              connection={connection}
-              configuration={state.configuration}
-              onConfigured={() => setState({ kind: 'ready' })}
-              submitLabel="Test, save, and open Registry"
-            />
+            <div className="grid gap-4">
+              {state.warning === undefined ? null : (
+                <Alert variant="destructive">
+                  <CircleAlert />
+                  <AlertTitle>Replace invalid Registry settings</AlertTitle>
+                  <AlertDescription>{state.warning}</AlertDescription>
+                </Alert>
+              )}
+              <RegistryConnectionForm
+                key={`${state.configuration.source}:${state.configuration.origin ?? ''}`}
+                connection={connection}
+                configuration={state.configuration}
+                onConfigured={() => setState({ kind: 'ready' })}
+                submitLabel="Test, save, and open Registry"
+              />
+            </div>
           )}
         </CardContent>
       </Card>

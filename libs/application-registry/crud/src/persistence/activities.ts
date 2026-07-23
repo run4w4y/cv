@@ -5,11 +5,7 @@ import {
 import { finalizeQuery } from '@cv/drizzle-query-effect'
 import { asc, eq, getColumns } from 'drizzle-orm'
 import { Effect } from 'effect'
-import {
-  databaseFailure,
-  type RegistryDatabaseError,
-  type RegistryQueryTooComplexError,
-} from '../errors'
+import { databaseFailure, type RegistryDatabaseError } from '../errors'
 import type { RegistryExecutor } from '../internal/connection'
 import type { ActivityListPage, ActivityListResolution } from '../types'
 
@@ -32,10 +28,7 @@ export const listApplicationActivities = (
 export const listActivities = (
   database: RegistryExecutor,
   resolved: ActivityListResolution
-): Effect.Effect<
-  ActivityListPage,
-  RegistryDatabaseError | RegistryQueryTooComplexError
-> =>
+): Effect.Effect<ActivityListPage, RegistryDatabaseError> =>
   Effect.gen(function* () {
     const query = resolved.apply(
       database

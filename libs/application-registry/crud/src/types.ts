@@ -14,15 +14,12 @@ import type {
   GeneratedArtifact,
   JobPostingSnapshot,
   ListingAvailability,
-  ListingCheckConfidence,
   ListingCheckMode,
-  ListingCheckReason,
   ListingCheckRun,
   ListingCheckRunTrigger,
   UtcIsoTimestamp,
 } from '@cv/application-registry-entity'
 import type {
-  AnnualCompensation,
   activityListQuery,
   applicationListQuery,
   RegistryActivityListItem,
@@ -70,10 +67,6 @@ export type ActivityListPage = QueryPage<
   CursorPageInfo
 >
 
-export type ApplicationPatch = ApplicationMutable & {
-  readonly expectedVersion?: number
-}
-
 export type PersistedManagedApplicationUpdate = {
   readonly annualCompensation?: {
     readonly replacement: PersistedAnnualCompensation | null
@@ -89,12 +82,6 @@ export type PersistedManagedApplicationUpdate = {
     readonly normalizedUrl: string
   }
   readonly recordedAt: UtcIsoTimestamp
-}
-
-export type ManagedApplicationUpdateResult = {
-  readonly annualCompensation: AnnualCompensation | null
-  readonly application: Application
-  readonly labels: readonly string[]
 }
 
 export interface PersistApplicationOptions {
@@ -180,15 +167,6 @@ export type ClaimedListingCheckSchedule = ApplicationListingCheckSchedule & {
 export type StartedScheduledListingCheckRun = {
   readonly run: ListingCheckRun
   readonly schedules: readonly ClaimedListingCheckSchedule[]
-}
-
-export type ListingCheckProjection = {
-  readonly availability: ListingAvailability
-  readonly checkedAt: string
-  readonly closedCandidateAt: string | null
-  readonly confidence: ListingCheckConfidence
-  readonly consecutiveClosedChecks: number
-  readonly reasonCode: ListingCheckReason
 }
 
 export type PersistedContentEntry = Omit<

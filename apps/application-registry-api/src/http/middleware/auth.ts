@@ -35,15 +35,20 @@ const makeTokenVerifier = (
     })
   })
 
-export const makeRegistryAuthorizationLayer = (
+export const makeRegistryBearerTokenVerifier = (
   token: Redacted.Redacted<string>
-) => {
-  const verify = makeTokenVerifier(
+) =>
+  makeTokenVerifier(
     'RegistryAuthorization.verifyBearerToken',
     token,
     'Registry API token is not configured.',
     'Missing or invalid registry API token.'
   )
+
+export const makeRegistryAuthorizationLayer = (
+  token: Redacted.Redacted<string>
+) => {
+  const verify = makeRegistryBearerTokenVerifier(token)
   return Layer.succeed(
     RegistryAuthorization,
     RegistryAuthorization.of({

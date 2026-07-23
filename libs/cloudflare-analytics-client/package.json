@@ -15,7 +15,6 @@
     }
   },
   "dependencies": {
-    "effect": "4.0.0-beta.99",
-    "es-toolkit": "^1.43.0"
+    "effect": "4.0.0-beta.99"
   }
 }

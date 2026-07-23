@@ -10,10 +10,6 @@ import type {
   ApplicationListingCheck,
 } from '@cv/application-registry-entity'
 import {
-  RegistryEventPublisher,
-  RegistryEventSchema,
-} from '@cv/application-registry-events'
-import {
   ListingAvailabilityChecker,
   type ListingAvailabilityChecker as ListingAvailabilityCheckerShape,
 } from '@cv/application-registry-listing-check'
@@ -64,7 +60,6 @@ const make = (checker: ListingAvailabilityCheckerShape) =>
     const applications = yield* ApplicationsCrud
     const checks = yield* ListingChecksCrud
     const idempotency = yield* IdempotencyCrud
-    const events = yield* RegistryEventPublisher
 
     const loadCheckResult = (
       applicationId: string,
@@ -76,17 +71,6 @@ const make = (checker: ListingAvailabilityCheckerShape) =>
         const application = yield* findRequiredApplication(
           applications,
           applicationId
-        )
-        yield* events.publish(
-          RegistryEventSchema.cases.ListingCheckCompleted.make({
-            applicationId,
-            correlationId: check.operationId,
-            eventId: `listing-check-completed:${check.operationId}`,
-            occurredAt: check.receivedAt,
-            outcome: check.outcome,
-            runId: check.runId,
-            version: 1,
-          })
         )
         return {
           application,

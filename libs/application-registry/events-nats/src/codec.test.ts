@@ -7,14 +7,11 @@ import { Effect } from 'effect'
 
 import { decodeRegistryEvent, encodeRegistryEvent } from './codec'
 
-const event = RegistryEventSchema.cases.ApplicationUpdated.make({
+const event = RegistryEventSchema.cases.CvPublicationChanged.make({
   applicationId: 'application-1',
-  applicationVersion: 2,
-  changedFields: ['applicationStatus'],
   correlationId: 'update-1',
-  eventId: 'application-updated:update-1',
+  eventId: 'cv-publication-changed:update-1',
   occurredAt: '2026-07-21T12:00:00.000Z',
-  status: 'applied',
   version: 1,
 })
 

@@ -601,9 +601,8 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
 })
 
 test('deleting an application cascades through its complete prepared CV graph', async () => {
-  const removed = await runCrud(
+  await runCrud(
     Effect.gen(function* () {
-      const applications = yield* ApplicationsCrud
       const artifacts = yield* ArtifactsCrud
       const content = yield* ContentCrud
       const links = yield* CvLinksCrud
@@ -666,12 +665,14 @@ test('deleting an application cascades through its complete prepared CV graph', 
         contentRevisionId: 'content-revision-1',
       })
       yield* artifacts.persistPending(pendingArtifact, 1)
-
-      return yield* applications.remove(application.applicationId)
     })
   )
 
-  assert.equal(removed, true)
+  const removed = await harness.query<{ id: string }>(
+    `delete from applications where id = $1 returning id`,
+    [application.applicationId]
+  )
+  assert.deepEqual(removed, [{ id: application.applicationId }])
 
   const ownedRows = await harness.query<{ count: number; relation: string }>(
     `select 'job_posting_snapshots' as relation, count(*)::int as count

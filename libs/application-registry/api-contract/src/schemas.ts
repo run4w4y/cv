@@ -11,7 +11,6 @@ import {
   type ApplicationNote,
   ApplicationNoteSchema,
   ApplicationSchema,
-  ExpectedApplicationVersionSchema,
   type ListingCheckRun,
   ListingCheckRunSchema,
   NonEmptyTrimmedStringSchema as NonEmptyString,
@@ -96,37 +95,6 @@ export const ApplicationFacetsResponseSchema: Schema.Codec<ApplicationFacetsResp
     })
   )
 
-export const ReplaceApplicationLabelsRequestSchema = Schema.Struct({
-  expectedVersion: Schema.optional(ExpectedApplicationVersionSchema),
-  labels: Schema.Array(NonEmptyString),
-})
-
-export type ReplaceApplicationLabelsRequest = Schema.Schema.Type<
-  typeof ReplaceApplicationLabelsRequestSchema
->
-
-export const ReplaceAnnualCompensationRequestSchema = Schema.Struct({
-  annualCompensation: Schema.NullOr(AnnualCompensationSchema),
-  expectedVersion: ExpectedApplicationVersionSchema,
-})
-
-export type ReplaceAnnualCompensationRequest = Schema.Schema.Type<
-  typeof ReplaceAnnualCompensationRequestSchema
->
-
-export type ReplaceAnnualCompensationResponse = {
-  readonly annualCompensation: AnnualCompensation | null
-  readonly application: Application
-}
-
-export const ReplaceAnnualCompensationResponseSchema: Schema.Codec<ReplaceAnnualCompensationResponse> =
-  Schema.revealCodec(
-    Schema.Struct({
-      annualCompensation: Schema.NullOr(AnnualCompensationSchema),
-      application: ApplicationSchema,
-    })
-  )
-
 export type UpdateApplicationResponse = {
   readonly annualCompensation: AnnualCompensation | null
   readonly application: Application
@@ -140,15 +108,6 @@ export const UpdateApplicationResponseSchema: Schema.Codec<UpdateApplicationResp
       application: ApplicationSchema,
       labels: Schema.Array(NonEmptyString),
     })
-  )
-
-export type ListApplicationLabelsResponse = {
-  readonly items: readonly ApplicationLabel[]
-}
-
-export const ListApplicationLabelsResponseSchema: Schema.Codec<ListApplicationLabelsResponse> =
-  Schema.revealCodec(
-    Schema.Struct({ items: Schema.Array(ApplicationLabelSchema) })
   )
 
 export type AddApplicationNoteResponse = {

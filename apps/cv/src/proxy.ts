@@ -5,7 +5,7 @@ import { contentSecurityPolicy } from '@/server/content-security-policy'
 
 const previewPathPattern = /(?:^|\/)_preview(?:\/|$)/u
 
-export const middleware = (request: NextRequest) => {
+export const proxy = (request: NextRequest) => {
   const nonce = btoa(crypto.randomUUID())
   const policy = contentSecurityPolicy({
     development: process.env.NODE_ENV === 'development',

@@ -2,7 +2,6 @@ import type { ContentRevisionResultResponse } from '@cv/application-registry-api
 import { Effect } from 'effect'
 import * as Reactivity from 'effect/unstable/reactivity/Reactivity'
 
-import { publicCvBaseUrl } from '@/preparation/config'
 import {
   contentMutationReactivityKeys,
   type PublicationIdentity,
@@ -32,7 +31,6 @@ const stageCvRevision = (
           applicationId,
           entry: result.entry,
           operationId: result.revision.operationId,
-          publicBaseUrl: publicCvBaseUrl(),
           revisionId: result.revision.id,
         })
         .pipe(Effect.as(result))

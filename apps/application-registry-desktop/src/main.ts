@@ -83,8 +83,7 @@ const bridgeFailure = (
 })
 
 const publicFailure = (
-  error: DesktopExpectedError,
-  fallbackCode: DesktopBridgeErrorCode
+  error: DesktopExpectedError
 ): DesktopBridgeResult<never> =>
   Match.value(error).pipe(
     Match.tag('CodexSdkError', (failure) =>
@@ -97,12 +96,7 @@ const publicFailure = (
       bridgeFailure(failure.code, failure.message)
     ),
     Match.tag('DesktopSettingsError', (failure) =>
-      bridgeFailure(
-        failure.code === 'configuration_invalid'
-          ? 'invalid_request'
-          : fallbackCode,
-        failure.message
-      )
+      bridgeFailure(failure.code, failure.message)
     ),
     Match.tag('DesktopIpcRequestError', (failure) =>
       bridgeFailure('invalid_request', failure.message)
@@ -213,11 +207,11 @@ const createDesktopLayer = () => {
   const settings = desktopSettingsLayer({
     userDataPath: app.getPath('userData'),
   }).pipe(Layer.provide(Layer.merge(platform, encryption)))
-  const network = desktopNetworkLayer.pipe(
-    Layer.provide(Layer.merge(settings, NodeHttpClient.layerUndici))
+  const network = desktopNetworkLayer().pipe(
+    Layer.provide(Layer.merge(settings, NodeHttpClient.layerNodeHttp))
   )
-  const registryConnection = desktopRegistryConnectionLayer.pipe(
-    Layer.provide(Layer.merge(settings, NodeHttpClient.layerUndici))
+  const registryConnection = desktopRegistryConnectionLayer().pipe(
+    Layer.provide(Layer.merge(settings, NodeHttpClient.layerNodeHttp))
   )
   const codex = desktopCodexLayer({
     executable: packagedCodexExecutable(),
@@ -260,7 +254,7 @@ const run = <Value, Error extends DesktopExpectedError>(
           Effect.flatMap(DesktopDiagnostics, (diagnostics) =>
             diagnostics
               .log('error', 'ipc-operation-failed', error)
-              .pipe(Effect.as(publicFailure(error, fallbackCode)))
+              .pipe(Effect.as(publicFailure(error)))
           ),
         onSuccess: (value) => Effect.succeed(success(value)),
       }),
@@ -305,8 +299,7 @@ const installIpc = (runtime: DesktopRuntime) => {
             new DesktopIpcRequestError({
               cause: new Error('Rejected IPC sender.'),
               message: 'The desktop request sender is invalid.',
-            }),
-            'invalid_request'
+            })
           )
         )
 

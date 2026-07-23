@@ -1,7 +1,5 @@
-import { timingSafeEqual } from 'node:crypto'
-
 import { applicationRegistryApiPrefix } from '@cv/application-registry-api-contract'
-import { Effect, Redacted } from 'effect'
+import { Effect, type Redacted } from 'effect'
 import {
   HttpRouter,
   HttpServerRequest,
@@ -9,6 +7,7 @@ import {
 } from 'effect/unstable/http'
 
 import type { FactsStorageShape } from '../../facts/storage'
+import { makeRegistryBearerTokenVerifier } from '../middleware/auth'
 
 const factsObjectPrefix =
   `${applicationRegistryApiPrefix}/facts/objects` as const
@@ -17,16 +16,6 @@ const presentedBearerToken = (request: Request): string | null => {
   const authorization = request.headers.get('authorization')
   const match = authorization?.match(/^Bearer[\t ]+([^\s]+)$/i)
   return match?.[1] ?? null
-}
-
-const sameToken = (left: string, right: string) => {
-  const encoder = new TextEncoder()
-  const leftBytes = encoder.encode(left)
-  const rightBytes = encoder.encode(right)
-  return (
-    leftBytes.byteLength === rightBytes.byteLength &&
-    timingSafeEqual(leftBytes, rightBytes)
-  )
 }
 
 const factsObjectKey = (request: Request): string | null => {
@@ -56,25 +45,32 @@ const factsObjectKey = (request: Request): string | null => {
   }
 }
 
-const unauthorizedResponse = (): Response =>
-  Response.json(
-    {
-      code: 'unauthorized',
-      message: 'Missing or invalid registry API token.',
-    },
-    { status: 401 }
-  )
-
 export const makeFactsObjectRequestHandler = (
   storage: FactsStorageShape,
   registryApiToken: Redacted.Redacted<string>
 ) => {
-  const registryToken = Redacted.value(registryApiToken)
+  const verify = makeRegistryBearerTokenVerifier(registryApiToken)
 
   return async (request: Request): Promise<Response> => {
     const presented = presentedBearerToken(request)
-    if (presented === null || !sameToken(presented, registryToken)) {
-      return unauthorizedResponse()
+    const authorizationFailure = await Effect.runPromise(
+      verify(presented ?? '').pipe(
+        Effect.match({
+          onFailure: (error) => error,
+          onSuccess: () => null,
+        })
+      )
+    )
+    if (authorizationFailure) {
+      const unavailable =
+        authorizationFailure._tag === 'ServiceUnavailableError'
+      return Response.json(
+        {
+          code: unavailable ? 'service_unavailable' : 'unauthorized',
+          message: authorizationFailure.message,
+        },
+        { status: unavailable ? 503 : 401 }
+      )
     }
     if (request.method !== 'GET') {
       return Response.json(

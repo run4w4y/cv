@@ -6,7 +6,7 @@ COPY . .
 RUN bun install --frozen-lockfile
 RUN bunx nx run application-registry-pdf-worker:build --skip-nx-cache
 
-FROM node:24.17.0-bookworm-slim
+FROM node:24.18.0-bookworm-slim
 
 ENV NODE_ENV=production
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1

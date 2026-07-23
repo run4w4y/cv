@@ -13,7 +13,7 @@ resource "infisical_secret" "this" {
     kind        = each.value.value == local.placeholder_value ? "user-placeholder" : "default-value"
   })
 
-  depends_on = [infisical_secret_folder.child]
+  depends_on = [infisical_secret_folder.managed_child]
 
   lifecycle {
     ignore_changes = [
@@ -33,31 +33,6 @@ resource "random_password" "facts_publish_token" {
   special = false
 }
 
-resource "random_password" "private_audience_key" {
-  length  = 48
-  special = false
-}
-
-resource "infisical_secret" "private_audience_key" {
-  name             = "PRIVATE_CONTENT_AUDIENCE_KEY"
-  value_wo         = random_password.private_audience_key.result
-  value_wo_version = 1
-  env_slug         = var.environment_slug
-  workspace_id     = var.infisical_project_id
-  folder_path      = local.content_path
-
-  metadata = merge(local.common_metadata, {
-    description = "Terraform-generated key used to derive reversible encrypted private audience URL ids."
-    kind        = "generated-secret"
-  })
-
-  depends_on = [infisical_secret_folder.child]
-
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
 resource "infisical_secret" "registry_api_token" {
   name             = "REGISTRY_API_TOKEN"
   value_wo         = random_password.registry_api_token.result
@@ -71,7 +46,7 @@ resource "infisical_secret" "registry_api_token" {
     kind        = "generated-secret"
   })
 
-  depends_on = [infisical_secret_folder.child]
+  depends_on = [infisical_secret_folder.managed_child]
 
   lifecycle {
     prevent_destroy = true
@@ -91,7 +66,7 @@ resource "infisical_secret" "facts_publish_token" {
     kind        = "generated-secret"
   })
 
-  depends_on = [infisical_secret_folder.child]
+  depends_on = [infisical_secret_folder.managed_child]
 
   lifecycle {
     prevent_destroy = true

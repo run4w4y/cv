@@ -1,10 +1,10 @@
 import { createSelectSchema } from 'drizzle-orm/effect-schema'
 import { Schema } from 'effect'
 
-import { UtcIsoTimestampSchema } from '../model/constraints'
+import { HttpUrlSchema, UtcIsoTimestampSchema } from '../model/constraints'
 import { ListingCheckEvidenceSchema } from '../model/listing-checks'
 import {
-  applicationListingCheckSchedules,
+  type applicationListingCheckSchedules,
   applicationListingChecks,
   listingCheckRuns,
 } from '../tables/listing-checks'
@@ -13,9 +13,11 @@ export const ApplicationListingCheckSchema = createSelectSchema(
   applicationListingChecks,
   {
     checkedAt: () => UtcIsoTimestampSchema,
-    receivedAt: () => UtcIsoTimestampSchema,
     evidence: () => Schema.Array(ListingCheckEvidenceSchema),
+    finalUrl: () => HttpUrlSchema,
     nextCheckAt: () => UtcIsoTimestampSchema,
+    receivedAt: () => UtcIsoTimestampSchema,
+    requestedUrl: () => HttpUrlSchema,
   }
 )
 
@@ -28,15 +30,6 @@ export const ListingCheckRunSchema = createSelectSchema(listingCheckRuns, {
 })
 
 export type ListingCheckRun = typeof listingCheckRuns.$inferSelect
-
-export const ApplicationListingCheckScheduleSchema = createSelectSchema(
-  applicationListingCheckSchedules,
-  {
-    dueAt: () => UtcIsoTimestampSchema,
-    leaseUntil: () => UtcIsoTimestampSchema,
-    updatedAt: () => UtcIsoTimestampSchema,
-  }
-)
 
 export type ApplicationListingCheckSchedule =
   typeof applicationListingCheckSchedules.$inferSelect

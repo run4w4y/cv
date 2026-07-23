@@ -1,7 +1,6 @@
 import {
   createInsertSchema,
   createSelectSchema,
-  createUpdateSchema,
 } from 'drizzle-orm/effect-schema'
 import { Schema } from 'effect'
 import { omit } from 'es-toolkit/object'
@@ -30,18 +29,28 @@ const applicationCompensationInsertRefinements = {
   updatedAt: UtcIsoTimestampSchema,
 }
 
-const applicationCompensationUpdateRefinements = {
-  currencyCode: () => CurrencyCodeSchema,
-  minimumMinor: () => NonNegativeMinorAmountSchema,
-  maximumMinor: () => NonNegativeMinorAmountSchema,
-  createdAt: () => UtcIsoTimestampSchema,
-  updatedAt: () => UtcIsoTimestampSchema,
-}
+export const compensationRangeOrderFilter = Schema.makeFilter(
+  (value: {
+    readonly maximumMinor?: number | null
+    readonly minimumMinor?: number | null
+  }) =>
+    value.minimumMinor === undefined ||
+    value.maximumMinor === undefined ||
+    value.minimumMinor === null ||
+    value.maximumMinor === null ||
+    value.minimumMinor <= value.maximumMinor
+      ? undefined
+      : {
+          path: ['maximumMinor'],
+          issue:
+            'Maximum compensation must be greater than or equal to minimum compensation.',
+        }
+)
 
 export const ApplicationCompensationSchema = createSelectSchema(
   applicationCompensations,
   applicationCompensationSelectRefinements
-)
+).pipe(Schema.check(compensationRangeOrderFilter))
 
 export type ApplicationCompensation =
   typeof applicationCompensations.$inferSelect
@@ -51,11 +60,6 @@ export const ApplicationCompensationInsertSchema = createInsertSchema(
   applicationCompensationInsertRefinements
 )
 
-export const ApplicationCompensationUpdateSchema = createUpdateSchema(
-  applicationCompensations,
-  applicationCompensationUpdateRefinements
-)
-
 export const ApplicationCompensationInputSchema = Schema.Struct(
   omit(ApplicationCompensationInsertSchema.fields, [
     'applicationId',
@@ -63,23 +67,7 @@ export const ApplicationCompensationInputSchema = Schema.Struct(
     'id',
     'updatedAt',
   ])
-).pipe(
-  Schema.check(
-    Schema.makeFilter((value) =>
-      value.minimumMinor === undefined ||
-      value.maximumMinor === undefined ||
-      value.minimumMinor === null ||
-      value.maximumMinor === null ||
-      value.minimumMinor <= value.maximumMinor
-        ? undefined
-        : {
-            path: ['maximumMinor'],
-            issue:
-              'Maximum compensation must be greater than or equal to minimum compensation.',
-          }
-    )
-  )
-)
+).pipe(Schema.check(compensationRangeOrderFilter))
 
 export type ApplicationCompensationInput = Schema.Schema.Type<
   typeof ApplicationCompensationInputSchema

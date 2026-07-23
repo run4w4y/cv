@@ -9,6 +9,7 @@ import {
   encodeListApplicationsSearchParams,
   FactsReleaseBundleBodySchema,
   IdempotencyHeadersSchema,
+  PersistJobPostingSnapshotRequestSchema,
   UpdateApplicationRequestSchema,
 } from './index'
 import { applicationRegistryOpenApi } from './openapi'
@@ -89,6 +90,34 @@ describe('application registry API contract', () => {
         role: 'Engineer',
       })
     ).toThrow()
+  })
+
+  test('rejects blank application identity fields at the HTTP boundary', () => {
+    expect(() =>
+      Schema.decodeUnknownSync(CreateApplicationRequestSchema)({
+        company: '   ',
+        location: null,
+        postingUrl: 'https://example.test/jobs/one',
+        role: 'Engineer',
+      })
+    ).toThrow()
+    expect(() =>
+      Schema.decodeUnknownSync(UpdateApplicationRequestSchema)({
+        expectedVersion: 1,
+        location: '   ',
+      })
+    ).toThrow()
+  })
+
+  test('rejects non-HTTP snapshot URLs at the HTTP boundary', () => {
+    expect(() =>
+      Schema.decodeUnknownSync(PersistJobPostingSnapshotRequestSchema)({
+        fetcherVersion: 'fetcher-v1',
+        finalUrl: null,
+        requestedUrl: 'file:///tmp/job.html',
+        status: 'fetched',
+      })
+    ).toThrow(/HTTP or HTTPS/u)
   })
 
   test('uses raw Uint8Array transport for blobs', () => {

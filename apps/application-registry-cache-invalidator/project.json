@@ -1,0 +1,24 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "application-registry-cache-invalidator",
+  "projectType": "application",
+  "sourceRoot": "apps/application-registry-cache-invalidator/src",
+  "tags": ["scope:application-registry", "type:service", "visibility:private"],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "color": true,
+        "command": "bun build apps/application-registry-cache-invalidator/src/main.ts --target=node --outfile=apps/application-registry-cache-invalidator/dist/main.mjs"
+      }
+    },
+    "format": {},
+    "format:check": {},
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {}
+  }
+}

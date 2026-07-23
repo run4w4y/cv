@@ -19,6 +19,9 @@ on:
       pdf_worker_image_digest:
         description: Immutable PDF worker image digest.
         value: ${{ jobs.publish-pdf-worker.outputs.digest }}
+      cache_invalidator_image_digest:
+        description: Immutable cache invalidator image digest.
+        value: ${{ jobs.publish-cache-invalidator.outputs.digest }}
 
 env:
   REGISTRY: ghcr.io
@@ -141,5 +144,35 @@ jobs:
         with:
           context: .
           file: apps/application-registry-pdf-worker/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+  publish-cache-invalidator:
+    name: Publish cache invalidator image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.image.outputs.digest }}
+    env:
+      IMAGE_NAME: ${{ github.repository_owner }}/application-registry-cache-invalidator
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push immutable cache invalidator image
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/application-registry-cache-invalidator/Dockerfile
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}

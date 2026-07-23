@@ -1,0 +1,47 @@
+name: Set up infrastructure tools
+description: Install the pinned Nomad Pack CLI and optional Terragrunt CLI.
+
+inputs:
+  install-terragrunt:
+    description: Whether to install Terragrunt.
+    default: "false"
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - name: Install Nomad Pack
+      shell: bash
+      env:
+        NOMAD_PACK_SHA256: 58399149a2b3944d17294fb5c98b30cd02fc9fd1f8d5275713be3dbc5345bfb4
+        NOMAD_PACK_VERSION: 0.4.2
+      run: |
+        set -euo pipefail
+        install_root="$(mktemp -d)"
+        trap 'rm -rf "$install_root"' EXIT
+        archive="nomad-pack_${NOMAD_PACK_VERSION}_linux_amd64.zip"
+        curl -fsSL \
+          "https://releases.hashicorp.com/nomad-pack/${NOMAD_PACK_VERSION}/${archive}" \
+          -o "$install_root/$archive"
+        printf '%s  %s\n' "$NOMAD_PACK_SHA256" "$install_root/$archive" |
+          sha256sum --check -
+        unzip -q "$install_root/$archive" -d "$install_root"
+        sudo install "$install_root/nomad-pack" /usr/local/bin/nomad-pack
+
+    - name: Install Terragrunt
+      if: ${{ inputs.install-terragrunt == 'true' }}
+      shell: bash
+      env:
+        TERRAGRUNT_SHA256: 387509aa15d3f38a93d0888ace2bd67c3e5eea841e1f4d585ea2174d566f35e9
+        TERRAGRUNT_VERSION: 1.0.4
+      run: |
+        set -euo pipefail
+        install_root="$(mktemp -d)"
+        trap 'rm -rf "$install_root"' EXIT
+        binary="$install_root/terragrunt"
+        curl -fsSL \
+          "https://github.com/gruntwork-io/terragrunt/releases/download/v${TERRAGRUNT_VERSION}/terragrunt_linux_amd64" \
+          -o "$binary"
+        printf '%s  %s\n' "$TERRAGRUNT_SHA256" "$binary" |
+          sha256sum --check -
+        sudo install "$binary" /usr/local/bin/terragrunt

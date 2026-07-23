@@ -11,7 +11,7 @@ provider "registry.terraform.io/cloudflare/cloudflare" {
 
 provider "registry.terraform.io/infisical/infisical" {
   version     = "0.16.34"
-  constraints = "~> 0.16"
+  constraints = "~> 0.16.0"
   hashes = [
     "h1:6ha+HtQ5pDPivSzmwdQYiRP8H0vdoM7jW1ATVDVC/Zs=",
   ]

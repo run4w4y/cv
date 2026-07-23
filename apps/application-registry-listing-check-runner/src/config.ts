@@ -1,5 +1,6 @@
+import { ListingCheckModeSchema } from '@cv/application-registry-entity'
 import type { RunDueListingChecksInput } from '@cv/application-registry-service'
-import { Config, Effect, type Redacted, Schema } from 'effect'
+import { Config, Effect, type Redacted } from 'effect'
 
 export interface RunnerConfiguration {
   readonly limit: number
@@ -18,8 +19,6 @@ export interface RunnerConfiguration {
     readonly username: string
   }
 }
-
-const ListingCheckModeSchema = Schema.Literals(['report', 'archive_eligible'])
 
 export const readRunnerConfiguration: Effect.Effect<
   RunnerConfiguration,

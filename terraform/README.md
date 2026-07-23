@@ -8,8 +8,8 @@ belongs to `~/infrastructure`.
 ## JetStream topology
 
 `terraform/live/prod/jetstream` owns the `REGISTRY_EVENTS` stream and
-`registry-pdf-worker` durable pull consumer. Runtime credentials cannot create
-or modify either resource.
+`registry-pdf-worker` and `registry-cache-invalidator` durable pull consumers.
+Runtime credentials cannot create or modify these resources.
 
 Use a temporary operator Connect upstream for plans and applies:
 
@@ -38,14 +38,29 @@ in front of the self-hosted services:
   Next.js assets, non-GET requests, and query strings;
 - synchronized self-hosted registry and public-CV URLs.
 
-There are no Worker, Pages, database, object-storage, queue, or browser-runtime
-resources in this module. Analytics are read directly by the registry API from
-Cloudflare GraphQL, and cache invalidation calls Cloudflare's purge API.
+Analytics are read directly by the registry API from Cloudflare GraphQL. Cache
+invalidation is performed by a dedicated JetStream consumer with a separate
+Cloudflare purge credential.
+
+The module deploys no Worker or Pages application runtime; all application code
+runs on Nomad.
 
 The production inputs are `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`,
 `CLOUDFLARE_ZONE_ID`, `DOMAIN_NAME`, `CV_WEB_HOST`,
 `APPLICATION_REGISTRY_MANAGEMENT_ACCESS_EMAIL`, and the Infisical settings.
 The Terraform token needs Access and zone Cache Rules write permissions.
+
+Only deployable roots under `terraform/live` own `.terraform.lock.hcl` files.
+Reusable modules intentionally do not carry provider locks.
+
+## Infisical legacy-content migration
+
+The Infisical module moves retained child folders to a new resource address and
+then forgets the obsolete `/cv/content` folder and
+`PRIVATE_CONTENT_AUDIENCE_KEY` without deleting either remote object. This
+preserves the original destroy protection and makes the first apply
+non-destructive. After confirming that no deployment reads the legacy key,
+remove the unmanaged key and empty folder manually in Infisical.
 
 ## Validation
 
@@ -58,5 +73,21 @@ rsync -a --exclude=.terraform --exclude=.terragrunt-cache \
 for module in "$validation_root"/modules/*; do
   terraform -chdir="$module" init -backend=false -input=false
   terraform -chdir="$module" validate
+done
+
+terragrunt hcl format --check --working-dir terraform/live/prod
+terragrunt hcl validate \
+  --working-dir terraform/live/prod \
+  --tf-path terraform \
+  --inputs \
+  --strict
+
+image="registry.example.test/cv@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+for pack in nomad/packs/*; do
+  render_args=(--parser-v1 --var "docker_image=$image")
+  if [[ "$pack" == "nomad/packs/cv-web" ]]; then
+    render_args+=(--var "deployment_id=validation")
+  fi
+  nomad-pack render "$pack" "${render_args[@]}" >/dev/null
 done
 ```

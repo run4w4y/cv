@@ -20,9 +20,6 @@ on:
         required: true
         type: choice
 
-env:
-  ASTRO_TELEMETRY_DISABLED: "1"
-
 jobs:
   quality:
     name: Quality gates
@@ -49,6 +46,11 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v4.0.1
 
+      - name: Set up infrastructure tools
+        uses: ./.github/actions/setup-infrastructure-tools
+        with:
+          install-terragrunt: "true"
+
       - name: Validate GitHub Actions and embedded shell scripts
         run: |
           command -v shellcheck
@@ -63,6 +65,37 @@ jobs:
           for module in "$validation_root"/modules/*; do
             terraform -chdir="$module" init -backend=false -input=false
             terraform -chdir="$module" validate
+          done
+
+      - name: Validate Terragrunt live roots and Nomad Packs
+        run: |
+          terragrunt hcl format --check --working-dir terraform/live/prod
+          env \
+            APPLICATION_REGISTRY_MANAGEMENT_ACCESS_EMAIL=owner@example.test \
+            CLOUDFLARE_ACCOUNT_ID=account-id \
+            CLOUDFLARE_API_TOKEN=cloudflare-token \
+            CLOUDFLARE_ZONE_ID=zone-id \
+            CV_WEB_HOST=cv.example.test \
+            DOMAIN_NAME=example.test \
+            INFISICAL_PROJECT_ID=00000000-0000-0000-0000-000000000000 \
+            NATS_ADMIN_PASSWORD=nats-password \
+            NATS_ADMIN_SERVER=nats://127.0.0.1:4222 \
+            NATS_ADMIN_USER=nats-user \
+            TF_CLOUD_ORGANIZATION=example \
+            TF_CLOUD_PROJECT=cv \
+            terragrunt hcl validate \
+              --working-dir terraform/live/prod \
+              --tf-path terraform \
+              --inputs \
+              --strict
+
+          image="registry.example.test/cv@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          for pack in nomad/packs/*; do
+            render_args=(--parser-v1 --var "docker_image=$image")
+            if [[ "$pack" == "nomad/packs/cv-web" ]]; then
+              render_args+=(--var "deployment_id=validation")
+            fi
+            nomad-pack render "$pack" "${render_args[@]}" >/dev/null
           done
 
       - name: Check formatting, imports, and lint rules
@@ -121,6 +154,9 @@ jobs:
 
       - name: Build PDF event worker
         run: ./node_modules/.bin/nx run application-registry-pdf-worker:build --skip-nx-cache
+
+      - name: Build cache invalidator
+        run: ./node_modules/.bin/nx run application-registry-cache-invalidator:build --skip-nx-cache
 
   application-registry-tests:
     name: Test application registry services
@@ -244,4 +280,6 @@ jobs:
       web_image_digest: ${{ needs.publish-application-registry-images.outputs.web_image_digest }}
       listing_check_runner_image_digest: ${{ needs.publish-application-registry-images.outputs.listing_check_runner_image_digest }}
       pdf_worker_image_digest: ${{ needs.publish-application-registry-images.outputs.pdf_worker_image_digest }}
+      cache_invalidator_image_digest: ${{ needs.publish-application-registry-images.outputs.cache_invalidator_image_digest }}
+      cache_invalidator_enabled: ${{ vars.CV_CACHE_INVALIDATOR_ENABLED == 'true' }}
     uses: ./.github/workflows/deploy-application-registry.yml

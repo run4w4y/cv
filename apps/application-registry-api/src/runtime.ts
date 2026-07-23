@@ -6,7 +6,10 @@ import {
   makeNatsRegistryEventPublisherLayer,
   makeRegistryEventPublisherConfiguration,
 } from '@cv/application-registry-events-nats'
-import { RegistryAnalyticsError } from '@cv/application-registry-service'
+import {
+  CvPublicationConfiguration,
+  RegistryAnalyticsError,
+} from '@cv/application-registry-service'
 import { RegistryServicesLive } from '@cv/application-registry-service/live'
 import { CloudflareAnalytics } from '@cv/cloudflare-analytics-client'
 import { BunServices } from '@effect/platform-bun'
@@ -17,7 +20,6 @@ import * as FetchHttpClient from 'effect/unstable/http/FetchHttpClient'
 import { HttpApiBuilder } from 'effect/unstable/httpapi'
 
 import { CloudflareCvAnalyticsTrafficLive } from './analytics/cloudflare'
-import { makeCvCacheInvalidatorLayer } from './cache-invalidation'
 import type { ApiServerConfiguration } from './config'
 import { factsRegistryLayer } from './facts/registry'
 import { FactsPublicationHandlersLayer } from './http/handlers/facts'
@@ -113,13 +115,20 @@ export const makeRegistryServicesLayer = (
       },
     })
   )
+  const publication = Layer.succeed(
+    CvPublicationConfiguration,
+    CvPublicationConfiguration.of({
+      publicBaseUrl: configuration.publication.publicBaseUrl,
+    })
+  )
 
   return Layer.merge(
     RegistryServicesLive.pipe(
       Layer.provide(analytics),
       Layer.provide(artifacts),
       Layer.provide(crud),
-      Layer.provide(events)
+      Layer.provide(events),
+      Layer.provide(publication)
     ),
     factsRegistryLayer(
       makeS3FactsStorageLayer(s3, configuration.minio.factsBucket)
@@ -133,12 +142,6 @@ export const makeApiWebHandler = (
 ) => {
   const api = Layer.provide(makeApiHandlersLayer(configuration, s3), [
     makeRegistryServicesLayer(configuration, s3),
-    makeCvCacheInvalidatorLayer({
-      apiToken: configuration.analytics.apiToken,
-      endpoint: configuration.cacheInvalidation.endpoint,
-      host: configuration.analytics.host,
-      zoneId: configuration.analytics.zoneId,
-    }),
     makeFactsPublisherAuthorizationLayer(
       configuration.authentication.factsPublishToken
     ),

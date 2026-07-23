@@ -31,7 +31,6 @@ job [[ .my.job_name | quote ]] {
       check {
         name     = "registry-web-live"
         type     = "http"
-        expose   = true
         port     = "http"
         method   = "GET"
         path     = "/_health"

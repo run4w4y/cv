@@ -35,10 +35,8 @@ export const preparationRuntimeLayer = applicationPreparationLayer().pipe(
   Layer.provide(workflowDependenciesLayer)
 )
 
-export const preparationRuntime = Atom.runtime(preparationRuntimeLayer).pipe(
-  Atom.keepAlive
-)
+export const preparationRuntime = Atom.runtime(preparationRuntimeLayer)
 
-export const preparationRunsAtom = preparationRuntime
-  .subscriptionRef(Effect.map(ApplicationPreparation, ({ runs }) => runs))
-  .pipe(Atom.keepAlive)
+export const preparationRunsAtom = preparationRuntime.subscriptionRef(
+  Effect.map(ApplicationPreparation, ({ runs }) => runs)
+)

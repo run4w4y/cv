@@ -3,12 +3,17 @@
 Layered Effect client for Cloudflare GraphQL Analytics.
 
 The package owns Cloudflare request construction, provider-limit discovery,
-range chunking, provider error classification, and response normalization. It
-reads the active dataset's retention, maximum query duration, and page-size
-limits from Cloudflare, caches successful discovery for one hour, and rejects
-out-of-retention ranges without silently clipping them. It aggregates exact
-paths behind caller-owned opaque aliases and never returns raw GraphQL rows or
-aliased paths to application code.
+range chunking, provider error classification, strict response decoding, and
+typed-row aggregation. It reads the active dataset's retention, maximum query
+duration, and page-size limits from Cloudflare and caches successful discovery
+for one hour. Every successful response is decoded once with Effect Schema;
+malformed rows fail instead of being converted into zero traffic. A full result
+page also fails explicitly because Cloudflare may have truncated it.
+
+The application service owns user-facing range validation and passes canonical
+UTC ranges to this adapter. The client aggregates exact CV paths behind
+caller-owned opaque aliases and never returns raw GraphQL rows or aliased paths
+to application code.
 
 ## Services
 
@@ -44,7 +49,6 @@ const ClientLive = CloudflareAnalytics.layer.pipe(
 const data = CloudflareAnalytics.Service.use((client) =>
   client.readAliasedPaths({
     aliases: [{ key: 'publication-1', path: '/c/opaque-token' }],
-    pathLike: '/c/%',
     range: {
       from: '2026-07-18T00:00:00.000Z',
       to: '2026-07-19T00:00:00.000Z',

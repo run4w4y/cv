@@ -5,13 +5,12 @@ export const defaultEndpoint = 'https://api.cloudflare.com/client/v4/graphql'
 export interface Configuration {
   readonly apiToken: Redacted.Redacted<string>
   readonly endpoint: URL
-  readonly host?: string
+  readonly host: string
   readonly zoneId: string
 }
 
 export interface Range {
   readonly from: string
-  readonly host?: string
   readonly to: string
 }
 
@@ -57,7 +56,6 @@ export interface AliasedPathData {
 
 export interface ReadAliasedPathsOptions {
   readonly aliases: ReadonlyArray<PathAlias>
-  readonly pathLike?: string
   readonly range: Range
 }
 

@@ -9,18 +9,10 @@ provider "registry.terraform.io/hashicorp/random" {
   ]
 }
 
-provider "registry.terraform.io/hashicorp/tls" {
-  version     = "4.3.0"
-  constraints = "~> 4.0"
-  hashes = [
-    "h1:j/BqLS2N2AScZyotd9nZpHdieJ7e5S8y+A+ZfIu8kL8=",
-  ]
-}
-
 provider "registry.terraform.io/infisical/infisical" {
-  version     = "0.16.33"
-  constraints = "~> 0.16"
+  version     = "0.16.34"
+  constraints = "~> 0.16.0"
   hashes = [
-    "h1:NpD3hCplIp57PAjop3zT+XvX8xhxUd95wKJqnCywopA=",
+    "h1:6ha+HtQ5pDPivSzmwdQYiRP8H0vdoM7jW1ATVDVC/Zs=",
   ]
 }

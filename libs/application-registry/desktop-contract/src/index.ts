@@ -1,3 +1,4 @@
+import { RegistryOriginSchema } from '@cv/application-registry-api-contract'
 import { Schema } from 'effect'
 import type { JsonSchema } from 'effect/JsonSchema'
 
@@ -11,10 +12,14 @@ export const DesktopBridgeErrorCodeSchema = Schema.Literals([
   'codex_rate_limited',
   'codex_startup_failed',
   'codex_state_initialization_failed',
+  'configuration_invalid',
+  'encryption_unavailable',
   'invalid_request',
   'network_failed',
   'registry_not_configured',
   'registry_unauthorized',
+  'settings_corrupt',
+  'settings_io_failed',
 ])
 export type DesktopBridgeErrorCode = typeof DesktopBridgeErrorCodeSchema.Type
 
@@ -102,7 +107,7 @@ export type DesktopRegistryConfiguration = {
 }
 
 export const DesktopRegistryConfigureSchema = Schema.Struct({
-  origin: Schema.Trim.pipe(Schema.check(Schema.isNonEmpty())),
+  origin: RegistryOriginSchema,
   token: Schema.optionalKey(Schema.Trim),
 })
 export type DesktopRegistryConfigureInput =

@@ -1,7 +1,7 @@
 import { createSelectSchema } from 'drizzle-orm/effect-schema'
 import { Schema } from 'effect'
 
-import { UtcIsoTimestampSchema } from '../model/constraints'
+import { HttpUrlSchema, UtcIsoTimestampSchema } from '../model/constraints'
 import {
   ArtifactKindSchema,
   ArtifactStatusSchema,
@@ -26,8 +26,10 @@ export const JobPostingSnapshotSchema = createSelectSchema(
   jobPostingSnapshots,
   {
     fetchedAt: () => UtcIsoTimestampSchema,
+    finalUrl: () => HttpUrlSchema,
     normalizedByteLength: () => NonNegativeIntegerSchema,
     rawByteLength: () => NonNegativeIntegerSchema,
+    requestedUrl: () => HttpUrlSchema,
     status: () => JobSnapshotStatusSchema,
   }
 )
@@ -53,6 +55,7 @@ export type ContentRevision = typeof contentRevisions.$inferSelect
 export const CvLinkSchema = createSelectSchema(cvLinks, {
   createdAt: () => UtcIsoTimestampSchema,
   disabledAt: () => UtcIsoTimestampSchema,
+  publicUrl: () => HttpUrlSchema,
   publicationVersion: () => PositiveIntegerSchema,
   updatedAt: () => UtcIsoTimestampSchema,
   version: () => PositiveIntegerSchema,
@@ -65,6 +68,7 @@ export const GeneratedArtifactSchema = createSelectSchema(generatedArtifacts, {
   generatedAt: () => UtcIsoTimestampSchema,
   kind: () => ArtifactKindSchema,
   publicationVersion: () => PositiveIntegerSchema,
+  qrTarget: () => HttpUrlSchema,
   status: () => ArtifactStatusSchema,
   updatedAt: () => UtcIsoTimestampSchema,
 })

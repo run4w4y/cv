@@ -6,28 +6,6 @@
   "tags": ["scope:shared", "type:runtime"],
   "targets": {
     "build": {
-      "executor": "nx:noop",
-      "outputs": ["{projectRoot}/dist"],
-      "dependsOn": [
-        {
-          "projects": "self",
-          "target": "build:browser"
-        }
-      ]
-    },
-    "lint": {},
-    "lint:fix": {},
-    "test:unit": {
-      "dependsOn": [
-        "^build",
-        {
-          "projects": "self",
-          "target": "build:browser"
-        }
-      ]
-    },
-    "typecheck": {},
-    "build:tsc": {
       "executor": "@nx/js:tsc",
       "outputs": ["{projectRoot}/dist"],
       "options": {
@@ -38,27 +16,10 @@
         "generatePackageJson": false
       }
     },
-    "build:browser": {
-      "executor": "nx:run-commands",
-      "dependsOn": [
-        {
-          "projects": "self",
-          "target": "build:tsc"
-        }
-      ],
-      "outputs": [
-        "{projectRoot}/dist/browser/boot.js",
-        "{projectRoot}/dist/browser/runtime.js"
-      ],
-      "options": {
-        "color": true,
-        "commands": [
-          "vite build --config libs/color-scheme/vite.browser.config.ts --mode boot",
-          "vite build --config libs/color-scheme/vite.browser.config.ts --mode runtime"
-        ],
-        "parallel": false
-      }
-    },
+    "lint": {},
+    "lint:fix": {},
+    "test:unit": {},
+    "typecheck": {},
     "format": {},
     "format:check": {}
   }

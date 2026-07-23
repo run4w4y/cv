@@ -6,10 +6,6 @@ import {
   type PersistedContentRevision,
 } from '@cv/application-registry-crud'
 import type { ContentRevision } from '@cv/application-registry-entity'
-import {
-  RegistryEventPublisher,
-  RegistryEventSchema,
-} from '@cv/application-registry-events'
 import { Effect, Layer } from 'effect'
 
 import { RegistryConflictError, RegistryNotFoundError } from '../errors'
@@ -59,48 +55,6 @@ const make = Effect.gen(function* () {
   const content = yield* ContentCrud
   const snapshots = yield* JobPostingSnapshotsCrud
   const store = yield* ArtifactStore
-  const events = yield* RegistryEventPublisher
-
-  const publishEntryCreated = (entry: {
-    readonly applicationId: string
-    readonly createdAt: string
-    readonly id: string
-    readonly kind: 'cover_letter' | 'cv'
-    readonly locale: string
-  }) => {
-    const eventId = `content-entry-created:${entry.id}`
-    return events.publish(
-      RegistryEventSchema.cases.ContentEntryCreated.make({
-        applicationId: entry.applicationId,
-        contentEntryId: entry.id,
-        correlationId: eventId,
-        eventId,
-        kind: entry.kind,
-        locale: entry.locale,
-        occurredAt: entry.createdAt,
-        version: 1,
-      })
-    )
-  }
-
-  const publishRevisionAppended = (
-    applicationId: string,
-    entryId: string,
-    revision: ContentRevision,
-    contentVersion: number
-  ) =>
-    events.publish(
-      RegistryEventSchema.cases.ContentRevisionAppended.make({
-        applicationId,
-        contentEntryId: entryId,
-        contentRevisionId: revision.id,
-        contentVersion,
-        correlationId: revision.operationId,
-        eventId: `content-revision-appended:${revision.operationId}`,
-        occurredAt: revision.createdAt,
-        version: 1,
-      })
-    )
 
   const find = Effect.fn('ContentEntriesService.find')(
     (applicationIdentifier: string, entryId: string) =>
@@ -176,12 +130,6 @@ const make = Effect.gen(function* () {
                   'The operation ID is already used by a different content revision.',
               })
             }
-            yield* publishRevisionAppended(
-              application.id,
-              entry.id,
-              replay,
-              input.expectedVersion + 1
-            )
             return { entry, revision: replay }
           }
 
@@ -237,12 +185,6 @@ const make = Effect.gen(function* () {
               `Content revision was not persisted: ${revision.id}`
             )
           }
-          yield* publishRevisionAppended(
-            application.id,
-            updatedEntry.id,
-            storedRevision,
-            updatedEntry.version
-          )
           return { entry: updatedEntry, revision: storedRevision }
         })
     ),
@@ -289,19 +231,6 @@ const make = Effect.gen(function* () {
               `Approved content entry disappeared: ${entry.id}`
             )
           }
-          const eventId = `content-revision-approved:${revision.id}:${updatedEntry.version}`
-          yield* events.publish(
-            RegistryEventSchema.cases.ContentRevisionApproved.make({
-              applicationId: updatedEntry.applicationId,
-              contentEntryId: updatedEntry.id,
-              contentRevisionId: revision.id,
-              contentVersion: updatedEntry.version,
-              correlationId: eventId,
-              eventId,
-              occurredAt: updatedEntry.updatedAt,
-              version: 1,
-            })
-          )
           return { entry: updatedEntry, revision }
         })
     ),
@@ -319,7 +248,6 @@ const make = Effect.gen(function* () {
             locale
           )
           if (existing) {
-            yield* publishEntryCreated(existing)
             return existing
           }
 
@@ -342,7 +270,6 @@ const make = Effect.gen(function* () {
               `Content entry was not persisted for application ${application.id}.`
             )
           }
-          yield* publishEntryCreated(stored)
           return stored
         })
     ),

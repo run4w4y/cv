@@ -10,17 +10,28 @@ import type {
 
 export const applicationRejectedDisableReason = 'application_rejected'
 
+export interface CvPublicationConfigurationShape {
+  readonly publicBaseUrl: URL
+}
+
+export class CvPublicationConfiguration extends Context.Service<
+  CvPublicationConfiguration,
+  CvPublicationConfigurationShape
+>()('@cv/application-registry-service/CvPublicationConfiguration') {}
+
 export interface CvPublicationsService {
   readonly disableForApplication: (
     applicationIdentifier: string,
-    reason: string
+    reason: string,
+    operationId: string
   ) => Effect.Effect<number, ApplicationRegistryError>
   readonly findByEntry: (
     applicationIdentifier: string,
     entryId: string
   ) => Effect.Effect<CvLink, ApplicationRegistryError>
   readonly restoreAfterRejection: (
-    applicationIdentifier: string
+    applicationIdentifier: string,
+    operationId: string
   ) => Effect.Effect<number, ApplicationRegistryError>
   readonly resolvePreview: (
     token: string,

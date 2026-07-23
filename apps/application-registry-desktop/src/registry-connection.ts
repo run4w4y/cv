@@ -1,8 +1,12 @@
+import {
+  applicationRegistryApiPrefix,
+  HealthResponseSchema,
+} from '@cv/application-registry-api-contract'
 import type {
   DesktopRegistryConfiguration,
   DesktopRegistryConfigureInput,
 } from '@cv/application-registry-desktop-contract'
-import { Context, Effect, Layer, Redacted, Schema } from 'effect'
+import { Context, type Duration, Effect, Layer, Redacted, Schema } from 'effect'
 import { HttpClient, HttpClientRequest } from 'effect/unstable/http'
 
 import {
@@ -10,8 +14,6 @@ import {
   type DesktopSettingsError,
   type RegistryCredentials,
 } from './settings'
-
-const RegistryHealthSchema = Schema.Struct({ ok: Schema.Boolean })
 
 export class DesktopRegistryConnectionError extends Schema.TaggedErrorClass<DesktopRegistryConnectionError>()(
   'DesktopRegistryConnectionError',
@@ -28,6 +30,15 @@ const connectionError = (
   cause: unknown
 ) => new DesktopRegistryConnectionError({ cause, code, message })
 
+const verificationError = (cause: unknown) =>
+  Schema.is(DesktopRegistryConnectionError)(cause)
+    ? cause
+    : connectionError(
+        'network_failed',
+        'The Registry API could not be reached.',
+        cause
+      )
+
 export interface DesktopRegistryConnectionShape {
   readonly configure: (
     input: DesktopRegistryConfigureInput
@@ -42,80 +53,82 @@ export class DesktopRegistryConnection extends Context.Service<
   DesktopRegistryConnectionShape
 >()('cv-desktop/DesktopRegistryConnection') {}
 
-export const desktopRegistryConnectionLayer = Layer.effect(
-  DesktopRegistryConnection,
-  Effect.gen(function* () {
-    const client = yield* HttpClient.HttpClient
-    const settings = yield* DesktopSettings
+export const desktopRegistryConnectionLayer = (
+  options: { readonly verificationTimeout?: Duration.Input } = {}
+) =>
+  Layer.effect(
+    DesktopRegistryConnection,
+    Effect.gen(function* () {
+      const client = yield* HttpClient.HttpClient
+      const settings = yield* DesktopSettings
 
-    const verify = Effect.fn('DesktopRegistryConnection.verify')(function* (
-      credentials: RegistryCredentials
-    ) {
-      const request = HttpClientRequest.get(
-        new URL('/api/registry/health', credentials.origin)
-      ).pipe(
-        HttpClientRequest.acceptJson,
-        HttpClientRequest.bearerToken(Redacted.value(credentials.token))
-      )
-      const response = yield* client.execute(request).pipe(
-        Effect.timeout('15 seconds'),
-        Effect.mapError((cause) =>
-          connectionError(
-            'network_failed',
-            'The Registry API could not be reached.',
-            cause
+      const verify = Effect.fn('DesktopRegistryConnection.verify')(
+        function* (credentials: RegistryCredentials) {
+          const request = HttpClientRequest.get(
+            new URL(
+              `${applicationRegistryApiPrefix}/health`,
+              credentials.origin
+            )
+          ).pipe(
+            HttpClientRequest.acceptJson,
+            HttpClientRequest.bearerToken(Redacted.value(credentials.token))
           )
-        )
+          const response = yield* client.execute(request)
+
+          if (response.status === 401 || response.status === 403) {
+            return yield* Effect.fail(
+              connectionError(
+                'registry_unauthorized',
+                'The Registry API rejected the bearer token.',
+                new Error(String(response.status))
+              )
+            )
+          }
+          if (response.status !== 200) {
+            return yield* Effect.fail(
+              connectionError(
+                'network_failed',
+                `The Registry health check returned HTTP ${response.status}.`,
+                new Error(String(response.status))
+              )
+            )
+          }
+
+          const payload = yield* response.json.pipe(
+            Effect.flatMap(Schema.decodeUnknownEffect(HealthResponseSchema)),
+            Effect.mapError((cause) =>
+              connectionError(
+                'network_failed',
+                'The Registry health check returned an invalid response.',
+                cause
+              )
+            )
+          )
+          if (!payload.ok) {
+            return yield* Effect.fail(
+              connectionError(
+                'network_failed',
+                'The Registry health check did not report a healthy service.',
+                new Error('Unhealthy Registry response')
+              )
+            )
+          }
+        },
+        (effect) =>
+          effect.pipe(
+            Effect.timeout(options.verificationTimeout ?? '15 seconds'),
+            Effect.mapError(verificationError)
+          )
       )
 
-      if (response.status === 401 || response.status === 403) {
-        return yield* Effect.fail(
-          connectionError(
-            'registry_unauthorized',
-            'The Registry API rejected the bearer token.',
-            new Error(String(response.status))
-          )
-        )
-      }
-      if (response.status !== 200) {
-        return yield* Effect.fail(
-          connectionError(
-            'network_failed',
-            `The Registry health check returned HTTP ${response.status}.`,
-            new Error(String(response.status))
-          )
-        )
-      }
-
-      const payload = yield* response.json.pipe(
-        Effect.flatMap(Schema.decodeUnknownEffect(RegistryHealthSchema)),
-        Effect.mapError((cause) =>
-          connectionError(
-            'network_failed',
-            'The Registry health check returned an invalid response.',
-            cause
-          )
-        )
+      const configure = Effect.fn('DesktopRegistryConnection.configure')(
+        function* (input: DesktopRegistryConfigureInput) {
+          const credentials = yield* settings.resolveUpdate(input)
+          yield* verify(credentials)
+          return yield* settings.write(credentials)
+        }
       )
-      if (!payload.ok) {
-        return yield* Effect.fail(
-          connectionError(
-            'network_failed',
-            'The Registry health check did not report a healthy service.',
-            new Error('Unhealthy Registry response')
-          )
-        )
-      }
+
+      return DesktopRegistryConnection.of({ configure })
     })
-
-    const configure = Effect.fn('DesktopRegistryConnection.configure')(
-      function* (input: DesktopRegistryConfigureInput) {
-        const credentials = yield* settings.resolveUpdate(input)
-        yield* verify(credentials)
-        return yield* settings.write(credentials)
-      }
-    )
-
-    return DesktopRegistryConnection.of({ configure })
-  })
-)
+  )

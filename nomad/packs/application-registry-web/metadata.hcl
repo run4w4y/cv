@@ -4,6 +4,6 @@ app {
 
 pack {
   name        = "application-registry-web"
-  description = "Application Registry management SPA and same-origin API proxy"
+  description = "Application Registry management SPA"
   version     = "0.1.0"
 }

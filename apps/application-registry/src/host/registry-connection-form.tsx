@@ -159,10 +159,10 @@ export const RegistryConnectionForm = ({
             {operation === 'reset' ? (
               <>
                 <LoaderCircle className="animate-spin" />
-                Restoring default…
+                Forgetting saved connection…
               </>
             ) : (
-              'Use default configuration'
+              'Forget saved connection'
             )}
           </Button>
         ) : null}

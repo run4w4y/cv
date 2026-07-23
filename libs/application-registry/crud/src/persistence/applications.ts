@@ -6,9 +6,5 @@ export {
   listApplicationFacets,
   listApplications,
 } from './application-queries'
-export {
-  patchApplication,
-  persistApplication,
-  removeApplication,
-} from './application-writes'
+export { persistApplication } from './application-writes'
 export { updateManagedApplication } from './managed-application-update'

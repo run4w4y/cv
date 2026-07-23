@@ -1,14 +1,8 @@
-import type {
-  RegistryDatabaseError,
-  RegistryQueryTooComplexError,
-} from '@cv/application-registry-crud'
+import type { RegistryDatabaseError } from '@cv/application-registry-crud'
 import type { RegistryEventPublishError } from '@cv/application-registry-events'
 import { Data } from 'effect'
 
-export {
-  RegistryDatabaseError,
-  RegistryQueryTooComplexError,
-} from '@cv/application-registry-crud'
+export { RegistryDatabaseError } from '@cv/application-registry-crud'
 
 export class RegistryNotFoundError extends Data.TaggedError(
   'RegistryNotFoundError'
@@ -52,4 +46,3 @@ export type ApplicationRegistryError =
   | RegistryDatabaseError
   | RegistryEventPublishError
   | RegistryNotFoundError
-  | RegistryQueryTooComplexError

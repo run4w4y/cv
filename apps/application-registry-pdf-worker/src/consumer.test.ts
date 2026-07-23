@@ -4,6 +4,7 @@ import {
   type RegistryEvent,
   type RegistryEventDelivery,
   RegistryEventSchema,
+  RegistryEventSourceError,
 } from '@cv/application-registry-events'
 import {
   PdfArtifactPersistence,
@@ -98,7 +99,11 @@ const attempt: PdfGenerationAttempt = {
   },
 }
 
-const deliveryProbe = (event: RegistryEvent, deliveryCount = 1) => {
+const deliveryProbe = (
+  event: RegistryEvent,
+  deliveryCount = 1,
+  working?: RegistryEventDelivery['working']
+) => {
   const acknowledgements: string[] = []
   const delivery: RegistryEventDelivery = {
     ack: Effect.sync(() => {
@@ -115,9 +120,11 @@ const deliveryProbe = (event: RegistryEvent, deliveryCount = 1) => {
       Effect.sync(() => {
         acknowledgements.push(`term:${reason}`)
       }),
-    working: Effect.sync(() => {
-      acknowledgements.push('working')
-    }),
+    working:
+      working ??
+      Effect.sync(() => {
+        acknowledgements.push('working')
+      }),
   }
   return { acknowledgements, delivery }
 }
@@ -156,10 +163,10 @@ const processingLayer = (
 
 describe('PDF registry-event consumer', () => {
   test('acknowledges unrelated registry events without invoking PDF services', async () => {
-    const event = RegistryEventSchema.cases.ApplicationCreated.make({
+    const event = RegistryEventSchema.cases.CvPublicationChanged.make({
       applicationId: 'application-1',
       correlationId: 'application-1',
-      eventId: 'application-created:application-1',
+      eventId: 'cv-publication-changed:application-1',
       occurredAt,
       version: 1,
     })
@@ -224,5 +231,30 @@ describe('PDF registry-event consumer', () => {
     )
 
     expect(probe.acknowledgements).toEqual(['nak:20000'])
+  })
+
+  test('interrupts processing when the delivery heartbeat fails', async () => {
+    const probe = deliveryProbe(
+      trigger,
+      1,
+      Effect.fail(
+        new RegistryEventSourceError({
+          cause: new Error('connection closed'),
+          message: 'Registry event source message heartbeat failed.',
+          operation: 'message heartbeat',
+        })
+      )
+    )
+
+    const error = await Effect.runPromise(
+      consumeRegistryEvent(probe.delivery, 0, 5).pipe(
+        Effect.provide(processingLayer(() => Effect.never)),
+        Effect.flip
+      )
+    )
+
+    expect(error).toBeInstanceOf(RegistryEventSourceError)
+    expect(error.operation).toBe('message heartbeat')
+    expect(probe.acknowledgements).toEqual([])
   })
 })

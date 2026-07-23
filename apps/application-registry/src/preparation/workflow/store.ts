@@ -3,7 +3,6 @@ import {
   PreparationStoreError,
 } from '@cv/application-preparation-workflow'
 import { Effect, Layer } from 'effect'
-import { publicCvBaseUrl } from '@/preparation/config'
 import { PreparationRepository } from '@/preparation/data/repository'
 
 const storeOperation = (operation: string) =>
@@ -29,7 +28,6 @@ export const preparationStoreLayer = Layer.effect(
                     applicationId: input.applicationId,
                     entry: result.entry,
                     operationId: result.revision.operationId,
-                    publicBaseUrl: publicCvBaseUrl(),
                     revisionId: result.revision.id,
                   })
                   .pipe(Effect.as(result))
@@ -46,7 +44,6 @@ export const preparationStoreLayer = Layer.effect(
                     applicationId: input.applicationId,
                     entry: result.entry,
                     operationId: result.revision.operationId,
-                    publicBaseUrl: publicCvBaseUrl(),
                     revisionId: result.revision.id,
                   })
                   .pipe(Effect.as(result))

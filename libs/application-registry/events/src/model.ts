@@ -1,5 +1,4 @@
 import {
-  ApplicationStatusSchema,
   NonEmptyTrimmedStringSchema,
   UtcIsoTimestampSchema,
 } from '@cv/application-registry-entity'
@@ -16,59 +15,6 @@ const envelope = {
 }
 
 export const RegistryEventSchema = Schema.TaggedUnion({
-  ApplicationCreated: {
-    ...envelope,
-    applicationId: NonEmptyString,
-  },
-  ApplicationUpdated: {
-    ...envelope,
-    applicationId: NonEmptyString,
-    applicationVersion: PositiveVersion,
-    changedFields: Schema.Array(NonEmptyString),
-    status: ApplicationStatusSchema,
-  },
-  ApplicationRemoved: {
-    ...envelope,
-    applicationId: NonEmptyString,
-  },
-  ApplicationNoteAdded: {
-    ...envelope,
-    applicationId: NonEmptyString,
-    noteId: NonEmptyString,
-  },
-  CompensationChanged: {
-    ...envelope,
-    applicationId: NonEmptyString,
-  },
-  ContentEntryCreated: {
-    ...envelope,
-    applicationId: NonEmptyString,
-    contentEntryId: NonEmptyString,
-    kind: Schema.Literals(['cover_letter', 'cv']),
-    locale: NonEmptyString,
-  },
-  ContentRevisionAppended: {
-    ...envelope,
-    applicationId: NonEmptyString,
-    contentEntryId: NonEmptyString,
-    contentRevisionId: NonEmptyString,
-    contentVersion: PositiveVersion,
-  },
-  ContentRevisionApproved: {
-    ...envelope,
-    applicationId: NonEmptyString,
-    contentEntryId: NonEmptyString,
-    contentRevisionId: NonEmptyString,
-    contentVersion: PositiveVersion,
-  },
-  CvPublicationStaged: {
-    ...envelope,
-    applicationId: NonEmptyString,
-    contentEntryId: NonEmptyString,
-    contentRevisionId: NonEmptyString,
-    cvLinkId: NonEmptyString,
-    publicationVersion: PositiveVersion,
-  },
   CvPublicationAvailabilityChanged: {
     ...envelope,
     applicationId: NonEmptyString,
@@ -78,6 +24,10 @@ export const RegistryEventSchema = Schema.TaggedUnion({
     enabled: Schema.Boolean,
     publicationVersion: PositiveVersion,
   },
+  CvPublicationChanged: {
+    ...envelope,
+    applicationId: NonEmptyString,
+  },
   PdfGenerationRequested: {
     ...envelope,
     applicationId: NonEmptyString,
@@ -86,35 +36,18 @@ export const RegistryEventSchema = Schema.TaggedUnion({
     cvLinkId: NonEmptyString,
     publicationVersion: PositiveVersion,
   },
-  PdfGenerated: {
-    ...envelope,
-    applicationId: NonEmptyString,
-    artifactId: NonEmptyString,
-    contentEntryId: NonEmptyString,
-    publicationVersion: PositiveVersion,
-  },
-  PdfGenerationFailed: {
-    ...envelope,
-    applicationId: NonEmptyString,
-    artifactId: NonEmptyString,
-    code: NonEmptyString,
-    contentEntryId: NonEmptyString,
-    publicationVersion: PositiveVersion,
-  },
-  JobPostingSnapshotPersisted: {
-    ...envelope,
-    applicationId: NonEmptyString,
-    snapshotId: NonEmptyString,
-  },
-  ListingCheckCompleted: {
-    ...envelope,
-    applicationId: NonEmptyString,
-    outcome: Schema.Literals(['closed', 'open', 'unknown']),
-    runId: Schema.NullOr(NonEmptyString),
-  },
 })
 
 export type RegistryEvent = typeof RegistryEventSchema.Type
+
+export type CvPublicationChangedEvent = Extract<
+  RegistryEvent,
+  { readonly _tag: 'CvPublicationChanged' }
+>
+
+export const isCvPublicationChangedEvent = (
+  event: RegistryEvent
+): event is CvPublicationChangedEvent => event._tag === 'CvPublicationChanged'
 
 export type PdfGenerationTriggerEvent =
   | (Extract<

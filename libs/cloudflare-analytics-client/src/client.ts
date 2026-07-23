@@ -1,19 +1,40 @@
-import { Cache, Context, Duration, Effect, Exit, Layer } from 'effect'
+import {
+  Cache,
+  Context,
+  DateTime,
+  Duration,
+  Effect,
+  Exit,
+  Layer,
+  type Schema,
+} from 'effect'
 import * as HttpClient from 'effect/unstable/http/HttpClient'
 import * as HttpClientRequest from 'effect/unstable/http/HttpClientRequest'
+import * as HttpClientResponse from 'effect/unstable/http/HttpClientResponse'
 
 import { normalizeAliasedPaths } from './aliased-normalize'
 import type { Error as ClientError } from './errors'
-import { GraphQLError, HttpError, ParseError, RequestError } from './errors'
-import { extractGraphqlErrors } from './graphql-errors'
-import { decodeDatasetLimits } from './limits'
 import {
-  buildLimitsQuery,
+  GraphQLError,
+  HttpError,
+  RequestError,
+  ResponseError,
+  ResultLimitError,
+} from './errors'
+import {
   buildLimitsVariables,
   buildQuery,
   buildVariables,
+  limitsQuery,
 } from './query'
-import { resolveRange } from './range'
+import { splitRange } from './range'
+import {
+  type AnalyticsData,
+  AnalyticsEnvelopeSchema,
+  datasetLimitsFromData,
+  type GraphqlEnvelope,
+  LimitsEnvelopeSchema,
+} from './schemas'
 import type {
   AliasedPathData,
   Configuration as ConfigurationShape,
@@ -41,29 +62,14 @@ export const Service = Context.Service<Interface>(
 
 const previewBody = (body: string) => body.replace(/\s+/gu, ' ').slice(0, 220)
 
-const parsePayload = (body: string) =>
-  Effect.try({
-    try: (): unknown => JSON.parse(body),
-    catch: (cause) =>
-      ParseError.fromCause({
-        cause,
-        message: 'Cloudflare GraphQL response was not valid JSON',
-      }),
-  })
-
-const rejectGraphqlErrors = (payload: unknown) => {
-  const messages = extractGraphqlErrors(payload)
-
-  return messages.length > 0
-    ? Effect.fail(new GraphQLError({ messages }))
-    : Effect.succeed(payload)
-}
-
-const requestPayload = Effect.fn('CloudflareAnalytics.request')(function* (
+const requestPayload = Effect.fn('CloudflareAnalytics.request')(function* <
+  Data extends Schema.Constraint,
+>(
   client: HttpClient.HttpClient,
   configuration: ConfigurationShape,
   query: string,
-  variables: unknown
+  variables: unknown,
+  responseSchema: Data
 ) {
   const request = yield* HttpClientRequest.post(configuration.endpoint).pipe(
     HttpClientRequest.acceptJson,
@@ -87,38 +93,70 @@ const requestPayload = Effect.fn('CloudflareAnalytics.request')(function* (
       })
     )
   )
-  const body = yield* response.text.pipe(
-    Effect.mapError((cause) =>
-      RequestError.fromCause({
-        cause,
-        message: 'Cloudflare analytics response body could not be read',
-      })
-    )
-  )
-
   if (response.status < 200 || response.status >= 300) {
+    const body = yield* response.text.pipe(
+      Effect.mapError((cause) =>
+        RequestError.fromCause({
+          cause,
+          message: 'Cloudflare analytics response body could not be read',
+        })
+      )
+    )
+
     return yield* new HttpError({
       bodyPreview: previewBody(body),
       status: response.status,
     })
   }
 
-  const payload = yield* parsePayload(body)
-  return yield* rejectGraphqlErrors(payload)
+  return yield* HttpClientResponse.schemaBodyJson(responseSchema)(
+    response
+  ).pipe(
+    Effect.mapError(
+      () =>
+        new ResponseError({
+          message:
+            'Cloudflare GraphQL response was not valid JSON or did not match its expected contract',
+        })
+    )
+  )
 })
+
+const requireGraphqlData = <Data>(
+  envelope: GraphqlEnvelope<Data>
+): Effect.Effect<Data, GraphQLError> => {
+  if (envelope.errors !== null) {
+    return Effect.fail(
+      new GraphQLError({
+        messages: envelope.errors.map(({ message }) => message),
+      })
+    )
+  }
+
+  return Effect.succeed(envelope.data)
+}
 
 const requestAnalyticsPayload = (
   client: HttpClient.HttpClient,
   configuration: ConfigurationShape,
   limits: DatasetLimits,
-  range: Range,
-  pathLike?: string
+  range: Range
 ) =>
   requestPayload(
     client,
     configuration,
     buildQuery(limits.maxPageSize),
-    buildVariables(configuration, range, pathLike)
+    buildVariables(configuration, range),
+    AnalyticsEnvelopeSchema
+  ).pipe(
+    Effect.flatMap(requireGraphqlData),
+    Effect.flatMap((payload) =>
+      payload.viewer.zones.some(
+        ({ dailyPaths }) => dailyPaths.length >= limits.maxPageSize
+      )
+        ? Effect.fail(new ResultLimitError({ maxPageSize: limits.maxPageSize }))
+        : Effect.succeed(payload)
+    )
   )
 
 const make = Effect.gen(function* () {
@@ -130,9 +168,13 @@ const make = Effect.gen(function* () {
       requestPayload(
         httpClient,
         configuration,
-        buildLimitsQuery(),
-        buildLimitsVariables(configuration)
-      ).pipe(Effect.flatMap(decodeDatasetLimits)),
+        limitsQuery,
+        buildLimitsVariables(configuration),
+        LimitsEnvelopeSchema
+      ).pipe(
+        Effect.flatMap(requireGraphqlData),
+        Effect.map(datasetLimitsFromData)
+      ),
     {
       capacity: 1,
       timeToLive: (exit) => (Exit.isSuccess(exit) ? '1 hour' : Duration.zero),
@@ -144,32 +186,24 @@ const make = Effect.gen(function* () {
   )
 
   const readAliasedPaths = Effect.fn('CloudflareAnalytics.readAliasedPaths')(
-    ({ aliases, pathLike, range }: ReadAliasedPathsOptions) =>
-      readLimits().pipe(
-        Effect.flatMap((limits) =>
-          resolveRange(range, limits).pipe(
-            Effect.map((resolved) => ({ ...resolved, limits }))
-          )
-        ),
-        Effect.flatMap(({ chunks, effectiveRange, limits }) =>
-          Effect.forEach(
-            chunks,
-            (chunk) =>
-              requestAnalyticsPayload(
-                httpClient,
-                configuration,
-                limits,
-                chunk,
-                pathLike
-              ),
-            { concurrency: 1 }
-          ).pipe(
-            Effect.flatMap((payloads) =>
-              normalizeAliasedPaths(payloads, effectiveRange, aliases)
-            )
-          )
-        )
+    function* ({ aliases, range }: ReadAliasedPathsOptions) {
+      if (aliases.length === 0) {
+        const generatedAt = DateTime.formatIso(yield* DateTime.now)
+        return normalizeAliasedPaths([], range, aliases, generatedAt)
+      }
+
+      const limits = yield* readLimits()
+      const chunks = splitRange(range, limits.maxDurationMs)
+      const payloads: AnalyticsData[] = yield* Effect.forEach(
+        chunks,
+        (chunk) =>
+          requestAnalyticsPayload(httpClient, configuration, limits, chunk),
+        { concurrency: 1 }
       )
+      const generatedAt = DateTime.formatIso(yield* DateTime.now)
+
+      return normalizeAliasedPaths(payloads, range, aliases, generatedAt)
+    }
   )
 
   return Service.of({ readAliasedPaths, readLimits })
@@ -178,21 +212,4 @@ const make = Effect.gen(function* () {
 export const layer = Layer.effect(Service, make)
 
 export type { Error } from './errors'
-export {
-  describeError,
-  GraphQLError,
-  HttpError,
-  NormalizeError,
-  ParseError,
-  RangeValidationError,
-  RequestError,
-} from './errors'
-export type {
-  AliasedPathData,
-  AliasedPathRecord,
-  DatasetLimits,
-  PathAlias,
-  Range,
-  ReadAliasedPathsOptions,
-} from './types'
 export { defaultEndpoint } from './types'

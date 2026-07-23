@@ -81,7 +81,6 @@ export const makePreparationPublicationRepository = (
           },
           payload: {
             expectedContentVersion: input.entry.version,
-            publicBaseUrl: input.publicBaseUrl,
             revisionId: input.revisionId,
           },
         })

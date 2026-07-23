@@ -21,6 +21,7 @@ import {
   ContentEntriesService,
   type CreateApplicationInput,
   CvAnalyticsTrafficSource,
+  CvPublicationConfiguration,
   CvPublicationsService,
   PdfArtifactsService,
   ScheduledListingChecksRunner,
@@ -72,7 +73,15 @@ const makeRegistryServiceTestRuntime = (database: RegistryDatabaseShape) =>
       Layer.provide(makeRegistryCrudLive(database)),
       Layer.provide(makeInMemoryArtifactStoreLayer()),
       Layer.provide(RegistryEventPublisherNoop),
-      Layer.provide(FakeCvAnalyticsTrafficSourceLive)
+      Layer.provide(FakeCvAnalyticsTrafficSourceLive),
+      Layer.provide(
+        Layer.succeed(
+          CvPublicationConfiguration,
+          CvPublicationConfiguration.of({
+            publicBaseUrl: new URL('https://cv.example.test/c/'),
+          })
+        )
+      )
     )
   )
 
@@ -375,7 +384,6 @@ test('restores a rejection-disabled publication only after its current PDF is re
       const staged = yield* publications.stage(application.id, entry.id, {
         operationId: crypto.randomUUID(),
         expectedContentVersion: approved.entry.version,
-        publicBaseUrl: 'https://cv.example.test/c',
         revisionId: appended.revision.id,
       })
       yield* publications.setAvailability(application.id, entry.id, {
@@ -404,7 +412,8 @@ test('restores a rejection-disabled publication only after its current PDF is re
       })
       yield* publications.disableForApplication(
         application.id,
-        'application_rejected'
+        'application_rejected',
+        'publication-rejected'
       )
       const reopened = yield* applications.update(application.id, {
         applicationStatus: 'preparing',
@@ -412,7 +421,8 @@ test('restores a rejection-disabled publication only after its current PDF is re
         idempotencyKey: 'publication-reopened',
       })
       const restoredWhilePending = yield* publications.restoreAfterRejection(
-        application.id
+        application.id,
+        'publication-reopened-pending'
       )
       const linkWhilePending = yield* publications.findByEntry(
         application.id,
@@ -426,7 +436,8 @@ test('restores a rejection-disabled publication only after its current PDF is re
         pdf
       )
       const restoredWhenReady = yield* publications.restoreAfterRejection(
-        application.id
+        application.id,
+        'publication-reopened-ready'
       )
       const restoredLink = yield* publications.findByEntry(
         application.id,

@@ -10,6 +10,7 @@ import {
   ExpectedApplicationVersionSchema,
   type GeneratedArtifact,
   GeneratedArtifactSchema,
+  HttpUrlSchema,
   type JobPostingSnapshot,
   JobPostingSnapshotSchema,
   NonEmptyTrimmedStringSchema as NonEmptyString,
@@ -34,10 +35,10 @@ export type BlobReferenceInput = Schema.Schema.Type<
 
 const PersistJobPostingSnapshotBase = {
   fetcherVersion: NonEmptyString,
-  finalUrl: Schema.NullOr(NonEmptyString),
+  finalUrl: Schema.NullOr(HttpUrlSchema),
   normalized: Schema.optional(Schema.NullOr(BlobReferenceInputSchema)),
   raw: Schema.optional(Schema.NullOr(BlobReferenceInputSchema)),
-  requestedUrl: NonEmptyString,
+  requestedUrl: HttpUrlSchema,
 }
 
 export const PersistJobPostingSnapshotRequestSchema = Schema.Union([
@@ -74,14 +75,6 @@ export const JobPostingSnapshotPayloadParamsSchema = Schema.Struct({
   kind: Schema.Literals(['normalized', 'raw']),
   snapshotId: NonEmptyString,
 })
-
-export const EnsureContentEntryRequestSchema = Schema.Struct({
-  kind: ContentEntryKindSchema,
-  locale: RegistryContentLocaleSchema,
-})
-export type EnsureContentEntryRequest = Schema.Schema.Type<
-  typeof EnsureContentEntryRequestSchema
->
 
 export const ContentEntryResponseSchema: Schema.Codec<ContentEntry> =
   Schema.revealCodec(ContentEntrySchema)
@@ -147,7 +140,6 @@ export const ListContentRevisionsResponseSchema: Schema.Codec<{
 
 export const StageCvRequestSchema = Schema.Struct({
   expectedContentVersion: ExpectedApplicationVersionSchema,
-  publicBaseUrl: NonEmptyString,
   revisionId: NonEmptyString,
 })
 export type StageCvRequest = Schema.Schema.Type<typeof StageCvRequestSchema>
@@ -163,14 +155,6 @@ export type SetCvLinkAvailabilityRequest = Schema.Schema.Type<
 
 export const CvLinkResponseSchema: Schema.Codec<CvLink> =
   Schema.revealCodec(CvLinkSchema)
-
-export const DisableApplicationCvLinksRequestSchema = Schema.Struct({
-  reason: NonEmptyString,
-})
-
-export const DisableApplicationCvLinksResponseSchema = Schema.Struct({
-  count: Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0))),
-})
 
 export const CurrentPdfArtifactParamsSchema = Schema.Struct({
   entryId: NonEmptyString,

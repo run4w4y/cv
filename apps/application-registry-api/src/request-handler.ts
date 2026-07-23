@@ -16,20 +16,32 @@ const withPrivateCachePolicy = (request: Request, response: Response) => {
 
 export interface ApiServerRequestHandlerOptions {
   readonly apiHandler: (request: Request) => Promise<Response>
+  readonly logError?: (cause: unknown) => void
 }
 
 export const makeApiServerRequestHandler = (
   options: ApiServerRequestHandlerOptions
 ) => {
+  const logError =
+    options.logError ??
+    ((cause: unknown) => {
+      console.error('Registry API request failed.', cause)
+    })
+
   return async (request: Request): Promise<Response> => {
     try {
       return withPrivateCachePolicy(request, await options.apiHandler(request))
     } catch (cause) {
-      const message =
-        cause instanceof Error ? cause.message : 'Registry API request failed.'
+      logError(cause)
       return withPrivateCachePolicy(
         request,
-        Response.json({ code: 'internal_error', message }, { status: 500 })
+        Response.json(
+          {
+            code: 'internal_error',
+            message: 'Registry API request failed.',
+          },
+          { status: 500 }
+        )
       )
     }
   }

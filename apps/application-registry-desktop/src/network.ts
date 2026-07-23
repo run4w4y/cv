@@ -1,33 +1,12 @@
+import { applicationRegistryApiPrefix } from '@cv/application-registry-api-contract'
 import type {
   DesktopFetchRequest,
   DesktopFetchResponse,
 } from '@cv/application-registry-desktop-contract'
-import { Context, Effect, Layer, Redacted, Schema } from 'effect'
+import { Context, type Duration, Effect, Layer, Redacted, Schema } from 'effect'
 import { HttpClient, HttpClientRequest } from 'effect/unstable/http'
 
 import { DesktopSettings } from './settings'
-
-const maximumBodyBytes = 32 * 1024 * 1024
-const allowedMethods = new Set([
-  'DELETE',
-  'GET',
-  'HEAD',
-  'PATCH',
-  'POST',
-  'PUT',
-])
-const forbiddenRequestHeaders = new Set([
-  'connection',
-  'cookie',
-  'host',
-  'origin',
-  'proxy-authorization',
-  'referer',
-  'sec-fetch-dest',
-  'sec-fetch-mode',
-  'sec-fetch-site',
-  'transfer-encoding',
-])
 
 export class DesktopNetworkError extends Schema.TaggedErrorClass<DesktopNetworkError>()(
   'DesktopNetworkError',
@@ -49,47 +28,39 @@ const networkError = (
 ) => new DesktopNetworkError({ cause, code, message })
 
 export const isRegistryDesktopRequest = (url: string) =>
-  url === '/api/registry' || url.startsWith('/api/registry/')
+  url === applicationRegistryApiPrefix ||
+  url.startsWith(`${applicationRegistryApiPrefix}/`)
 
-const isFrankfurterRatesRequest = (request: DesktopFetchRequest, url: URL) =>
-  request.method === 'GET' &&
-  url.protocol === 'https:' &&
-  url.username === '' &&
-  url.password === '' &&
-  url.hostname === 'api.frankfurter.dev' &&
-  url.port === '' &&
-  url.pathname === '/v2/rates' &&
-  url.hash === '' &&
-  url.searchParams.getAll('base').length === 1 &&
-  /^[A-Z]{3}$/u.test(url.searchParams.get('base') ?? '') &&
-  [...url.searchParams.keys()].every((key) => key === 'base')
-
-export const isAllowedDesktopExternalRequest = (
-  request: DesktopFetchRequest,
-  url: URL
-) => isFrankfurterRatesRequest(request, url)
-
-const headers = (request: DesktopFetchRequest) => {
-  if (request.headers.length > 128) {
-    throw new Error('Too many request headers.')
+const isResolvedRegistryTarget = (target: URL, configuredOrigin: string) => {
+  try {
+    const decoded = new URL(decodeURIComponent(target.pathname), target.origin)
+    return (
+      target.origin === new URL(configuredOrigin).origin &&
+      isRegistryDesktopRequest(target.pathname) &&
+      isRegistryDesktopRequest(decoded.pathname)
+    )
+  } catch {
+    return false
   }
-  const result: Record<string, string> = {}
-  for (const [rawName, rawValue] of request.headers) {
-    const name = rawName.toLowerCase()
-    if (
-      forbiddenRequestHeaders.has(name) ||
-      rawName.length > 256 ||
-      rawValue.length > 16_384
-    ) {
-      throw new Error(`The request header ${rawName} is not allowed.`)
-    }
-    result[name] = rawValue
-  }
-  return result
 }
 
 const responseHeaderEntries = (values: Readonly<Record<string, string>>) =>
   Object.entries(values)
+
+const requestHeaders = (
+  values: DesktopFetchRequest['headers'],
+  authorization: string
+) => ({
+  ...Object.fromEntries(
+    values.map(([name, value]) => [name.toLowerCase(), value])
+  ),
+  authorization,
+})
+
+const requestError = (cause: unknown) =>
+  Schema.is(DesktopNetworkError)(cause)
+    ? cause
+    : networkError('network_failed', 'The network request failed.', cause)
 
 export interface DesktopNetworkShape {
   readonly fetch: (
@@ -102,136 +73,81 @@ export class DesktopNetwork extends Context.Service<
   DesktopNetworkShape
 >()('cv-desktop/DesktopNetwork') {}
 
-export const desktopNetworkLayer = Layer.effect(
-  DesktopNetwork,
-  Effect.gen(function* () {
-    const client = yield* HttpClient.HttpClient
-    const settings = yield* DesktopSettings
+export const desktopNetworkLayer = (
+  options: { readonly requestTimeout?: Duration.Input } = {}
+) =>
+  Layer.effect(
+    DesktopNetwork,
+    Effect.gen(function* () {
+      const client = yield* HttpClient.HttpClient
+      const settings = yield* DesktopSettings
 
-    const fetch = Effect.fn('DesktopNetwork.fetch')(function* (
-      input: DesktopFetchRequest
-    ) {
-      const request = yield* Effect.try({
-        try: () => {
-          const method = input.method.toUpperCase()
-          if (!allowedMethods.has(method))
-            throw new Error('Method is not allowed.')
-          if ((method === 'GET' || method === 'HEAD') && input.body !== null) {
-            throw new Error(`${method} requests cannot include a body.`)
+      const fetch = Effect.fn('DesktopNetwork.fetch')(
+        function* (input: DesktopFetchRequest) {
+          if (!isRegistryDesktopRequest(input.url)) {
+            return yield* Effect.fail(
+              networkError(
+                'invalid_request',
+                'The desktop network bridge accepts only Registry API requests.',
+                new Error(input.url)
+              )
+            )
           }
-          if ((input.body?.byteLength ?? 0) > maximumBodyBytes) {
-            throw new Error('The request body is too large.')
+
+          const credentials = yield* settings.read.pipe(
+            Effect.mapError((cause) =>
+              networkError('registry_not_configured', cause.message, cause)
+            )
+          )
+          if (credentials === null) {
+            return yield* Effect.fail(
+              networkError(
+                'registry_not_configured',
+                'The desktop Registry connection is not configured.',
+                new Error('Missing credentials')
+              )
+            )
           }
-          return { headers: headers(input), method }
+
+          const headers = requestHeaders(
+            input.headers,
+            `Bearer ${Redacted.value(credentials.token)}`
+          )
+          const target = new URL(input.url, credentials.origin)
+          if (!isResolvedRegistryTarget(target, credentials.origin)) {
+            return yield* Effect.fail(
+              networkError(
+                'invalid_request',
+                'The desktop network bridge accepts only Registry API requests.',
+                new Error(target.href)
+              )
+            )
+          }
+          let outbound = HttpClientRequest.make(
+            input.method.toUpperCase() as Parameters<
+              typeof HttpClientRequest.make
+            >[0]
+          )(target.href, { headers })
+          if (input.body !== null) {
+            outbound = HttpClientRequest.bodyUint8Array(outbound, input.body)
+          }
+
+          const response = yield* client.execute(outbound)
+          const body = yield* response.arrayBuffer
+          return {
+            body: new Uint8Array(body),
+            headers: responseHeaderEntries(response.headers),
+            status: response.status,
+            statusText: '',
+          }
         },
-        catch: (cause) =>
-          networkError(
-            'invalid_request',
-            'The network request is invalid.',
-            cause
-          ),
-      })
-
-      let target: URL
-      if (isRegistryDesktopRequest(input.url)) {
-        const credentials = yield* settings.read.pipe(
-          Effect.mapError((cause) =>
-            networkError('registry_not_configured', cause.message, cause)
+        (effect) =>
+          effect.pipe(
+            Effect.timeout(options.requestTimeout ?? '120 seconds'),
+            Effect.mapError(requestError)
           )
-        )
-        if (credentials === null) {
-          return yield* Effect.fail(
-            networkError(
-              'registry_not_configured',
-              'The desktop Registry connection is not configured.',
-              new Error('Missing credentials')
-            )
-          )
-        }
-        target = new URL(input.url, credentials.origin)
-        request.headers.authorization = `Bearer ${Redacted.value(credentials.token)}`
-      } else {
-        target = yield* Effect.try({
-          try: () => new URL(input.url),
-          catch: (cause) =>
-            networkError(
-              'invalid_request',
-              'The request URL is invalid.',
-              cause
-            ),
-        })
-        if (!isAllowedDesktopExternalRequest(input, target)) {
-          return yield* Effect.fail(
-            networkError(
-              'invalid_request',
-              'The desktop network bridge rejected an unrecognized destination.',
-              new Error(target.origin)
-            )
-          )
-        }
-        delete request.headers.authorization
-      }
-
-      let outbound = HttpClientRequest.make(
-        request.method as Parameters<typeof HttpClientRequest.make>[0]
-      )(target, { headers: request.headers })
-      if (input.body !== null) {
-        outbound = HttpClientRequest.bodyUint8Array(outbound, input.body)
-      }
-      const response = yield* client.execute(outbound).pipe(
-        Effect.timeout('120 seconds'),
-        Effect.mapError((cause) =>
-          networkError('network_failed', 'The network request failed.', cause)
-        )
       )
-      if (response.status >= 300 && response.status < 400) {
-        return yield* Effect.fail(
-          networkError(
-            'network_failed',
-            'The network bridge refused a redirect.',
-            new Error(String(response.status))
-          )
-        )
-      }
-      const declaredLength = Number(response.headers['content-length'] ?? '0')
-      if (
-        Number.isFinite(declaredLength) &&
-        declaredLength > maximumBodyBytes
-      ) {
-        return yield* Effect.fail(
-          networkError(
-            'network_failed',
-            'The network response is too large.',
-            new Error(String(declaredLength))
-          )
-        )
-      }
-      const body = yield* response.arrayBuffer.pipe(
-        Effect.mapError((cause) =>
-          networkError(
-            'network_failed',
-            'The response body could not be read.',
-            cause
-          )
-        )
-      )
-      if (body.byteLength > maximumBodyBytes) {
-        return yield* Effect.fail(
-          networkError(
-            'network_failed',
-            'The network response is too large.',
-            new Error(String(body.byteLength))
-          )
-        )
-      }
-      return {
-        body: new Uint8Array(body),
-        headers: responseHeaderEntries(response.headers),
-        status: response.status,
-        statusText: '',
-      }
+
+      return DesktopNetwork.of({ fetch })
     })
-
-    return DesktopNetwork.of({ fetch })
-  })
-)
+  )

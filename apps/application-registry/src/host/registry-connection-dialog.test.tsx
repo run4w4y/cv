@@ -196,7 +196,7 @@ describe('RegistryConnectionControl', () => {
     )
     fireEvent.click(
       await view.findByRole('button', {
-        name: 'Use default configuration',
+        name: 'Forget saved connection',
       })
     )
 
@@ -254,6 +254,56 @@ describe('HostBootstrap', () => {
       expect(configure).toHaveBeenCalledWith({
         origin: 'https://registry.example.test',
         token: 'machine-token',
+      })
+    )
+    expect(await view.findByText('Registry application ready')).toBeTruthy()
+  })
+
+  test('offers replacement setup when stored desktop settings are corrupt', async () => {
+    const configure = mock(async () => ({
+      ok: true as const,
+      value: storedConfiguration,
+    }))
+    installBridge({
+      configure,
+      status: async () => ({
+        error: {
+          code: 'settings_corrupt',
+          details: 'registry-settings.json',
+          message: 'The saved Registry settings could not be decrypted.',
+        },
+        ok: false,
+      }),
+    })
+    const view = render(
+      <HostBootstrap>
+        <p>Registry application ready</p>
+      </HostBootstrap>
+    )
+
+    expect(
+      await view.findByText('Replace invalid Registry settings')
+    ).toBeTruthy()
+    expect(
+      view.getByText('The saved Registry settings could not be decrypted.')
+    ).toBeTruthy()
+    fireEvent.change(
+      view.getByRole('textbox', { name: 'Registry API base URL' }),
+      { target: { value: 'https://replacement.example.test' } }
+    )
+    fireEvent.change(view.getByLabelText('Registry bearer token'), {
+      target: { value: 'replacement-token' },
+    })
+    fireEvent.click(
+      view.getByRole('button', {
+        name: 'Test, save, and open Registry',
+      })
+    )
+
+    await waitFor(() =>
+      expect(configure).toHaveBeenCalledWith({
+        origin: 'https://replacement.example.test',
+        token: 'replacement-token',
       })
     )
     expect(await view.findByText('Registry application ready')).toBeTruthy()

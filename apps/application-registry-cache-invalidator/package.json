@@ -1,0 +1,19 @@
+{
+  "name": "@cv/application-registry-cache-invalidator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nx run application-registry-cache-invalidator:build",
+    "start": "node dist/main.mjs"
+  },
+  "dependencies": {
+    "@cv/application-registry-events": "workspace:*",
+    "@cv/application-registry-events-nats": "workspace:*",
+    "@effect/platform-node": "4.0.0-beta.99",
+    "effect": "4.0.0-beta.99"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0"
+  }
+}

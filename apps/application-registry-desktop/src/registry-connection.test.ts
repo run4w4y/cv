@@ -57,7 +57,7 @@ describe('desktop Registry configuration', () => {
   test('verifies the bearer token before storing it', async () => {
     const requests: Array<HttpClientRequest.HttpClientRequest> = []
     let writes = 0
-    const layer = desktopRegistryConnectionLayer.pipe(
+    const layer = desktopRegistryConnectionLayer().pipe(
       Layer.provide(
         Layer.merge(
           settingsLayer(() => {
@@ -94,7 +94,7 @@ describe('desktop Registry configuration', () => {
 
   test('does not store a token rejected by the API', async () => {
     let writes = 0
-    const layer = desktopRegistryConnectionLayer.pipe(
+    const layer = desktopRegistryConnectionLayer().pipe(
       Layer.provide(
         Layer.merge(
           settingsLayer(() => {
@@ -114,6 +114,46 @@ describe('desktop Registry configuration', () => {
     }).pipe(Effect.provide(layer), Effect.flip, Effect.runPromise)
 
     expect(error).toMatchObject({ code: 'registry_unauthorized' })
+    expect(writes).toBe(0)
+  })
+
+  test('times out while a successful health response body is still stalled', async () => {
+    let writes = 0
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"ok":'))
+      },
+    })
+    const layer = desktopRegistryConnectionLayer({
+      verificationTimeout: '50 millis',
+    }).pipe(
+      Layer.provide(
+        Layer.merge(
+          settingsLayer(() => {
+            writes += 1
+          }),
+          responseClient(
+            new Response(body, {
+              headers: { 'content-type': 'application/json' },
+              status: 200,
+            })
+          )
+        )
+      )
+    )
+
+    const error = await Effect.gen(function* () {
+      const connection = yield* DesktopRegistryConnection
+      return yield* connection.configure({
+        origin: 'https://registry.example.test',
+        token: 'machine-token',
+      })
+    }).pipe(Effect.provide(layer), Effect.flip, Effect.runPromise)
+
+    expect(error).toMatchObject({
+      code: 'network_failed',
+      message: 'The Registry API could not be reached.',
+    })
     expect(writes).toBe(0)
   })
 })

@@ -1,20 +1,18 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
-  buildLimitsQuery,
   buildLimitsVariables,
   buildQuery,
   buildVariables,
+  limitsQuery,
 } from './query'
-import { makeRange } from './range'
 import { testConfiguration } from './test-fixtures'
 
 describe('cloudflare analytics query', () => {
   test('keeps the grouped query shape needed for aliased path analytics', () => {
-    const query = buildQuery()
+    const query = buildQuery(5_000)
 
     expect(query).toContain('query AliasedPathAnalytics')
-    expect(query).toContain('topPaths: httpRequestsAdaptiveGroups')
     expect(query).toContain('dailyPaths: httpRequestsAdaptiveGroups')
     expect(query).toContain('orderBy: [date_ASC]')
     expect(query).toContain('clientRequestPath')
@@ -24,9 +22,9 @@ describe('cloudflare analytics query', () => {
   })
 
   test('queries the configured dataset limits', () => {
-    expect(buildLimitsQuery()).toContain('httpRequestsAdaptiveGroups')
-    expect(buildLimitsQuery()).toContain('notOlderThan')
-    expect(buildLimitsQuery()).toContain('maxDuration')
+    expect(limitsQuery).toContain('httpRequestsAdaptiveGroups')
+    expect(limitsQuery).toContain('notOlderThan')
+    expect(limitsQuery).toContain('maxDuration')
     expect(buildLimitsVariables(testConfiguration)).toEqual({
       zoneTag: 'zone-123',
     })
@@ -41,10 +39,10 @@ describe('cloudflare analytics query', () => {
   })
 
   test('builds variables with host and range filters', () => {
-    const range = makeRange({
+    const range = {
       from: '2026-06-01T00:00:00.000Z',
       to: '2026-06-20T00:00:00.000Z',
-    })
+    }
     const variables = buildVariables(testConfiguration, range)
 
     expect(variables.zoneTag).toBe('zone-123')
@@ -55,15 +53,6 @@ describe('cloudflare analytics query', () => {
     expect(variables.filter.AND).toContainEqual({
       clientRequestHTTPHost: 'cv.example.test',
     })
-  })
-
-  test('adds an optional provider-side path filter', () => {
-    const range = makeRange({
-      from: '2026-06-18T00:00:00.000Z',
-      to: '2026-06-19T00:00:00.000Z',
-    })
-    const variables = buildVariables(testConfiguration, range, '/c/%')
-
     expect(variables.filter.AND).toContainEqual({
       clientRequestPath_like: '/c/%',
     })

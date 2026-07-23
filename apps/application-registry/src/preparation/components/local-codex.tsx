@@ -67,7 +67,7 @@ export const LocalCodex = ({ variant = 'card' }: LocalCodexProps) => {
         <AlertDescription>
           {variant === 'compact'
             ? 'Open the local desktop app to run AI preparation.'
-            : 'AI preparation is intentionally disabled in the Cloudflare web app. Open this registry in the local desktop app to generate or revise content; manual editing and publication remain available here.'}
+            : 'AI preparation runs in the local desktop app. Open this registry there to generate or revise content; manual editing and publication remain available in the hosted app.'}
         </AlertDescription>
       </Alert>
     )

@@ -9,9 +9,11 @@ import {
   ContentRevisionSchema,
   CvLinkSchema,
   HttpUrlSchema,
+  ListingObservationSchema,
   normalizeApplicationPostingUrl,
 } from './index'
 import { applicationActivityKindValues } from './model/values'
+import { AnnualCompensationSchema } from './query'
 
 const applicationRow = {
   id: 'application-1',
@@ -78,6 +80,13 @@ describe('application registry database schemas', () => {
         source: 'job-board',
       })
     ).toThrow()
+    expect(() =>
+      Schema.decodeUnknownSync(AnnualCompensationSchema)({
+        currencyCode: 'JPY',
+        minimumMinor: 14_000_000,
+        maximumMinor: 10_000_000,
+      })
+    ).toThrow()
   })
 
   test('preserves Drizzle insert and update optionality around refinements', () => {
@@ -107,6 +116,21 @@ describe('application registry database schemas', () => {
     expect(mutable.followUpAt).toBeNull()
     expect(mutable.company).toBe('Updated Example')
     expect(mutable.location).toBeNull()
+  })
+
+  test('uses canonical nonempty application identity fields', () => {
+    expect(() =>
+      Schema.decodeUnknownSync(ApplicationWritableSchema)({
+        postingUrl: 'https://example.test/jobs/two',
+        company: '   ',
+        role: 'Engineer',
+      })
+    ).toThrow()
+    expect(() =>
+      Schema.decodeUnknownSync(ApplicationMutableSchema)({
+        location: '   ',
+      })
+    ).toThrow()
   })
 
   test('derives backend activity insert schemas from the table', () => {
@@ -154,6 +178,21 @@ describe('application registry database schemas', () => {
     expect(() =>
       Schema.decodeUnknownSync(ApplicationMutableSchema)({
         postingUrl: 'mailto:jobs@example.test',
+      })
+    ).toThrow(/HTTP or HTTPS/u)
+    expect(() =>
+      Schema.decodeUnknownSync(ListingObservationSchema)({
+        checkedAt: applicationRow.updatedAt,
+        checkerVersion: 'checker-v1',
+        confidence: 'high',
+        contentHash: null,
+        evidence: [],
+        finalUrl: null,
+        httpStatus: null,
+        outcome: 'unknown',
+        provider: 'test',
+        reasonCode: 'network_error',
+        requestedUrl: 'file:///tmp/listing.html',
       })
     ).toThrow(/HTTP or HTTPS/u)
   })
@@ -208,5 +247,11 @@ describe('application registry database schemas', () => {
     expect(link.enabled).toBeTrue()
     expect(link.token).toBe('public-token')
     expect(link.publicationVersion).toBe(1)
+    expect(() =>
+      Schema.decodeUnknownSync(CvLinkSchema)({
+        ...link,
+        publicUrl: 'file:///tmp/public-cv.html',
+      })
+    ).toThrow(/HTTP or HTTPS/u)
   })
 })

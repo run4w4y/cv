@@ -6,6 +6,7 @@ export {
   type ApplicationSavedView,
   type ApplicationSavedViewState,
   ApplicationSavedViews,
+  comparableApplicationViewState,
   loadApplicationSavedViews,
   loadApplicationWorkspaceState,
   persistApplicationSavedViews,

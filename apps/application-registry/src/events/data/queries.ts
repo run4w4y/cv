@@ -72,26 +72,10 @@ const disabledEventsAtom = Atom.writable<EventsPullResult, void>(
 
 type EventsFamilyInput = EventsListRequest & { readonly enabled: boolean }
 
-const pendingEventRequests = new Map<string, EventsFamilyInput>()
-const eventsFamily = Atom.family((key: string) => {
-  const input = pendingEventRequests.get(key)
-  if (input === undefined) {
-    throw new Error(`Missing events atom input for key ${key}.`)
-  }
+export const eventsAtom = Atom.family((input: EventsFamilyInput) => {
   const { enabled, ...request } = input
   return enabled ? createEventsAtom(request) : disabledEventsAtom
 })
-
-/** Keeps semantically equal URL requests on one atom subscription. */
-export const eventsAtom = (input: EventsFamilyInput) => {
-  const key = JSON.stringify(input)
-  pendingEventRequests.set(key, input)
-  try {
-    return eventsFamily(key)
-  } finally {
-    pendingEventRequests.delete(key)
-  }
-}
 
 export const refreshEventLists = RegistryClient.runtime.fn(() =>
   Reactivity.invalidate([activityListsReactivityKey])

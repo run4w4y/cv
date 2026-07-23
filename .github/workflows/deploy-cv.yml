@@ -31,13 +31,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Install Nomad Pack
-        run: |
-          version=0.3.0
-          archive="nomad-pack_${version}_linux_amd64.zip"
-          curl -fsSL "https://releases.hashicorp.com/nomad-pack/${version}/${archive}" -o "$archive"
-          unzip -q "$archive" -d /tmp/nomad-pack
-          sudo install /tmp/nomad-pack/nomad-pack /usr/local/bin/nomad-pack
+      - name: Set up Nomad Pack
+        uses: ./.github/actions/setup-infrastructure-tools
 
       - name: Register CV web service
         env:

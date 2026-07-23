@@ -1,123 +1,33 @@
-import * as Effect from 'effect/Effect'
+import type { Range } from './types'
 
-import { RangeValidationError } from './errors'
-import type { DatasetLimits, Range } from './types'
+export const splitRange = (
+  range: Range,
+  maxDurationMs: number
+): readonly Range[] => {
+  const fromTimestamp = Date.parse(range.from)
+  const toTimestamp = Date.parse(range.to)
 
-export const makeRange = (
-  input: {
-    readonly days?: number
-    readonly from?: string | null
-    readonly host?: string | null
-    readonly to?: string | null
-  } = {},
-  now = new Date()
-): Range => {
-  const to = input.to?.trim() || now.toISOString()
-  const days = Number.isFinite(input.days) && input.days ? input.days : 30
-  const from =
-    input.from?.trim() ||
-    new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString()
-  const host = input.host?.trim()
-
-  return {
-    from,
-    ...(host ? { host } : {}),
-    to,
+  if (
+    !Number.isFinite(fromTimestamp) ||
+    !Number.isFinite(toTimestamp) ||
+    toTimestamp <= fromTimestamp
+  ) {
+    throw new Error('Cloudflare analytics received a non-canonical range.')
   }
-}
 
-const parseTimestamp = (value: string) => {
-  const timestamp = Date.parse(value.trim())
+  const chunks: Range[] = []
+  let cursor = fromTimestamp
 
-  return Number.isFinite(timestamp) ? timestamp : undefined
-}
+  while (cursor < toTimestamp) {
+    const next = Math.min(cursor + maxDurationMs, toTimestamp)
 
-interface ResolvedRange {
-  readonly chunks: readonly Range[]
-  readonly effectiveRange: Range
-}
-
-export const resolveRange = (
-  range: Range,
-  limits: DatasetLimits,
-  options: {
-    readonly now?: Date
-  } = {}
-) =>
-  Effect.suspend((): Effect.Effect<ResolvedRange, RangeValidationError> => {
-    const nowTimestamp = options.now?.getTime() ?? Date.now()
-    const fromTimestamp = parseTimestamp(range.from)
-    const toTimestamp = parseTimestamp(range.to)
-
-    if (fromTimestamp === undefined || toTimestamp === undefined) {
-      return Effect.fail(
-        new RangeValidationError({
-          from: range.from,
-          message: 'Cloudflare analytics range must use valid date values.',
-          to: range.to,
-        })
-      )
-    }
-
-    if (toTimestamp <= fromTimestamp) {
-      return Effect.fail(
-        new RangeValidationError({
-          from: range.from,
-          message: 'Cloudflare analytics range end must be after its start.',
-          to: range.to,
-        })
-      )
-    }
-
-    const oldestAvailableTimestamp = nowTimestamp - limits.retentionMs
-    if (fromTimestamp < oldestAvailableTimestamp) {
-      return Effect.fail(
-        new RangeValidationError({
-          from: range.from,
-          message: `Cloudflare analytics are available from ${new Date(oldestAvailableTimestamp).toISOString()}.`,
-          to: range.to,
-        })
-      )
-    }
-
-    if (toTimestamp > nowTimestamp) {
-      return Effect.fail(
-        new RangeValidationError({
-          from: range.from,
-          message: 'Cloudflare analytics ranges cannot include future time.',
-          to: range.to,
-        })
-      )
-    }
-
-    const chunks: Range[] = []
-    let cursor = fromTimestamp
-
-    while (cursor < toTimestamp) {
-      const next = Math.min(cursor + limits.maxDurationMs, toTimestamp)
-
-      chunks.push({
-        from: new Date(cursor).toISOString(),
-        ...(range.host ? { host: range.host } : {}),
-        to: new Date(next).toISOString(),
-      })
-
-      cursor = next
-    }
-
-    return Effect.succeed({
-      chunks,
-      effectiveRange: {
-        from: new Date(fromTimestamp).toISOString(),
-        ...(range.host ? { host: range.host } : {}),
-        to: new Date(toTimestamp).toISOString(),
-      },
+    chunks.push({
+      from: new Date(cursor).toISOString(),
+      to: new Date(next).toISOString(),
     })
-  })
 
-export const chunkRange = (
-  range: Range,
-  limits: DatasetLimits,
-  options: Parameters<typeof resolveRange>[2] = {}
-) =>
-  resolveRange(range, limits, options).pipe(Effect.map(({ chunks }) => chunks))
+    cursor = next
+  }
+
+  return chunks
+}

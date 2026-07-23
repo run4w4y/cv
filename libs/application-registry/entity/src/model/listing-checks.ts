@@ -14,7 +14,7 @@ import {
 export const ListingCheckEvidenceSchema = Schema.Struct({
   code: Schema.NonEmptyString,
   detail: Schema.NonEmptyString,
-  sourceUrl: Schema.NullOr(Schema.NonEmptyString),
+  sourceUrl: Schema.NullOr(HttpUrlSchema),
 })
 
 export type ListingCheckEvidence = Schema.Schema.Type<
@@ -37,7 +37,7 @@ export const ListingObservationSchema = Schema.Struct({
   confidence: ListingCheckConfidenceSchema,
   contentHash: Schema.NullOr(NonEmptyString),
   evidence: Schema.Array(ListingCheckEvidenceSchema),
-  finalUrl: Schema.NullOr(NonEmptyString),
+  finalUrl: Schema.NullOr(HttpUrlSchema),
   httpStatus: Schema.NullOr(
     Schema.Int.pipe(
       Schema.check(Schema.isBetween({ minimum: 100, maximum: 599 }))
@@ -46,7 +46,7 @@ export const ListingObservationSchema = Schema.Struct({
   outcome: ListingCheckOutcomeSchema,
   provider: NonEmptyString,
   reasonCode: ListingCheckReasonSchema,
-  requestedUrl: NonEmptyString,
+  requestedUrl: HttpUrlSchema,
 })
 
 export type ListingObservation = Schema.Schema.Type<

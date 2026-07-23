@@ -128,7 +128,6 @@ export type StageCvInput = {
   readonly applicationId: string
   readonly entry: ContentEntry
   readonly operationId: string
-  readonly publicBaseUrl: string
   readonly revisionId: string
 }
 

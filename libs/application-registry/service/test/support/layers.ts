@@ -32,9 +32,7 @@ export const applicationsCrud = (
         nextCursor: null,
       },
     }),
-  patch: () => Effect.succeed(application),
   persist: () => Effect.void,
-  remove: () => Effect.succeed(true),
   updateManaged: () => Effect.succeed(true),
   ...overrides,
 })
@@ -51,7 +49,6 @@ export const annotationsCrudLayer = (
     listLabels: () => Effect.succeed([]),
     listNotes: () => Effect.succeed([]),
     persistNote: () => Effect.void,
-    replaceLabels: () => Effect.succeed([]),
     ...overrides,
   })
 
@@ -60,7 +57,6 @@ export const compensationsCrudLayer = (
 ) =>
   Layer.succeed(CompensationsCrud, {
     listByApplication: () => Effect.succeed([]),
-    replaceAnnual: () => Effect.succeed(true),
     ...overrides,
   })
 

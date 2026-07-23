@@ -1,4 +1,9 @@
-import { applicationRegistryApiPrefix } from '@cv/application-registry-api-contract'
+import {
+  applicationRegistryApiPrefix,
+  HealthResponseSchema,
+  normalizeRegistryOrigin,
+  RegistryOriginSchema,
+} from '@cv/application-registry-api-contract'
 import { Option, Schema } from 'effect'
 
 import type {
@@ -40,16 +45,12 @@ export interface WebRegistryConnection extends RegistryConnection {
   readonly reset: () => Promise<RegistryConnectionConfiguration>
 }
 
-const RegistryUrlSchema = Schema.Trim.pipe(
-  Schema.decodeTo(Schema.URLFromString)
-)
 const RegistryTokenSchema = Schema.Trim.pipe(Schema.check(Schema.isNonEmpty()))
 const StoredConnectionSchema = Schema.Struct({
   schemaVersion: Schema.Literal(WEB_REGISTRY_CONNECTION_SCHEMA_VERSION),
-  origin: RegistryUrlSchema,
+  origin: RegistryOriginSchema,
   token: RegistryTokenSchema,
 })
-const RegistryHealthSchema = Schema.Struct({ ok: Schema.Boolean })
 
 const runtimeEnvironment: WebRegistryEnvironment = {
   VITE_REGISTRY_API_URL: import.meta.env.VITE_REGISTRY_API_URL,
@@ -65,28 +66,12 @@ const browserStorage = (): Storage | null => {
   }
 }
 
-const parseRegistryUrl = (raw: string): URL => {
-  let url: URL
+const parseRegistryOrigin = (raw: string): string => {
   try {
-    url = Schema.decodeUnknownSync(RegistryUrlSchema)(raw)
+    return normalizeRegistryOrigin(raw)
   } catch {
     throw new Error('Enter a valid Registry API URL.')
   }
-  const localHttp =
-    url.protocol === 'http:' &&
-    (url.hostname === 'localhost' ||
-      url.hostname === '127.0.0.1' ||
-      url.hostname === '[::1]')
-  if (
-    (url.protocol !== 'https:' && !localHttp) ||
-    url.username.length > 0 ||
-    url.password.length > 0
-  ) {
-    throw new Error(
-      'Use an HTTPS Registry API URL, or HTTP only for a local address.'
-    )
-  }
-  return url
 }
 
 const parseRegistryToken = (raw: string): string => {
@@ -103,7 +88,7 @@ const directConnection = (
   source: DirectConnection['source']
 ): DirectConnection => ({
   mode: 'direct',
-  origin: parseRegistryUrl(origin).origin,
+  origin: parseRegistryOrigin(origin),
   source,
   token: parseRegistryToken(token),
 })
@@ -128,7 +113,7 @@ const loadStoredConnection = (
       ? null
       : {
           mode: 'direct',
-          origin: decoded.origin.origin,
+          origin: normalizeRegistryOrigin(decoded.origin),
           source: 'override',
           token: decoded.token,
         }
@@ -141,9 +126,9 @@ const defaultConnection = (
   environment: WebRegistryEnvironment
 ): UnconfiguredConnection => ({
   mode: 'unconfigured',
-  origin: parseRegistryUrl(
+  origin: parseRegistryOrigin(
     environment.VITE_REGISTRY_API_URL?.trim() || DEFAULT_REGISTRY_API_URL
-  ).origin,
+  ),
   source: 'default',
 })
 
@@ -210,39 +195,62 @@ const authenticatedRequest = (
 
 const verifyConnection = async (
   connection: DirectConnection,
-  fetcher: RegistryFetch
-) => {
-  const response = await fetcher(
-    new URL(`${applicationRegistryApiPrefix}/health`, connection.origin),
-    {
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${connection.token}`,
-      },
+  fetcher: RegistryFetch,
+  timeoutMs: number
+) =>
+  withVerificationTimeout(timeoutMs, async (signal) => {
+    const response = await fetcher(
+      new URL(`${applicationRegistryApiPrefix}/health`, connection.origin),
+      {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${connection.token}`,
+        },
+        signal,
+      }
+    )
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('The Registry API rejected the bearer token.')
     }
-  )
-  if (response.status === 401 || response.status === 403) {
-    throw new Error('The Registry API rejected the bearer token.')
-  }
-  if (response.status !== 200) {
-    throw new Error(
-      `The Registry health check returned HTTP ${response.status}.`
-    )
-  }
+    if (response.status !== 200) {
+      throw new Error(
+        `The Registry health check returned HTTP ${response.status}.`
+      )
+    }
 
-  let payload: unknown
-  try {
-    payload = await response.json()
-  } catch {
-    throw new Error('The Registry health check returned an invalid response.')
-  }
-  const health = Option.getOrNull(
-    Schema.decodeUnknownOption(RegistryHealthSchema)(payload)
-  )
-  if (health?.ok !== true) {
-    throw new Error(
-      'The Registry health check did not report a healthy service.'
+    let payload: unknown
+    try {
+      payload = await response.json()
+    } catch {
+      throw new Error('The Registry health check returned an invalid response.')
+    }
+    const health = Option.getOrNull(
+      Schema.decodeUnknownOption(HealthResponseSchema)(payload)
     )
+    if (health?.ok !== true) {
+      throw new Error(
+        'The Registry health check did not report a healthy service.'
+      )
+    }
+  })
+
+const withVerificationTimeout = async <Value>(
+  timeoutMs: number,
+  operation: (signal: AbortSignal) => Promise<Value>
+): Promise<Value> => {
+  const controller = new AbortController()
+  let timeout: ReturnType<typeof globalThis.setTimeout> | undefined
+  const expired = new Promise<never>((_resolve, reject) => {
+    timeout = globalThis.setTimeout(() => {
+      controller.abort()
+      reject(new Error('The Registry health check timed out.'))
+    }, timeoutMs)
+  })
+
+  try {
+    return await Promise.race([operation(controller.signal), expired])
+  } finally {
+    if (timeout !== undefined) globalThis.clearTimeout(timeout)
   }
 }
 
@@ -284,6 +292,7 @@ export const createWebRegistryConnection = (
     readonly fetch?: RegistryFetch
     readonly hostOrigin?: string
     readonly storage?: Storage | null
+    readonly verificationTimeoutMs?: number
   } = {}
 ): WebRegistryConnection => {
   const environment = options.environment ?? runtimeEnvironment
@@ -295,6 +304,7 @@ export const createWebRegistryConnection = (
     options.hostOrigin ?? globalThis.location?.origin ?? 'http://localhost'
   const storage =
     options.storage === undefined ? browserStorage() : options.storage
+  const verificationTimeoutMs = options.verificationTimeoutMs ?? 15_000
   let active: ActiveWebRegistryConnection | null = null
 
   const readActive = () => {
@@ -314,7 +324,7 @@ export const createWebRegistryConnection = (
           ? current.token
           : ''
     const next = directConnection(input.origin, token, 'override')
-    await verifyConnection(next, fetcher)
+    await verifyConnection(next, fetcher, verificationTimeoutMs)
     persistConnection(storage, next)
     active = next
     return connectionConfiguration(next)

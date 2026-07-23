@@ -1,5 +1,5 @@
 {
-  description = "Astro CV website devshell";
+  description = "CV workspace development shell";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -30,14 +30,14 @@
             bun
             chromium
             infisical-cli
+            nomad-pack
             shellcheck
             terraform
             terragrunt
-            nodejs_22
+            nodejs_24
           ];
 
           shellHook = ''
-            export ASTRO_TELEMETRY_DISABLED=1
             export CV_CHROME_PATH="${chromium}/bin/chromium"
           '';
         };

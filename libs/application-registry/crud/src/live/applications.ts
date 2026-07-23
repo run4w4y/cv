@@ -6,9 +6,7 @@ import {
   findApplicationsByPostingUrl,
   listApplicationFacets,
   listApplications,
-  patchApplication,
   persistApplication,
-  removeApplication,
   updateManagedApplication,
 } from '../persistence/applications'
 import { ApplicationsCrud } from '../services/applications'
@@ -23,11 +21,7 @@ export const makeApplicationsCrudLive = (database: RegistryDatabase) =>
     findByPostingUrl: (postingUrlNormalized) =>
       findApplicationsByPostingUrl(database, postingUrlNormalized),
     list: (resolved) => listApplications(database, resolved),
-    patch: (applicationId, patch, recordedAt) =>
-      patchApplication(database, applicationId, patch, recordedAt),
     updateManaged: (applicationId, input) =>
       updateManagedApplication(database, applicationId, input),
     persist: (input, options) => persistApplication(database, input, options),
-    remove: (applicationId, expectedVersion) =>
-      removeApplication(database, applicationId, expectedVersion),
   })

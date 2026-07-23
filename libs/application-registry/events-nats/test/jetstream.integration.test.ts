@@ -167,10 +167,10 @@ test('publisher does not create a missing stream', async () => {
     streamName: 'REGISTRY_EVENTS_MISSING',
     subjectRoot: 'registry.missing',
   })
-  const event = RegistryEventSchema.cases.ApplicationCreated.make({
+  const event = RegistryEventSchema.cases.CvPublicationChanged.make({
     applicationId: 'application-missing',
     correlationId: 'application-missing',
-    eventId: 'application-created:application-missing',
+    eventId: 'cv-publication-changed:application-missing',
     occurredAt: '2026-07-21T12:00:00.000Z',
     version: 1,
   })

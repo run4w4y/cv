@@ -35,7 +35,7 @@ test('floating and modal portals remain interactive inside a dialog', async ({
   const dialogPortal = page.locator('[data-slot="dialog-portal"]')
   await expect(dialogPortal).toHaveCount(1)
 
-  await page.getByRole('combobox', { name: 'Status combobox' }).click()
+  await page.getByRole('combobox', { name: 'Layering status' }).click()
   const combobox = page.locator('[data-slot="combobox-content"]')
   await expect(combobox).toBeVisible()
   await expect(
@@ -44,7 +44,7 @@ test('floating and modal portals remain interactive inside a dialog', async ({
   await expectTopmostAtCenter(page, combobox)
   await page.getByRole('option', { name: 'Interviewing' }).click()
 
-  await page.getByRole('combobox', { name: 'Priority select' }).click()
+  await page.getByRole('combobox', { name: 'Layering priority' }).click()
   const select = page.locator('[data-slot="select-content"]')
   await expect(select).toBeVisible()
   await expect(dialogPortal.locator('[data-slot="select-portal"]')).toHaveCount(

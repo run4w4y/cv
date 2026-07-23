@@ -2,7 +2,7 @@ locals {
   root_path                 = "/${var.root_folder_name}"
   analytics_path            = "${local.root_path}/analytics"
   application_registry_path = "${local.root_path}/application-registry"
-  content_path              = "${local.root_path}/content"
+  cache_invalidation_path   = "${local.root_path}/cache-invalidation"
   deploy_path               = "${local.root_path}/deploy"
   facts_publication_path    = "${local.root_path}/facts-publication"
 
@@ -25,10 +25,10 @@ locals {
       path        = local.application_registry_path
       description = "Personal application registry authentication and Cloudflare deployment values."
     }
-    content = {
-      name        = "content"
-      path        = local.content_path
-      description = "Private CV content credentials."
+    cache_invalidation = {
+      name        = "cache-invalidation"
+      path        = local.cache_invalidation_path
+      description = "Dedicated Cloudflare cache-purge credential consumed only by the CV cache invalidator."
     }
     deploy = {
       name        = "deploy"
@@ -53,11 +53,18 @@ locals {
     (local.analytics_path) = {
       CLOUDFLARE_ANALYTICS_API_TOKEN = {
         value       = local.placeholder_value
-        description = "Cloudflare token used by the registry API for GraphQL analytics and CV cache purges. Requires Account Analytics Read, Zone Analytics Read, and Cache Purge for the CV zone."
+        description = "Cloudflare token used by the registry API for GraphQL analytics. Requires Account Analytics Read and Zone Analytics Read."
       }
       CLOUDFLARE_GRAPHQL_ENDPOINT = {
         value       = "https://api.cloudflare.com/client/v4/graphql"
         description = "Cloudflare GraphQL endpoint override for the analytics connector."
+      }
+    }
+
+    (local.cache_invalidation_path) = {
+      CLOUDFLARE_CACHE_PURGE_API_TOKEN = {
+        value       = local.placeholder_value
+        description = "Cloudflare token used only by the CV cache invalidator. Requires Cache Purge for the CV zone."
       }
     }
 

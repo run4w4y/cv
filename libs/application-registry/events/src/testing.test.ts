@@ -1,16 +1,20 @@
 import { describe, expect, test } from 'bun:test'
 import { Effect } from 'effect'
 import { RegistryEventSchema } from './model'
-import { RegistryEventPublisher } from './publisher'
+import {
+  publishRegistryEventBestEffort,
+  RegistryEventPublishError,
+  RegistryEventPublisher,
+} from './publisher'
 import {
   RegistryEventPublisherRecording,
   RegistryEventRecorder,
 } from './testing'
 
-const event = RegistryEventSchema.cases.ApplicationCreated.make({
+const event = RegistryEventSchema.cases.CvPublicationChanged.make({
   applicationId: 'application-1',
   correlationId: 'create-1',
-  eventId: 'application-created:application-1',
+  eventId: 'cv-publication-changed:application-1',
   occurredAt: '2026-07-21T12:00:00.000Z',
   version: 1,
 })
@@ -24,7 +28,7 @@ describe('RegistryEventPublisherRecording', () => {
         yield* publisher.publish(event)
         yield* publisher.publish({
           ...event,
-          eventId: 'application-created:application-2',
+          eventId: 'cv-publication-changed:application-2',
           applicationId: 'application-2',
         })
         return yield* recorder.events()
@@ -32,8 +36,30 @@ describe('RegistryEventPublisherRecording', () => {
     )
 
     expect(recorded.map(({ eventId }) => eventId)).toEqual([
-      'application-created:application-1',
-      'application-created:application-2',
+      'cv-publication-changed:application-1',
+      'cv-publication-changed:application-2',
     ])
+  })
+
+  test('keeps notification delivery best-effort', async () => {
+    let attemptedEventId: string | undefined
+    const failingPublisher = RegistryEventPublisher.of({
+      publish: Effect.fn('RegistryEventPublisher.failingTest')((event) => {
+        attemptedEventId = event.eventId
+        return Effect.fail(
+          new RegistryEventPublishError({
+            cause: new Error('transport unavailable'),
+            eventId: event.eventId,
+            message: 'Transport unavailable.',
+          })
+        )
+      }),
+    })
+
+    await Effect.runPromise(
+      publishRegistryEventBestEffort(failingPublisher, event)
+    )
+
+    expect(attemptedEventId).toBe(event.eventId)
   })
 })

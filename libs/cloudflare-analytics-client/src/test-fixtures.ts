@@ -20,7 +20,7 @@ export const cloudflarePayload = {
               dimensions: {
                 clientCountryName: 'Germany',
                 clientRequestPath:
-                  '/en/a/frontend-alpha/?p=AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA',
+                  '/c/frontend-alpha?p=AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA',
                 datetimeDay: '2026-06-17',
               },
               sum: {
@@ -31,7 +31,7 @@ export const cloudflarePayload = {
               count: 8,
               dimensions: {
                 clientCountryName: 'Netherlands',
-                clientRequestPath: '/en/',
+                clientRequestPath: '/c/home',
                 datetimeDay: '2026-06-18',
               },
               sum: {
@@ -39,19 +39,9 @@ export const cloudflarePayload = {
               },
             },
           ],
-          topPaths: [
-            {
-              count: 999,
-              dimensions: {
-                clientRequestPath: '/en/a/frontend-alpha/',
-              },
-              sum: {
-                visits: 999,
-              },
-            },
-          ],
         },
       ],
     },
   },
+  errors: null,
 }

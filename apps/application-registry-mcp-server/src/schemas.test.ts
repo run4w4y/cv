@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { ApplicationCompensationInputSchema as CanonicalApplicationCompensationInputSchema } from '@cv/application-registry-entity'
+import {
+  ApplicationCompanySchema,
+  ApplicationRoleSchema,
+  ApplicationCompensationInputSchema as CanonicalApplicationCompensationInputSchema,
+} from '@cv/application-registry-entity'
 import { Schema } from 'effect'
 
 import {
@@ -26,6 +30,23 @@ describe('MCP registry schemas', () => {
             source: 'job-board',
           },
         ],
+        location: null,
+        postingUrl: 'https://example.test/jobs/one',
+        role: 'Engineer',
+      })
+    ).toThrow()
+  })
+
+  test('reuses canonical application identity fields', () => {
+    expect(CreateApplicationParametersSchema.fields.company).toBe(
+      ApplicationCompanySchema
+    )
+    expect(CreateApplicationParametersSchema.fields.role).toBe(
+      ApplicationRoleSchema
+    )
+    expect(() =>
+      Schema.decodeUnknownSync(CreateApplicationParametersSchema)({
+        company: '   ',
         location: null,
         postingUrl: 'https://example.test/jobs/one',
         role: 'Engineer',

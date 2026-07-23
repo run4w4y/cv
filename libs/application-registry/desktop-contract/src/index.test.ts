@@ -24,6 +24,11 @@ describe('desktop IPC schemas', () => {
         origin: 'https://registry.example.test',
       })
     ).toBe(true)
+    expect(
+      Schema.is(DesktopRegistryConfigureSchema)({
+        origin: 'http://[::1]:3000',
+      })
+    ).toBe(true)
   })
 
   test('rejects malformed IPC values before they reach capabilities', () => {
@@ -45,5 +50,10 @@ describe('desktop IPC schemas', () => {
     expect(
       Schema.is(DesktopRegistryConfigureSchema)({ origin: '', token: '' })
     ).toBe(false)
+    expect(
+      Schema.is(DesktopRegistryConfigureSchema)({
+        origin: 'http://registry.example.test',
+      })
+    ).toBe(true)
   })
 })

@@ -1,8 +1,9 @@
+import { normalizeRegistryOrigin } from '@cv/application-registry-api-contract'
 import type {
   DesktopRegistryConfiguration,
   DesktopRegistryConfigureInput,
 } from '@cv/application-registry-desktop-contract'
-import { Context, Effect, Layer, Redacted, Schema } from 'effect'
+import { Context, Duration, Effect, Layer, Redacted, Schema } from 'effect'
 import { FileSystem } from 'effect/FileSystem'
 import { Path } from 'effect/Path'
 
@@ -57,28 +58,6 @@ const StoredSettingsSchema = Schema.Struct({
   origin: Schema.String,
   token: Schema.String,
 })
-
-const normalizeOrigin = (raw: string) => {
-  const url = new URL(raw.trim())
-  if (
-    url.protocol !== 'https:' &&
-    !(
-      url.protocol === 'http:' &&
-      ['127.0.0.1', 'localhost'].includes(url.hostname)
-    )
-  ) {
-    throw new Error(
-      'Use an HTTPS Registry API URL (or localhost for development).'
-    )
-  }
-  if (url.username || url.password) {
-    throw new Error('The Registry API URL cannot contain credentials.')
-  }
-  url.pathname = '/'
-  url.search = ''
-  url.hash = ''
-  return url.origin
-}
 
 const settingsError = (
   code: DesktopSettingsError['code'],
@@ -135,7 +114,7 @@ export const desktopSettingsLayer = (options: {
           }
           return origin && token
             ? {
-                origin: normalizeOrigin(origin),
+                origin: normalizeRegistryOrigin(origin),
                 source: 'environment' as const,
                 token: Redacted.make(token),
               }
@@ -297,7 +276,7 @@ export const desktopSettingsLayer = (options: {
         }
         const credentials = yield* Effect.try({
           try: () => ({
-            origin: normalizeOrigin(stored.origin),
+            origin: normalizeRegistryOrigin(stored.origin),
             source: 'stored' as const,
             token: Redacted.make(token),
           }),
@@ -314,10 +293,7 @@ export const desktopSettingsLayer = (options: {
         return credentials
       })
 
-      const read: Effect.Effect<
-        ActiveRegistryCredentials | null,
-        DesktopSettingsError
-      > = readEnvironment.pipe(
+      const load = readEnvironment.pipe(
         Effect.flatMap(
           (
             configured
@@ -326,6 +302,10 @@ export const desktopSettingsLayer = (options: {
             DesktopSettingsError
           > => (configured === null ? readStored : Effect.succeed(configured))
         )
+      )
+      const [read, invalidateRead] = yield* Effect.cachedInvalidateWithTTL(
+        load,
+        Duration.infinity
       )
 
       const status = read.pipe(
@@ -361,7 +341,7 @@ export const desktopSettingsLayer = (options: {
           }
 
           const origin = yield* Effect.try({
-            try: () => normalizeOrigin(input.origin),
+            try: () => normalizeRegistryOrigin(input.origin),
             catch: (cause) =>
               settingsError(
                 'configuration_invalid',
@@ -374,7 +354,7 @@ export const desktopSettingsLayer = (options: {
             return { origin, token: Redacted.make(replacementToken) }
           }
 
-          const stored = yield* readStored
+          const stored = yield* read
           if (stored === null) {
             return yield* Effect.fail(
               settingsError(
@@ -393,7 +373,7 @@ export const desktopSettingsLayer = (options: {
       ) {
         const credentials = yield* Effect.try({
           try: () => ({
-            origin: normalizeOrigin(input.origin),
+            origin: normalizeRegistryOrigin(input.origin),
             token: Redacted.value(input.token).trim(),
           }),
           catch: (cause) =>
@@ -413,6 +393,7 @@ export const desktopSettingsLayer = (options: {
           )
         }
         yield* persistEncrypted(credentials)
+        yield* invalidateRead
         return {
           configured: true,
           editable: true,

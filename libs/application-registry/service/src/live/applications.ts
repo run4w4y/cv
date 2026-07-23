@@ -8,17 +8,9 @@ import {
 } from '@cv/application-registry-crud'
 import { normalizeApplicationPostingUrl } from '@cv/application-registry-entity'
 import { applicationListQuery } from '@cv/application-registry-entity/query'
-import {
-  RegistryEventPublisher,
-  RegistryEventSchema,
-} from '@cv/application-registry-events'
 import { Effect, Layer } from 'effect'
 
-import {
-  RegistryBadRequestError,
-  RegistryConflictError,
-  type RegistryDatabaseError,
-} from '../errors'
+import { RegistryConflictError, type RegistryDatabaseError } from '../errors'
 import {
   selectAnnualCompensation,
   toApplicationListItem,
@@ -44,20 +36,13 @@ import type {
   UpdateApplicationInput,
 } from '../types'
 
-const postingIdentity = (postingUrl: string) =>
-  Effect.try({
-    try: () => {
-      const normalizedUrl = normalizeApplicationPostingUrl(postingUrl)
-      return {
-        fingerprint: normalizedUrl,
-        normalizedUrl,
-      }
-    },
-    catch: () =>
-      new RegistryBadRequestError({
-        message: 'postingUrl must be a valid absolute HTTP(S) URL.',
-      }),
-  })
+const postingIdentity = (postingUrl: string) => {
+  const normalizedUrl = normalizeApplicationPostingUrl(postingUrl)
+  return {
+    fingerprint: normalizedUrl,
+    normalizedUrl,
+  }
+}
 
 const submittedStatuses = new Set([
   'applied',
@@ -73,7 +58,6 @@ const make = Effect.gen(function* () {
   const annotations = yield* AnnotationsCrud
   const compensations = yield* CompensationsCrud
   const idempotency = yield* IdempotencyCrud
-  const events = yield* RegistryEventPublisher
 
   const find = Effect.fn('ApplicationsService.find')((identifier: string) =>
     applications
@@ -84,7 +68,7 @@ const make = Effect.gen(function* () {
   const persistedApplication = Effect.fn(
     'ApplicationsService.persistedApplication'
   )(function* (request: CreateApplicationInput, applicationId: string) {
-    const identity = yield* postingIdentity(request.postingUrl)
+    const identity = postingIdentity(request.postingUrl)
     const recordedAt = yield* registryNow
     return {
       ...request,
@@ -171,17 +155,7 @@ const make = Effect.gen(function* () {
                     )
               )
             )
-          const created = yield* find(applicationId)
-          yield* events.publish(
-            RegistryEventSchema.cases.ApplicationCreated.make({
-              applicationId: created.id,
-              correlationId: created.id,
-              eventId: `application-created:${created.id}`,
-              occurredAt: created.createdAt,
-              version: 1,
-            })
-          )
-          return created
+          return yield* find(applicationId)
         })
     ),
     facets: Effect.fn('ApplicationsService.facets')(() =>
@@ -231,30 +205,9 @@ const make = Effect.gen(function* () {
               request,
             }),
           }
-          const eventChangedFields = Object.entries(request)
-            .filter(
-              ([field, value]) =>
-                value !== undefined &&
-                field !== 'expectedVersion' &&
-                field !== 'idempotencyKey'
-            )
-            .map(([field]) => field)
           const replay = yield* findValidatedIdempotency(idempotency, identity)
           if (replay) {
-            const result = yield* managedResult(application.id)
-            yield* events.publish(
-              RegistryEventSchema.cases.ApplicationUpdated.make({
-                applicationId: application.id,
-                applicationVersion: result.application.version,
-                changedFields: eventChangedFields,
-                correlationId: request.idempotencyKey,
-                eventId: `application-updated:${request.idempotencyKey}`,
-                occurredAt: result.application.updatedAt,
-                status: result.application.applicationStatus,
-                version: 1,
-              })
-            )
-            return result
+            return yield* managedResult(application.id)
           }
 
           if (request.expectedVersion !== application.version) {
@@ -343,7 +296,7 @@ const make = Effect.gen(function* () {
             patch.postingUrl === undefined ||
             patch.postingUrl === application.postingUrl
               ? undefined
-              : yield* postingIdentity(patch.postingUrl)
+              : postingIdentity(patch.postingUrl)
           if (nextPostingIdentity) {
             const existing = yield* applications.findByPostingUrl(
               nextPostingIdentity.normalizedUrl
@@ -391,53 +344,7 @@ const make = Effect.gen(function* () {
             }
           }
 
-          const result = yield* managedResult(application.id)
-          yield* events.publish(
-            RegistryEventSchema.cases.ApplicationUpdated.make({
-              applicationId: application.id,
-              applicationVersion: result.application.version,
-              changedFields: eventChangedFields,
-              correlationId: request.idempotencyKey,
-              eventId: `application-updated:${request.idempotencyKey}`,
-              occurredAt: result.application.updatedAt,
-              status: result.application.applicationStatus,
-              version: 1,
-            })
-          )
-          return result
-        })
-    ),
-    remove: Effect.fn('ApplicationsService.remove')(
-      (identifier: string, expectedVersion?: number) =>
-        Effect.gen(function* () {
-          const application = yield* find(identifier)
-          if (
-            expectedVersion !== undefined &&
-            expectedVersion !== application.version
-          ) {
-            return yield* new RegistryConflictError({
-              message: `Application version ${application.version} does not match expected version ${expectedVersion}.`,
-            })
-          }
-          const removed = yield* applications.remove(
-            application.id,
-            expectedVersion
-          )
-          if (!removed) {
-            return yield* new RegistryConflictError({
-              message: 'The application changed while it was being removed.',
-            })
-          }
-          const occurredAt = yield* registryNow
-          yield* events.publish(
-            RegistryEventSchema.cases.ApplicationRemoved.make({
-              applicationId: application.id,
-              correlationId: application.id,
-              eventId: `application-removed:${application.id}`,
-              occurredAt,
-              version: 1,
-            })
-          )
+          return yield* managedResult(application.id)
         })
     ),
   } satisfies ApplicationsServiceShape

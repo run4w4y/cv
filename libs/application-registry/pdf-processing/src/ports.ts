@@ -93,8 +93,6 @@ export const mapPdfPersistenceError = (operation: string) =>
         transientPersistenceError(operation, cause),
       RegistryNotFoundError: (cause) =>
         permanentPersistenceError(operation, cause),
-      RegistryQueryTooComplexError: (cause) =>
-        permanentPersistenceError(operation, cause),
     }),
     Match.exhaustive
   )

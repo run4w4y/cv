@@ -42,3 +42,24 @@ resource "jetstream_consumer" "registry_pdf_worker" {
     prevent_destroy = true
   }
 }
+
+resource "jetstream_consumer" "registry_cache_invalidator" {
+  stream_id    = jetstream_stream.registry_events.id
+  durable_name = "registry-cache-invalidator"
+  description  = "Durable Cloudflare invalidation consumer for public CV publication changes."
+
+  ack_policy      = "explicit"
+  ack_wait        = 60
+  deliver_all     = true
+  filter_subjects = ["registry.events.cv.publication-changed.v1"]
+  max_ack_pending = 16
+  max_delivery    = 10
+  max_waiting     = 4
+  max_expires     = 30
+  replay_policy   = "instant"
+  replicas        = 1
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}

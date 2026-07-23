@@ -31,6 +31,7 @@ import { application } from '../../test/support/fixtures'
 import { applicationsCrudLayer } from '../../test/support/layers'
 import {
   ContentEntriesService,
+  CvPublicationConfiguration,
   CvPublicationsService,
   JobPostingSnapshotsService,
   PdfArtifactsService,
@@ -494,7 +495,15 @@ const makeHarness = (eventPublisherLayer = RegistryEventPublisherNoop) => {
   const live = RegistryContentServicesLive.pipe(
     Layer.provide(memory.layer),
     Layer.provide(makeInMemoryArtifactStoreLayer()),
-    Layer.provide(eventPublisherLayer)
+    Layer.provide(eventPublisherLayer),
+    Layer.provide(
+      Layer.succeed(
+        CvPublicationConfiguration,
+        CvPublicationConfiguration.of({
+          publicBaseUrl: new URL('https://cv.example.test/c/'),
+        })
+      )
+    )
   )
   const run = <A, E>(
     effect: Effect.Effect<
@@ -639,7 +648,6 @@ describe('content domain services', () => {
         const firstLink = yield* publications.stage(application.id, entry.id, {
           operationId: crypto.randomUUID(),
           expectedContentVersion: firstApproval.entry.version,
-          publicBaseUrl: 'https://cv.example.test/cv',
           revisionId: first.revision.id,
         })
         yield* Effect.sync(() => {
@@ -656,7 +664,8 @@ describe('content domain services', () => {
           state.applicationStatus = 'preparing'
         })
         const restored = yield* publications.restoreAfterRejection(
-          application.id
+          application.id,
+          'restore-after-rejection'
         )
         const enabledWithoutPdf = yield* publications.setAvailability(
           application.id,
@@ -688,7 +697,6 @@ describe('content domain services', () => {
         const secondLink = yield* publications.stage(application.id, entry.id, {
           operationId: crypto.randomUUID(),
           expectedContentVersion: secondApproval.entry.version,
-          publicBaseUrl: 'https://cv.example.test/cv',
           revisionId: second.revision.id,
         })
         const privatePublicResolution = yield* Effect.flip(
@@ -741,26 +749,21 @@ describe('content domain services', () => {
     )
     expect(result.publicLink.enabled).toBe(true)
     expect(result.secondLink.publicUrl).toBe(
-      `https://cv.example.test/cv/${result.firstLink.token}`
+      `https://cv.example.test/c/${result.firstLink.token}`
     )
     expect(new TextDecoder().decode(result.resolved.bytes)).toBe(
       '{"revision":2}'
     )
   })
 
-  test('keeps publication state changes when event delivery fails', async () => {
+  test('keeps staging successful when publication event delivery fails', async () => {
     const attemptedEventIds: Array<string> = []
     const eventPublisherLayer = Layer.succeed(
       RegistryEventPublisher,
       RegistryEventPublisher.of({
         publish: Effect.fn('RegistryEventPublisher.failForTest')(
           function* (event) {
-            if (
-              event._tag !== 'CvPublicationStaged' &&
-              event._tag !== 'CvPublicationAvailabilityChanged'
-            ) {
-              return
-            }
+            if (event._tag !== 'CvPublicationChanged') return
             attemptedEventIds.push(event.eventId)
             return yield* new RegistryEventPublishError({
               cause: new Error('event transport unavailable'),
@@ -800,29 +803,17 @@ describe('content domain services', () => {
         const staged = yield* publications.stage(application.id, entry.id, {
           operationId: 'best-effort-stage',
           expectedContentVersion: approved.entry.version,
-          publicBaseUrl: 'https://cv.example.test/cv',
           revisionId: appended.revision.id,
         })
-        const enabled = yield* publications.setAvailability(
-          application.id,
-          entry.id,
-          {
-            operationId: 'best-effort-availability',
-            enabled: true,
-            expectedPublicationVersion: staged.publicationVersion,
-          }
-        )
         const stored = yield* publications.findByEntry(application.id, entry.id)
-        return { enabled, staged, stored }
+        return { staged, stored }
       })
     )
 
-    expect(result.staged.enabled).toBe(false)
-    expect(result.enabled.enabled).toBe(true)
-    expect(result.stored.enabled).toBe(true)
+    expect(result.staged).toEqual(result.stored)
+    expect(result.stored.enabled).toBe(false)
     expect(attemptedEventIds).toEqual([
-      'cv-publication-staged:best-effort-stage',
-      'cv-publication-availability-changed:best-effort-availability',
+      `cv-publication-changed:${application.id}:best-effort-stage`,
     ])
   })
 
@@ -870,7 +861,6 @@ describe('content domain services', () => {
           publications.stage(application.id, entry.id, {
             operationId: crypto.randomUUID(),
             expectedContentVersion: approved.entry.version,
-            publicBaseUrl: 'https://cv.example.test/cv',
             revisionId: appended.revision.id,
           })
         )
@@ -926,7 +916,6 @@ describe('content domain services', () => {
           publications.stage(application.id, entry.id, {
             operationId: crypto.randomUUID(),
             expectedContentVersion: appended.entry.version,
-            publicBaseUrl: 'https://cv.example.test/cv',
             revisionId: appended.revision.id,
           })
         )
@@ -974,7 +963,6 @@ describe('content domain services', () => {
         const staged = yield* publications.stage(application.id, entry.id, {
           operationId: crypto.randomUUID(),
           expectedContentVersion: approved.entry.version,
-          publicBaseUrl: 'https://cv.example.test/c',
           revisionId: revision.revision.id,
         })
         const link = yield* publications.setAvailability(
@@ -1016,7 +1004,8 @@ describe('content domain services', () => {
 
         state.allowLinkAvailabilityRepair = true
         const restoredWhilePending = yield* publications.restoreAfterRejection(
-          application.id
+          application.id,
+          'restore-while-pending'
         )
         const pendingLink = yield* publications.findByEntry(
           application.id,
@@ -1029,7 +1018,8 @@ describe('content domain services', () => {
           new TextEncoder().encode('%PDF ready after rejection')
         )
         const restored = yield* publications.restoreAfterRejection(
-          application.id
+          application.id,
+          'restore-ready-publication'
         )
         const persistedRestored = yield* publications.findByEntry(
           application.id,
@@ -1099,7 +1089,6 @@ describe('content domain services', () => {
         const staged = yield* publications.stage(application.id, entry.id, {
           operationId: crypto.randomUUID(),
           expectedContentVersion: approved.entry.version,
-          publicBaseUrl: 'https://cv.example.test/c',
           revisionId: revision.revision.id,
         })
         yield* publications.setAvailability(application.id, entry.id, {
@@ -1137,7 +1126,8 @@ describe('content domain services', () => {
 
         state.applicationStatus = 'preparing'
         const restored = yield* publications.restoreAfterRejection(
-          application.id
+          application.id,
+          'restore-current-artifact'
         )
         const reopenedLink = yield* publications.findByEntry(
           application.id,
@@ -1190,7 +1180,6 @@ describe('content domain services', () => {
         const link = yield* publications.stage(application.id, entry.id, {
           operationId: crypto.randomUUID(),
           expectedContentVersion: approval.entry.version,
-          publicBaseUrl: 'https://cv.example.test/cv/',
           revisionId: draft.revision.id,
         })
         const disabledStart = yield* Effect.flip(
@@ -1290,7 +1279,8 @@ describe('content domain services', () => {
           }
         )
         const systemRestored = yield* publications.restoreAfterRejection(
-          application.id
+          application.id,
+          'restore-system-disabled-link'
         )
         const systemRestoredLink = yield* publications.findByEntry(
           application.id,
@@ -1382,7 +1372,6 @@ describe('content domain services', () => {
         const staged = yield* publications.stage(application.id, entry.id, {
           operationId: crypto.randomUUID(),
           expectedContentVersion: approval.entry.version,
-          publicBaseUrl: 'https://cv.example.test/c/',
           revisionId: draft.revision.id,
         })
         yield* publications.setAvailability(application.id, entry.id, {
@@ -1494,7 +1483,6 @@ describe('content domain services', () => {
         const staged = yield* publications.stage(application.id, entry.id, {
           operationId: crypto.randomUUID(),
           expectedContentVersion: approval.entry.version,
-          publicBaseUrl: 'https://cv.example.test/c/',
           revisionId: draft.revision.id,
         })
         yield* publications.setAvailability(application.id, entry.id, {
@@ -1545,10 +1533,10 @@ describe('content domain services', () => {
     expect(state.beforeFailedArtifactDisable).toBeUndefined()
   })
 
-  test('retries failed PDF attempts and isolates a changed publication URL', async () => {
+  test('retries failed PDF attempts and isolates a restaged publication', async () => {
     const { run, state } = makeHarness()
     const firstPdf = new TextEncoder().encode('%PDF retry')
-    const secondPdf = new TextEncoder().encode('%PDF changed URL')
+    const secondPdf = new TextEncoder().encode('%PDF restaged publication')
     const result = await run(
       Effect.gen(function* () {
         const content = yield* ContentEntriesService
@@ -1578,7 +1566,6 @@ describe('content domain services', () => {
         const firstLink = yield* publications.stage(application.id, entry.id, {
           operationId: crypto.randomUUID(),
           expectedContentVersion: approval.entry.version,
-          publicBaseUrl: 'https://cv.example.test/c/',
           revisionId: draft.revision.id,
         })
         const firstActive = yield* publications.setAvailability(
@@ -1607,6 +1594,14 @@ describe('content domain services', () => {
         const disabledAfterFailure = yield* publications.findByEntry(
           application.id,
           entry.id
+        )
+        const failedReplayWhileDisabled = yield* ensurePdfAttempt(
+          application.id,
+          entry.id,
+          {
+            expectedPublicationVersion: firstLink.publicationVersion,
+            eventId: 'request-failed',
+          }
         )
         const failedIdempotent = yield* pdfs.fail(
           application.id,
@@ -1642,11 +1637,27 @@ describe('content domain services', () => {
           eventId: 'request-stale',
         })
 
+        const restagedDraft = yield* content.appendRevision(
+          application.id,
+          entry.id,
+          appendInput(
+            new TextEncoder().encode('{"retry":"restaged"}'),
+            approval.entry.version,
+            'pdf-restaged-revision'
+          )
+        )
+        const restagedApproval = yield* content.approveRevision(
+          application.id,
+          entry.id,
+          {
+            expectedVersion: restagedDraft.entry.version,
+            revisionId: restagedDraft.revision.id,
+          }
+        )
         const secondLink = yield* publications.stage(application.id, entry.id, {
           operationId: crypto.randomUUID(),
-          expectedContentVersion: approval.entry.version,
-          publicBaseUrl: 'https://new-cv.example.test/c/',
-          revisionId: draft.revision.id,
+          expectedContentVersion: restagedApproval.entry.version,
+          revisionId: restagedDraft.revision.id,
         })
         const secondActive = yield* publications.setAvailability(
           application.id,
@@ -1678,12 +1689,12 @@ describe('content domain services', () => {
           application.id,
           entry.id
         )
-        const changedUrlAttempt = yield* ensurePdfAttempt(
+        const restagedAttempt = yield* ensurePdfAttempt(
           application.id,
           entry.id,
           {
             expectedPublicationVersion: secondLink.publicationVersion,
-            eventId: 'request-changed-url',
+            eventId: 'request-restaged',
           }
         )
         const manuallyDisabled = yield* publications.setAvailability(
@@ -1696,9 +1707,9 @@ describe('content domain services', () => {
             reason: 'manual test',
           }
         )
-        const changedUrlFailure = yield* pdfs.fail(
+        const restagedFailure = yield* pdfs.fail(
           application.id,
-          changedUrlAttempt.id,
+          restagedAttempt.id,
           'manual_browser_failure',
           'The browser failed after a manual disable.'
         )
@@ -1713,7 +1724,7 @@ describe('content domain services', () => {
         })
         const finalAttempt = yield* ensurePdfAttempt(application.id, entry.id, {
           expectedPublicationVersion: secondLink.publicationVersion,
-          eventId: 'request-changed-url-final',
+          eventId: 'request-restaged-final',
         })
         const secondReady = yield* pdfs.complete(
           application.id,
@@ -1729,14 +1740,13 @@ describe('content domain services', () => {
 
         return {
           activeAfterStaleFailure,
-          changedUrlAttempt,
-          changedUrlFailure,
           current,
           disabledAfterFailure,
           disabledAfterManualFailure,
           failed,
           failedIdempotent,
           failedReplay,
+          failedReplayWhileDisabled,
           finalAttempt,
           firstActive,
           firstLink,
@@ -1744,6 +1754,8 @@ describe('content domain services', () => {
           firstReady,
           manuallyDisabled,
           retryAttempt,
+          restagedAttempt,
+          restagedFailure,
           secondActive,
           secondLink,
           secondReady,
@@ -1757,6 +1769,7 @@ describe('content domain services', () => {
     expect(result.failed.status).toBe('failed')
     expect(result.firstActive.enabled).toBe(true)
     expect(result.failedIdempotent).toEqual(result.failed)
+    expect(result.failedReplayWhileDisabled).toEqual(result.failed)
     expect(result.disabledAfterFailure.enabled).toBe(false)
     expect(result.disabledAfterFailure.disabledReason).toBe(
       pdfGenerationFailedDisableReason
@@ -1772,12 +1785,12 @@ describe('content domain services', () => {
     expect(result.staleFailure.status).toBe('failed')
     expect(result.activeAfterStaleFailure).toEqual(result.secondActive)
     expect(result.secondLink.version).toBeGreaterThan(result.firstLink.version)
-    expect(result.secondLink.publicUrl).not.toBe(result.firstLink.publicUrl)
-    expect(result.changedUrlAttempt.publicationVersion).toBe(
+    expect(result.secondLink.publicUrl).toBe(result.firstLink.publicUrl)
+    expect(result.restagedAttempt.publicationVersion).toBe(
       result.secondLink.publicationVersion
     )
-    expect(result.changedUrlAttempt.qrTarget).toBe(result.secondLink.publicUrl)
-    expect(result.changedUrlFailure.status).toBe('failed')
+    expect(result.restagedAttempt.qrTarget).toBe(result.secondLink.publicUrl)
+    expect(result.restagedFailure.status).toBe('failed')
     expect(result.manuallyDisabled.disabledReason).toBe('manual test')
     expect(result.disabledAfterManualFailure).toEqual(result.manuallyDisabled)
     expect(result.finalAttempt.publicationVersion).toBe(

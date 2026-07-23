@@ -4,7 +4,6 @@ import type {
   PersistedApplication,
   PersistedManagedApplicationUpdate,
 } from '@cv/application-registry-crud'
-import { RegistryEventPublisherNoop } from '@cv/application-registry-events'
 import { PgDialect } from 'drizzle-orm/pg-core'
 import { Effect, Layer } from 'effect'
 import { TestClock } from 'effect/testing'
@@ -28,8 +27,7 @@ const live = (applicationLayer = applicationsCrudLayer()) =>
     Layer.provide(applicationLayer),
     Layer.provide(annotationsCrudLayer()),
     Layer.provide(compensationsCrudLayer()),
-    Layer.provide(idempotencyCrudLayer()),
-    Layer.provide(RegistryEventPublisherNoop)
+    Layer.provide(idempotencyCrudLayer())
   )
 
 describe('ApplicationsService', () => {

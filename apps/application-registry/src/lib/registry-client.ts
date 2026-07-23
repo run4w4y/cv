@@ -23,8 +23,8 @@ export const hostHttpClientLayer = FetchHttpClient.layer.pipe(
 /**
  * The browser's single typed registry client and atom runtime.
  *
- * Requests are generated directly from ApplicationRegistryApi. The development
- * proxy owns authorization, so the browser only needs the Fetch HTTP client.
+ * Requests are generated directly from ApplicationRegistryApi. The host
+ * connection adapter owns routing and authorization.
  */
 export class RegistryClient extends AtomHttpApi.Service<RegistryClient>()(
   '@cv/application-registry-management/RegistryClient',

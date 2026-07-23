@@ -90,15 +90,13 @@ const withHeartbeat = <A, E, R>(
   milliseconds: number,
   effect: Effect.Effect<A, E, R>
 ) =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      yield* Effect.sleep(milliseconds).pipe(
+  effect.pipe(
+    Effect.raceFirst(
+      Effect.sleep(milliseconds).pipe(
         Effect.andThen(delivery.working),
-        Effect.forever,
-        Effect.forkScoped
+        Effect.forever
       )
-      return yield* effect
-    })
+    )
   )
 
 export const consumeRegistryEvent = (

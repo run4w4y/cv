@@ -8,3 +8,7 @@ Production topology is declared in
 `terraform/modules/application-registry-jetstream`. Test suites provision
 isolated streams and consumers through `@cv/test-infrastructure` before
 constructing these layers.
+
+Source layers require durable consumers to define finite, positive
+`max_deliver` and `max_ack_pending` values. They expose those limits as delivery
+attempt and in-flight processing bounds to transport-neutral consumers.

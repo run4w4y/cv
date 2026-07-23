@@ -22,18 +22,22 @@ afterEach(async () => {
   )
 })
 
-const makeLayer = async (encryptionAvailable = true) => {
+const makeLayer = async (
+  encryptionAvailable = true,
+  onDecrypt: () => void = () => undefined
+) => {
   const directory = await mkdtemp(join(tmpdir(), 'cv-desktop-settings-'))
   directories.push(directory)
   const encryption = Layer.succeed(
     ElectronSafeStorage,
     ElectronSafeStorage.of({
       decrypt: (bytes) =>
-        Effect.succeed(
-          Buffer.from(bytes)
+        Effect.sync(() => {
+          onDecrypt()
+          return Buffer.from(bytes)
             .toString('utf8')
             .replace(/^encrypted:/u, '')
-        ),
+        }),
       encrypt: (value) => Effect.succeed(Buffer.from(`encrypted:${value}`)),
       isAvailable: Effect.succeed(encryptionAvailable),
     })
@@ -99,6 +103,66 @@ describe('desktop registry settings', () => {
     }).pipe(Effect.provide(layer), Effect.flip, Effect.runPromise)
 
     expect(error).toMatchObject({ code: 'settings_corrupt' })
+  })
+
+  test('repairs corrupt settings when replacement credentials are supplied', async () => {
+    const { directory, layer } = await makeLayer()
+    await writeFile(
+      join(directory, 'registry-settings.json'),
+      '{broken',
+      'utf8'
+    )
+
+    const result = await Effect.gen(function* () {
+      const settings = yield* DesktopSettings
+      yield* settings.read.pipe(Effect.flip)
+      const replacement = yield* settings.resolveUpdate({
+        origin: 'https://replacement.example.test/path',
+        token: 'replacement-token',
+      })
+      yield* settings.write(replacement)
+      return yield* settings.read
+    }).pipe(Effect.provide(layer), Effect.runPromise)
+
+    expect(result?.origin).toBe('https://replacement.example.test')
+    expect(result === null ? null : Redacted.value(result.token)).toBe(
+      'replacement-token'
+    )
+  })
+
+  test('caches decrypted credentials until a successful write invalidates them', async () => {
+    let decryptions = 0
+    const { directory, layer } = await makeLayer(true, () => {
+      decryptions += 1
+    })
+    await writeFile(
+      join(directory, 'registry-settings.json'),
+      JSON.stringify({
+        encrypted: true,
+        origin: 'https://registry.example.test',
+        token: Buffer.from('encrypted:initial-token').toString('base64'),
+      }),
+      'utf8'
+    )
+
+    const result = await Effect.gen(function* () {
+      const settings = yield* DesktopSettings
+      yield* settings.read
+      yield* settings.status
+      yield* settings.read
+      const replacement = yield* settings.resolveUpdate({
+        origin: 'https://replacement.example.test',
+        token: 'replacement-token',
+      })
+      yield* settings.write(replacement)
+      return yield* settings.read
+    }).pipe(Effect.provide(layer), Effect.runPromise)
+
+    expect(decryptions).toBe(2)
+    expect(result?.origin).toBe('https://replacement.example.test')
+    expect(result === null ? null : Redacted.value(result.token)).toBe(
+      'replacement-token'
+    )
   })
 
   test('migrates a legacy plaintext token to OS-encrypted storage', async () => {

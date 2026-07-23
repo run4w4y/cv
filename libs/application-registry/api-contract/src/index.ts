@@ -32,4 +32,8 @@ export * from './event-commands'
 export * from './facts-publication'
 export { applicationRegistryOpenApi } from './openapi'
 export * from './schemas'
-export { applicationRegistryApiPrefix } from './transport'
+export {
+  applicationRegistryApiPrefix,
+  normalizeRegistryOrigin,
+  RegistryOriginSchema,
+} from './transport'

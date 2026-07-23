@@ -1,6 +1,9 @@
 import { ListApplicationsResponseSchema } from '@cv/application-registry-api-contract'
 import {
+  ApplicationCompanySchema,
   ApplicationCompensationInputSchema,
+  ApplicationLocationSchema,
+  ApplicationRoleSchema,
   ApplicationSchema,
   ApplicationStatusSchema,
   ExpectedApplicationVersionSchema,
@@ -52,9 +55,9 @@ export { ApplicationCompensationInputSchema }
 
 export const CreateApplicationParametersSchema = Schema.Struct({
   postingUrl: HttpUrlSchema,
-  company: NonEmptyTrimmedStringSchema,
-  role: NonEmptyTrimmedStringSchema,
-  location: Schema.NullOr(NonEmptyTrimmedStringSchema).annotate({
+  company: ApplicationCompanySchema,
+  role: ApplicationRoleSchema,
+  location: Schema.NullOr(ApplicationLocationSchema).annotate({
     description: 'Use null when the listing does not specify a location.',
   }),
   applicationStatus: Schema.optionalKey(ApplicationStatusSchema),
@@ -77,9 +80,9 @@ export const UpdateApplicationParametersSchema = Schema.Struct({
       'Current application version returned by get_application or search_applications. Updates fail on stale versions.',
   }),
   postingUrl: Schema.optionalKey(HttpUrlSchema),
-  company: Schema.optionalKey(NonEmptyTrimmedStringSchema),
-  role: Schema.optionalKey(NonEmptyTrimmedStringSchema),
-  location: Schema.optionalKey(Schema.NullOr(NonEmptyTrimmedStringSchema)),
+  company: Schema.optionalKey(ApplicationCompanySchema),
+  role: Schema.optionalKey(ApplicationRoleSchema),
+  location: Schema.optionalKey(Schema.NullOr(ApplicationLocationSchema)),
   applicationStatus: Schema.optionalKey(ApplicationStatusSchema),
   targetStage: Schema.optionalKey(TargetStageSchema),
   personalPriority: Schema.optionalKey(Schema.NullOr(PersonalPrioritySchema)),

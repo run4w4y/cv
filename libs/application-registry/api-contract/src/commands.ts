@@ -1,9 +1,11 @@
 import {
   ApplicationCompensationInputSchema,
+  ApplicationLocationSchema,
   ApplicationMutableSchema,
   ApplicationNoteSchema,
   ApplicationWritableSchema,
   ExpectedApplicationVersionSchema,
+  HttpUrlSchema,
   ListingCheckModeSchema,
   ListingCheckTargetSchema,
   ListingObservationSchema,
@@ -28,7 +30,7 @@ export const RegistryApplicationInputSchema = Schema.Struct({
     Schema.Array(ApplicationCompensationInputSchema)
   ),
   labels: Schema.optional(Schema.Array(NonEmptyString)),
-  location: Schema.NullOr(Schema.String),
+  location: Schema.NullOr(ApplicationLocationSchema),
 })
 
 export type RegistryApplicationInput = Schema.Schema.Type<
@@ -67,7 +69,7 @@ export type AddApplicationNoteCommand = Schema.Schema.Type<
 
 export const ListingCheckFindingSchema = Schema.Struct({
   applicationId: NonEmptyString,
-  postingUrl: NonEmptyString,
+  postingUrl: HttpUrlSchema,
   observation: ListingObservationSchema,
   idempotencyKey: NonEmptyString,
   target: ListingCheckTargetSchema,

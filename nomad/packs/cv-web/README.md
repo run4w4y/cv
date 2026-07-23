@@ -5,9 +5,10 @@ the `cv` hostname through the existing Cloudflare Tunnel, and the service reads
 publications from the private `cv-registry` service through a single Consul
 Connect upstream.
 
-The application emits an edge-only Cloudflare cache policy for public CV pages.
-Preview and internal routes are private and `no-store`. Cache invalidation is
-performed directly through the Cloudflare API by the registry service.
+Terraform owns the edge-only Cloudflare cache policy for public CV pages.
+Preview and internal routes are private and `no-store`. The dedicated registry
+cache invalidator consumes publication events and purges the public `/c/`
+prefix.
 
 Render before registering:
 

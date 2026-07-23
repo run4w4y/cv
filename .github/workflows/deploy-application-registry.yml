@@ -22,6 +22,15 @@ on:
         description: Immutable PDF worker image digest.
         required: true
         type: string
+      cache_invalidator_image_digest:
+        description: Immutable cache invalidator image digest.
+        required: true
+        type: string
+      cache_invalidator_enabled:
+        default: false
+        description: Run the cache invalidator after its infrastructure prerequisites are installed.
+        required: false
+        type: boolean
 
 concurrency:
   group: application-registry-production
@@ -43,13 +52,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Install Nomad Pack
-        run: |
-          version=0.3.0
-          archive="nomad-pack_${version}_linux_amd64.zip"
-          curl -fsSL "https://releases.hashicorp.com/nomad-pack/${version}/${archive}" -o "$archive"
-          unzip -q "$archive" -d /tmp/nomad-pack
-          sudo install /tmp/nomad-pack/nomad-pack /usr/local/bin/nomad-pack
+      - name: Set up Nomad Pack
+        uses: ./.github/actions/setup-infrastructure-tools
 
       - name: Register registry API service
         env:
@@ -80,13 +84,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Install Nomad Pack
-        run: |
-          version=0.3.0
-          archive="nomad-pack_${version}_linux_amd64.zip"
-          curl -fsSL "https://releases.hashicorp.com/nomad-pack/${version}/${archive}" -o "$archive"
-          unzip -q "$archive" -d /tmp/nomad-pack
-          sudo install /tmp/nomad-pack/nomad-pack /usr/local/bin/nomad-pack
+      - name: Set up Nomad Pack
+        uses: ./.github/actions/setup-infrastructure-tools
 
       - name: Register registry management web service
         env:
@@ -114,13 +113,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Install Nomad Pack
-        run: |
-          version=0.3.0
-          archive="nomad-pack_${version}_linux_amd64.zip"
-          curl -fsSL "https://releases.hashicorp.com/nomad-pack/${version}/${archive}" -o "$archive"
-          unzip -q "$archive" -d /tmp/nomad-pack
-          sudo install /tmp/nomad-pack/nomad-pack /usr/local/bin/nomad-pack
+      - name: Set up Nomad Pack
+        uses: ./.github/actions/setup-infrastructure-tools
 
       - name: Register periodic listing-check job
         env:
@@ -146,13 +140,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Install Nomad Pack
-        run: |
-          version=0.3.0
-          archive="nomad-pack_${version}_linux_amd64.zip"
-          curl -fsSL "https://releases.hashicorp.com/nomad-pack/${version}/${archive}" -o "$archive"
-          unzip -q "$archive" -d /tmp/nomad-pack
-          sudo install /tmp/nomad-pack/nomad-pack /usr/local/bin/nomad-pack
+      - name: Set up Nomad Pack
+        uses: ./.github/actions/setup-infrastructure-tools
 
       - name: Register PDF worker service
         env:
@@ -162,6 +151,33 @@ jobs:
           WORKER_IMAGE_DIGEST: ${{ inputs.pdf_worker_image_digest }}
         run: |
           nomad-pack run nomad/packs/application-registry-pdf-worker \
+            --parser-v1 \
+            --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${WORKER_IMAGE_DIGEST}" \
+            --var "enabled=${WORKER_ENABLED}"
+
+  deploy-cache-invalidator:
+    name: Register cache invalidator
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    env:
+      IMAGE_NAME: ${{ github.repository_owner }}/application-registry-cache-invalidator
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Nomad Pack
+        uses: ./.github/actions/setup-infrastructure-tools
+
+      - name: Register cache invalidator service
+        env:
+          NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
+          NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
+          WORKER_ENABLED: ${{ inputs.cache_invalidator_enabled }}
+          WORKER_IMAGE_DIGEST: ${{ inputs.cache_invalidator_image_digest }}
+        run: |
+          nomad-pack run nomad/packs/application-registry-cache-invalidator \
             --parser-v1 \
             --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${WORKER_IMAGE_DIGEST}" \
             --var "enabled=${WORKER_ENABLED}"

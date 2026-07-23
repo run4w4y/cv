@@ -43,4 +43,27 @@ describe('application registry API server request boundary', () => {
     expect(response.headers.get('cache-control')).toBe('private, no-store')
     expect(requests).toHaveLength(1)
   })
+
+  test('logs unexpected causes without exposing their messages', async () => {
+    const cause = new Error('database password appeared in an SDK exception')
+    const logged: unknown[] = []
+    const handler = makeApiServerRequestHandler({
+      apiHandler: () => Promise.reject(cause),
+      logError: (error) => {
+        logged.push(error)
+      },
+    })
+
+    const response = await handler(
+      new Request('https://registry.test/api/registry/applications')
+    )
+
+    expect(response.status).toBe(500)
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+    expect(await response.json()).toEqual({
+      code: 'internal_error',
+      message: 'Registry API request failed.',
+    })
+    expect(logged).toEqual([cause])
+  })
 })

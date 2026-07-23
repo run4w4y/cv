@@ -4,8 +4,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { RouterProvider } from 'react-router'
 import { HostBootstrap } from './host/bootstrap'
-import { CvPublicationWorkflowProvider } from './preparation/publication'
-import { PreparationWorkflowProvider } from './preparation/workflow/provider'
+import { HostPreparationWorkflowProvider } from './host/preparation-workflow-provider'
 import { router } from './router'
 import './styles.css'
 
@@ -20,11 +19,9 @@ ReactDOM.createRoot(root).render(
     <RegistryProvider>
       <HostBootstrap>
         <TooltipProvider delay={400}>
-          <PreparationWorkflowProvider>
-            <CvPublicationWorkflowProvider>
-              <RouterProvider router={router} />
-            </CvPublicationWorkflowProvider>
-          </PreparationWorkflowProvider>
+          <HostPreparationWorkflowProvider>
+            <RouterProvider router={router} />
+          </HostPreparationWorkflowProvider>
         </TooltipProvider>
       </HostBootstrap>
     </RegistryProvider>

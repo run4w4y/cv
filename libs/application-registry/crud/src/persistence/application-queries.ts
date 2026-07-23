@@ -6,11 +6,7 @@ import {
 import { finalizeQuery } from '@cv/drizzle-query-effect'
 import { asc, desc, eq, type SQL } from 'drizzle-orm'
 import { Effect } from 'effect'
-import {
-  databaseFailure,
-  type RegistryDatabaseError,
-  type RegistryQueryTooComplexError,
-} from '../errors'
+import { databaseFailure, type RegistryDatabaseError } from '../errors'
 import type { RegistryExecutor } from '../internal/connection'
 import type {
   ApplicationFacets,
@@ -61,10 +57,7 @@ export const findApplicationsByPostingUrl = (
 export const listApplications = (
   database: RegistryExecutor,
   resolved: ApplicationListResolution
-): Effect.Effect<
-  ApplicationListPage,
-  RegistryDatabaseError | RegistryQueryTooComplexError
-> =>
+): Effect.Effect<ApplicationListPage, RegistryDatabaseError> =>
   Effect.gen(function* () {
     const relational = resolved.relational({ select: ['noteCount'] })
     const query = database.query.applications.findMany({

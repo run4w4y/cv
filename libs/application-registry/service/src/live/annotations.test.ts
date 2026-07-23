@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test'
 import type { PersistedNote } from '@cv/application-registry-crud'
-import { RegistryEventPublisherNoop } from '@cv/application-registry-events'
 import { Effect, Layer } from 'effect'
 import { application, note, receipt } from '../../test/support/fixtures'
 import {
@@ -26,8 +25,7 @@ const live = (
   AnnotationsServiceLive.pipe(
     Layer.provide(annotationLayer),
     Layer.provide(applicationsCrudLayer()),
-    Layer.provide(operationLayer),
-    Layer.provide(RegistryEventPublisherNoop)
+    Layer.provide(operationLayer)
   )
 
 describe('AnnotationsService', () => {

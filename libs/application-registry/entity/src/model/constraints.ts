@@ -64,7 +64,3 @@ export const NonNegativeMinorAmountSchema = Schema.Int.pipe(
   Schema.check(Schema.isGreaterThanOrEqualTo(0)),
   Schema.check(Schema.isLessThanOrEqualTo(Number.MAX_SAFE_INTEGER))
 )
-
-export const PositiveRateSchema = Schema.Number.pipe(
-  Schema.check(Schema.isGreaterThan(0))
-)

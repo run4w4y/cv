@@ -11,7 +11,7 @@ resource "infisical_secret_folder" "root" {
   }
 }
 
-resource "infisical_secret_folder" "child" {
+resource "infisical_secret_folder" "managed_child" {
   for_each = local.child_folders
 
   project_id       = var.infisical_project_id

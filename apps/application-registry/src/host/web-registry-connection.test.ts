@@ -96,6 +96,96 @@ describe('web Registry connection', () => {
     expect(routed.headers.get('x-request-id')).toBe('request-1')
   })
 
+  test('preserves mutation methods and bodies while routing them', async () => {
+    const fetcher = mock(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = requestFrom(input, init)
+        return request.url.endsWith('/api/registry/health')
+          ? Response.json({ ok: true })
+          : Response.json({ updated: true })
+      }
+    )
+    const connection = createWebRegistryConnection({
+      environment: {},
+      fetch: fetcher,
+      hostOrigin: 'https://management.example.test',
+      storage: window.localStorage,
+    })
+    await connection.configure({
+      origin: 'https://registry.example.test',
+      token: 'bearer-token',
+    })
+
+    await connection.fetch('/api/registry/applications/app-1', {
+      body: '{"status":"interviewing"}',
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    })
+
+    const mutation = requestFrom(
+      fetcher.mock.calls[1]?.[0] as RequestInfo | URL,
+      fetcher.mock.calls[1]?.[1]
+    )
+    expect(mutation.url).toBe(
+      'https://registry.example.test/api/registry/applications/app-1'
+    )
+    expect(mutation.method).toBe('PATCH')
+    expect(mutation.headers.get('authorization')).toBe('Bearer bearer-token')
+    expect(await mutation.text()).toBe('{"status":"interviewing"}')
+  })
+
+  test('accepts local IPv6 HTTP Registry origins', async () => {
+    const fetcher = mock(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        Response.json({ ok: true })
+    )
+    const connection = createWebRegistryConnection({
+      environment: {},
+      fetch: fetcher,
+      hostOrigin: 'https://management.example.test',
+      storage: window.localStorage,
+    })
+
+    const configured = await connection.configure({
+      origin: 'http://[::1]:8787/path',
+      token: 'bearer-token',
+    })
+
+    expect(configured.origin).toBe('http://[::1]:8787')
+    const healthRequest = requestFrom(
+      fetcher.mock.calls[0]?.[0] as RequestInfo | URL,
+      fetcher.mock.calls[0]?.[1]
+    )
+    expect(healthRequest.url).toBe('http://[::1]:8787/api/registry/health')
+  })
+
+  test('bounds the complete health check and does not persist a timed-out connection', async () => {
+    const fetcher = mock(
+      async () =>
+        await new Promise<Response>(() => {
+          // The timeout must settle configuration even if a fetch implementation
+          // ignores its AbortSignal.
+        })
+    )
+    const connection = createWebRegistryConnection({
+      environment: {},
+      fetch: fetcher,
+      hostOrigin: 'https://management.example.test',
+      storage: window.localStorage,
+      verificationTimeoutMs: 10,
+    })
+
+    await expect(
+      connection.configure({
+        origin: 'https://registry.example.test',
+        token: 'bearer-token',
+      })
+    ).rejects.toThrow('The Registry health check timed out.')
+    expect(
+      window.localStorage.getItem(WEB_REGISTRY_CONNECTION_STORAGE_KEY)
+    ).toBeNull()
+  })
+
   test('uses build defaults until a stored override replaces them', async () => {
     window.localStorage.setItem(
       WEB_REGISTRY_CONNECTION_STORAGE_KEY,

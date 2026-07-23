@@ -1,10 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { Effect, Layer } from 'effect'
 import * as FetchHttpClient from 'effect/unstable/http/FetchHttpClient'
-import { isPlainObject } from 'es-toolkit/predicate'
 
 import { Configuration, type Interface, layer, Service } from './client'
-import { makeRange } from './range'
 import { cloudflarePayload, testConfiguration } from './test-fixtures'
 
 type FetchResponse = (
@@ -33,6 +31,7 @@ const defaultLimitsPayload = {
       ],
     },
   },
+  errors: null,
 } as const
 
 const makeFetch = (respond: FetchResponse): typeof globalThis.fetch =>
@@ -75,10 +74,13 @@ const requestBodyText = (body: BodyInit | null | undefined) =>
       ? body
       : String(body)
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
 const isLimitsRequest = (init: RequestInit | undefined) => {
   const body = JSON.parse(requestBodyText(init?.body))
   return (
-    isPlainObject(body) &&
+    isRecord(body) &&
     typeof body.query === 'string' &&
     body.query.includes('query AnalyticsLimits')
   )
@@ -87,24 +89,24 @@ const isLimitsRequest = (init: RequestInit | undefined) => {
 const readRequestRange = (init: RequestInit | undefined) => {
   const body = JSON.parse(requestBodyText(init?.body))
 
-  if (!isPlainObject(body) || !isPlainObject(body.variables)) {
+  if (!isRecord(body) || !isRecord(body.variables)) {
     throw new Error('Missing GraphQL variables')
   }
 
   const filter = body.variables.filter
 
-  if (!isPlainObject(filter) || !Array.isArray(filter.AND)) {
+  if (!isRecord(filter) || !Array.isArray(filter.AND)) {
     throw new Error('Missing GraphQL filter')
   }
 
   const rangeFilter = filter.AND.find(
     (entry) =>
-      isPlainObject(entry) &&
+      isRecord(entry) &&
       typeof entry.datetime_geq === 'string' &&
       typeof entry.datetime_lt === 'string'
   )
 
-  if (!isPlainObject(rangeFilter)) {
+  if (!isRecord(rangeFilter)) {
     throw new Error('Missing GraphQL range filter')
   }
 
@@ -124,7 +126,7 @@ const payloadForRange = (range: { readonly from: string }) => ({
               count: 1,
               dimensions: {
                 clientCountryName: 'Germany',
-                clientRequestPath: '/en/',
+                clientRequestPath: '/c/home',
                 datetimeDay: range.from.slice(0, 10),
               },
               sum: {
@@ -132,11 +134,11 @@ const payloadForRange = (range: { readonly from: string }) => ({
               },
             },
           ],
-          topPaths: [],
         },
       ],
     },
   },
+  errors: null,
 })
 
 const addMilliseconds = (date: Date, milliseconds: number) =>
@@ -146,10 +148,10 @@ const recentRange = () => {
   const from = addMilliseconds(new Date(), -2 * 24 * 60 * 60 * 1000)
   const to = addMilliseconds(from, 24 * 60 * 60 * 1000)
 
-  return makeRange({
+  return {
     from: from.toISOString(),
     to: to.toISOString(),
-  })
+  }
 }
 
 describe('CloudflareAnalytics', () => {
@@ -200,7 +202,10 @@ describe('CloudflareAnalytics', () => {
       {
         readLimits: () => {
           limitRequests += 1
-          return Response.json({ data: { viewer: { zones: [] } } })
+          return Response.json({
+            data: { viewer: { zones: [] } },
+            errors: null,
+          })
         },
       }
     )
@@ -228,11 +233,11 @@ describe('CloudflareAnalytics', () => {
                   sum: { visits: 1 },
                 },
               ],
-              topPaths: [],
             },
           ],
         },
       },
+      errors: null,
     }
 
     const data = await runWithClient(
@@ -243,7 +248,6 @@ describe('CloudflareAnalytics', () => {
       (client) =>
         client.readAliasedPaths({
           aliases: [{ key: 'cv-link-1', path: `/c/${token}` }],
-          pathLike: '/c/%',
           range: recentRange(),
         })
     )
@@ -274,7 +278,7 @@ describe('CloudflareAnalytics', () => {
       },
       (client) =>
         client.readAliasedPaths({
-          aliases: [{ key: 'home', path: '/en/' }],
+          aliases: [{ key: 'home', path: '/c/home' }],
           range: recentRange(),
         })
     )
@@ -302,11 +306,11 @@ describe('CloudflareAnalytics', () => {
       },
       (client) =>
         client.readAliasedPaths({
-          aliases: [{ key: 'home', path: '/en/' }],
-          range: makeRange({
+          aliases: [{ key: 'home', path: '/c/home' }],
+          range: {
             from: rangeFrom.toISOString(),
             to: rangeTo.toISOString(),
-          }),
+          },
         })
     )
 
@@ -336,13 +340,173 @@ describe('CloudflareAnalytics', () => {
           }),
         (client) =>
           client.readAliasedPaths({
-            aliases: [{ key: 'home', path: '/en/' }],
-            range: makeRange(),
+            aliases: [{ key: 'home', path: '/c/home' }],
+            range: recentRange(),
           })
       )
     )
 
     expect(result._tag).toBe('Failure')
     expect(result.toString()).toContain('CloudflareAnalytics.GraphQLError')
+  })
+
+  test('rejects malformed analytics payloads instead of returning zero traffic', async () => {
+    const result = await Effect.runPromiseExit(
+      withClient(
+        async () =>
+          Response.json({
+            data: { unexpected: true },
+            errors: null,
+          }),
+        (client) =>
+          client.readAliasedPaths({
+            aliases: [{ key: 'home', path: '/c/home' }],
+            range: recentRange(),
+          })
+      )
+    )
+
+    expect(result._tag).toBe('Failure')
+    expect(result.toString()).toContain('CloudflareAnalytics.ResponseError')
+  })
+
+  test('rejects invalid metrics and dates at the response boundary', async () => {
+    const token = 'private-token'
+    const result = await Effect.runPromiseExit(
+      withClient(
+        async () =>
+          Response.json({
+            data: {
+              viewer: {
+                zones: [
+                  {
+                    dailyPaths: [
+                      {
+                        count: -7,
+                        dimensions: {
+                          clientCountryName: 'Germany',
+                          clientRequestPath: `/c/${token}`,
+                          datetimeDay: 'not-a-date',
+                        },
+                        sum: { visits: 'garbage' },
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+            errors: null,
+          }),
+        (client) =>
+          client.readAliasedPaths({
+            aliases: [{ key: 'home', path: `/c/${token}` }],
+            range: recentRange(),
+          })
+      )
+    )
+
+    expect(result._tag).toBe('Failure')
+    expect(result.toString()).toContain('CloudflareAnalytics.ResponseError')
+    expect(result.toString()).not.toContain(token)
+  })
+
+  test('rejects malformed GraphQL error envelopes', async () => {
+    const result = await Effect.runPromiseExit(
+      withClient(
+        async () => Response.json({ errors: [{ detail: 'missing message' }] }),
+        (client) =>
+          client.readAliasedPaths({
+            aliases: [{ key: 'home', path: '/c/home' }],
+            range: recentRange(),
+          })
+      )
+    )
+
+    expect(result._tag).toBe('Failure')
+    expect(result.toString()).toContain('CloudflareAnalytics.ResponseError')
+  })
+
+  test('fails loudly when Cloudflare fills the result page', async () => {
+    const result = await Effect.runPromiseExit(
+      withClient(
+        async () =>
+          Response.json({
+            data: {
+              viewer: {
+                zones: [
+                  {
+                    dailyPaths: [
+                      {
+                        count: 1,
+                        dimensions: {
+                          clientCountryName: 'Germany',
+                          clientRequestPath: '/c/home',
+                          datetimeDay: new Date().toISOString().slice(0, 10),
+                        },
+                        sum: { visits: 1 },
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+            errors: null,
+          }),
+        (client) =>
+          client.readAliasedPaths({
+            aliases: [{ key: 'home', path: '/c/home' }],
+            range: recentRange(),
+          }),
+        {
+          readLimits: () =>
+            Response.json({
+              data: {
+                viewer: {
+                  zones: [
+                    {
+                      settings: {
+                        httpRequestsAdaptiveGroups: {
+                          enabled: true,
+                          maxDuration: 86_400,
+                          maxPageSize: 1,
+                          notOlderThan: 2_678_400,
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+              errors: null,
+            }),
+        }
+      )
+    )
+
+    expect(result._tag).toBe('Failure')
+    expect(result.toString()).toContain('CloudflareAnalytics.ResultLimitError')
+  })
+
+  test('returns empty data without contacting Cloudflare for empty aliases', async () => {
+    let requests = 0
+    const data = await runWithClient(
+      async () => {
+        requests += 1
+        throw new Error('Cloudflare should not be contacted.')
+      },
+      (client) =>
+        client.readAliasedPaths({
+          aliases: [],
+          range: recentRange(),
+        }),
+      {
+        readLimits: () => {
+          requests += 1
+          return Response.json(defaultLimitsPayload)
+        },
+      }
+    )
+
+    expect(data.records).toEqual([])
+    expect(requests).toBe(0)
   })
 })

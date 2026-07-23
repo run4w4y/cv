@@ -3,10 +3,6 @@ import {
   ApplicationsCrud,
   JobPostingSnapshotsCrud,
 } from '@cv/application-registry-crud'
-import {
-  RegistryEventPublisher,
-  RegistryEventSchema,
-} from '@cv/application-registry-events'
 import { Effect, Layer } from 'effect'
 
 import { RegistryNotFoundError } from '../errors'
@@ -35,7 +31,6 @@ const make = Effect.gen(function* () {
   const applications = yield* ApplicationsCrud
   const snapshots = yield* JobPostingSnapshotsCrud
   const store = yield* ArtifactStore
-  const events = yield* RegistryEventPublisher
 
   const find = Effect.fn('JobPostingSnapshotsService.find')(
     (applicationIdentifier: string, snapshotId: string) =>
@@ -133,16 +128,6 @@ const make = Effect.gen(function* () {
                     )
               )
             )
-          yield* events.publish(
-            RegistryEventSchema.cases.JobPostingSnapshotPersisted.make({
-              applicationId: application.id,
-              correlationId: id,
-              eventId: `job-posting-snapshot-persisted:${id}`,
-              occurredAt: stored.fetchedAt,
-              snapshotId: stored.id,
-              version: 1,
-            })
-          )
           return stored
         })
     ),

@@ -23,7 +23,7 @@ const make = Effect.gen(function* () {
     ),
     read: Effect.fn('CloudflareCvAnalyticsTraffic.read')((aliases, range) =>
       client
-        .readAliasedPaths({ aliases, pathLike: '/c/%', range })
+        .readAliasedPaths({ aliases, range })
         .pipe(Effect.mapError(providerError))
     ),
   })

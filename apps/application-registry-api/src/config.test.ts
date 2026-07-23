@@ -45,16 +45,11 @@ describe('application registry API server configuration', () => {
     expect(configuration.minio.forcePathStyle).toBe(true)
     expect(configuration.nats.server).toBe('nats://127.0.0.1:4222')
     expect(configuration.postgres.maxConnections).toBe(6)
+    expect(configuration.publication.publicBaseUrl.href).toBe(
+      'https://cv.example.test/c/'
+    )
     expect(Redacted.value(configuration.postgres.password)).toBe(
       'postgres-secret'
-    )
-  })
-
-  test('uses the Cloudflare API cache-purge endpoint by default', async () => {
-    const configuration = await readWith({})
-
-    expect(configuration.cacheInvalidation.endpoint.toString()).toBe(
-      'https://api.cloudflare.com/client/v4/'
     )
   })
 

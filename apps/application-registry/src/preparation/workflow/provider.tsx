@@ -3,7 +3,7 @@ import type * as React from 'react'
 
 import { preparationRuntime } from './atoms'
 
-/** Owns the session-scoped in-memory Workflow engine for the browser app. */
+/** Owns the session-scoped in-memory Workflow engine for the desktop renderer. */
 export const PreparationWorkflowProvider = ({
   children,
 }: {

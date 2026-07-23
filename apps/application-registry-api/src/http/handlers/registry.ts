@@ -24,10 +24,6 @@ import {
 } from '@cv/application-registry-service'
 import { Effect, Match } from 'effect'
 import { HttpApiBuilder } from 'effect/unstable/httpapi'
-import {
-  type CvCacheInvalidation,
-  CvCacheInvalidator,
-} from '../../cache-invalidation'
 
 const toApiError = Match.type<ApplicationRegistryError>().pipe(
   Match.tag('RegistryBadRequestError', (error) =>
@@ -38,9 +34,6 @@ const toApiError = Match.type<ApplicationRegistryError>().pipe(
   ),
   Match.tag('RegistryConflictError', (error) =>
     ConflictError.make({ message: error.message })
-  ),
-  Match.tag('RegistryQueryTooComplexError', (error) =>
-    BadRequestError.make({ message: error.message })
   ),
   Match.tag('RegistryDatabaseError', (error) =>
     InternalServerError.make({ message: error.message })
@@ -60,35 +53,19 @@ const toApiError = Match.type<ApplicationRegistryError>().pipe(
 const expose = <A>(effect: Effect.Effect<A, ApplicationRegistryError>) =>
   effect.pipe(Effect.mapError(toApiError))
 
-const invalidatePublicationCache = (
-  invalidator: CvCacheInvalidator['Service'],
-  invalidation: CvCacheInvalidation
-) =>
-  invalidator.invalidate(invalidation).pipe(
-    Effect.catch((error) =>
-      Effect.logWarning('Cloudflare CV cache purge failed.', {
-        message: error.message,
-      })
-    )
-  )
-
 const syncCvLinksForStatus = (
   cvPublications: CvPublicationsService,
-  invalidator: CvCacheInvalidator['Service'],
   applicationId: string,
-  nextStatus: string
+  nextStatus: string,
+  operationId: string
 ) =>
-  (nextStatus === 'rejected'
+  nextStatus === 'rejected'
     ? cvPublications.disableForApplication(
         applicationId,
-        applicationRejectedDisableReason
+        applicationRejectedDisableReason,
+        operationId
       )
-    : cvPublications.restoreAfterRejection(applicationId)
-  ).pipe(
-    Effect.tap(() => invalidatePublicationCache(invalidator, { all: true })),
-    Effect.asVoid,
-    Effect.catch((error) => Effect.logWarning(error.message))
-  )
+    : cvPublications.restoreAfterRejection(applicationId, operationId)
 
 export const ApplicationsHandlersLayer = HttpApiBuilder.group(
   ApplicationRegistryApi,
@@ -101,7 +78,6 @@ export const ApplicationsHandlersLayer = HttpApiBuilder.group(
       const compensations = yield* CompensationsService
       const cvAnalytics = yield* CvAnalyticsService
       const cvPublications = yield* CvPublicationsService
-      const cvCacheInvalidator = yield* CvCacheInvalidator
       const listingChecks = yield* ListingChecksService
 
       return handlers.handleAll({
@@ -143,9 +119,20 @@ export const ApplicationsHandlersLayer = HttpApiBuilder.group(
               })
               yield* syncCvLinksForStatus(
                 cvPublications,
-                cvCacheInvalidator,
                 updated.application.id,
-                updated.application.applicationStatus
+                updated.application.applicationStatus,
+                headers['idempotency-key']
+              ).pipe(
+                Effect.catch((error) =>
+                  Effect.logWarning(
+                    'ApplicationRegistry.cv_link_reconciliation_failed',
+                    {
+                      applicationId: updated.application.id,
+                      message: error.message,
+                      operationId: headers['idempotency-key'],
+                    }
+                  )
+                )
               )
               return updated
             })
@@ -279,7 +266,6 @@ export const PublicationsHandlersLayer = HttpApiBuilder.group(
   (handlers) =>
     Effect.gen(function* () {
       const cvPublications = yield* CvPublicationsService
-      const cvCacheInvalidator = yield* CvCacheInvalidator
       const pdfArtifacts = yield* PdfArtifactsService
 
       return handlers.handleAll({
@@ -299,12 +285,6 @@ export const PublicationsHandlersLayer = HttpApiBuilder.group(
               ...payload,
               operationId: headers['idempotency-key'],
             })
-          ).pipe(
-            Effect.tap((link) =>
-              invalidatePublicationCache(cvCacheInvalidator, {
-                token: link.token,
-              })
-            )
           ),
         readCurrentPdfArtifact: ({ params, query }) =>
           expose(
@@ -320,12 +300,6 @@ export const PublicationsHandlersLayer = HttpApiBuilder.group(
               ...payload,
               operationId: headers['idempotency-key'],
             })
-          ).pipe(
-            Effect.tap((link) =>
-              invalidatePublicationCache(cvCacheInvalidator, {
-                token: link.token,
-              })
-            )
           ),
         requestPdfGeneration: ({ headers, params, payload }) =>
           expose(

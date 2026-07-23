@@ -11,7 +11,7 @@ import type {
   CvLink,
 } from '@cv/application-registry-entity'
 import {
-  type RegistryEvent,
+  publishRegistryEventBestEffort,
   RegistryEventPublisher,
   RegistryEventSchema,
 } from '@cv/application-registry-events'
@@ -36,6 +36,7 @@ import {
 } from '../internal/shared'
 import {
   applicationRejectedDisableReason,
+  CvPublicationConfiguration,
   CvPublicationsService,
   type CvPublicationsService as CvPublicationsServiceShape,
 } from '../services/cv-publications'
@@ -50,64 +51,63 @@ const requireCvEntry = (entry: ContentEntry) =>
         })
       )
 
-const publicUrl = (
-  baseUrl: string,
-  token: string
-): Effect.Effect<string, RegistryBadRequestError> =>
-  Effect.try({
-    try: () => {
-      const base = new URL(baseUrl)
-      if (base.protocol !== 'https:' && base.protocol !== 'http:') {
-        throw new Error('Public CV base URL must use HTTP or HTTPS.')
-      }
-      base.hash = ''
-      base.search = ''
-      base.pathname = `${base.pathname.replace(/\/?$/u, '/')}${encodeURIComponent(token)}`
-      return `${base.origin}${base.pathname}`
-    },
-    catch: () =>
-      new RegistryBadRequestError({
-        message: `Invalid public CV base URL: ${baseUrl}`,
-      }),
-  })
+const publicUrl = (baseUrl: URL, token: string): string => {
+  const base = new URL(baseUrl)
+  base.hash = ''
+  base.search = ''
+  base.pathname = `${base.pathname.replace(/\/?$/u, '/')}${encodeURIComponent(token)}`
+  return `${base.origin}${base.pathname}`
+}
 
 const make = Effect.gen(function* () {
+  const configuration = yield* CvPublicationConfiguration
   const applications = yield* ApplicationsCrud
   const artifacts = yield* ArtifactsCrud
   const content = yield* ContentCrud
+  const events = yield* RegistryEventPublisher
   const links = yield* CvLinksCrud
   const store = yield* ArtifactStore
-  const events = yield* RegistryEventPublisher
 
-  const publishBestEffort = Effect.fn(
-    'CvPublicationsService.publishBestEffort'
-  )((event: RegistryEvent) =>
-    events.publish(event).pipe(
-      Effect.catch((error) =>
-        Effect.logWarning('CV publication event could not be published.', {
-          eventId: event.eventId,
-          message: error.message,
-        })
-      )
+  const publishPublicationChanged = Effect.fn(
+    'CvPublicationsService.publishPublicationChanged'
+  )((applicationId: string, operationId: string, occurredAt: string) =>
+    publishRegistryEventBestEffort(
+      events,
+      RegistryEventSchema.cases.CvPublicationChanged.make({
+        applicationId,
+        correlationId: operationId,
+        eventId: `cv-publication-changed:${applicationId}:${operationId}`,
+        occurredAt,
+        version: 1,
+      })
     )
   )
 
   const publishAvailabilityChanged = Effect.fn(
     'CvPublicationsService.publishAvailabilityChanged'
-  )((link: CvLink, operationId: string) =>
-    publishBestEffort(
+  )((current: CvLink, operationId: string) =>
+    publishRegistryEventBestEffort(
+      events,
       RegistryEventSchema.cases.CvPublicationAvailabilityChanged.make({
-        applicationId: link.applicationId,
-        contentEntryId: link.contentEntryId,
-        contentRevisionId: link.currentRevisionId,
+        applicationId: current.applicationId,
+        contentEntryId: current.contentEntryId,
+        contentRevisionId: current.currentRevisionId,
         correlationId: operationId,
-        cvLinkId: link.id,
-        enabled: link.enabled,
+        cvLinkId: current.id,
+        enabled: current.enabled,
         eventId: `cv-publication-availability-changed:${operationId}`,
-        occurredAt: link.updatedAt,
-        publicationVersion: link.publicationVersion,
+        occurredAt: current.updatedAt,
+        publicationVersion: current.publicationVersion,
         version: 1,
       })
+    ).pipe(
+      Effect.andThen(
+        publishPublicationChanged(
+          current.applicationId,
+          operationId,
+          current.updatedAt
+        )
+      )
     )
   )
 
@@ -205,31 +205,45 @@ const make = Effect.gen(function* () {
   return {
     disableForApplication: Effect.fn(
       'CvPublicationsService.disableForApplication'
-    )((applicationIdentifier: string, reason: string) =>
+    )((applicationIdentifier: string, reason: string, operationId: string) =>
       Effect.gen(function* () {
         const application = yield* findApplicationForContent(
           applications,
           applicationIdentifier
+        )
+        const correlationId = yield* requireNonEmpty(
+          operationId,
+          'CV publication operation ID'
         )
         const normalizedReason = yield* requireNonEmpty(
           reason,
           'Disable reason'
         )
-        return yield* links.disableForApplication(
+        const changed = yield* links.disableForApplication(
           application.id,
           normalizedReason,
           yield* registryNow
         )
+        yield* publishPublicationChanged(
+          application.id,
+          correlationId,
+          application.updatedAt
+        )
+        return changed
       })
     ),
     findByEntry: findAssociatedLink,
     restoreAfterRejection: Effect.fn(
       'CvPublicationsService.restoreAfterRejection'
-    )((applicationIdentifier: string) =>
+    )((applicationIdentifier: string, operationId: string) =>
       Effect.gen(function* () {
         const application = yield* findApplicationForContent(
           applications,
           applicationIdentifier
+        )
+        const correlationId = yield* requireNonEmpty(
+          operationId,
+          'CV publication operation ID'
         )
         if (application.applicationStatus === 'rejected') return 0
         const applicationLinks = yield* links.findByApplication(application.id)
@@ -266,6 +280,11 @@ const make = Effect.gen(function* () {
             }
           ),
           { concurrency: 1 }
+        )
+        yield* publishPublicationChanged(
+          application.id,
+          correlationId,
+          application.updatedAt
         )
         return restored.reduce<number>((total, count) => total + count, 0)
       })
@@ -305,7 +324,10 @@ const make = Effect.gen(function* () {
           }
 
           const token = existing?.token ?? newRegistryId().replaceAll('-', '')
-          const resolvedPublicUrl = yield* publicUrl(input.publicBaseUrl, token)
+          const resolvedPublicUrl = publicUrl(
+            configuration.publicBaseUrl,
+            token
+          )
           const now = yield* registryNow
           const applied = yield* links.stage(
             {
@@ -343,18 +365,10 @@ const make = Effect.gen(function* () {
                 'The CV page changed while its draft revision was being staged.',
             })
           }
-          yield* publishBestEffort(
-            RegistryEventSchema.cases.CvPublicationStaged.make({
-              applicationId: staged.applicationId,
-              contentEntryId: staged.contentEntryId,
-              contentRevisionId: staged.currentRevisionId,
-              correlationId: operationId,
-              cvLinkId: staged.id,
-              eventId: `cv-publication-staged:${operationId}`,
-              occurredAt: staged.updatedAt,
-              publicationVersion: staged.publicationVersion,
-              version: 1,
-            })
+          yield* publishPublicationChanged(
+            staged.applicationId,
+            operationId,
+            staged.updatedAt
           )
           return staged
         })

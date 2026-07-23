@@ -10,6 +10,8 @@ import { connect } from '@nats-io/transport-node'
 import { Effect, Layer, Option, Predicate, Stream } from 'effect'
 
 import { decodeRegistryEvent, encodeRegistryEvent } from './codec'
+import { releaseNatsConnection } from './connection'
+import { natsMessageAction } from './delivery'
 import type {
   RegistryEventConsumerConfiguration,
   RegistryEventNatsConnection,
@@ -34,11 +36,14 @@ const publisherError = (eventId: string, operation: string, cause: unknown) =>
     message: `Registry event ${operation} failed: ${messageOf(cause)}`,
   })
 
-const acquireConnection = (configuration: RegistryEventNatsConnection) =>
+const acquireConnection = (
+  configuration: RegistryEventNatsConnection,
+  connectNats: typeof connect = connect
+) =>
   Effect.acquireRelease(
     Effect.tryPromise({
       try: () =>
-        connect({
+        connectNats({
           maxReconnectAttempts: configuration.maxReconnectAttempts,
           name: configuration.clientName,
           pass: configuration.password,
@@ -49,15 +54,15 @@ const acquireConnection = (configuration: RegistryEventNatsConnection) =>
         }),
       catch: (cause) => sourceError('connection', cause),
     }),
-    (connection) =>
-      Effect.promise(() => connection.drain()).pipe(
-        Effect.catch(() => Effect.promise(() => connection.close()))
-      )
+    releaseNatsConnection
   )
 
 const makeDelivery = (
   message: JsMsg
-): Effect.Effect<Option.Option<RegistryEventDelivery>> =>
+): Effect.Effect<
+  Option.Option<RegistryEventDelivery>,
+  RegistryEventSourceError
+> =>
   decodeRegistryEvent(message.data).pipe(
     Effect.matchEffect({
       onFailure: (error) =>
@@ -65,64 +70,81 @@ const makeDelivery = (
           message: error.message,
           sequence: message.info.streamSequence,
         }).pipe(
-          Effect.andThen(Effect.sync(() => message.term(error.message))),
+          Effect.andThen(
+            natsMessageAction('message termination', () =>
+              message.term(error.message)
+            )
+          ),
           Effect.as(Option.none())
         ),
       onSuccess: (event) =>
         Effect.succeed(
           Option.some({
-            ack: Effect.sync(() => message.ack()),
+            ack: natsMessageAction('message acknowledgement', () =>
+              message.ack()
+            ),
             deliveryCount: message.info.deliveryCount,
             event,
             nak: (delayMilliseconds) =>
-              Effect.sync(() => message.nak(delayMilliseconds)),
+              natsMessageAction('message negative acknowledgement', () =>
+                message.nak(delayMilliseconds)
+              ),
             sequence: message.info.streamSequence,
-            term: (reason) => Effect.sync(() => message.term(reason)),
-            working: Effect.sync(() => message.working()),
+            term: (reason) =>
+              natsMessageAction('message termination', () =>
+                message.term(reason)
+              ),
+            working: natsMessageAction('message heartbeat', () =>
+              message.working()
+            ),
           })
         ),
     })
   )
 
 export const makeNatsRegistryEventPublisherLayer = (
-  configuration: RegistryEventPublisherConfiguration
+  configuration: RegistryEventPublisherConfiguration,
+  options: { readonly connect?: typeof connect } = {}
 ) =>
-  Layer.effect(
+  Layer.succeed(
     RegistryEventPublisher,
-    Effect.gen(function* () {
-      const connection = yield* acquireConnection(configuration.nats).pipe(
-        Effect.mapError((error) =>
-          publisherError('startup', 'connection', error)
-        )
-      )
-      const client = jetstream(connection)
-
-      return RegistryEventPublisher.of({
-        publish: Effect.fn('RegistryEventPublisher.nats')(function* (event) {
-          const bytes = yield* encodeRegistryEvent(event)
-          const acknowledgement = yield* Effect.tryPromise({
-            try: () =>
-              client.publish(
-                registryEventSubject(configuration.topology, event),
-                bytes,
-                {
-                  msgID: event.eventId,
-                  timeout: 10_000,
-                }
-              ),
-            catch: (cause) => publisherError(event.eventId, 'publish', cause),
-          })
-          if (acknowledgement.stream !== configuration.topology.streamName) {
-            return yield* publisherError(
-              event.eventId,
-              'publish acknowledgement',
-              new Error(
-                `Expected stream ${configuration.topology.streamName}, received ${acknowledgement.stream}.`
+    RegistryEventPublisher.of({
+      publish: Effect.fn('RegistryEventPublisher.nats')((event) =>
+        Effect.scoped(
+          Effect.gen(function* () {
+            const connection = yield* acquireConnection(
+              configuration.nats,
+              options.connect
+            ).pipe(
+              Effect.mapError((error) =>
+                publisherError(event.eventId, 'connection', error)
               )
             )
-          }
-        }),
-      })
+            const bytes = yield* encodeRegistryEvent(event)
+            const acknowledgement = yield* Effect.tryPromise({
+              try: () =>
+                jetstream(connection).publish(
+                  registryEventSubject(configuration.topology, event),
+                  bytes,
+                  {
+                    msgID: event.eventId,
+                    timeout: 10_000,
+                  }
+                ),
+              catch: (cause) => publisherError(event.eventId, 'publish', cause),
+            })
+            if (acknowledgement.stream !== configuration.topology.streamName) {
+              return yield* publisherError(
+                event.eventId,
+                'publish acknowledgement',
+                new Error(
+                  `Expected stream ${configuration.topology.streamName}, received ${acknowledgement.stream}.`
+                )
+              )
+            }
+          })
+        )
+      ),
     })
   )
 
@@ -147,6 +169,7 @@ export const makeNatsRegistryEventSourceLayer = (
         catch: (cause) => sourceError('consumer inspection', cause),
       })
       const maxDeliver = consumerInfo.config.max_deliver
+      const maxInFlight = consumerInfo.config.max_ack_pending
       if (
         typeof maxDeliver !== 'number' ||
         !Number.isInteger(maxDeliver) ||
@@ -156,6 +179,18 @@ export const makeNatsRegistryEventSourceLayer = (
           'consumer validation',
           new Error(
             `Consumer ${configuration.consumerName} must have a finite positive max_deliver value.`
+          )
+        )
+      }
+      if (
+        typeof maxInFlight !== 'number' ||
+        !Number.isInteger(maxInFlight) ||
+        maxInFlight <= 0
+      ) {
+        return yield* sourceError(
+          'consumer validation',
+          new Error(
+            `Consumer ${configuration.consumerName} must have a finite positive max_ack_pending value.`
           )
         )
       }
@@ -177,6 +212,7 @@ export const makeNatsRegistryEventSourceLayer = (
           Stream.map((value) => value.value)
         ),
         maxDeliver,
+        maxInFlight,
       })
     })
   )

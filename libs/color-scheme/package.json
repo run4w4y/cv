@@ -14,10 +14,6 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./astro": {
-      "types": "./dist/astro.d.ts",
-      "default": "./dist/astro.js"
-    },
     "./react": {
       "types": "./dist/react.d.ts",
       "default": "./dist/react.js"

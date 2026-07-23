@@ -1,4 +1,3 @@
-import { CloudflareAnalytics } from '@cv/cloudflare-analytics-client'
 import { Config, Effect, type Redacted } from 'effect'
 
 export interface ApiServerConfiguration {
@@ -11,9 +10,6 @@ export interface ApiServerConfiguration {
   readonly authentication: {
     readonly factsPublishToken: Redacted.Redacted<string>
     readonly registryApiToken: Redacted.Redacted<string>
-  }
-  readonly cacheInvalidation: {
-    readonly endpoint: URL
   }
   readonly cors: {
     readonly allowedOrigins: ReadonlyArray<string>
@@ -43,6 +39,9 @@ export interface ApiServerConfiguration {
     readonly password: Redacted.Redacted<string>
     readonly port: number
     readonly username: string
+  }
+  readonly publication: {
+    readonly publicBaseUrl: URL
   }
 }
 
@@ -88,6 +87,16 @@ const corsAllowedOrigins = Config.nonEmptyString(
   Effect.map((origins) => [...new Set(origins)])
 )
 
+const publicCvBaseUrl = Config.nonEmptyString('CV_WEB_HOST').pipe(
+  Effect.flatMap((host) =>
+    Effect.try({
+      try: () => new URL(`https://${host}/c/`),
+      catch: () =>
+        new Error('CV_WEB_HOST must produce a valid public HTTP(S) URL.'),
+    })
+  )
+)
+
 export const readApiServerConfiguration: Effect.Effect<
   ApiServerConfiguration,
   unknown
@@ -96,7 +105,7 @@ export const readApiServerConfiguration: Effect.Effect<
     apiToken: Config.redacted('CLOUDFLARE_ANALYTICS_API_TOKEN'),
     endpoint: url(
       'CLOUDFLARE_GRAPHQL_ENDPOINT',
-      CloudflareAnalytics.defaultEndpoint
+      'https://api.cloudflare.com/client/v4/graphql'
     ),
     host: Config.nonEmptyString('CV_WEB_HOST'),
     zoneId: Config.nonEmptyString('CLOUDFLARE_ZONE_ID'),
@@ -104,12 +113,6 @@ export const readApiServerConfiguration: Effect.Effect<
   authentication: Effect.all({
     factsPublishToken: Config.redacted('FACTS_PUBLISH_TOKEN'),
     registryApiToken: Config.redacted('REGISTRY_API_TOKEN'),
-  }),
-  cacheInvalidation: Effect.all({
-    endpoint: url(
-      'CLOUDFLARE_API_ENDPOINT',
-      'https://api.cloudflare.com/client/v4/'
-    ),
   }),
   cors: Effect.all({
     allowedOrigins: corsAllowedOrigins,
@@ -149,6 +152,9 @@ export const readApiServerConfiguration: Effect.Effect<
     password: Config.redacted('POSTGRES_PASSWORD'),
     port: Config.port('POSTGRES_PORT').pipe(Config.withDefault(5432)),
     username: Config.nonEmptyString('POSTGRES_USER'),
+  }),
+  publication: Effect.all({
+    publicBaseUrl: publicCvBaseUrl,
   }),
 }).pipe(
   Effect.flatMap((configuration) => {

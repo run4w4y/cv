@@ -188,16 +188,6 @@ export type ActivityListPage = QueryPage<
 export type ApplicationCompensationsResult =
   RegistryItems<ApplicationCompensation>
 
-export type ReplaceAnnualCompensationInput = {
-  readonly annualCompensation: AnnualCompensation | null
-  readonly expectedVersion: number
-}
-
-export type ReplaceAnnualCompensationResult = {
-  readonly annualCompensation: AnnualCompensation | null
-  readonly application: Application
-}
-
 export type RecordListingObservationInput = {
   readonly expectedVersion?: number
   readonly mode: ListingCheckMode
@@ -331,7 +321,6 @@ export type ApproveContentRevisionInput = {
 export type StageCvInput = {
   readonly expectedContentVersion: number
   readonly operationId: string
-  readonly publicBaseUrl: string
   readonly revisionId: string
 }
 

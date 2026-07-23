@@ -85,30 +85,12 @@ type ApplicationsFamilyInput = ApplicationsListRequest & {
   readonly enabled: boolean
 }
 
-const pendingApplicationRequests = new Map<string, ApplicationsFamilyInput>()
-const applicationsFamily = Atom.family((key: string) => {
-  const input = pendingApplicationRequests.get(key)
-  if (input === undefined) {
-    throw new Error(`Missing applications atom input for key ${key}.`)
+export const applicationsAtom = Atom.family(
+  (input: ApplicationsFamilyInput) => {
+    const { enabled, ...request } = input
+    return enabled ? createApplicationsAtom(request) : disabledApplicationsAtom
   }
-  const { enabled, ...request } = input
-  return enabled ? createApplicationsAtom(request) : disabledApplicationsAtom
-})
-
-/**
- * Atom.family keys objects by identity. The browser URL creates equivalent
- * request objects on rerender, so use their canonical value as the family key.
- * This keeps subscription identity stable without component-level memo hooks.
- */
-export const applicationsAtom = (input: ApplicationsFamilyInput) => {
-  const key = JSON.stringify(input)
-  pendingApplicationRequests.set(key, input)
-  try {
-    return applicationsFamily(key)
-  } finally {
-    pendingApplicationRequests.delete(key)
-  }
-}
+)
 
 export const applicationFacetsAtom = registryQuery('listApplicationFacets', {
   reactivityKeys: [applicationReactivity.facets],

@@ -9,7 +9,7 @@ ENV NX_DAEMON=false
 RUN --mount=type=cache,target=/root/.bun/install/cache bun install --frozen-lockfile
 RUN bunx nx run cv:build --skip-nx-cache
 
-FROM node:24.12.0-alpine
+FROM node:24.18.0-alpine
 
 WORKDIR /app
 

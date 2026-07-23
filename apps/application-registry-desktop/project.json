@@ -8,12 +8,7 @@
     "build": {
       "executor": "nx:run-commands",
       "dependsOn": ["^build"],
-      "inputs": [
-        "default",
-        "^production",
-        { "env": "CV_WEB_HOST" },
-        { "env": "VITE_CV_PUBLIC_BASE_URL" }
-      ],
+      "inputs": ["default", "^production"],
       "outputs": ["{projectRoot}/dist"],
       "options": {
         "command": "bun run scripts/build.ts",

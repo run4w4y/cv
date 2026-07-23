@@ -1,10 +1,8 @@
-.astro/
 .generated/
 .nx/
 .direnv/
 .playwright-mcp/
 .terraform/
-.terraform.lock.hcl
 .external/
 .env
 .env.local

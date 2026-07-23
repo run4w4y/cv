@@ -42,6 +42,6 @@ upstream and `CV_DEPLOYMENT_ID` identifies the deployed revision.
 
 Public CV responses advertise a one-day Cloudflare edge TTL plus seven days of
 stale-while-revalidate and 30 days of stale-if-error. Preview and internal
-routes remain `private, no-store`. Publication changes trigger exact-URL or
-prefix purges directly from the registry API through Cloudflare's cache-purge
-API.
+routes remain `private, no-store`. Publication changes emit durable registry
+events; the dedicated cache invalidator consumes them and purges the configured
+public `/c/` prefix through Cloudflare's cache-purge API.

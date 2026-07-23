@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test'
-import * as Effect from 'effect/Effect'
 
 import { normalizeAliasedPaths } from './aliased-normalize'
 
@@ -7,48 +6,45 @@ const range = {
   from: '2026-07-18T00:00:00.000Z',
   to: '2026-07-19T00:00:00.000Z',
 }
+const generatedAt = '2026-07-19T00:00:00.000Z'
 
 describe('aliased Cloudflare path normalization', () => {
-  test('returns application-owned keys and omits the matched paths', async () => {
+  test('returns application-owned keys and omits the matched paths', () => {
     const token = 'publication-secret-token'
-    const result = await Effect.runPromise(
-      normalizeAliasedPaths(
-        [
-          {
-            data: {
-              viewer: {
-                zones: [
+    const result = normalizeAliasedPaths(
+      [
+        {
+          viewer: {
+            zones: [
+              {
+                dailyPaths: [
                   {
-                    dailyPaths: [
-                      {
-                        count: 5,
-                        dimensions: {
-                          clientCountryName: 'Germany',
-                          clientRequestPath: `/c/${token}`,
-                          datetimeDay: '2026-07-18',
-                        },
-                        sum: { visits: 3 },
-                      },
-                      {
-                        count: 8,
-                        dimensions: {
-                          clientCountryName: 'Netherlands',
-                          clientRequestPath: '/unrelated',
-                          datetimeDay: '2026-07-18',
-                        },
-                        sum: { visits: 4 },
-                      },
-                    ],
-                    topPaths: [],
+                    count: 5,
+                    dimensions: {
+                      clientCountryName: 'Germany',
+                      clientRequestPath: `/c/${token}`,
+                      datetimeDay: '2026-07-18',
+                    },
+                    sum: { visits: 3 },
+                  },
+                  {
+                    count: 8,
+                    dimensions: {
+                      clientCountryName: 'Netherlands',
+                      clientRequestPath: '/c/unrelated',
+                      datetimeDay: '2026-07-18',
+                    },
+                    sum: { visits: 4 },
                   },
                 ],
               },
-            },
+            ],
           },
-        ],
-        range,
-        [{ key: 'link-1', path: `/c/${token}` }]
-      )
+        },
+      ],
+      range,
+      [{ key: 'link-1', path: `/c/${token}` }],
+      generatedAt
     )
 
     expect(result.records).toEqual([
@@ -69,9 +65,12 @@ describe('aliased Cloudflare path normalization', () => {
     expect(JSON.stringify(result)).not.toContain('/c/')
   })
 
-  test('includes zero-visit aliases', async () => {
-    const result = await Effect.runPromise(
-      normalizeAliasedPaths([], range, [{ key: 'link-1', path: '/c/unseen' }])
+  test('includes zero-visit aliases', () => {
+    const result = normalizeAliasedPaths(
+      [],
+      range,
+      [{ key: 'link-1', path: '/c/unseen' }],
+      generatedAt
     )
 
     expect(result.records[0]).toMatchObject({
@@ -80,36 +79,32 @@ describe('aliased Cloudflare path normalization', () => {
     })
   })
 
-  test('preserves an explicit zero visit metric', async () => {
-    const result = await Effect.runPromise(
-      normalizeAliasedPaths(
-        [
-          {
-            data: {
-              viewer: {
-                zones: [
+  test('preserves an explicit zero visit metric', () => {
+    const result = normalizeAliasedPaths(
+      [
+        {
+          viewer: {
+            zones: [
+              {
+                dailyPaths: [
                   {
-                    dailyPaths: [
-                      {
-                        count: 5,
-                        dimensions: {
-                          clientCountryName: 'Germany',
-                          clientRequestPath: '/c/zero-visits',
-                          datetimeDay: '2026-07-18',
-                        },
-                        sum: { visits: 0 },
-                      },
-                    ],
-                    topPaths: [],
+                    count: 5,
+                    dimensions: {
+                      clientCountryName: 'Germany',
+                      clientRequestPath: '/c/zero-visits',
+                      datetimeDay: '2026-07-18',
+                    },
+                    sum: { visits: 0 },
                   },
                 ],
               },
-            },
+            ],
           },
-        ],
-        range,
-        [{ key: 'link-1', path: '/c/zero-visits' }]
-      )
+        },
+      ],
+      range,
+      [{ key: 'link-1', path: '/c/zero-visits' }],
+      generatedAt
     )
 
     expect(result.records[0]).toEqual({
@@ -124,17 +119,5 @@ describe('aliased Cloudflare path normalization', () => {
       ],
       totals: { pageViews: 5, visits: 0 },
     })
-  })
-
-  test('rejects duplicate alias keys before reading provider data', async () => {
-    const result = await Effect.runPromiseExit(
-      normalizeAliasedPaths([], range, [
-        { key: 'link-1', path: '/c/one' },
-        { key: 'link-1', path: '/c/two' },
-      ])
-    )
-
-    expect(result._tag).toBe('Failure')
-    expect(result.toString()).toContain('CloudflareAnalytics.NormalizeError')
   })
 })

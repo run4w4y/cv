@@ -22,7 +22,7 @@ export class HttpError extends Schema.TaggedErrorClass<HttpError>()(
   'CloudflareAnalytics.HttpError',
   {
     bodyPreview: Schema.String,
-    status: Schema.Number,
+    status: Schema.Int,
   }
 ) {
   override get message() {
@@ -41,63 +41,30 @@ export class GraphQLError extends Schema.TaggedErrorClass<GraphQLError>()(
   }
 }
 
-export class ParseError extends Schema.TaggedErrorClass<ParseError>()(
-  'CloudflareAnalytics.ParseError',
+export class ResponseError extends Schema.TaggedErrorClass<ResponseError>()(
+  'CloudflareAnalytics.ResponseError',
   {
-    cause: Schema.String,
     message: Schema.String,
-  }
-) {
-  static fromCause({
-    cause,
-    message,
-  }: {
-    readonly cause: unknown
-    readonly message: string
-  }) {
-    return new ParseError({ cause: normalizeCause(cause), message })
-  }
-}
-
-export class NormalizeError extends Schema.TaggedErrorClass<NormalizeError>()(
-  'CloudflareAnalytics.NormalizeError',
-  {
-    cause: Schema.String,
-    message: Schema.String,
-  }
-) {
-  static fromCause({
-    cause,
-    message,
-  }: {
-    readonly cause: unknown
-    readonly message: string
-  }) {
-    return new NormalizeError({ cause: normalizeCause(cause), message })
-  }
-}
-
-export class RangeValidationError extends Schema.TaggedErrorClass<RangeValidationError>()(
-  'CloudflareAnalytics.RangeValidationError',
-  {
-    from: Schema.String,
-    message: Schema.String,
-    to: Schema.String,
   }
 ) {}
+
+export class ResultLimitError extends Schema.TaggedErrorClass<ResultLimitError>()(
+  'CloudflareAnalytics.ResultLimitError',
+  {
+    maxPageSize: Schema.Int,
+  }
+) {
+  override get message() {
+    return `Cloudflare analytics filled its ${this.maxPageSize}-row result page`
+  }
+}
 
 export type Error =
   | RequestError
   | HttpError
   | GraphQLError
-  | ParseError
-  | NormalizeError
-  | RangeValidationError
+  | ResponseError
+  | ResultLimitError
 
 const normalizeCause = (cause: unknown) =>
   cause instanceof globalThis.Error ? cause.message : String(cause)
-
-export const describeError = (error: Error) =>
-  error instanceof GraphQLError
-    ? `${error.message}: ${error.messages.join('; ')}`
-    : error.message

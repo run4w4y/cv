@@ -11,6 +11,7 @@ import {
 } from '@cv/application-registry-entity'
 import {
   type PdfGenerationTriggerEvent,
+  publishRegistryEventBestEffort,
   RegistryEventPublisher,
   RegistryEventSchema,
 } from '@cv/application-registry-events'
@@ -172,13 +173,16 @@ const make = Effect.gen(function* () {
   )(function* (entryId: string, artifact: GeneratedArtifact) {
     const link = yield* links.findByEntry(entryId)
     if (
-      !link?.enabled ||
+      !link ||
       link.id !== artifact.cvLinkId ||
       link.currentRevisionId !== artifact.contentRevisionId ||
       link.publicationVersion !== artifact.publicationVersion ||
       link.publicUrl !== artifact.qrTarget
     ) {
-      return
+      return false
+    }
+    if (!link.enabled) {
+      return link.disabledReason === pdfGenerationFailedDisableReason
     }
 
     const current = yield* artifacts.findCurrentForPublication(
@@ -189,49 +193,39 @@ const make = Effect.gen(function* () {
       link.publicUrl
     )
     if (current?.id !== artifact.id) {
-      return
+      return false
     }
 
-    yield* links.disableForFailedArtifact(
+    const disabled = yield* links.disableForFailedArtifact(
       link.id,
       link.version,
       artifact,
       pdfGenerationFailedDisableReason,
       yield* registryNow
     )
+    return disabled
   })
 
-  const publishGenerated = Effect.fn('PdfArtifactsService.publishGenerated')(
-    (applicationId: string, entryId: string, artifact: GeneratedArtifact) =>
-      events.publish(
-        RegistryEventSchema.cases.PdfGenerated.make({
-          applicationId,
-          artifactId: artifact.id,
-          contentEntryId: entryId,
-          correlationId: artifact.requestId,
-          eventId: `pdf-generated:${artifact.id}`,
-          occurredAt: artifact.updatedAt,
-          publicationVersion: artifact.publicationVersion,
-          version: 1,
-        })
-      )
-  )
-
-  const publishFailed = Effect.fn('PdfArtifactsService.publishFailed')(
-    (applicationId: string, entryId: string, artifact: GeneratedArtifact) =>
-      events.publish(
-        RegistryEventSchema.cases.PdfGenerationFailed.make({
-          applicationId,
-          artifactId: artifact.id,
-          code: artifact.errorCode ?? 'pdf_generation_failed',
-          contentEntryId: entryId,
-          correlationId: artifact.requestId,
-          eventId: `pdf-generation-failed:${artifact.id}`,
-          occurredAt: artifact.updatedAt,
-          publicationVersion: artifact.publicationVersion,
-          version: 1,
-        })
-      )
+  const publishPublicationChanged = Effect.fn(
+    'PdfArtifactsService.publishPublicationChanged'
+  )(
+    (
+      applicationId: string,
+      artifact: GeneratedArtifact,
+      publicationChanged: boolean
+    ) =>
+      publicationChanged
+        ? publishRegistryEventBestEffort(
+            events,
+            RegistryEventSchema.cases.CvPublicationChanged.make({
+              applicationId,
+              correlationId: artifact.requestId,
+              eventId: `cv-publication-changed:${applicationId}:${artifact.requestId}`,
+              occurredAt: artifact.updatedAt,
+              version: 1,
+            })
+          )
+        : Effect.void
   )
 
   return {
@@ -273,18 +267,6 @@ const make = Effect.gen(function* () {
                 'The current CV publication no longer matches the generation event.',
             })
           }
-          if (!link.enabled) {
-            return yield* new RegistryConflictError({
-              message:
-                'The public CV link must be temporarily enabled before PDF generation starts.',
-            })
-          }
-          if (entry.approvedRevisionId !== link.currentRevisionId) {
-            return yield* new RegistryConflictError({
-              message:
-                'The public CV link is not pinned to the approved content revision.',
-            })
-          }
           yield* requireAssociatedRevision(
             content,
             entry.id,
@@ -300,12 +282,28 @@ const make = Effect.gen(function* () {
           const existing = yield* artifacts.findByRequestId(requestId)
           if (existing) {
             const validated = yield* validateAttemptIdentity(existing, identity)
-            if (validated.status === 'ready') {
-              yield* publishGenerated(application.id, entry.id, validated)
-            } else if (validated.status === 'failed') {
-              yield* publishFailed(application.id, entry.id, validated)
+            if (validated.status === 'failed') {
+              yield* publishPublicationChanged(
+                application.id,
+                validated,
+                !link.enabled &&
+                  link.disabledReason === pdfGenerationFailedDisableReason
+              )
             }
             return validated
+          }
+
+          if (!link.enabled) {
+            return yield* new RegistryConflictError({
+              message:
+                'The public CV link must be temporarily enabled before PDF generation starts.',
+            })
+          }
+          if (entry.approvedRevisionId !== link.currentRevisionId) {
+            return yield* new RegistryConflictError({
+              message:
+                'The public CV link is not pinned to the approved content revision.',
+            })
           }
 
           const now = yield* registryNow
@@ -417,10 +415,20 @@ const make = Effect.gen(function* () {
         bytes: Uint8Array
       ) =>
         Effect.gen(function* () {
-          const { artifact, entry } = yield* findArtifactForApplication(
+          const { artifact, link } = yield* findArtifactForApplication(
             applicationIdentifier,
             artifactId
           )
+          if (
+            link.currentRevisionId !== artifact.contentRevisionId ||
+            link.publicationVersion !== artifact.publicationVersion ||
+            link.publicUrl !== artifact.qrTarget
+          ) {
+            return yield* new RegistryConflictError({
+              message:
+                'The current CV publication no longer matches the PDF generation attempt.',
+            })
+          }
           const rendererVersion = yield* requireNonEmpty(
             rendererVersionInput,
             'Renderer version'
@@ -437,7 +445,6 @@ const make = Effect.gen(function* () {
               artifact.mediaType === 'application/pdf' &&
               artifact.rendererVersion === rendererVersion
             ) {
-              yield* publishGenerated(entry.applicationId, entry.id, artifact)
               return artifact
             }
             return yield* new RegistryConflictError({
@@ -481,7 +488,6 @@ const make = Effect.gen(function* () {
                     )
               )
             )
-          yield* publishGenerated(entry.applicationId, entry.id, completed)
           return completed
         })
     ),
@@ -507,8 +513,15 @@ const make = Effect.gen(function* () {
               artifact.errorCode === code &&
               artifact.errorMessage === message
             ) {
-              yield* disableFailedPublication(entry.id, artifact)
-              yield* publishFailed(entry.applicationId, entry.id, artifact)
+              const publicationChange = yield* disableFailedPublication(
+                entry.id,
+                artifact
+              )
+              yield* publishPublicationChanged(
+                entry.applicationId,
+                artifact,
+                publicationChange
+              )
               return artifact
             }
             return yield* new RegistryConflictError({
@@ -542,8 +555,15 @@ const make = Effect.gen(function* () {
                     )
               )
             )
-          yield* disableFailedPublication(entry.id, failed)
-          yield* publishFailed(entry.applicationId, entry.id, failed)
+          const publicationChange = yield* disableFailedPublication(
+            entry.id,
+            failed
+          )
+          yield* publishPublicationChanged(
+            entry.applicationId,
+            failed,
+            publicationChange
+          )
           return failed
         })
     ),

@@ -1,4 +1,6 @@
 import type {
+  DesktopBridgeError,
+  DesktopBridgeResult,
   DesktopHostBridge,
   DesktopRegistryConfiguration,
   DesktopRegistryConfigureInput,
@@ -36,6 +38,18 @@ export interface RegistryConnection {
   readonly status: () => Promise<RegistryConnectionConfiguration>
 }
 
+export class RegistryConnectionError extends Error {
+  readonly code: DesktopBridgeError['code']
+  readonly details: string | null
+
+  constructor(error: DesktopBridgeError) {
+    super(error.message, { cause: error })
+    this.name = 'RegistryConnectionError'
+    this.code = error.code
+    this.details = error.details ?? null
+  }
+}
+
 const desktopConfiguration = (
   configuration: DesktopRegistryConfiguration
 ): RegistryConnectionConfiguration => ({
@@ -45,16 +59,10 @@ const desktopConfiguration = (
 })
 
 const desktopResult = async <Value>(
-  operation: Promise<
-    | { readonly ok: true; readonly value: Value }
-    | {
-        readonly error: { readonly message: string }
-        readonly ok: false
-      }
-  >
+  operation: Promise<DesktopBridgeResult<Value>>
 ): Promise<Value> => {
   const result = await operation
-  if (!result.ok) throw new Error(result.error.message)
+  if (!result.ok) throw new RegistryConnectionError(result.error)
   return result.value
 }
 

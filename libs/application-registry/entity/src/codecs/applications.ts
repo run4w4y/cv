@@ -10,12 +10,21 @@ import { omit, pick } from 'es-toolkit/object'
 import {
   ApplicationVersionSchema,
   HttpUrlSchema,
+  NonEmptyTrimmedStringSchema,
   UtcIsoTimestampSchema,
 } from '../model/constraints'
 import { applications } from '../tables/applications'
 import { optionalNullableInsertField } from './optional-nullable-insert-field'
 
+export const ApplicationCompanySchema = NonEmptyTrimmedStringSchema
+export const ApplicationLocationSchema = NonEmptyTrimmedStringSchema
+export const ApplicationRoleSchema = NonEmptyTrimmedStringSchema
+
 const applicationSelectRefinements = {
+  postingUrl: () => HttpUrlSchema,
+  company: () => ApplicationCompanySchema,
+  role: () => ApplicationRoleSchema,
+  location: () => ApplicationLocationSchema,
   version: () => ApplicationVersionSchema,
   followUpAt: () => UtcIsoTimestampSchema,
   appliedAt: () => UtcIsoTimestampSchema,
@@ -27,6 +36,9 @@ const applicationSelectRefinements = {
 
 const applicationInsertRefinements = {
   postingUrl: HttpUrlSchema,
+  company: ApplicationCompanySchema,
+  role: ApplicationRoleSchema,
+  location: optionalNullableInsertField(ApplicationLocationSchema),
   followUpAt: optionalNullableInsertField(UtcIsoTimestampSchema),
   appliedAt: optionalNullableInsertField(UtcIsoTimestampSchema),
   createdAt: UtcIsoTimestampSchema,
@@ -35,6 +47,9 @@ const applicationInsertRefinements = {
 
 const applicationUpdateRefinements = {
   postingUrl: () => HttpUrlSchema,
+  company: () => ApplicationCompanySchema,
+  role: () => ApplicationRoleSchema,
+  location: () => ApplicationLocationSchema,
   followUpAt: () => UtcIsoTimestampSchema,
   appliedAt: () => UtcIsoTimestampSchema,
   createdAt: () => UtcIsoTimestampSchema,

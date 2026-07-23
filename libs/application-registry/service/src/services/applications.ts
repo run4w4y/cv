@@ -29,10 +29,6 @@ export interface ApplicationsService {
     identifier: string,
     input: UpdateApplicationInput
   ) => Effect.Effect<UpdateApplicationResult, ApplicationRegistryError>
-  readonly remove: (
-    identifier: string,
-    expectedVersion?: number
-  ) => Effect.Effect<void, ApplicationRegistryError>
 }
 
 export const ApplicationsService = Context.Service<ApplicationsService>(

@@ -19,19 +19,26 @@ const errorKind = (error: DesktopBridgeError): StructuredGenerationErrorKind =>
     Match.when('codex_not_authenticated', () => 'authentication' as const),
     Match.when('codex_rate_limited', () => 'rate-limited' as const),
     Match.when('codex_output_invalid', () => 'invalid-output' as const),
-    Match.when('invalid_request', () => 'invalid-request' as const),
+    Match.whenOr(
+      'configuration_invalid',
+      'invalid_request',
+      () => 'invalid-request' as const
+    ),
     Match.whenOr(
       'codex_model_unavailable',
       'codex_not_available',
       'codex_startup_failed',
       'codex_state_initialization_failed',
+      'encryption_unavailable',
       'registry_not_configured',
       'registry_unauthorized',
+      'settings_corrupt',
       () => 'unavailable' as const
     ),
     Match.whenOr(
       'codex_generation_failed',
       'network_failed',
+      'settings_io_failed',
       () => 'failed' as const
     ),
     Match.exhaustive

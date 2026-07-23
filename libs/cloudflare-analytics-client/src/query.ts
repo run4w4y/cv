@@ -1,6 +1,6 @@
 import type { Configuration, GraphqlVariables, Range } from './types'
 
-export const buildLimitsQuery = () => `
+export const limitsQuery = `
 query AnalyticsLimits($zoneTag: string) {
   viewer {
     zones(filter: { zoneTag: $zoneTag }) {
@@ -21,23 +21,10 @@ export const buildLimitsVariables = (configuration: Configuration) => ({
   zoneTag: configuration.zoneId,
 })
 
-export const buildQuery = (maxPageSize = 5_000) => `
+export const buildQuery = (maxPageSize: number) => `
 query AliasedPathAnalytics($zoneTag: string, $filter: filter) {
   viewer {
     zones(filter: { zoneTag: $zoneTag }) {
-      topPaths: httpRequestsAdaptiveGroups(
-        filter: $filter
-        limit: ${Math.min(1_000, maxPageSize)}
-        orderBy: [sum_visits_DESC]
-      ) {
-        count
-        sum {
-          visits
-        }
-        dimensions {
-          clientRequestPath
-        }
-      }
       dailyPaths: httpRequestsAdaptiveGroups(
         filter: $filter
         limit: ${maxPageSize}
@@ -60,12 +47,8 @@ query AliasedPathAnalytics($zoneTag: string, $filter: filter) {
 
 export const buildVariables = (
   configuration: Configuration,
-  range: Range,
-  pathLike?: string
+  range: Range
 ): GraphqlVariables => {
-  const host = range.host ?? configuration.host
-  const normalizedPathLike = pathLike?.trim()
-
   return {
     filter: {
       AND: [
@@ -76,10 +59,12 @@ export const buildVariables = (
         {
           requestSource: 'eyeball',
         },
-        ...(host ? [{ clientRequestHTTPHost: host }] : []),
-        ...(normalizedPathLike
-          ? [{ clientRequestPath_like: normalizedPathLike }]
-          : []),
+        {
+          clientRequestHTTPHost: configuration.host,
+        },
+        {
+          clientRequestPath_like: '/c/%',
+        },
       ],
     },
     zoneTag: configuration.zoneId,

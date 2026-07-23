@@ -7,6 +7,7 @@ import { type Application, ApplicationSchema } from '../codecs/applications'
 import {
   type ApplicationCompensation,
   ApplicationCompensationSchema,
+  compensationRangeOrderFilter,
 } from '../codecs/compensations'
 import { NonEmptyTrimmedStringSchema } from '../model/constraints'
 
@@ -23,21 +24,7 @@ export const AnnualCompensationSchema: Schema.Codec<AnnualCompensation> =
       currencyCode: ApplicationCompensationSchema.fields.currencyCode,
       maximumMinor: ApplicationCompensationSchema.fields.maximumMinor,
       minimumMinor: ApplicationCompensationSchema.fields.minimumMinor,
-    }).pipe(
-      Schema.check(
-        Schema.makeFilter((value: AnnualCompensation) =>
-          value.minimumMinor === null ||
-          value.maximumMinor === null ||
-          value.minimumMinor <= value.maximumMinor
-            ? undefined
-            : {
-                path: ['maximumMinor'],
-                issue:
-                  'Annual compensation maximum must be greater than or equal to the minimum.',
-              }
-        )
-      )
-    )
+    }).pipe(Schema.check(compensationRangeOrderFilter))
   )
 
 /** Application representation returned by list queries. */

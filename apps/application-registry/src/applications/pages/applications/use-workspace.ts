@@ -28,6 +28,7 @@ import { useDebouncedDraft } from '../../../table-workspace/use-debounced-value'
 import type { TableDensity } from '../../components/application-table'
 import {
   type ApplicationSavedViewState,
+  comparableApplicationViewState,
   loadApplicationWorkspaceState,
   persistApplicationWorkspaceState,
 } from '../../components/saved-views'
@@ -121,6 +122,7 @@ export const useApplicationsWorkspace = (
     density,
     displayCurrency: currency,
   }
+  const persistedWorkspaceState = comparableApplicationViewState(currentState)
 
   // Restore browser-facing workspace state once on entry.
   React.useEffect(() => {
@@ -138,25 +140,11 @@ export const useApplicationsWorkspace = (
   }, [filters, initialState, ready, searchParams, setSearchParams])
 
   // localStorage is the durable boundary for the last visited workspace.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the canonical state fingerprint covers every persisted field.
   React.useEffect(() => {
     if (!ready || typeof window === 'undefined') return
-    persistApplicationWorkspaceState(window.localStorage, {
-      keyword,
-      filters: appliedFilters,
-      sorting,
-      columnVisibility,
-      density,
-      displayCurrency: currency,
-    })
-  }, [
-    appliedFilters,
-    columnVisibility,
-    currency,
-    density,
-    keyword,
-    ready,
-    sorting,
-  ])
+    persistApplicationWorkspaceState(window.localStorage, currentState)
+  }, [persistedWorkspaceState, ready])
 
   const applyView = (state: ApplicationSavedViewState) => {
     filters.setEditorState(

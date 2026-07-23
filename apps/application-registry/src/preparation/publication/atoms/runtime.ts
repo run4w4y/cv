@@ -18,7 +18,10 @@ export const cvPublicationRuntimeLayer = cvPublicationWorkflowLayer.pipe(
   Layer.provideMerge(WorkflowEngine.layerMemory)
 )
 
-/** Session-scoped in-memory publication Workflow runtime. Mount once at root. */
+/**
+ * Session-scoped publication runtime. Its route provider starts it lazily, and
+ * keepAlive preserves an active publication when navigation leaves the route.
+ */
 export const cvPublicationRuntime = Atom.runtime(
   cvPublicationRuntimeLayer
 ).pipe(Atom.keepAlive)

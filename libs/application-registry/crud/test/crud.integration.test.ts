@@ -134,20 +134,15 @@ after(async () => {
   await harness.dispose()
 })
 
-test('executes application CRUD and database defaults through slice services', async () => {
+test('persists applications with database defaults through slice services', async () => {
   const result = await runCrud(
     Effect.gen(function* () {
       const applications = yield* ApplicationsCrud
       const created = yield* seedApplication
-      const updated = yield* applications.patch(
-        application.applicationId,
-        { expectedVersion: 1, location: 'Remote' },
-        '2026-07-12T13:00:00.000Z'
-      )
       const page = yield* applications.list(
         resolveApplicationList({ pagination: { size: 10 } })
       )
-      return { created, page, updated }
+      return { created, page }
     })
   )
 
@@ -158,203 +153,11 @@ test('executes application CRUD and database defaults through slice services', a
   assert.equal(result.created.targetStage, 'backlog')
   assert.equal(result.created.version, 1)
 
-  assert.ok(result.updated)
-  assert.equal(result.updated.location, 'Remote')
-  assert.equal(result.updated.version, 2)
   assert.deepEqual(
     result.page.items.map(({ id }) => id),
     ['crud-application-1']
   )
   assert.equal(result.page.pageInfo.hasNextPage, false)
-})
-
-test('atomically replaces annual compensation and rejects a stale version', async () => {
-  const result = await runCrud(
-    Effect.gen(function* () {
-      const applications = yield* ApplicationsCrud
-      const compensations = yield* CompensationsCrud
-      yield* applications.persist(
-        {
-          ...application,
-          compensations: [
-            {
-              id: 'crud-annual-original',
-              kind: 'base_salary',
-              currencyCode: 'USD',
-              minimumMinor: 12_000_000,
-              maximumMinor: 15_000_000,
-              period: 'year',
-              rawText: null,
-              source: 'crud-test',
-            },
-          ],
-        },
-        {
-          operation: 'annual compensation seed',
-        }
-      )
-      const replaced = yield* compensations.replaceAnnual(
-        application.applicationId,
-        1,
-        {
-          id: 'crud-annual-replacement',
-          kind: 'base_salary',
-          currencyCode: 'EUR',
-          minimumMinor: 3_000_000_000,
-          maximumMinor: 5_000_000_000,
-          rawText: null,
-          source: 'table',
-        },
-        '2026-07-12T13:00:00.000Z'
-      )
-      const stale = yield* compensations.replaceAnnual(
-        application.applicationId,
-        1,
-        null,
-        '2026-07-12T14:00:00.000Z'
-      )
-      return {
-        application: yield* applications.findByIdentifier(
-          application.applicationId
-        ),
-        compensations: yield* compensations.listByApplication(
-          application.applicationId
-        ),
-        replaced,
-        stale,
-      }
-    })
-  )
-
-  assert.equal(result.replaced, true)
-  assert.equal(result.stale, false)
-  assert.equal(result.application?.version, 2)
-  assert.deepEqual(
-    result.compensations.map(
-      ({ currencyCode, id, maximumMinor, minimumMinor }) => ({
-        currencyCode,
-        id,
-        maximumMinor,
-        minimumMinor,
-      })
-    ),
-    [
-      {
-        currencyCode: 'EUR',
-        id: 'crud-annual-replacement',
-        maximumMinor: 5_000_000_000,
-        minimumMinor: 3_000_000_000,
-      },
-    ]
-  )
-})
-
-test('clears every annual compensation variant without removing bonuses', async () => {
-  const result = await runCrud(
-    Effect.gen(function* () {
-      const applications = yield* ApplicationsCrud
-      const compensations = yield* CompensationsCrud
-      yield* applications.persist(
-        {
-          ...application,
-          compensations: [
-            {
-              id: 'crud-clear-base',
-              kind: 'base_salary',
-              currencyCode: 'USD',
-              minimumMinor: 12_000_000,
-              maximumMinor: 15_000_000,
-              period: 'year',
-              rawText: null,
-              source: 'crud-test',
-            },
-            {
-              id: 'crud-clear-total',
-              kind: 'total_compensation',
-              currencyCode: 'USD',
-              minimumMinor: 15_000_000,
-              maximumMinor: 18_000_000,
-              period: 'year',
-              rawText: null,
-              source: 'crud-test',
-            },
-            {
-              id: 'crud-preserve-bonus',
-              kind: 'bonus',
-              currencyCode: 'USD',
-              minimumMinor: 1_000_000,
-              maximumMinor: 2_000_000,
-              period: 'year',
-              rawText: null,
-              source: 'crud-test',
-            },
-          ],
-        },
-        { operation: 'annual compensation clear seed' }
-      )
-      const cleared = yield* compensations.replaceAnnual(
-        application.applicationId,
-        1,
-        null,
-        '2026-07-12T13:00:00.000Z'
-      )
-      return {
-        cleared,
-        items: yield* compensations.listByApplication(
-          application.applicationId
-        ),
-      }
-    })
-  )
-
-  assert.equal(result.cleared, true)
-  assert.deepEqual(
-    result.items.map(({ id }) => id),
-    ['crud-preserve-bonus']
-  )
-})
-
-test('atomically replaces labels and preserves them after a stale write', async () => {
-  const result = await runCrud(
-    Effect.gen(function* () {
-      const annotations = yield* AnnotationsCrud
-      const applications = yield* ApplicationsCrud
-      yield* applications.persist(application, {
-        operation: 'label replacement seed',
-      })
-      const replaced = yield* annotations.replaceLabels(
-        application.applicationId,
-        ['Remote', 'TypeScript', 'Remote'],
-        '2026-07-12T13:00:00.000Z',
-        1
-      )
-      const stale = yield* annotations.replaceLabels(
-        application.applicationId,
-        ['Stale'],
-        '2026-07-12T14:00:00.000Z',
-        1
-      )
-      return {
-        application: yield* applications.findByIdentifier(
-          application.applicationId
-        ),
-        labels: yield* annotations.listLabels(application.applicationId),
-        replaced,
-        stale,
-      }
-    })
-  )
-
-  assert.deepEqual(
-    result.replaced?.map(({ label }) => label),
-    ['Remote', 'TypeScript']
-  )
-  assert.equal(result.stale, undefined)
-  assert.equal(result.application?.version, 2)
-  assert.deepEqual(
-    result.labels.map(({ label }) => label),
-    ['Remote', 'TypeScript']
-  )
 })
 
 test('updates a managed application aggregate in one version transition', async () => {
@@ -1197,13 +1000,11 @@ test('enforces PostgreSQL foreign keys and cascades application children', async
     }
   )
 
-  const removed = await runCrud(
-    Effect.gen(function* () {
-      const applications = yield* ApplicationsCrud
-      return yield* applications.remove(application.applicationId)
-    })
+  const removed = await harness.query<{ id: string }>(
+    `delete from applications where id = $1 returning id`,
+    [application.applicationId]
   )
-  assert.equal(removed, true)
+  assert.deepEqual(removed, [{ id: application.applicationId }])
 
   const notes = await harness.query<{ count: number }>(
     `select count(*)::int as count
