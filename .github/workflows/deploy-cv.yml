@@ -41,6 +41,7 @@ jobs:
           NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
         run: |
           nomad-pack run nomad/packs/cv-web \
+            --detach \
             --parser-v1 \
             --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${CV_IMAGE_DIGEST}" \
             --var "deployment_id=${GITHUB_SHA}" \

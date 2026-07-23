@@ -65,6 +65,7 @@ jobs:
           NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
         run: |
           nomad-pack run nomad/packs/application-registry-api \
+            --detach \
             --parser-v1 \
             --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${API_IMAGE_DIGEST}" \
             --var "enabled=${API_ENABLED}" \
@@ -96,6 +97,7 @@ jobs:
           WEB_SUBDOMAIN: ${{ vars.CV_REGISTRY_WEB_SUBDOMAIN || 'cv-registry' }}
         run: |
           nomad-pack run nomad/packs/application-registry-web \
+            --detach \
             --parser-v1 \
             --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${WEB_IMAGE_DIGEST}" \
             --var "enabled=${WEB_ENABLED}" \
@@ -124,6 +126,7 @@ jobs:
           RUNNER_IMAGE_DIGEST: ${{ inputs.listing_check_runner_image_digest }}
         run: |
           nomad-pack run nomad/packs/application-registry-listing-check-runner \
+            --detach \
             --parser-v1 \
             --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${RUNNER_IMAGE_DIGEST}" \
             --var "enabled=${RUNNER_ENABLED}"
@@ -151,6 +154,7 @@ jobs:
           WORKER_IMAGE_DIGEST: ${{ inputs.pdf_worker_image_digest }}
         run: |
           nomad-pack run nomad/packs/application-registry-pdf-worker \
+            --detach \
             --parser-v1 \
             --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${WORKER_IMAGE_DIGEST}" \
             --var "enabled=${WORKER_ENABLED}"
@@ -178,6 +182,7 @@ jobs:
           WORKER_IMAGE_DIGEST: ${{ inputs.cache_invalidator_image_digest }}
         run: |
           nomad-pack run nomad/packs/application-registry-cache-invalidator \
+            --detach \
             --parser-v1 \
             --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${WORKER_IMAGE_DIGEST}" \
             --var "enabled=${WORKER_ENABLED}"

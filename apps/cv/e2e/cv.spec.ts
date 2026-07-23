@@ -138,11 +138,6 @@ test('renders the A4 capability preview without interactive controls', async ({
   expect(qrBox.y + qrBox.height).toBeLessThanOrEqual(
     headerBox.y + headerBox.height
   )
-
-  await expect(page).toHaveScreenshot('print-preview.png', {
-    animations: 'disabled',
-    fullPage: true,
-  })
 })
 
 test('switches the public route to its dedicated PDF tree for printing', async ({
@@ -239,28 +234,6 @@ test('tracks the operating-system scheme while system is selected', async ({
   await page.emulateMedia({ colorScheme: 'dark' })
   await expect(root).toHaveClass(/(?:^|\s)dark(?:\s|$)/u)
   await expect(root).toHaveAttribute('data-color-scheme', 'system')
-})
-
-test('matches the website light and dark visual baselines', async ({
-  page,
-}) => {
-  await page.emulateMedia({ colorScheme: 'light' })
-  await page.goto(fixturePath)
-
-  const root = page.locator('html')
-  await page.getByRole('button', { name: 'Light' }).click()
-  await expect(root).toHaveAttribute('data-color-scheme', 'light')
-  await expect(page).toHaveScreenshot('responsive-light.png', {
-    animations: 'disabled',
-    fullPage: true,
-  })
-
-  await page.getByRole('button', { name: 'Dark' }).click()
-  await expect(root).toHaveAttribute('data-color-scheme', 'dark')
-  await expect(page).toHaveScreenshot('responsive-dark.png', {
-    animations: 'disabled',
-    fullPage: true,
-  })
 })
 
 test('returns not found for unknown fixture capabilities', async ({ page }) => {

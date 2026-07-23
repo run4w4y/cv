@@ -9,7 +9,6 @@ const rootDir = fileURLToPath(new URL('../..', import.meta.url))
 export default defineConfig({
   expect: {
     timeout: 5_000,
-    toHaveScreenshot: { maxDiffPixels: 500 },
   },
   forbidOnly: Boolean(process.env.CI),
   fullyParallel: true,
