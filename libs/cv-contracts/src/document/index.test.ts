@@ -70,14 +70,42 @@ const validDocument = {
 
 describe('cv.document.v1', () => {
   test('decodes the flattened one-page document shape', () => {
-    const document = Schema.decodeUnknownSync(CvDocumentV1Schema)(validDocument)
+    const document = Schema.decodeUnknownSync(CvDocumentV1Schema)({
+      ...validDocument,
+      experienceDuration: '6+ years',
+    })
 
     expect(document.$schema).toBe(cvDocumentV1ContractId)
     expect(document.person.name).toBe('Ada Lovelace')
+    expect(document.experienceDuration).toBe('6+ years')
     expect(document.experience[0]?.technologies).toEqual([
       'TypeScript',
       'Effect',
     ])
+  })
+
+  test('allows personal location and education metadata to be omitted', () => {
+    const document = Schema.decodeUnknownSync(CvDocumentV1Schema)({
+      ...validDocument,
+      education: [
+        {
+          details: [],
+          id: 'education.mathematics',
+          institution: 'University of London',
+          qualification: 'Mathematics',
+        },
+      ],
+      person: {
+        contacts: validDocument.person.contacts,
+        headline: validDocument.person.headline,
+        name: validDocument.person.name,
+        summary: validDocument.person.summary,
+      },
+    })
+
+    expect(document.person.location).toBeUndefined()
+    expect(document.education[0]?.location).toBeUndefined()
+    expect(document.education[0]?.period).toBeUndefined()
   })
 
   test('rejects an unsupported contract version and unknown root fields', () => {

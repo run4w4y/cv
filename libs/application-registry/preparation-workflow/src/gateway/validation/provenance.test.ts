@@ -57,6 +57,19 @@ const factsCatalogue: FactsCatalogueV1 = {
       ],
       kind: 'experience',
     },
+    {
+      entries: [
+        {
+          degree: 'Mathematics',
+          details: [],
+          id: 'education.mathematics',
+          institution: 'University of London',
+          location: 'London, UK',
+          period: '2019-2023',
+        },
+      ],
+      kind: 'education',
+    },
   ],
 }
 
@@ -81,6 +94,13 @@ const validExperience: CvDocumentV1['experience'][number] = {
   period: '2023-present',
   role: 'Platform engineer',
   technologies: ['Effect'],
+}
+
+const validEducation: CvDocumentV1['education'][number] = {
+  details: [],
+  id: 'education.mathematics',
+  institution: 'University of London',
+  qualification: 'Mathematics',
 }
 
 const validCv: CvDocumentV1 = {
@@ -157,6 +177,25 @@ describe('CV provenance validation', () => {
     )
     expect(privateEntryError.message).toContain(
       'experience:experience.private is absent from the facts catalogue'
+    )
+  })
+
+  test('allows reviewed education dates and locations to be omitted', async () => {
+    await Effect.runPromise(
+      validateCvProvenance(factsCatalogue, {
+        ...validCv,
+        education: [validEducation],
+      })
+    )
+
+    const changedPeriodError = await failureOf(
+      validateCvProvenance(factsCatalogue, {
+        ...validCv,
+        education: [{ ...validEducation, period: '2020-2024' }],
+      })
+    )
+    expect(changedPeriodError.message).toContain(
+      'education:education.mathematics.period was changed'
     )
   })
 })

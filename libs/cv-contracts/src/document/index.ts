@@ -189,10 +189,18 @@ export const CvEducationItemV1Schema = Schema.Struct({
   qualification: ShortTextSchema.annotate({
     title: 'Qualification',
   }),
-  period: ShortTextSchema.annotate({
-    title: 'Period',
-  }),
-  location: Schema.optional(ShortTextSchema.annotate({ title: 'Location' })),
+  period: Schema.optional(
+    ShortTextSchema.annotate({
+      title: 'Period',
+      description: 'Optional human-readable education period.',
+    })
+  ),
+  location: Schema.optional(
+    ShortTextSchema.annotate({
+      title: 'Location',
+      description: 'Optional institution location.',
+    })
+  ),
   details: Schema.Array(HighlightSchema).pipe(
     Schema.check(Schema.isMaxLength(4))
   ),
@@ -251,6 +259,13 @@ const CvDocumentV1StructureSchema = Schema.Struct({
     description: 'Text direction used by the renderer.',
   }),
   person: CvPersonV1Schema,
+  experienceDuration: Schema.optional(
+    ShortTextSchema.annotate({
+      title: 'Experience duration',
+      description:
+        'Optional localized total-experience text shown with the experience heading.',
+    })
+  ),
   experience: Schema.Array(CvExperienceItemV1Schema).pipe(
     Schema.check(Schema.isMaxLength(10))
   ),

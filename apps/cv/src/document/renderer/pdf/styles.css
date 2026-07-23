@@ -290,6 +290,23 @@
   font-size: 0.72rem;
 }
 
+.cv2-education-title {
+  color: var(--cv2-text-secondary);
+}
+
+.cv2-education-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.08rem 0.24rem;
+  font-size: 0.68rem;
+}
+
+.cv2-education-institution {
+  color: var(--cv2-accent);
+  font-weight: 690;
+}
+
 .cv2-publication {
   display: grid;
   width: 25mm;

@@ -67,7 +67,11 @@ export const PdfCvRenderer = ({
 
       <div className="cv2-layout">
         <div className="cv2-column">
-          <ExperienceSection entries={document.experience} labels={labels} />
+          <ExperienceSection
+            duration={document.experienceDuration}
+            entries={document.experience}
+            labels={labels}
+          />
           <ProjectsSection entries={document.projects} labels={labels} />
         </div>
         <div className="cv2-column">

@@ -70,18 +70,24 @@ export const EducationEntry = ({
   readonly labels: CvRendererLabels
   readonly titleId: string
 }) => (
-  <article aria-labelledby={titleId} className="cv2-entry">
-    <header className="cv2-entry-header">
-      <div>
-        <h3 className="cv2-entry-title" id={titleId}>
-          {entry.qualification}
-        </h3>
-        <p className="cv2-entry-organization">{entry.institution}</p>
-      </div>
-      <p className="cv2-entry-period">
-        {entry.period}
+  <article aria-labelledby={titleId} className="cv2-entry cv2-education-entry">
+    <header>
+      <h3 className="cv2-skill-label cv2-education-title" id={titleId}>
+        {entry.qualification}
+      </h3>
+      <p className="cv2-skill-items cv2-education-meta">
+        <span className="cv2-education-institution">{entry.institution}</span>
         {entry.location ? (
-          <span className="cv2-entry-location">{entry.location}</span>
+          <>
+            <span aria-hidden="true">·</span>
+            <span>{entry.location}</span>
+          </>
+        ) : null}
+        {entry.period ? (
+          <>
+            <span aria-hidden="true">·</span>
+            <span>{entry.period}</span>
+          </>
         ) : null}
       </p>
     </header>

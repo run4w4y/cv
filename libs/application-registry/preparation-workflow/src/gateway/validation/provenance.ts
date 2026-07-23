@@ -165,7 +165,7 @@ export const validateCvProvenance = (
       issues.push(`education:${item.id}.institution was changed`)
     if (item.qualification !== source.degree)
       issues.push(`education:${item.id}.qualification was changed`)
-    if (item.period !== source.period)
+    if (item.period !== undefined && item.period !== source.period)
       issues.push(`education:${item.id}.period was changed`)
     if (item.location !== undefined && item.location !== source.location)
       issues.push(`education:${item.id}.location was changed`)

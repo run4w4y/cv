@@ -13,14 +13,21 @@ import { idFragment, Section } from './primitives'
 const idPrefix = 'cv-document'
 
 export const ExperienceSection = ({
+  duration,
   entries,
   labels,
 }: {
+  readonly duration?: string
   readonly entries: ReadonlyArray<CvExperienceItemV1>
   readonly labels: CvRendererLabels
 }) =>
   entries.length === 0 ? null : (
-    <Section heading={labels.experience} id={`${idPrefix}-experience`}>
+    <Section
+      heading={
+        duration ? `${labels.experience} · ${duration}` : labels.experience
+      }
+      id={`${idPrefix}-experience`}
+    >
       <ol className="cv2-entry-list">
         {entries.map((entry) => (
           <li key={entry.id}>

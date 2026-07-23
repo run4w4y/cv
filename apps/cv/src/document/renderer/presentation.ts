@@ -45,7 +45,9 @@ export const cvWebPresentation = (
       description: labels.experienceDescription,
       id: 'cv-web-experience',
       kind: 'experience',
-      label: labels.experience,
+      label: document.experienceDuration
+        ? `${labels.experience} · ${document.experienceDuration}`
+        : labels.experience,
     })
   }
   if (document.projects.length > 0) {

@@ -188,7 +188,7 @@ const ProjectRow = ({
 const EducationRow = ({ entry }: { readonly entry: CvEducationItemV1 }) => (
   <article className="cv-web-entry cv-web-education-entry">
     <div className="cv-web-entry-meta">
-      <p>{entry.period}</p>
+      {entry.period ? <p>{entry.period}</p> : null}
       {entry.location ? <p>{entry.location}</p> : null}
     </div>
     <div className="cv-web-entry-main">

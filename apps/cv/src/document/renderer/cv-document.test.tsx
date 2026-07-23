@@ -70,10 +70,16 @@ describe('CV renderers', () => {
 
   test('selects website presentation labels from the document locale', () => {
     const markup = renderToStaticMarkup(
-      <WebCvRenderer document={{ ...document, locale: 'ru' }} />
+      <WebCvRenderer
+        document={{
+          ...document,
+          experienceDuration: '6+ лет',
+          locale: 'ru',
+        }}
+      />
     )
 
-    expect(markup).toContain('>Опыт</h2>')
+    expect(markup).toContain('>Опыт · 6+ лет</h2>')
     expect(markup).toContain('aria-label="Контактная информация"')
     expect(markup).toContain('aria-label="Разделы резюме"')
   })
@@ -93,5 +99,46 @@ describe('CV renderers', () => {
       markup.indexOf('</header>')
     )
     expect(markup).not.toContain('data-cv-web-document')
+  })
+
+  test('renders optional total experience with the PDF section heading', () => {
+    const markup = renderToStaticMarkup(
+      <PdfCvRenderer
+        document={{ ...document, experienceDuration: '6+ years' }}
+      />
+    )
+
+    expect(markup).toContain('>Experience · 6+ years</h2>')
+  })
+
+  test('renders compact education details without absent optional metadata', () => {
+    const markup = renderToStaticMarkup(
+      <PdfCvRenderer
+        document={{
+          ...document,
+          education: [
+            {
+              details: [],
+              id: 'education.mathematics',
+              institution: 'University of London',
+              qualification: 'Mathematics',
+            },
+          ],
+          person: { ...document.person, location: undefined },
+        }}
+      />
+    )
+    const educationMarkup = markup.match(
+      /<section aria-labelledby="cv-document-education"[\s\S]*?<\/section>/u
+    )?.[0]
+
+    expect(educationMarkup).toContain(
+      'class="cv2-skill-label cv2-education-title"'
+    )
+    expect(educationMarkup).toContain(
+      'class="cv2-education-institution">University of London</span>'
+    )
+    expect(educationMarkup).not.toContain('2015–2019')
+    expect(educationMarkup).not.toContain('London, UK')
   })
 })
