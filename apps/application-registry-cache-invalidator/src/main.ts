@@ -30,7 +30,7 @@ const program = Effect.scoped(
     )
     const invalidator = makeCloudflareCacheInvalidatorLayer(
       configuration.cloudflare
-    ).pipe(Layer.provide(NodeHttpClient.layerUndici))
+    ).pipe(Layer.provide(NodeHttpClient.layerNodeHttp))
     const runtime = Layer.merge(source, invalidator)
 
     yield* Console.log(
