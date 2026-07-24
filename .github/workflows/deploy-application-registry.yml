@@ -68,12 +68,58 @@ jobs:
             --var "traefik_subdomain=${API_SUBDOMAIN}"
 
       - name: Wait for registry migration and API rollout
+        env:
+          NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
+          NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
         run: |
-          deployment_id="$(
-            nomad job deployments -latest -json cv-registry |
-              jq -er 'if type == "array" then .[0].ID else .ID end'
+          nomad_api() {
+            curl \
+              --fail \
+              --silent \
+              --show-error \
+              --header "X-Nomad-Token: ${NOMAD_TOKEN}" \
+              "${NOMAD_ADDR%/}$1"
+          }
+
+          deployment="$(
+            nomad_api "/v1/job/cv-registry/deployment"
           )"
-          nomad deployment status -monitor "$deployment_id"
+          deployment_id="$(jq -er '.ID' <<<"$deployment")"
+          previous_status=""
+
+          for _ in {1..120}; do
+            deployment="$(
+              nomad_api "/v1/deployment/${deployment_id}"
+            )"
+            status="$(jq -er '.Status' <<<"$deployment")"
+            description="$(
+              jq -er '.StatusDescription // "No description"' <<<"$deployment"
+            )"
+
+            if [[ "$status" != "$previous_status" ]]; then
+              printf 'Registry deployment %s: %s (%s)\n' \
+                "$deployment_id" "$status" "$description"
+              previous_status="$status"
+            fi
+
+            case "$status" in
+              successful)
+                exit 0
+                ;;
+              running | pending | initializing | unblocking)
+                sleep 2
+                ;;
+              *)
+                printf 'Registry deployment failed: %s (%s)\n' \
+                  "$status" "$description" >&2
+                exit 1
+                ;;
+            esac
+          done
+
+          printf 'Registry deployment %s did not finish within four minutes.\n' \
+            "$deployment_id" >&2
+          exit 1
 
   deploy-registry-web:
     name: Register registry management web
