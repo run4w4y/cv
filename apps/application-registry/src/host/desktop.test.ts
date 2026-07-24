@@ -73,6 +73,10 @@ describe('desktop host fetch', () => {
     expect(requests).toHaveLength(1)
     expect(requests[0]?.url).toBe('/api/registry/applications/app-1?view=full')
     expect(requests[0]?.method).toBe('PATCH')
+    expect(requests[0]?.headers).toContainEqual([
+      'content-type',
+      'application/json',
+    ])
     expect(new TextDecoder().decode(requests[0]?.body ?? undefined)).toBe(
       '{"status":"interviewing"}'
     )

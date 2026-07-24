@@ -46,10 +46,13 @@ type PreparationRunBase = {
   readonly applicationId: string | null
   readonly batchId: string
   readonly batchPosition: number
+  readonly company: string | null
   readonly createdAt: number
+  readonly jobId: string
   readonly kind: DocumentKind
   readonly locale: string
   readonly message: string
+  readonly role: string | null
   readonly runId: string
   readonly stage: PreparationStage
   readonly stepHistory: ReadonlyArray<PreparationStepHistoryEntry>

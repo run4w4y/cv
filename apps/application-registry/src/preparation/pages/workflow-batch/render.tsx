@@ -1,6 +1,6 @@
 import {
   type PreparationBatch,
-  type PreparationRun,
+  type PreparationJob,
   summarizePreparationBatch,
 } from '@cv/application-preparation-workflow/domain'
 import { useAtom, useAtomValue } from '@effect/atom-react'
@@ -20,47 +20,52 @@ import type {
   WorkflowJobListItem,
 } from '@/preparation/workflows/presentation'
 
-const activeStatuses = new Set([
-  'queued',
-  'running',
-  'review_submitted',
-  'cancelling',
-])
+const activeStatuses = new Set(['queued', 'running'])
 
 const toBatchItem = (batch: PreparationBatch): WorkflowBatchListItem => {
-  const statuses = batch.runs.map((run) => run.status)
+  const statuses = batch.jobs.map((job) => job.status)
   const count = (status: string) =>
     statuses.filter((candidate) => candidate === status).length
   return {
     active: statuses.filter((status) => activeStatuses.has(status)).length,
     batchId: batch.batchId,
     cancelled: count('cancelled'),
-    completed: count('approved') + count('rejected'),
+    completed: count('completed'),
     createdAt: batch.createdAt,
-    failed: count('failed'),
-    kind: batch.kind,
+    failed: count('failed') + count('mixed'),
+    kinds: batch.kinds,
     locale: batch.locale,
-    needsReview: count('awaiting_review'),
+    needsReview: count('needs_review'),
     status: batch.status,
-    total: batch.runs.length,
+    total: batch.jobs.length,
     updatedAt: batch.updatedAt,
+    urlCount: batch.urlCount,
   }
 }
 
-const toJobItem = (run: PreparationRun): WorkflowJobListItem => ({
-  applicationId: run.applicationId,
-  batchId: run.batchId,
-  createdAt: run.createdAt,
-  error: run.error,
-  kind: run.kind,
-  locale: run.locale,
-  message: run.message,
-  position: run.batchPosition,
-  runId: run.runId,
-  stage: run.stage,
-  status: run.status,
-  updatedAt: run.updatedAt,
-  url: run.url,
+const toJobItem = (job: PreparationJob): WorkflowJobListItem => ({
+  applicationId: job.applicationId,
+  artifacts: job.artifacts.map((run) => ({
+    error: run.error,
+    kind: run.kind,
+    message: run.message,
+    runId: run.runId,
+    stage: run.stage,
+    status: run.status,
+  })),
+  batchId: job.batchId,
+  company: job.company,
+  createdAt: job.createdAt,
+  jobId: job.jobId,
+  kinds: job.artifacts.map(({ kind }) => kind),
+  locale: job.locale,
+  message: job.message,
+  position: job.batchPosition,
+  primaryRunId: job.primaryRunId,
+  role: job.role,
+  status: job.status,
+  updatedAt: job.updatedAt,
+  url: job.url,
 })
 
 export const WorkflowBatchPage = () => {
@@ -123,22 +128,21 @@ export const WorkflowBatchPage = () => {
     })
   }
 
-  const cancellableIds = batch.runs
+  const cancellableIds = batch.jobs
     .filter(
-      (run) =>
-        run.status === 'queued' ||
-        run.status === 'running' ||
-        run.status === 'review_submitted' ||
-        run.status === 'awaiting_review'
+      (job) =>
+        job.status === 'queued' ||
+        job.status === 'running' ||
+        job.status === 'needs_review'
     )
-    .map((run) => run.runId)
+    .map((job) => job.primaryRunId)
 
   return (
     <WorkflowBatchScreen
       batch={toBatchItem(batch)}
       cancelError={cancelError}
       cancellingRunIds={cancellingRunIds}
-      jobs={batch.runs.map(toJobItem)}
+      jobs={batch.jobs.map(toJobItem)}
       onCancelAll={() => void requestCancellation(cancellableIds)}
       onCancelJob={(runId) => void requestCancellation([runId])}
     />

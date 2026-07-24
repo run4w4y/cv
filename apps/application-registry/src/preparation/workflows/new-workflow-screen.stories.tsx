@@ -87,10 +87,9 @@ const NewWorkflowPreview = ({
   const settingsValid =
     form.locale.length > 0 &&
     localeError === null &&
-    (form.kind === 'cv' || form.prompt.trim().length > 0) &&
+    (!form.includeCoverLetter || form.prompt.trim().length > 0) &&
     promptCharactersRemaining >= 0
-  const canStart =
-    urlsValid && settingsValid && (form.kind !== 'cv' || guidanceReady)
+  const canStart = urlsValid && settingsValid && guidanceReady
 
   return (
     <NewWorkflowScreen
@@ -152,7 +151,7 @@ export const CoverLetterSettings: Story = {
   args: {
     initialForm: {
       ...validWorkflowForm,
-      kind: 'cover_letter',
+      includeCoverLetter: true,
       locale: 'de',
       prompt:
         'Write in German. Keep the letter direct and under 350 words, emphasizing platform leadership and mentoring.',

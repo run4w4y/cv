@@ -57,7 +57,7 @@ export const CvContactLinkV1Schema = Schema.Struct({
     title: 'Contact value',
     description: 'The exact contact value shown to the reader.',
   }),
-  href: Schema.optional(
+  href: Schema.optionalKey(
     UriSchema.annotate({
       title: 'Contact link',
       description: 'Absolute URI opened for this contact method.',
@@ -77,7 +77,7 @@ export const CvPersonV1Schema = Schema.Struct({
     description: 'The person name displayed as the document title.',
   }),
   headline: HeadlineSchema,
-  location: Schema.optional(
+  location: Schema.optionalKey(
     ShortTextSchema.annotate({
       title: 'Location',
       description: 'Public location or remote-work location statement.',
@@ -111,12 +111,12 @@ export const CvExperienceItemV1Schema = Schema.Struct({
     title: 'Period',
     description: 'Human-readable employment period.',
   }),
-  location: Schema.optional(
+  location: Schema.optionalKey(
     ShortTextSchema.annotate({
       title: 'Location',
     })
   ),
-  summary: Schema.optional(
+  summary: Schema.optionalKey(
     NonEmptyTextSchema.pipe(Schema.check(Schema.isMaxLength(800))).annotate({
       title: 'Experience summary',
     })
@@ -189,13 +189,13 @@ export const CvEducationItemV1Schema = Schema.Struct({
   qualification: ShortTextSchema.annotate({
     title: 'Qualification',
   }),
-  period: Schema.optional(
+  period: Schema.optionalKey(
     ShortTextSchema.annotate({
       title: 'Period',
       description: 'Optional human-readable education period.',
     })
   ),
-  location: Schema.optional(
+  location: Schema.optionalKey(
     ShortTextSchema.annotate({
       title: 'Location',
       description: 'Optional institution location.',
@@ -216,7 +216,7 @@ export type CvEducationItemV1 = Schema.Schema.Type<
 
 export const CvAdditionalItemV1Schema = Schema.Struct({
   id: StableIdentifierSchema.annotate({ title: 'Additional item ID' }),
-  title: Schema.optional(ShortTextSchema.annotate({ title: 'Item title' })),
+  title: Schema.optionalKey(ShortTextSchema.annotate({ title: 'Item title' })),
   text: NonEmptyTextSchema.pipe(Schema.check(Schema.isMaxLength(500))).annotate(
     {
       title: 'Item text',
@@ -259,7 +259,7 @@ const CvDocumentV1StructureSchema = Schema.Struct({
     description: 'Text direction used by the renderer.',
   }),
   person: CvPersonV1Schema,
-  experienceDuration: Schema.optional(
+  experienceDuration: Schema.optionalKey(
     ShortTextSchema.annotate({
       title: 'Experience duration',
       description:
@@ -316,7 +316,8 @@ export const CvDocumentV1Schema = CvDocumentV1StructureSchema.pipe(
         ),
       ],
       {
-        description: 'A one-page CV with unique item identifiers.',
+        description:
+          'An ATS-readable CV of at most two pages with unique item identifiers.',
       }
     )
   )
@@ -324,7 +325,7 @@ export const CvDocumentV1Schema = CvDocumentV1StructureSchema.pipe(
   identifier: 'CvDocumentV1',
   title: 'CV document v1',
   description:
-    'Flattened, single-locale content rendered as a one-page tailored CV.',
+    'Flattened, single-locale content rendered as an ATS-readable tailored CV of at most two pages.',
   parseOptions: { errors: 'all', onExcessProperty: 'error' },
 })
 

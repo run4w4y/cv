@@ -21,7 +21,7 @@ export interface GenerationGuidance {
   readonly instruction: string
   /** Inputs from which this value may be derived. */
   readonly sources: ReadonlyArray<GenerationGuidanceSource>
-  /** Soft one-page writing budget. Structural validation does not count words. */
+  /** Soft writing budget. Structural validation does not count words. */
   readonly maxWords?: number
 }
 

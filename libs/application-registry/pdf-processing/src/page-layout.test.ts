@@ -24,18 +24,31 @@ describe('PDF public-page layout assessment', () => {
     expect(assessCvPageLayout(measurement())).toMatchObject({ status: 'fits' })
   })
 
-  test('rejects vertical and horizontal overflow', () => {
+  test('accepts multi-page height and estimates its page count', () => {
     expect(
       assessCvPageLayout(
         measurement({
-          renderedHeightPx: 1_122.52 + cvPageLayoutToleranceCssPixels + 12,
-          scrollHeightPx: 1_135,
+          renderedHeightPx: 1_122.52 * 1.5,
+          scrollHeightPx: Math.ceil(1_122.52 * 1.5),
+        })
+      )
+    ).toMatchObject({ estimatedPageCount: 2, status: 'fits' })
+  })
+
+  test('rejects horizontal page and document overflow', () => {
+    expect(
+      assessCvPageLayout(
+        measurement({
+          renderedWidthPx: 793.7 + cvPageLayoutToleranceCssPixels + 12,
+          scrollWidthPx: 806,
         })
       ).status
     ).toBe('overflow')
-    expect(assessCvPageLayout(measurement({ scrollWidthPx: 799 })).status).toBe(
-      'overflow'
-    )
+    expect(
+      assessCvPageLayout(
+        measurement({ renderedWidthPx: 700, scrollWidthPx: 705 })
+      ).status
+    ).toBe('overflow')
   })
 
   test('rejects missing and invalid public renderer measurements', () => {

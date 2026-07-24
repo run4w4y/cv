@@ -1,11 +1,10 @@
-import { CvDocumentV1Schema } from '@cv/contracts/document'
 import { Effect, Schema, Semaphore } from 'effect'
 
-import { coverLetterJsonSchema } from '../cover-letter/ai-schema'
-import { CoverLetterDocumentSchema } from '../cover-letter/contract'
-import { cvDocumentV1JsonSchema } from '../cv/ai-schema'
+import { coverLetterGenerationContract } from '../cover-letter/ai-schema'
+import { cvDocumentV1GenerationContract } from '../cv/ai-schema'
 import type {
   EvidencePlan,
+  GenerationStageMetadata,
   JobAnalysis,
   PreparationBootstrap,
   PreparationWorkflowInput,
@@ -18,14 +17,18 @@ import {
   preparationSourceUrl,
   SectionBriefSchema,
 } from '../domain'
-import { toGenerationJsonSchema } from '../generation/ai-schema'
+import {
+  type GenerationContract,
+  toGenerationContract,
+} from '../generation/ai-schema'
 import {
   buildCoverLetterGenerationRequest,
   buildCvDraftGenerationRequest,
-  factsForGeneration,
+  evidenceReferencesForGeneration,
+  resolveEvidenceReferences,
 } from '../generation/prompts'
 import type {
-  StructuredGenerationRequest,
+  StructuredGenerationPrompt,
   StructuredGenerationShape,
 } from '../generation/service'
 import { formatted, generationStageMetadata, stageError } from './shared'
@@ -34,6 +37,32 @@ import {
   validateEvidencePlan,
   validateSectionBrief,
 } from './validation'
+
+const jobAnalysisGenerationContract = toGenerationContract(JobAnalysisSchema)
+const evidencePlanGenerationContract = toGenerationContract(EvidencePlanSchema)
+const sectionBriefGenerationContract = toGenerationContract(SectionBriefSchema)
+
+const sumUsage = (values: ReadonlyArray<number | null>): number | null => {
+  let total = 0
+  for (const value of values) {
+    if (value === null) return null
+    total += value
+  }
+  return total
+}
+
+const combineGenerationMetadata = (
+  stage: string,
+  entries: ReadonlyArray<GenerationStageMetadata>
+): GenerationStageMetadata => ({
+  executor: entries.at(-1)?.executor ?? 'unknown',
+  stage,
+  usage: {
+    inputTokens: sumUsage(entries.map(({ usage }) => usage.inputTokens)),
+    outputTokens: sumUsage(entries.map(({ usage }) => usage.outputTokens)),
+    totalTokens: sumUsage(entries.map(({ usage }) => usage.totalTokens)),
+  },
+})
 
 export const preparationSectionIds = (
   kind: PreparationWorkflowInput['kind']
@@ -54,15 +83,20 @@ export const makePreparationGenerationGateway = Effect.fn(
 
   const generate = Effect.fn('PreparationGateway.generate')(function* <Output>(
     stage: string,
-    schema: Schema.Codec<Output, unknown, never, never>,
-    request: StructuredGenerationRequest
+    contract: GenerationContract<Output>,
+    request: StructuredGenerationPrompt
   ) {
     const result = yield* generationSemaphore
-      .withPermits(1)(generation.generate(request))
+      .withPermits(1)(
+        generation.generate({
+          ...request,
+          outputSchema: contract.outputSchema,
+        })
+      )
       .pipe(stageError(stage))
-    const value = yield* Schema.decodeUnknownEffect(schema)(result.output).pipe(
-      stageError(stage)
-    )
+    const value = yield* Schema.decodeUnknownEffect(contract.codec)(
+      result.output
+    ).pipe(stageError(stage))
     return { metadata: generationStageMetadata(stage, result), value }
   })
 
@@ -70,17 +104,20 @@ export const makePreparationGenerationGateway = Effect.fn(
     input: PreparationWorkflowInput,
     context: PreparationBootstrap
   ) {
-    const generated = yield* generate('analysis', JobAnalysisSchema, {
-      instructions:
-        'Analyze one job posting. Extract only information supported by the posting; do not evaluate the candidate yet. Give every requirement a short stable ID unique within this response.',
-      prompt: [
-        `Source URL: ${preparationSourceUrl(input.source)}`,
-        `Requested locale: ${input.locale}`,
-        'Captured job posting:',
-        formatted(context.jobContext),
-      ].join('\n\n'),
-      outputSchema: toGenerationJsonSchema(JobAnalysisSchema),
-    })
+    const generated = yield* generate(
+      'analysis',
+      jobAnalysisGenerationContract,
+      {
+        instructions:
+          'Analyze one job posting. Extract only information supported by the posting; do not evaluate the candidate yet. Give every requirement a short stable ID unique within this response.',
+        prompt: [
+          `Source URL: ${preparationSourceUrl(input.source)}`,
+          `Requested locale: ${input.locale}`,
+          'Captured job posting:',
+          formatted(context.jobContext),
+        ].join('\n\n'),
+      }
+    )
     return {
       analysis: generated.value,
       metadata: generated.metadata,
@@ -92,23 +129,64 @@ export const makePreparationGenerationGateway = Effect.fn(
     context: PreparationBootstrap,
     analysis: JobAnalysis
   ) {
-    const generated = yield* generate('evidence', EvidencePlanSchema, {
-      instructions:
-        'Map job requirements only to explicitly supported reviewed fact IDs. An empty factIds list is preferable to an invented or weak match. Every requirement must appear either in matches or uncoveredRequirementIds.',
-      prompt: [
-        'Structured job analysis:',
-        formatted(analysis),
-        'Trusted facts catalogue:',
-        formatted(factsForGeneration(context.factsCatalogue)),
-      ].join('\n\n'),
-      outputSchema: toGenerationJsonSchema(EvidencePlanSchema),
-    })
+    const references = evidenceReferencesForGeneration(context.factsCatalogue)
+    const evidencePlanningPrompt = [
+      'Structured job analysis:',
+      formatted(analysis),
+      'Selectable reviewed evidence catalogue:',
+      formatted(references),
+    ].join('\n\n')
+    const generated = yield* generate(
+      'evidence',
+      evidencePlanGenerationContract,
+      {
+        instructions:
+          'Map job requirements to reviewed evidence citations. Use only the exact evidence IDs supplied in the selectable catalogue. Evidence IDs are source citations, not text fragments. An empty evidenceIds list is preferable to an invented or weak match. Every requirement must appear either in matches or uncoveredRequirementIds.',
+        prompt: evidencePlanningPrompt,
+      }
+    )
+    const validation = yield* validateEvidencePlan(
+      analysis,
+      references,
+      generated.value
+    ).pipe(
+      Effect.map((plan) => ({ _tag: 'Valid' as const, plan })),
+      Effect.catch((error) =>
+        Effect.succeed({ _tag: 'Invalid' as const, error })
+      )
+    )
+    if (validation._tag === 'Valid') {
+      return { metadata: generated.metadata, plan: validation.plan }
+    }
+
+    const repaired = yield* generate(
+      'evidence:repair',
+      evidencePlanGenerationContract,
+      {
+        instructions:
+          'Correct the previous evidence plan. Use only exact requirement IDs and evidence IDs printed below. Preserve truthful coverage; move a requirement to uncoveredRequirementIds rather than inventing a citation.',
+        prompt: [
+          evidencePlanningPrompt,
+          'Previous invalid evidence plan:',
+          formatted(generated.value),
+          'Deterministic validation failure:',
+          validation.error.message,
+          'Return one corrected complete evidence plan.',
+        ].join('\n\n'),
+      }
+    )
     const plan = yield* validateEvidencePlan(
       analysis,
-      context.factsCatalogue,
-      generated.value
+      references,
+      repaired.value
     )
-    return { metadata: generated.metadata, plan }
+    return {
+      metadata: combineGenerationMetadata('evidence', [
+        generated.metadata,
+        repaired.metadata,
+      ]),
+      plan,
+    }
   })
 
   const brief = Effect.fn('PreparationGateway.brief')(function* (
@@ -118,12 +196,17 @@ export const makePreparationGenerationGateway = Effect.fn(
     plan: EvidencePlan,
     sectionId: string
   ) {
+    const references = evidenceReferencesForGeneration(context.factsCatalogue)
+    const selectedReferences = resolveEvidenceReferences(
+      references,
+      plan.matches.flatMap(({ evidenceIds }) => evidenceIds)
+    )
     const generated = yield* generate(
       `brief:${sectionId}`,
-      SectionBriefSchema,
+      sectionBriefGenerationContract,
       {
         instructions:
-          'Create a concise document-section brief. Reference only reviewed fact IDs from the supplied catalogue and return the requested sectionId exactly. Notes are planning instructions, not finished claims.',
+          'Create a concise document-section brief. Cite only evidence IDs selected by the validated evidence plan and return the requested sectionId exactly. Evidence IDs ground the writing; notes are planning instructions, not finished claims.',
         prompt: [
           `Document kind: ${input.kind}`,
           `Requested section: ${sectionId}`,
@@ -131,14 +214,13 @@ export const makePreparationGenerationGateway = Effect.fn(
           formatted(analysis),
           'Evidence plan:',
           formatted(plan),
-          'Trusted facts catalogue:',
-          formatted(factsForGeneration(context.factsCatalogue)),
+          'Resolved selected evidence:',
+          formatted(selectedReferences),
         ].join('\n\n'),
-        outputSchema: toGenerationJsonSchema(SectionBriefSchema),
       }
     )
     const value = yield* validateSectionBrief(
-      context.factsCatalogue,
+      references,
       plan,
       sectionId,
       generated.value
@@ -153,6 +235,18 @@ export const makePreparationGenerationGateway = Effect.fn(
     plan: EvidencePlan,
     briefs: ReadonlyArray<SectionBrief>
   ) {
+    const references = evidenceReferencesForGeneration(context.factsCatalogue)
+    const resolvedPlan = {
+      ...plan,
+      matches: plan.matches.map((match) => ({
+        ...match,
+        evidence: resolveEvidenceReferences(references, match.evidenceIds),
+      })),
+    }
+    const resolvedBriefs = briefs.map((brief) => ({
+      ...brief,
+      evidence: resolveEvidenceReferences(references, brief.evidenceIds),
+    }))
     const baseRequest = yield* input.kind === 'cv'
       ? Effect.gen(function* () {
           const guidance = input.cvGenerationGuidance
@@ -166,7 +260,6 @@ export const makePreparationGenerationGateway = Effect.fn(
             guidance,
             jobContext: context.jobContext,
             locale: input.locale,
-            schema: cvDocumentV1JsonSchema,
           })
         })
       : Effect.succeed(
@@ -177,27 +270,32 @@ export const makePreparationGenerationGateway = Effect.fn(
             prompt:
               input.coverLetterPrompt ??
               'Write a concise, specific, professional cover letter.',
-            schema: coverLetterJsonSchema,
           })
         )
-    const request: StructuredGenerationRequest = {
+    const request: StructuredGenerationPrompt = {
       ...baseRequest,
       prompt: [
         baseRequest.prompt,
-        'Use the following verified workflow analysis and planning artifacts. They are selection guidance; the trusted facts catalogue remains authoritative:',
+        'Use the following verified workflow analysis and planning artifacts. Evidence IDs are citations that ground factual claims, not text fragments to concatenate. Author one coherent, role-specific document in original prose. The trusted facts catalogue remains authoritative and provides surrounding context:',
         'Job analysis:',
         formatted(analysis),
-        'Evidence plan:',
-        formatted(plan),
-        'Parallel section briefs:',
-        formatted(briefs),
+        'Evidence plan with resolved reviewed sources:',
+        formatted(resolvedPlan),
+        'Parallel section briefs with resolved reviewed sources:',
+        formatted(resolvedBriefs),
+        ...(input.kind === 'cover_letter' && context.referenceCv !== null
+          ? [
+              `Generated alignment input: the following tailored CV revision (${context.referenceCvRevisionId ?? 'unknown revision'}) was generated for this same URL. Keep role positioning, selected experience, and terminology consistent with it. It is not an additional source of facts; the trusted facts catalogue remains authoritative:`,
+              formatted(context.referenceCv),
+            ]
+          : []),
       ].join('\n\n'),
     }
 
     if (input.kind === 'cv') {
       const generated = yield* generate(
         'composition',
-        CvDocumentV1Schema,
+        cvDocumentV1GenerationContract,
         request
       )
       if (generated.value.locale !== input.locale) {
@@ -218,7 +316,7 @@ export const makePreparationGenerationGateway = Effect.fn(
 
     const generated = yield* generate(
       'composition',
-      CoverLetterDocumentSchema,
+      coverLetterGenerationContract,
       request
     )
     if (generated.value.locale !== input.locale) {

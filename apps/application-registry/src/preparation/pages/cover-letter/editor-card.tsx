@@ -14,6 +14,7 @@ import {
 } from '@cv/internal-ui'
 import { RawJsonEditor, SchemaEditor } from '@cv/schema-editor/react'
 import { Check, Save, X } from 'lucide-react'
+import { CodexRefinement } from '@/preparation/components/codex-refinement'
 import type {
   CoverLetterPageController,
   CoverLetterWorkspace,
@@ -97,6 +98,18 @@ export const CoverLetterEditorCard = ({
             />
           </TabsContent>
         </Tabs>
+        <CodexRefinement
+          canRefine={
+            editor.baseRevision !== null &&
+            !editor.dirty &&
+            editor.validation.valid
+          }
+          codexAvailable={page.codexAvailable}
+          disabled={page.actionPending || page.workflowExecuting}
+          documentLabel="cover letter"
+          onRefine={page.refine}
+          refining={page.refining}
+        />
         <div className="mt-5 flex flex-wrap gap-2 border-t border-border pt-4">
           <Button
             disabled={

@@ -1,7 +1,6 @@
 import { cvRenderContractVersion } from '../../version'
 import { cvRendererLabelsForLocale } from '../labels'
 import { Contacts } from '../primitives'
-import { PublicVersion } from '../public-version'
 import {
   AdditionalSection,
   EducationSection,
@@ -37,9 +36,7 @@ export const PdfCvRenderer = ({
       dir={document.direction}
       lang={document.locale}
     >
-      <header
-        className={`cv2-header${publicUrl ? ' cv2-header-with-publication' : ''}`}
-      >
+      <header className="cv2-header">
         <div className="cv2-header-identity">
           <h1 className="cv2-name" id={titleId}>
             {document.person.name}
@@ -52,10 +49,21 @@ export const PdfCvRenderer = ({
             contacts={document.person.contacts}
             label={labels.contactInformation}
           />
+          {publicUrl ? (
+            <p className="cv2-publication" data-cv-print-only>
+              <span className="cv2-publication-label">
+                {labels.publicVersion}
+              </span>
+              <a
+                className="cv2-publication-link"
+                data-cv-public-url={publicUrl}
+                href={publicUrl}
+              >
+                {publicUrl}
+              </a>
+            </p>
+          ) : null}
         </div>
-        {publicUrl ? (
-          <PublicVersion labels={labels} publicUrl={publicUrl} />
-        ) : null}
       </header>
 
       <section aria-labelledby="cv-document-profile">
@@ -66,21 +74,17 @@ export const PdfCvRenderer = ({
       </section>
 
       <div className="cv2-layout">
-        <div className="cv2-column">
-          <ExperienceSection
-            duration={document.experienceDuration}
-            entries={document.experience}
-            labels={labels}
-          />
-          <ProjectsSection entries={document.projects} labels={labels} />
-        </div>
-        <div className="cv2-column">
-          <SkillsSection entries={document.skills} labels={labels} />
-          <EducationSection entries={document.education} labels={labels} />
-          {document.additionalSections.map((entry) => (
-            <AdditionalSection entry={entry} key={entry.id} />
-          ))}
-        </div>
+        <ExperienceSection
+          duration={document.experienceDuration}
+          entries={document.experience}
+          labels={labels}
+        />
+        <ProjectsSection entries={document.projects} labels={labels} />
+        <SkillsSection entries={document.skills} labels={labels} />
+        <EducationSection entries={document.education} labels={labels} />
+        {document.additionalSections.map((entry) => (
+          <AdditionalSection entry={entry} key={entry.id} />
+        ))}
       </div>
     </article>
   )

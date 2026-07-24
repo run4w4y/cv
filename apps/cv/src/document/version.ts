@@ -1,1 +1,1 @@
-export const cvRenderContractVersion = 'cv-render.v1' as const
+export const cvRenderContractVersion = 'cv-render.v2' as const

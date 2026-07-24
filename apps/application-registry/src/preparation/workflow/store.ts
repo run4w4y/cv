@@ -63,6 +63,10 @@ export const preparationStoreLayer = Layer.effect(
         repository
           .loadContentRevisionHistory(input)
           .pipe(storeOperation('loadContentRevisionHistory')),
+      loadPreparationHead: (input) =>
+        repository
+          .loadPreparationHead(input)
+          .pipe(storeOperation('loadPreparationHead')),
       loadWorkflowBootstrap: (input) =>
         repository
           .loadWorkflowBootstrap(input)

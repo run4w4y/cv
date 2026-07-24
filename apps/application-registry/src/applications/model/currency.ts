@@ -88,7 +88,7 @@ export const convertMinorAmount = (
 export const displayAnnualCompensation = (
   value: AnnualCompensation | null,
   displayCurrency: CompensationDisplayCurrency,
-  rateTable?: CompensationFxRateTable
+  rate?: CompensationFxRate
 ): DisplayedAnnualCompensation => {
   if (value === null || displayCurrency === 'original') {
     return { status: 'original', value }
@@ -97,12 +97,11 @@ export const displayAnnualCompensation = (
     return { status: 'converted', value }
   }
 
-  if (rateTable === undefined || rateTable.targetCurrency !== displayCurrency) {
-    return { status: 'unavailable', value }
-  }
-
-  const rate = rateTable.rates.get(value.currencyCode)
-  if (rate === undefined || rate.targetCurrency !== displayCurrency) {
+  if (
+    rate === undefined ||
+    rate.sourceCurrency !== value.currencyCode ||
+    rate.targetCurrency !== displayCurrency
+  ) {
     return { status: 'unavailable', value }
   }
 

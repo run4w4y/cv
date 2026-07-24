@@ -36,11 +36,12 @@ The URL workflow UI follows the same hierarchy as the runtime:
 - `/workflows/:batchId` is the parallel job monitor. It renders compact rows,
   aggregate progress, filtering, and batch cancellation instead of one card per
   URL.
-- `/workflows/:batchId/jobs/:runId` renders the append-only step timeline and
-  saved artifact metadata for one job.
-- The review entrypoint opens the existing document workspace in focused review
-  mode. Supporting job and generation context stays available in a collapsible
-  section without competing with the decision.
+- `/workflows/:batchId/jobs/:jobId` renders one URL job. Its CV and optional
+  cover letter have separate append-only timelines, candidates, errors, and
+  review actions.
+- `/workflows/:batchId/jobs/:jobId/artifacts/:kind/review` opens the existing
+  document workspace in focused review mode for one artifact. Supporting job
+  and generation context stays available without competing with the decision.
 - `/applications/:applicationId/publish` owns CV publication readiness, PDF,
   and public availability after review.
 
@@ -50,26 +51,41 @@ bridge.
 
 ## Preparation run
 
-1. A route starts the Workflow with either a strict `ReviewedContext` source or
-   a batch-only `CaptureUrl` source.
-   CV starts freeze the effective release guidance, including local client
-   overrides, into the typed Workflow input. Cover-letter starts carry no CV
-   guidance.
+1. A route starts one URL job with either a strict `ReviewedContext` source or
+   a batch-only `CaptureUrl` source. A URL job always includes a CV and may also
+   request a cover letter. CV starts freeze the effective release guidance,
+   including local client overrides, into the typed Workflow input.
 2. Reviewed sources pin application, snapshot, facts release, and URL. The
    gateway rejects drift; it does not silently substitute current context.
-3. The package Workflow analyzes the job, plans evidence, generates section briefs,
-   composes a schema-decoded tagged document, checks its cross-object
-   provenance invariants, and persists a candidate.
-4. It suspends on the typed human-review deferred. Approval verifies revision
-   ancestry and pins before mutating the registry.
-5. The progress service projects one tagged public `PreparationRun`; execution
-   IDs and review tokens remain package-private. Keyed selector atoms expose
-   only the run needed by a route or card.
+3. The package Workflow captures and analyzes the job and plans evidence once.
+   It then generates the CV first. A requested cover letter receives that exact
+   in-memory CV document and revision, so it never polls the registry or races
+   a separate workflow.
+4. Each artifact independently builds briefs, composes a schema-decoded tagged
+   document, checks its provenance invariants, persists a candidate, and
+   suspends on its own typed human-review deferred. A cover-letter failure does
+   not discard a reviewable CV. Approval verifies revision ancestry and pins
+   before mutating the registry.
+5. The progress service projects a flat `PreparationRun` per artifact and
+   groups siblings by `jobId` for job and batch screens. Execution IDs and
+   review tokens remain package-private. Artifact run IDs remain the operation
+   IDs used by human edits and Codex refinements.
 
-The engine uses `WorkflowEngine.layerMemory`. A refresh loses execution and
-review tokens but not an already persisted candidate. `editor/` detects that
-case from the candidate operation ID and requires an explicit decision to
-release the Workflow review gate before direct approval.
+### Desktop lifetime
+
+`PreparationWorkflowProvider` is mounted once above `RouterProvider`, and
+Workflow execution is handed to the memory engine with `discard: true`.
+Consequently, navigating to another application, workflow, or dashboard only
+changes subscribers; it does not unmount, interrupt, or cancel running jobs.
+The jobs also continue while their page is not visible.
+
+The boundary is the renderer session, not the route. The engine uses
+`WorkflowEngine.layerMemory`, so refreshing/reloading the renderer, closing the
+window, or quitting the desktop app loses active executions and review tokens.
+An already persisted candidate remains in the registry. `editor/` detects that
+detached candidate from its operation ID and requires an explicit decision
+before direct approval. Moving execution across renderer restarts requires a
+durable engine and is intentionally outside the current lifetime guarantee.
 
 ## Editor workspace
 

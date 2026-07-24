@@ -30,23 +30,32 @@ import {
 import { Link } from 'react-router'
 
 import {
-  WorkflowDocumentBadge,
+  WorkflowDocumentBadges,
   WorkflowPage,
   WorkflowPageHeader,
   WorkflowStatusBadge,
 } from './components'
 import {
+  documentKindLabel,
   formatWorkflowDuration,
   formatWorkflowTime,
   shortWorkflowId,
+  type WorkflowArtifactListItem,
   type WorkflowJobListItem,
   type WorkflowStepListItem,
+  workflowJobTitle,
 } from './presentation'
 
 export type WorkflowArtifactSummary = {
   readonly codexCalls: number
   readonly revisionNumber: number
   readonly tokens: number
+}
+
+export type WorkflowArtifactScreenItem = {
+  readonly artifact: WorkflowArtifactListItem
+  readonly steps: ReadonlyArray<WorkflowStepListItem>
+  readonly summary: WorkflowArtifactSummary | null
 }
 
 const timelineStatus = (
@@ -60,71 +69,71 @@ const timelineStatus = (
 }
 
 const canCancel = (status: WorkflowJobListItem['status']): boolean =>
-  status === 'queued' ||
-  status === 'running' ||
-  status === 'awaiting_review' ||
-  status === 'review_submitted'
+  status === 'queued' || status === 'running' || status === 'needs_review'
 
 export type WorkflowJobScreenProps = {
-  readonly artifact: WorkflowArtifactSummary | null
+  readonly artifacts: ReadonlyArray<WorkflowArtifactScreenItem>
   readonly cancelError: string | null
   readonly cancelling: boolean
   readonly job: WorkflowJobListItem
   readonly onCancel: () => void
-  readonly steps: ReadonlyArray<WorkflowStepListItem>
 }
 
 export const WorkflowJobScreen = ({
-  artifact,
+  artifacts,
   cancelError,
   cancelling,
   job,
   onCancel,
-  steps,
 }: WorkflowJobScreenProps) => (
   <WorkflowPage>
     <WorkflowPageHeader
       backTo={`/workflows/${encodeURIComponent(job.batchId)}`}
       backLabel="Batch overview"
       eyebrow={`Job ${job.position + 1} of batch ${shortWorkflowId(job.batchId)}`}
-      title={job.url}
+      title={workflowJobTitle(job)}
       description={job.message}
       metadata={
         <>
           <WorkflowStatusBadge status={job.status} />
-          <WorkflowDocumentBadge kind={job.kind} />
+          <WorkflowDocumentBadges kinds={job.kinds} />
           <Badge variant="outline">Locale {job.locale}</Badge>
           <span className="font-mono text-xs text-muted-foreground">
-            {shortWorkflowId(job.runId)}
+            {shortWorkflowId(job.jobId)}
           </span>
         </>
       }
       actions={
         <>
-          {job.status !== 'awaiting_review' ? null : (
-            <Button
-              render={
-                <Link
-                  to={`/workflows/${encodeURIComponent(job.batchId)}/jobs/${encodeURIComponent(job.runId)}/review`}
-                />
-              }
-            >
-              <FileCheck2 />
-              Review candidate
-            </Button>
-          )}
+          {artifacts
+            .filter(({ artifact }) => artifact.status === 'awaiting_review')
+            .map(({ artifact }) => (
+              <Button
+                key={artifact.runId}
+                render={
+                  <Link
+                    to={`/workflows/${encodeURIComponent(job.batchId)}/jobs/${encodeURIComponent(job.jobId)}/artifacts/${artifact.kind}/review`}
+                  />
+                }
+              >
+                <FileCheck2 />
+                Review {artifact.kind === 'cv' ? 'CV' : 'letter'}
+              </Button>
+            ))}
           {!canCancel(job.status) ? null : (
             <Button variant="outline" disabled={cancelling} onClick={onCancel}>
               <Ban />
               {cancelling ? 'Cancelling…' : 'Cancel job'}
             </Button>
           )}
-          {job.status !== 'failed' && job.status !== 'cancelled' ? null : (
+          {job.status !== 'failed' &&
+          job.status !== 'cancelled' &&
+          job.status !== 'mixed' ? null : (
             <Button
               variant="outline"
               render={
                 <Link
-                  to={`/workflows/new?url=${encodeURIComponent(job.url)}&kind=${job.kind}&locale=${encodeURIComponent(job.locale)}`}
+                  to={`/workflows/new?url=${encodeURIComponent(job.url)}&locale=${encodeURIComponent(job.locale)}`}
                 />
               }
             >
@@ -136,12 +145,16 @@ export const WorkflowJobScreen = ({
       }
     />
 
-    {job.error === null ? null : (
-      <Alert variant="destructive">
-        <CircleAlert />
-        <AlertTitle>Workflow failed</AlertTitle>
-        <AlertDescription>{job.error}</AlertDescription>
-      </Alert>
+    {artifacts.flatMap(({ artifact }) =>
+      artifact.error === null
+        ? []
+        : [
+            <Alert key={artifact.runId} variant="destructive">
+              <CircleAlert />
+              <AlertTitle>{documentKindLabel(artifact.kind)} failed</AlertTitle>
+              <AlertDescription>{artifact.error}</AlertDescription>
+            </Alert>,
+          ]
     )}
 
     {cancelError === null ? null : (
@@ -153,52 +166,62 @@ export const WorkflowJobScreen = ({
     )}
 
     <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
-      <Card>
-        <CardHeader>
-          <CardTitle>Workflow timeline</CardTitle>
-          <CardDescription>
-            The step log is append-only for this session. Waiting means the
-            generated artifact is safely stored before human review.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Timeline aria-label="Workflow step history">
-            {steps.map((step) => (
-              <TimelineItem
-                key={step.stage}
-                status={timelineStatus(step.status)}
+      <div className="grid gap-5">
+        {artifacts.map(({ artifact, steps }) => (
+          <Card key={artifact.runId}>
+            <CardHeader>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <CardTitle>{documentKindLabel(artifact.kind)}</CardTitle>
+                  <CardDescription>{artifact.message}</CardDescription>
+                </div>
+                <WorkflowStatusBadge status={artifact.status} />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Timeline
+                aria-label={`${documentKindLabel(artifact.kind)} workflow step history`}
               >
-                <TimelineIndicator />
-                <TimelineConnector />
-                <TimelineContent>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <TimelineTitle>{step.title}</TimelineTitle>
-                    <Badge variant="outline">
-                      {step.status.replaceAll('_', ' ')}
-                    </Badge>
-                  </div>
-                  <TimelineDescription>{step.description}</TimelineDescription>
-                  {step.startedAt === null ? null : (
-                    <TimelineTime
-                      dateTime={new Date(step.startedAt).toISOString()}
-                    >
-                      {formatWorkflowTime(step.startedAt)}
-                      {step.completedAt === null
-                        ? ''
-                        : ` · ${formatWorkflowDuration(step.startedAt, step.completedAt)}`}
-                    </TimelineTime>
-                  )}
-                </TimelineContent>
-              </TimelineItem>
-            ))}
-          </Timeline>
-        </CardContent>
-      </Card>
+                {steps.map((step) => (
+                  <TimelineItem
+                    key={step.stage}
+                    status={timelineStatus(step.status)}
+                  >
+                    <TimelineIndicator />
+                    <TimelineConnector />
+                    <TimelineContent>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <TimelineTitle>{step.title}</TimelineTitle>
+                        <Badge variant="outline">
+                          {step.status.replaceAll('_', ' ')}
+                        </Badge>
+                      </div>
+                      <TimelineDescription>
+                        {step.description}
+                      </TimelineDescription>
+                      {step.startedAt === null ? null : (
+                        <TimelineTime
+                          dateTime={new Date(step.startedAt).toISOString()}
+                        >
+                          {formatWorkflowTime(step.startedAt)}
+                          {step.completedAt === null
+                            ? ''
+                            : ` · ${formatWorkflowDuration(step.startedAt, step.completedAt)}`}
+                        </TimelineTime>
+                      )}
+                    </TimelineContent>
+                  </TimelineItem>
+                ))}
+              </Timeline>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
       <div className="grid gap-5">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Run details</CardTitle>
+            <CardTitle className="text-base">Job details</CardTitle>
           </CardHeader>
           <CardContent>
             <dl className="grid gap-3 text-sm">
@@ -243,49 +266,60 @@ export const WorkflowJobScreen = ({
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Sparkles className="size-4" />
-              Generated artifact
+              Generated artifacts
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            {artifact === null ? (
-              <p className="text-sm text-muted-foreground">
-                No candidate has been persisted yet.
-              </p>
-            ) : (
-              <dl className="grid gap-3 text-sm">
-                <div className="flex justify-between gap-4">
-                  <dt className="text-muted-foreground">Revision</dt>
-                  <dd className="font-medium tabular-nums">
-                    {artifact.revisionNumber}
-                  </dd>
+          <CardContent className="grid gap-4">
+            {artifacts.map(({ artifact, summary }, index) => (
+              <div key={artifact.runId} className="grid gap-3">
+                {index === 0 ? null : <Separator />}
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium">
+                    {documentKindLabel(artifact.kind)}
+                  </span>
+                  <WorkflowStatusBadge status={artifact.status} />
                 </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-muted-foreground">Codex calls</dt>
-                  <dd className="font-medium tabular-nums">
-                    {artifact.codexCalls}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-muted-foreground">Tokens</dt>
-                  <dd className="font-medium tabular-nums">
-                    {artifact.tokens.toLocaleString()}
-                  </dd>
-                </div>
-                {job.applicationId === null ? null : (
-                  <Button
-                    className="mt-1 w-full"
-                    variant="outline"
-                    render={
-                      <Link
-                        to={`/applications/${encodeURIComponent(job.applicationId)}`}
-                      />
-                    }
-                  >
-                    Open application
-                    <ExternalLink />
-                  </Button>
+                {summary === null ? (
+                  <p className="text-sm text-muted-foreground">
+                    No candidate has been persisted yet.
+                  </p>
+                ) : (
+                  <dl className="grid gap-2 text-sm">
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-muted-foreground">Revision</dt>
+                      <dd className="font-medium tabular-nums">
+                        {summary.revisionNumber}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-muted-foreground">Codex calls</dt>
+                      <dd className="font-medium tabular-nums">
+                        {summary.codexCalls}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-muted-foreground">Tokens</dt>
+                      <dd className="font-medium tabular-nums">
+                        {summary.tokens.toLocaleString()}
+                      </dd>
+                    </div>
+                  </dl>
                 )}
-              </dl>
+              </div>
+            ))}
+            {job.applicationId === null ? null : (
+              <Button
+                className="w-full"
+                variant="outline"
+                render={
+                  <Link
+                    to={`/applications/${encodeURIComponent(job.applicationId)}`}
+                  />
+                }
+              >
+                Open application
+                <ExternalLink />
+              </Button>
             )}
           </CardContent>
         </Card>

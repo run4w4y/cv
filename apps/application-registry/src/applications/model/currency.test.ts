@@ -46,19 +46,11 @@ describe('currency minor units', () => {
       minimumMinor: 10_000,
     }
     const displayed = displayAnnualCompensation(original, 'USD', {
+      observedAt: '2026-07-20T00:00:00.000Z',
+      provider: 'frankfurter',
+      rate: 1.2,
+      sourceCurrency: 'EUR',
       targetCurrency: 'USD',
-      rates: new Map([
-        [
-          'EUR',
-          {
-            observedAt: '2026-07-20T00:00:00.000Z',
-            provider: 'frankfurter',
-            rate: 1.2,
-            sourceCurrency: 'EUR',
-            targetCurrency: 'USD',
-          },
-        ],
-      ]),
     })
 
     expect(displayed).toEqual({

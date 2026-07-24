@@ -213,13 +213,13 @@ const createDesktopLayer = () => {
   const registryConnection = desktopRegistryConnectionLayer().pipe(
     Layer.provide(Layer.merge(settings, NodeHttpClient.layerNodeHttp))
   )
-  const codex = desktopCodexLayer({
-    executable: packagedCodexExecutable(),
-    temporaryPath: app.getPath('temp'),
-  }).pipe(Layer.provide(NodeFileSystem.layer))
   const diagnostics = desktopDiagnosticsLayer(app.getPath('userData')).pipe(
     Layer.provide(platform)
   )
+  const codex = desktopCodexLayer({
+    executable: packagedCodexExecutable(),
+    temporaryPath: app.getPath('temp'),
+  }).pipe(Layer.provide(Layer.merge(NodeFileSystem.layer, diagnostics)))
   return Layer.mergeAll(
     settings,
     network,

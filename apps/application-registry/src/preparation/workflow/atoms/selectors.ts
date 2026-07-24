@@ -3,6 +3,7 @@ import {
   latestApplicationRun,
   latestOpenApplicationRun,
   type PreparationRun,
+  selectPreparationJob,
 } from '@cv/application-preparation-workflow/domain'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 import * as Atom from 'effect/unstable/reactivity/Atom'
@@ -25,6 +26,14 @@ export const applicationPreparationIdentity = (
 export const preparationRunAtom = Atom.family((runId: string) =>
   Atom.make((get) =>
     AsyncResult.map(get(preparationRunsAtom), (runs) => runs.get(runId) ?? null)
+  )
+)
+
+export const preparationJobAtom = Atom.family((jobId: string) =>
+  Atom.make((get) =>
+    AsyncResult.map(get(preparationRunsAtom), (runs) =>
+      selectPreparationJob(runs, jobId)
+    )
   )
 )
 

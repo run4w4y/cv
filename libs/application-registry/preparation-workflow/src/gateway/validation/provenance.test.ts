@@ -15,7 +15,13 @@ const factsCatalogue: FactsCatalogueV1 = {
     {
       facts: [{ id: 'fact.certification', text: 'Cloud certified.' }],
       kind: 'identity',
-      languages: [],
+      languages: [
+        {
+          id: 'identity.languages.0',
+          name: 'English',
+          proficiency: 'Fluent',
+        },
+      ],
       location: 'London, UK',
       name: 'Ada Example',
     },
@@ -132,7 +138,7 @@ const failureOf = <A>(effect: Effect.Effect<A, PreparationWorkflowError>) =>
   Effect.runPromise(Effect.flip(effect))
 
 describe('CV provenance validation', () => {
-  test('checks copied metadata and additional reviewed-fact IDs', async () => {
+  test('checks copied metadata and additional reviewed evidence IDs', async () => {
     await Effect.runPromise(validateCvProvenance(factsCatalogue, validCv))
 
     const metadataError = await failureOf(
@@ -157,7 +163,7 @@ describe('CV provenance validation', () => {
       })
     )
     expect(additionalError.message).toContain(
-      'fact.invented is not a reviewed fact ID'
+      'fact.invented is not a reviewed additional-section evidence ID'
     )
 
     const privateEntryError = await failureOf(
@@ -177,6 +183,26 @@ describe('CV provenance validation', () => {
     )
     expect(privateEntryError.message).toContain(
       'experience:experience.private is absent from the facts catalogue'
+    )
+  })
+
+  test('accepts reviewed language IDs in additional sections', async () => {
+    await Effect.runPromise(
+      validateCvProvenance(factsCatalogue, {
+        ...validCv,
+        additionalSections: [
+          {
+            id: 'additional.languages',
+            items: [
+              {
+                id: 'identity.languages.0',
+                text: 'English — Fluent',
+              },
+            ],
+            title: 'Languages',
+          },
+        ],
+      })
     )
   })
 

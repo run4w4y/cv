@@ -19,7 +19,6 @@ export interface CvRendererLabels {
   readonly projects: string
   readonly projectsDescription: string
   readonly publicVersion: string
-  readonly publicVersionInstructions: string
   readonly sectionsNavigation: string
   readonly selectedWork: string
   readonly skills: string
@@ -51,7 +50,6 @@ const englishLabels: CvRendererLabels = {
   projects: 'Selected projects',
   projectsDescription: 'Independent and selected work',
   publicVersion: 'Current web CV',
-  publicVersionInstructions: 'Scan to open the exact public version',
   sectionsNavigation: 'CV sections',
   selectedWork: 'Selected work',
   skills: 'Skills',
@@ -83,7 +81,6 @@ const russianLabels: CvRendererLabels = {
   projects: 'Проекты',
   projectsDescription: 'Избранные и независимые проекты',
   publicVersion: 'Актуальное резюме в интернете',
-  publicVersionInstructions: 'Откройте точную публичную версию по QR-коду',
   sectionsNavigation: 'Разделы резюме',
   selectedWork: 'Избранное',
   skills: 'Навыки',

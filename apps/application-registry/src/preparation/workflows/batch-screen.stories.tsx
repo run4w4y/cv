@@ -31,7 +31,7 @@ export const ParallelJobs: Story = {}
 
 export const CancellingOneJob: Story = {
   args: {
-    cancellingRunIds: new Set(['run-northstar-composing']),
+    cancellingRunIds: new Set(['run-northstar-cv']),
   },
 }
 
@@ -57,10 +57,21 @@ export const CompletedBatch: Story = {
     jobs: [
       parallelWorkflowJobs[3],
       {
-        ...parallelWorkflowJobs[1],
-        message: 'Candidate rejected after review.',
-        stage: 'complete',
-        status: 'rejected',
+        ...parallelWorkflowJobs[5],
+        applicationId: 'application-polaris-principal-frontend',
+        artifacts: parallelWorkflowJobs[1].artifacts.map((artifact) => ({
+          ...artifact,
+          message: 'Candidate rejected after review.',
+          stage: 'complete' as const,
+          status: 'rejected' as const,
+        })),
+        company: 'Polaris',
+        jobId: 'job-polaris-completed',
+        kinds: ['cv', 'cover_letter'],
+        message: 'Both candidates were rejected after review.',
+        primaryRunId: 'run-polaris-completed-cv',
+        role: 'Principal Frontend Engineer',
+        status: 'completed',
       },
     ],
   },

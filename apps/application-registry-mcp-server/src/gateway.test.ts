@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { makeApplicationRegistryHttpClientLayer } from '@cv/application-registry-api-client'
 import type {
+  AddApplicationNoteResponse,
+  ApplicationAnnotationsResponse,
   CreateApplicationRequest,
+  ListApplicationActivitiesResponse,
   UpdateApplicationResponse,
 } from '@cv/application-registry-api-contract'
 import type { Application } from '@cv/application-registry-entity'
@@ -116,6 +119,77 @@ describe('application registry MCP gateway', () => {
     ])
     expect(requests[0]?.headers.get('authorization')).toBe('Bearer test-token')
     expect(requests[1]?.headers.get('idempotency-key')).toBe('update-key')
+  })
+
+  test('uses the generated activity, annotation, and note routes', async () => {
+    const requests: Request[] = []
+    const activities: ListApplicationActivitiesResponse = { items: [] }
+    const annotations: ApplicationAnnotationsResponse = {
+      labels: [],
+      notes: [],
+    }
+    const noteResponse: AddApplicationNoteResponse = {
+      note: {
+        applicationId: application.id,
+        body: 'Gmail correspondence',
+        createdAt: '2026-07-10T01:00:00.000Z',
+        id: 'note-1',
+        kind: 'contact',
+        source: 'gmail',
+        updatedAt: '2026-07-10T01:00:00.000Z',
+      },
+      replayed: false,
+    }
+    const fetch = makeFetch(async (request) => {
+      requests.push(request)
+      if (request.method === 'POST') {
+        return Response.json(noteResponse, { status: 201 })
+      }
+      if (request.url.endsWith('/activities')) return Response.json(activities)
+      return Response.json(annotations)
+    })
+
+    const result = await Effect.runPromise(
+      withGateway(
+        fetch,
+        Effect.gen(function* () {
+          const gateway = yield* ApplicationRegistryGateway
+          const observedActivities = yield* gateway.listActivities(
+            application.id
+          )
+          const observedAnnotations = yield* gateway.listAnnotations(
+            application.id
+          )
+          const note = yield* gateway.addNote(application.id, 'note-key', {
+            body: 'Gmail correspondence',
+            kind: 'contact',
+            source: 'gmail',
+          })
+          return { observedActivities, observedAnnotations, note }
+        })
+      )
+    )
+
+    expect(result).toEqual({
+      note: noteResponse,
+      observedActivities: activities,
+      observedAnnotations: annotations,
+    })
+    expect(requests.map(({ method, url }) => ({ method, url }))).toEqual([
+      {
+        method: 'GET',
+        url: 'https://registry.example.test/api/registry/applications/application-1/activities',
+      },
+      {
+        method: 'GET',
+        url: 'https://registry.example.test/api/registry/applications/application-1/annotations',
+      },
+      {
+        method: 'POST',
+        url: 'https://registry.example.test/api/registry/applications/application-1/notes',
+      },
+    ])
+    expect(requests[2]?.headers.get('idempotency-key')).toBe('note-key')
   })
 
   test('maps API authentication failures to a secret-safe tool error', async () => {

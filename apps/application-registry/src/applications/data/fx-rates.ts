@@ -1,4 +1,8 @@
-import { CurrencyCodeSchema } from '@cv/application-registry-entity'
+import {
+  CurrencyCodeSchema,
+  UtcIsoTimestampSchema,
+} from '@cv/application-registry-entity'
+import { BrowserKeyValueStore } from '@effect/platform-browser'
 import {
   Cache,
   Context,
@@ -10,11 +14,15 @@ import {
   Schema,
 } from 'effect'
 import { HttpClient, HttpClientResponse } from 'effect/unstable/http'
+import {
+  Persistable,
+  PersistedCache,
+  Persistence,
+} from 'effect/unstable/persistence'
 import * as Atom from 'effect/unstable/reactivity/Atom'
 
 import { hostHttpClientLayer } from '../../lib/registry-client'
 import type {
-  CompensationDisplayCurrency,
   CompensationFxRate,
   CompensationFxRateTable,
 } from '../model/currency'
@@ -30,6 +38,19 @@ const FrankfurterRateSchema = Schema.Struct({
 
 const FrankfurterRatesSchema = Schema.Array(FrankfurterRateSchema)
 
+const CompensationFxRateSchema = Schema.Struct({
+  observedAt: UtcIsoTimestampSchema,
+  provider: Schema.Literal('frankfurter'),
+  rate: Schema.Finite.pipe(Schema.check(Schema.isGreaterThan(0))),
+  sourceCurrency: CurrencyCodeSchema,
+  targetCurrency: CurrencyCodeSchema,
+})
+
+const CompensationFxRateTableSchema = Schema.Struct({
+  rates: Schema.ReadonlyMap(CurrencyCodeSchema, CompensationFxRateSchema),
+  targetCurrency: CurrencyCodeSchema,
+})
+
 type FrankfurterRate = Schema.Schema.Type<typeof FrankfurterRateSchema>
 
 export const frankfurterRatesUrl = (targetCurrency: string) =>
@@ -42,6 +63,14 @@ export class CompensationFxRateError extends Schema.TaggedErrorClass<Compensatio
     message: Schema.String,
   }
 ) {}
+
+class CompensationFxRateTableRequest extends Persistable.Class<{
+  payload: { readonly targetCurrency: string }
+}>()('CompensationFxRateTableRequest', {
+  primaryKey: ({ targetCurrency }) => targetCurrency,
+  success: CompensationFxRateTableSchema,
+  error: CompensationFxRateError,
+}) {}
 
 export const makeCompensationFxRateTable = Effect.fn(
   'CompensationFxRates.makeTable'
@@ -98,9 +127,10 @@ const fetchCompensationFxRateTable = Effect.fn(
 )
 
 interface CompensationFxRatesShape {
-  readonly get: (
+  readonly getRate: (
+    sourceCurrency: string,
     targetCurrency: string
-  ) => Effect.Effect<CompensationFxRateTable, CompensationFxRateError>
+  ) => Effect.Effect<CompensationFxRate, CompensationFxRateError>
 }
 
 class CompensationFxRates extends Context.Service<
@@ -108,47 +138,89 @@ class CompensationFxRates extends Context.Service<
   CompensationFxRatesShape
 >()('@cv/application-registry-management/CompensationFxRates') {}
 
+const compensationFxPersistenceLayer = Persistence.layerKvs.pipe(
+  Layer.provide(BrowserKeyValueStore.layerLocalStorage)
+)
+
 const CompensationFxRatesLive = Layer.effect(
   CompensationFxRates,
   Effect.gen(function* () {
-    const cache = yield* Cache.makeWith(fetchCompensationFxRateTable, {
+    const memoryCache = yield* Cache.makeWith(fetchCompensationFxRateTable, {
       capacity: 16,
       timeToLive: (exit) => (Exit.isSuccess(exit) ? '24 hours' : Duration.zero),
     })
+    const persistedCache = yield* PersistedCache.make(
+      (request: CompensationFxRateTableRequest) =>
+        fetchCompensationFxRateTable(request.targetCurrency),
+      {
+        storeId: '@cv/application-registry/compensation-fx-rates/v1',
+        timeToLive: (exit) =>
+          Exit.isSuccess(exit) ? '24 hours' : Duration.zero,
+        inMemoryCapacity: 16,
+        inMemoryTTL: (exit) =>
+          Exit.isSuccess(exit) ? '24 hours' : Duration.zero,
+      }
+    )
 
     return CompensationFxRates.of({
-      get: Effect.fn('CompensationFxRates.get')((targetCurrency: string) =>
-        Cache.get(cache, targetCurrency)
-      ),
+      getRate: Effect.fn('CompensationFxRates.getRate')(function* (
+        sourceCurrency: string,
+        targetCurrency: string
+      ) {
+        const request = new CompensationFxRateTableRequest({ targetCurrency })
+        const getFromMemory = () => Cache.get(memoryCache, targetCurrency)
+        const table = yield* persistedCache.get(request).pipe(
+          Effect.catchTags({
+            PersistenceError: getFromMemory,
+            SchemaError: () =>
+              persistedCache.invalidate(request).pipe(
+                Effect.ignore,
+                Effect.andThen(persistedCache.get(request)),
+                Effect.catchTags({
+                  PersistenceError: getFromMemory,
+                  SchemaError: getFromMemory,
+                })
+              ),
+          })
+        )
+        const rate = table.rates.get(sourceCurrency)
+        if (rate === undefined) {
+          return yield* new CompensationFxRateError({
+            cause: { sourceCurrency, targetCurrency },
+            message: `No ${sourceCurrency} to ${targetCurrency} compensation exchange rate is available.`,
+          })
+        }
+        return rate
+      }),
     })
   })
-).pipe(Layer.provide(hostHttpClientLayer))
-
-const compensationFxRuntime = Atom.runtime(CompensationFxRatesLive)
-const originalCurrencyRateTableAtom = Atom.make(
-  Effect.succeed<CompensationFxRateTable | null>(null)
+).pipe(
+  Layer.provide(compensationFxPersistenceLayer),
+  Layer.provide(hostHttpClientLayer)
 )
 
-export const compensationFxRateTableAtom = Atom.family(
-  (displayCurrency: CompensationDisplayCurrency) =>
-    displayCurrency === 'original'
-      ? originalCurrencyRateTableAtom
-      : compensationFxRuntime
-          .atom(
-            CompensationFxRates.use((rates) =>
-              rates
-                .get(displayCurrency)
-                .pipe(
-                  Effect.map((table): CompensationFxRateTable | null => table)
-                )
-            )
-          )
-          .pipe(
-            Atom.swr({
-              staleTime: '15 minutes',
-              revalidateOnMount: true,
-              revalidateOnFocus: false,
-            }),
-            Atom.setIdleTTL('24 hours')
-          )
+const compensationFxRuntime = Atom.runtime(CompensationFxRatesLive)
+
+export const compensationFxRateAtom = Atom.family(
+  ({
+    sourceCurrency,
+    targetCurrency,
+  }: {
+    readonly sourceCurrency: string
+    readonly targetCurrency: string
+  }) =>
+    compensationFxRuntime
+      .atom(
+        CompensationFxRates.use((rates) =>
+          rates.getRate(sourceCurrency, targetCurrency)
+        )
+      )
+      .pipe(
+        Atom.swr({
+          staleTime: '15 minutes',
+          revalidateOnMount: true,
+          revalidateOnFocus: false,
+        }),
+        Atom.setIdleTTL('24 hours')
+      )
 )

@@ -1,3 +1,4 @@
+export { coverLetterJsonSchema } from '../cover-letter/ai-schema'
 export {
   type CoverLetterDocument,
   CoverLetterDocumentSchema,

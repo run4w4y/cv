@@ -5,11 +5,9 @@ import {
   PdfGenerationTransientError,
   type PdfPermanentFailureCode,
 } from './model'
-import {
-  assessCvPageLayout,
-  type CvPageLayoutMeasurement,
-  cvPageLayoutToleranceCssPixels,
-} from './page-layout'
+import { assessCvPageLayout, type CvPageLayoutMeasurement } from './page-layout'
+
+export const cvPdfMaximumPageCount = 2
 
 type CvPageLayoutErrorCode = Extract<
   PdfPermanentFailureCode,
@@ -42,7 +40,7 @@ export class CvRenderPageHttpError extends Schema.TaggedErrorClass<CvRenderPageH
   }
 }
 
-export const assertCvFitsSingleA4Page = (
+export const assertCvHasValidPageLayout = (
   measurement: CvPageLayoutMeasurement
 ): void => {
   const assessment = assessCvPageLayout(measurement)
@@ -56,18 +54,32 @@ export const assertCvFitsSingleA4Page = (
     throw new CvPageLayoutError('cv_page_layout_invalid', message)
   }
 
-  const overflow: string[] = []
-  if (assessment.overflowHeightPx > cvPageLayoutToleranceCssPixels) {
-    overflow.push(`${assessment.overflowHeightPx.toFixed(1)} CSS px vertically`)
-  }
-  if (assessment.overflowWidthPx > cvPageLayoutToleranceCssPixels) {
-    overflow.push(
-      `${assessment.overflowWidthPx.toFixed(1)} CSS px horizontally`
-    )
-  }
   throw new CvPageLayoutError(
     'cv_page_overflow',
-    `The CV exceeds one A4 page by ${overflow.join(' and ')}.`
+    `The printable CV overflows horizontally by ${assessment.overflowWidthPx.toFixed(1)} CSS px.`
+  )
+}
+
+export const assertCvPdfPageCount = (
+  pageCount: number,
+  maximumPageCount = cvPdfMaximumPageCount
+): void => {
+  if (
+    !Number.isInteger(pageCount) ||
+    pageCount < 1 ||
+    !Number.isInteger(maximumPageCount) ||
+    maximumPageCount < 1
+  ) {
+    throw new CvPageLayoutError(
+      'cv_page_layout_invalid',
+      'The generated PDF page count could not be validated.'
+    )
+  }
+  if (pageCount <= maximumPageCount) return
+
+  throw new CvPageLayoutError(
+    'cv_page_overflow',
+    `The CV renders to ${pageCount} A4 pages; at most ${maximumPageCount} are allowed.`
   )
 }
 

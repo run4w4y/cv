@@ -1,8 +1,13 @@
-import { ListApplicationsResponseSchema } from '@cv/application-registry-api-contract'
+import {
+  ApplicationAnnotationsResponseSchema,
+  ListApplicationActivitiesResponseSchema,
+  ListApplicationsResponseSchema,
+} from '@cv/application-registry-api-contract'
 import {
   ApplicationCompanySchema,
   ApplicationCompensationInputSchema,
   ApplicationLocationSchema,
+  ApplicationNoteSchema,
   ApplicationRoleSchema,
   ApplicationSchema,
   ApplicationStatusSchema,
@@ -51,6 +56,9 @@ export const GetApplicationParametersSchema = Schema.Struct({
   }),
 })
 
+export const ListApplicationHistoryParametersSchema =
+  GetApplicationParametersSchema
+
 export { ApplicationCompensationInputSchema }
 
 export const CreateApplicationParametersSchema = Schema.Struct({
@@ -94,6 +102,52 @@ export const UpdateApplicationParametersSchema = Schema.Struct({
   labels: Schema.optionalKey(Schema.Array(NonEmptyTrimmedStringSchema)),
 })
 
+export const CorrespondenceClassificationSchema = Schema.Literals([
+  'submission_confirmed',
+  'recruiter_interview_scheduled',
+  'technical_screen_scheduled',
+  'take_home_received',
+  'later_interview_scheduled',
+  'offer_received',
+  'employer_rejection',
+  'candidate_withdrawal',
+  'contact_logged',
+])
+
+export const RecordApplicationCorrespondenceParametersSchema = Schema.Struct({
+  identifier: NonEmptyTrimmedStringSchema.annotate({
+    description: 'The matched application ID.',
+  }),
+  expectedVersion: ExpectedApplicationVersionSchema.annotate({
+    description:
+      'Current application version read immediately before recording the correspondence.',
+  }),
+  operationId: NonEmptyTrimmedStringSchema.annotate({
+    description:
+      'Stable caller-generated ID for this message and classification. Reuse it verbatim on retries.',
+  }),
+  gmailMessageId: NonEmptyTrimmedStringSchema.annotate({
+    description: 'Stable Gmail message ID used for duplicate detection.',
+  }),
+  gmailThreadId: NonEmptyTrimmedStringSchema.annotate({
+    description: 'Stable Gmail thread ID containing the message.',
+  }),
+  occurredAt: UtcIsoTimestampSchema.annotate({
+    description: 'Timestamp of the correspondence, not the processing time.',
+  }),
+  classification: CorrespondenceClassificationSchema,
+  evidenceSummary: NonEmptyTrimmedStringSchema.annotate({
+    description:
+      'Concise factual evidence supporting the classification; do not include speculative conclusions.',
+  }),
+  appliedAt: Schema.optionalKey(
+    UtcIsoTimestampSchema.annotate({
+      description:
+        'Earliest confirmed submission timestamp. Required for post-submission stages when the registry has no appliedAt.',
+    })
+  ),
+})
+
 export const ApplicationResultSchema = Schema.Struct({
   application: ApplicationSchema,
 })
@@ -105,4 +159,18 @@ export const UpdateApplicationResultSchema = Schema.Struct({
   labels: Schema.Array(NonEmptyTrimmedStringSchema),
 })
 
-export { ListApplicationsResponseSchema }
+export const RecordApplicationCorrespondenceResultSchema = Schema.Struct({
+  operationId: NonEmptyTrimmedStringSchema,
+  note: ApplicationNoteSchema,
+  noteReplayed: Schema.Boolean,
+  application: ApplicationSchema,
+  applicationUpdated: Schema.Boolean,
+  updateOperationId: Schema.NullOr(NonEmptyTrimmedStringSchema),
+  requiresReview: Schema.Boolean,
+})
+
+export {
+  ApplicationAnnotationsResponseSchema,
+  ListApplicationActivitiesResponseSchema,
+  ListApplicationsResponseSchema,
+}

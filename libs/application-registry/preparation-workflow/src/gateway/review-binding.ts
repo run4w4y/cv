@@ -7,7 +7,28 @@ import { Effect } from 'effect'
 import type { ContentRevisionResult, SavedCandidate } from '../domain'
 import { PreparationWorkflowError } from '../domain'
 
-const maximumHumanReviewDepth = 32
+const maximumReviewDepth = 32
+
+const isTrustedReviewDescendant = (
+  candidate: ContentRevision,
+  revision: ContentRevision
+): boolean => {
+  if (revision.source === 'human') return true
+  if (
+    revision.source !== 'ai_adjustment' ||
+    candidate.operationId === null ||
+    revision.operationId === null ||
+    !candidate.operationId.endsWith(':candidate')
+  ) {
+    return false
+  }
+  const runId = candidate.operationId.slice(0, -':candidate'.length)
+  const prefix = `${runId}:refinement:`
+  return (
+    revision.operationId.startsWith(prefix) &&
+    revision.operationId.length > prefix.length
+  )
+}
 
 export const reviewBindingError = (message: string) =>
   new PreparationWorkflowError({ message, stage: 'review' })
@@ -25,7 +46,8 @@ export const hasCandidatePins = (
 /**
  * Verifies a selected head against a fresh registry entry and its immutable
  * revision metadata. A reviewer may select the generated candidate itself or
- * a short chain of human edits descended directly from that candidate.
+ * a short chain of human edits and workflow-bound Codex refinements descended
+ * directly from that candidate.
  */
 export const verifyRevisionSelectionBinding = (
   candidate: SavedCandidate,
@@ -97,7 +119,7 @@ export const verifyRevisionSelectionBinding = (
 
     const visited = new Set<string>()
     let current = selected
-    for (let depth = 0; depth <= maximumHumanReviewDepth; depth += 1) {
+    for (let depth = 0; depth <= maximumReviewDepth; depth += 1) {
       if (visited.has(current.id)) {
         return yield* Effect.fail(
           reviewBindingError('The approved revision ancestry contains a cycle.')
@@ -115,17 +137,17 @@ export const verifyRevisionSelectionBinding = (
       if (current.id === candidateRevision.id) {
         return { entry, revision: selected }
       }
-      if (current.source !== 'human') {
+      if (!isTrustedReviewDescendant(candidateRevision, current)) {
         return yield* Effect.fail(
           reviewBindingError(
-            `Revision ${current.id} is not a human edit of the workflow candidate.`
+            `Revision ${current.id} is not a human edit or a trusted Codex refinement of the workflow candidate.`
           )
         )
       }
-      if (depth === maximumHumanReviewDepth) {
+      if (depth === maximumReviewDepth) {
         return yield* Effect.fail(
           reviewBindingError(
-            `The approved revision is more than ${maximumHumanReviewDepth} human edits from the workflow candidate.`
+            `The approved revision is more than ${maximumReviewDepth} review edits from the workflow candidate.`
           )
         )
       }
@@ -156,7 +178,7 @@ export const verifyRevisionSelectionBinding = (
 
     return yield* Effect.fail(
       reviewBindingError(
-        `The approved revision is more than ${maximumHumanReviewDepth} human edits from the workflow candidate.`
+        `The approved revision is more than ${maximumReviewDepth} review edits from the workflow candidate.`
       )
     )
   })

@@ -15,13 +15,27 @@ export class DesktopDiagnostics extends Context.Service<
   DesktopDiagnosticsShape
 >()('cv-desktop/DesktopDiagnostics') {}
 
-const describeCause = (cause: unknown) =>
+type DetailedError = Error & {
+  readonly _tag?: unknown
+  readonly code?: unknown
+  readonly details?: unknown
+}
+
+export const describeCause = (cause: unknown) =>
   Match.value(cause).pipe(
-    Match.when(Predicate.isError, (error) => ({
-      message: error.message,
-      name: error.name,
-      stack: error.stack,
-    })),
+    Match.when(Predicate.isError, (error) => {
+      const detailed = error as DetailedError
+      return {
+        ...(typeof detailed._tag === 'string' ? { tag: detailed._tag } : {}),
+        ...(typeof detailed.code === 'string' ? { code: detailed.code } : {}),
+        ...(typeof detailed.details === 'string'
+          ? { details: detailed.details }
+          : {}),
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+      }
+    }),
     Match.when(undefined, () => undefined),
     Match.orElse((cause) => ({ message: String(cause) }))
   )

@@ -66,20 +66,23 @@ export const reservePreparationRuns = (
   }
 
   const runs = new Map(current)
-  for (const { batchId, batchPosition, input } of reservations) {
+  for (const { batchId, batchPosition, input, jobId } of reservations) {
     const message = 'Waiting for a preparation slot.'
     runs.set(input.runId, {
       applicationId: preparationSourceApplicationId(input.source),
       batchId,
       batchPosition,
       candidate: null,
+      company: null,
       createdAt,
       error: null,
       executionId: null,
+      jobId: jobId ?? input.runId,
       kind: input.kind,
       locale: input.locale,
       message,
       reviewToken: null,
+      role: null,
       runId: input.runId,
       stage: 'queued',
       status: 'queued',

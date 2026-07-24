@@ -35,7 +35,7 @@ import {
 import { Link } from 'react-router'
 
 import {
-  WorkflowDocumentBadge,
+  WorkflowDocumentBadges,
   WorkflowMetricCard,
   WorkflowPage,
   WorkflowPageHeader,
@@ -184,8 +184,9 @@ export const WorkflowDashboardScreen = ({
                               {shortWorkflowId(batch.batchId)}
                             </span>
                             <span className="text-xs text-muted-foreground">
-                              {batch.total} URL{batch.total === 1 ? '' : 's'} ·{' '}
-                              {batch.locale}
+                              {batch.urlCount} URL
+                              {batch.urlCount === 1 ? '' : 's'} · {batch.total}{' '}
+                              job{batch.total === 1 ? '' : 's'} · {batch.locale}
                             </span>
                           </div>
                         </TableCell>
@@ -193,7 +194,9 @@ export const WorkflowDashboardScreen = ({
                           <WorkflowStatusBadge status={batch.status} />
                         </TableCell>
                         <TableCell>
-                          <WorkflowDocumentBadge kind={batch.kind} />
+                          <div className="flex flex-wrap gap-1">
+                            <WorkflowDocumentBadges kinds={batch.kinds} />
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="grid min-w-52 gap-2">

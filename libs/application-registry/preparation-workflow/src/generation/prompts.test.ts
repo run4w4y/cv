@@ -1,19 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import type { FactsCatalogueV1 } from '@cv/contracts/facts'
-import type { JsonSchema } from 'effect/JsonSchema'
 import { cvGenerationGuidanceTestFixture } from '../test-support'
 import {
   buildCoverLetterGenerationRequest,
   buildCvDraftGenerationRequest,
+  evidenceReferencesForGeneration,
   factsForGeneration,
 } from './prompts'
-
-const arbitrarySchema = {
-  type: 'object',
-  additionalProperties: false,
-  properties: { completelyDynamic: { type: 'string' } },
-  required: ['completelyDynamic'],
-} satisfies JsonSchema
 
 const facts = {
   $schema: 'cv.facts.v1',
@@ -33,7 +26,28 @@ const facts = {
           text: 'Verified fact.',
         },
       ],
-      languages: [],
+      languages: [
+        {
+          id: 'identity.languages.0',
+          name: 'English',
+          proficiency: 'Fluent',
+        },
+      ],
+    },
+    {
+      groups: [
+        {
+          id: 'skills.groups.0',
+          skills: [
+            {
+              id: 'skills.groups.0.skills.2',
+              name: 'Effect',
+            },
+          ],
+          title: 'Engineering',
+        },
+      ],
+      kind: 'skills',
     },
   ],
   evidence: [
@@ -155,7 +169,7 @@ describe('preparation request construction', () => {
     expect(projected).not.toContain('https://private-link.example.test')
   })
 
-  test('passes arbitrary schema, complete context, and content-owned guidance to CV generation', () => {
+  test('passes complete context and content-owned guidance to CV generation', () => {
     const job = { requirements: ['something unusual'] }
     const guidance = cvGenerationGuidanceTestFixture
     const request = buildCvDraftGenerationRequest({
@@ -163,15 +177,54 @@ describe('preparation request construction', () => {
       guidance,
       jobContext: job,
       locale: 'en',
-      schema: arbitrarySchema,
     })
 
-    expect(request.outputSchema).toBe(arbitrarySchema)
     expect(request.prompt).toContain('Verified fact.')
     expect(request.prompt).toContain('Preserve every metric.')
     expect(request.prompt).not.toContain('Private audit locator')
     expect(request.prompt).toContain(JSON.stringify(job, null, 2))
     expect(request.prompt).toContain(JSON.stringify(guidance, null, 2))
+  })
+
+  test('projects compiler-generated language and skill IDs as selectable evidence', () => {
+    const references = evidenceReferencesForGeneration(facts)
+
+    expect(references).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'fact-x',
+          kind: 'reviewed-fact',
+          label: 'Verified fact.',
+        }),
+        expect.objectContaining({
+          id: 'identity.languages.0',
+          kind: 'language',
+          label: 'English',
+        }),
+        expect.objectContaining({
+          id: 'skills.groups.0.skills.2',
+          kind: 'skill',
+          label: 'Effect',
+        }),
+      ])
+    )
+  })
+
+  test('keeps private catalogue entries out of selectable evidence', () => {
+    const ids = evidenceReferencesForGeneration(visibilityFacts).map(
+      ({ id }) => id
+    )
+
+    expect(ids).toContain('experience.public')
+    expect(ids).toContain('project.public')
+    expect(ids).not.toContain('experience.private')
+    expect(ids).not.toContain('fact.private-employer')
+    expect(ids).not.toContain('project.private')
+    expect(ids).not.toContain('fact.private-project')
+    expect(ids).not.toContain('contact.public')
+    expect(ids).not.toContain('contact.private')
+    expect(ids).not.toContain('link.public')
+    expect(ids).not.toContain('link.private')
   })
 
   test('keeps the user-authored cover-letter prompt separate and complete', () => {
@@ -180,12 +233,10 @@ describe('preparation request construction', () => {
       jobContext: 'posting text',
       locale: 'en',
       prompt: 'Prefer a direct opening.',
-      schema: arbitrarySchema,
     })
 
     expect(request.prompt).toContain('Prefer a direct opening.')
     expect(request.prompt).toContain('Verified fact.')
     expect(request.prompt).not.toContain('Private audit locator')
-    expect(request.outputSchema).toBe(arbitrarySchema)
   })
 })

@@ -213,6 +213,17 @@ export const normalizeCodexSdkError = (
       details
     )
   }
+  if (
+    /invalid (?:json )?schema|response[_ ]format|schema.+not supported|unsupported schema|structured output.+schema|schema.+structured output/iu.test(
+      details
+    )
+  ) {
+    return new CodexSdkError(
+      'invalid_request',
+      'Codex rejected the structured-output schema.',
+      details
+    )
+  }
   return new CodexSdkError(
     'codex_generation_failed',
     'The local Codex generation failed.',

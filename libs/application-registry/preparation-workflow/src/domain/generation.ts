@@ -45,7 +45,7 @@ export interface JobAnalysis
   extends Schema.Schema.Type<typeof JobAnalysisSchema> {}
 
 export const EvidenceMatchSchema = Schema.Struct({
-  factIds: Schema.UniqueArray(Schema.NonEmptyString).pipe(
+  evidenceIds: Schema.UniqueArray(Schema.NonEmptyString).pipe(
     Schema.check(Schema.isMaxLength(24))
   ),
   rationale: Schema.NonEmptyString,
@@ -65,7 +65,7 @@ export interface EvidencePlan
   extends Schema.Schema.Type<typeof EvidencePlanSchema> {}
 
 export const SectionBriefSchema = Schema.Struct({
-  factIds: Schema.UniqueArray(Schema.NonEmptyString).pipe(
+  evidenceIds: Schema.UniqueArray(Schema.NonEmptyString).pipe(
     Schema.check(Schema.isMaxLength(32))
   ),
   notes: Schema.Array(Schema.NonEmptyString).pipe(

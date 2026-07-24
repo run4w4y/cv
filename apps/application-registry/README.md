@@ -82,9 +82,9 @@ optimistic conflicts with the same idempotent operation ID.
 Approval of a workflow candidate is owned by a durable activity rather than the
 page. Before the registry is mutated, it proves that the selected revision is
 the current head and is either the generated candidate or a bounded chain of
-human edits descended from it, with the same entry, contract, facts release,
-and job snapshot. Approval then uses the freshly read entry version and checks
-the registry response.
+human edits and workflow-bound Codex refinements descended from it, with the
+same entry, contract, facts release, and job snapshot. Approval then uses the
+freshly read entry version and checks the registry response.
 
 Preparation pages consume one derived workspace atom keyed by application,
 document kind, locale, and optional run ID. Registry context, heads, model

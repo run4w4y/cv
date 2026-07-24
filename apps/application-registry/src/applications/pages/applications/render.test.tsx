@@ -331,7 +331,7 @@ describe('ApplicationsPage', () => {
       request.searchParams.get('filter')
     )
     expect(request.searchParams.get('currency')).toBeNull()
-    expect(fxRequests).toBe(1)
+    expect(fxRequests).toBe(0)
   })
 
   test('preserves nested workspace filters and requires explicit replacement', async () => {
@@ -448,9 +448,11 @@ describe('ApplicationsPage', () => {
 
   test('keeps the selected compensation currency out of registry requests', async () => {
     const applicationRequests: string[] = []
+    let fxRequests = 0
     globalThis.fetch = mock(async (input: string | URL | Request) => {
       const url = String(input)
       if (url.startsWith('https://api.frankfurter.dev/')) {
+        fxRequests += 1
         return Response.json([
           { base: 'JPY', date: '2026-07-20', quote: 'USD', rate: 0.0067 },
         ])
@@ -463,7 +465,16 @@ describe('ApplicationsPage', () => {
       }
       applicationRequests.push(url)
       return Response.json({
-        items: [],
+        items: [
+          {
+            ...application,
+            annualCompensation: {
+              currencyCode: 'USD',
+              minimumMinor: 15_000_000,
+              maximumMinor: 18_000_000,
+            },
+          },
+        ],
         pageInfo: {
           kind: 'cursor',
           size: 50,
@@ -486,6 +497,59 @@ describe('ApplicationsPage', () => {
       view.getByRole('combobox', { name: 'Compensation display currency' })
         .textContent
     ).toContain('JPY')
+    await view.findByText('JPY · annual · FX 2026-07-20')
+    expect(fxRequests).toBe(1)
+    expect(applicationRequests).toHaveLength(1)
+  })
+
+  test('keeps currency and filters isolated during consecutive interactions', async () => {
+    const applicationRequests: string[] = []
+    globalThis.fetch = mock(async (input: string | URL | Request) => {
+      const url = String(input)
+      if (url.startsWith('https://api.frankfurter.dev/')) {
+        return Response.json([
+          { base: 'JPY', date: '2026-07-20', quote: 'USD', rate: 0.0067 },
+        ])
+      }
+      if (url.endsWith('/facets')) {
+        return Response.json({ companies: ['Example'], labels: [] })
+      }
+      applicationRequests.push(url)
+      return Response.json({
+        items: [application],
+        pageInfo: {
+          kind: 'cursor',
+          size: 50,
+          hasNextPage: false,
+          hasPreviousPage: false,
+          totalItems: 1,
+          nextCursor: null,
+        },
+      })
+    }) as unknown as typeof fetch
+
+    const view = renderApplicationsPage(
+      '/applications?filter=company:contains:Example'
+    )
+    await waitFor(() => expect(applicationRequests).toHaveLength(1))
+
+    fireEvent.click(
+      view.getByRole('combobox', {
+        name: 'Compensation display currency',
+      })
+    )
+    const currencySearch = await view.findByLabelText('Search currencies…')
+    fireEvent.change(currencySearch, { target: { value: 'JPY' } })
+    fireEvent.keyDown(currencySearch, { key: 'ArrowDown' })
+    fireEvent.keyDown(currencySearch, { key: 'Enter' })
+    fireEvent.click(view.getByRole('button', { name: 'Remove Company filter' }))
+
+    await waitFor(() => {
+      const current = new URLSearchParams(window.location.search)
+      expect(current.get('currency')).toBe('JPY')
+      expect(current.has('filter')).toBe(false)
+      expect(applicationRequests).toHaveLength(2)
+    })
   })
 
   test('keeps a backend-valid canonical filter applied when the editor cannot display it', async () => {

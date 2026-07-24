@@ -15,7 +15,7 @@ export type CvPageLayoutAssessment =
   | {
       readonly actualHeightPx: number
       readonly actualWidthPx: number
-      readonly remainingHeightPx: number
+      readonly estimatedPageCount: number
       readonly remainingWidthPx: number
       readonly status: 'fits'
     }
@@ -25,9 +25,7 @@ export type CvPageLayoutAssessment =
       readonly status: 'invalid'
     }
   | {
-      readonly actualHeightPx: number
       readonly actualWidthPx: number
-      readonly overflowHeightPx: number
       readonly overflowWidthPx: number
       readonly status: 'overflow'
     }
@@ -109,25 +107,19 @@ export const assessCvPageLayout = (
     measurement.renderedWidthPx,
     measurement.scrollWidthPx
   )
-  const heightOverflows =
-    measurement.renderedHeightPx - measurement.pageHeightPx >
-      cvPageLayoutToleranceCssPixels ||
-    measurement.scrollHeightPx > Math.ceil(measurement.pageHeightPx)
   const widthOverflows =
     measurement.renderedWidthPx - measurement.pageWidthPx >
       cvPageLayoutToleranceCssPixels ||
-    measurement.scrollWidthPx > Math.ceil(measurement.pageWidthPx)
+    measurement.scrollWidthPx > Math.ceil(measurement.renderedWidthPx)
 
-  if (heightOverflows || widthOverflows) {
+  if (widthOverflows) {
     return {
-      actualHeightPx,
       actualWidthPx,
-      overflowHeightPx: heightOverflows
-        ? Math.max(0, actualHeightPx - measurement.pageHeightPx)
-        : 0,
-      overflowWidthPx: widthOverflows
-        ? Math.max(0, actualWidthPx - measurement.pageWidthPx)
-        : 0,
+      overflowWidthPx: Math.max(
+        0,
+        actualWidthPx -
+          Math.min(measurement.pageWidthPx, measurement.renderedWidthPx)
+      ),
       status: 'overflow',
     }
   }
@@ -135,7 +127,10 @@ export const assessCvPageLayout = (
   return {
     actualHeightPx,
     actualWidthPx,
-    remainingHeightPx: Math.max(0, measurement.pageHeightPx - actualHeightPx),
+    estimatedPageCount: Math.max(
+      1,
+      Math.ceil(actualHeightPx / measurement.pageHeightPx)
+    ),
     remainingWidthPx: Math.max(0, measurement.pageWidthPx - actualWidthPx),
     status: 'fits',
   }

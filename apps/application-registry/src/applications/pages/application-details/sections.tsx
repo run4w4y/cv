@@ -29,10 +29,7 @@ import { AnnualCompensation } from '../../components/annual-compensation'
 import { CurrencyCombobox } from '../../components/currency-combobox'
 import { ListingAvailabilityReviewDialog } from '../../components/listing-availability-review'
 import { StatusBadge } from '../../components/status-badge'
-import type {
-  CompensationDisplayCurrency,
-  CompensationFxRateTable,
-} from '../../model/currency'
+import type { CompensationDisplayCurrency } from '../../model/currency'
 
 const Detail = ({
   label,
@@ -166,15 +163,11 @@ export const ApplicationCompensation = ({
   onCurrencyChange,
   compensations,
   error,
-  conversionError,
-  rateTable,
 }: {
   readonly currency: CompensationDisplayCurrency
   readonly onCurrencyChange: (currency: CompensationDisplayCurrency) => void
   readonly compensations?: readonly ApplicationCompensationValue[]
   readonly error?: string
-  readonly conversionError?: string
-  readonly rateTable?: CompensationFxRateTable
 }) => {
   const annual = compensations?.filter(
     (compensation) => compensation.period === 'year'
@@ -198,14 +191,6 @@ export const ApplicationCompensation = ({
             ? 'Showing the original stored values.'
             : `Showing converted ${currency} values using client-side Frankfurter rates.`}
         </p>
-        {conversionError !== undefined ? (
-          <Alert className="mt-4">
-            <AlertTitle>Currency conversion unavailable</AlertTitle>
-            <AlertDescription>
-              {conversionError} Original compensation values remain visible.
-            </AlertDescription>
-          </Alert>
-        ) : null}
         {error !== undefined ? (
           <Alert variant="destructive" className="mt-4">
             <AlertTitle>Could not load compensation</AlertTitle>
@@ -238,7 +223,6 @@ export const ApplicationCompensation = ({
                       maximumMinor: original.maximumMinor,
                     }}
                     displayCurrency={currency}
-                    rateTable={rateTable}
                   />
                 </div>
               )

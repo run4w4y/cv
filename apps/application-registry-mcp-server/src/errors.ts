@@ -108,3 +108,18 @@ export const operationIdError = new ApplicationRegistryToolError({
   message:
     'A safe application update operation identifier could not be created.',
 })
+
+export const correspondenceVersionConflictError = (
+  expectedVersion: number,
+  actualVersion: number
+) =>
+  new ApplicationRegistryToolError({
+    kind: 'conflict',
+    message: `The application version changed before correspondence was recorded (expected ${expectedVersion}, found ${actualVersion}). Read the application again before retrying.`,
+  })
+
+export const correspondenceAppliedAtError = new ApplicationRegistryToolError({
+  kind: 'invalid_request',
+  message:
+    'Supply appliedAt when advancing an application beyond submission and its current appliedAt is null.',
+})

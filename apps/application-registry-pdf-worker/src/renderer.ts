@@ -1,5 +1,6 @@
 import {
-  assertCvFitsSingleA4Page,
+  assertCvHasValidPageLayout,
+  assertCvPdfPageCount,
   CvPageLayoutError,
   type CvPageLayoutMeasurement,
   CvRenderPageHttpError,
@@ -8,6 +9,7 @@ import {
   PdfRenderer,
 } from '@cv/application-registry-pdf-processing'
 import { Effect, Layer } from 'effect'
+import { PDFDocument } from 'pdf-lib'
 import { chromium } from 'playwright'
 
 export const makePlaywrightPdfRendererLayer = (browserCdpUrl: URL) =>
@@ -41,7 +43,7 @@ export const makePlaywrightPdfRendererLayer = (browserCdpUrl: URL) =>
                     )
                   })
                 })
-                assertCvFitsSingleA4Page(
+                assertCvHasValidPageLayout(
                   await page.evaluate(
                     measureCvPageLayoutInDocument as () => CvPageLayoutMeasurement
                   )
@@ -58,14 +60,20 @@ export const makePlaywrightPdfRendererLayer = (browserCdpUrl: URL) =>
                   )
                 }
 
+                const bytes = new Uint8Array(
+                  await page.pdf({
+                    format: 'A4',
+                    preferCSSPageSize: true,
+                    printBackground: true,
+                  })
+                )
+                const pdf = await PDFDocument.load(bytes, {
+                  updateMetadata: false,
+                })
+                assertCvPdfPageCount(pdf.getPageCount())
+
                 return {
-                  bytes: new Uint8Array(
-                    await page.pdf({
-                      format: 'A4',
-                      preferCSSPageSize: true,
-                      printBackground: true,
-                    })
-                  ),
+                  bytes,
                   rendererVersion: rendererVersion.trim(),
                 }
               } finally {

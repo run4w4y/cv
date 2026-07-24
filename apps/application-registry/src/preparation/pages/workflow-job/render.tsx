@@ -1,4 +1,5 @@
 import {
+  type PreparationJob,
   type PreparationRun,
   type PreparationStepSummary,
   preparationStepTimeline,
@@ -9,10 +10,11 @@ import { useParams } from 'react-router'
 
 import { asyncResultErrorMessage } from '@/lib/async-result'
 import {
-  cancelPreparationRunAtom,
-  preparationRunAtom,
+  cancelPreparationAtom,
+  preparationJobAtom,
 } from '@/preparation/workflow/atoms'
 import {
+  type WorkflowArtifactScreenItem,
   type WorkflowArtifactSummary,
   WorkflowJobScreen,
 } from '@/preparation/workflows/job-screen'
@@ -23,20 +25,29 @@ import {
   workflowStageLabel,
 } from '@/preparation/workflows/presentation'
 
-const toJobItem = (run: PreparationRun): WorkflowJobListItem => ({
-  applicationId: run.applicationId,
-  batchId: run.batchId,
-  createdAt: run.createdAt,
-  error: run.error,
-  kind: run.kind,
-  locale: run.locale,
-  message: run.message,
-  position: run.batchPosition,
-  runId: run.runId,
-  stage: run.stage,
-  status: run.status,
-  updatedAt: run.updatedAt,
-  url: run.url,
+const toJobItem = (job: PreparationJob): WorkflowJobListItem => ({
+  applicationId: job.applicationId,
+  artifacts: job.artifacts.map((run) => ({
+    error: run.error,
+    kind: run.kind,
+    message: run.message,
+    runId: run.runId,
+    stage: run.stage,
+    status: run.status,
+  })),
+  batchId: job.batchId,
+  company: job.company,
+  createdAt: job.createdAt,
+  jobId: job.jobId,
+  kinds: job.artifacts.map(({ kind }) => kind),
+  locale: job.locale,
+  message: job.message,
+  position: job.batchPosition,
+  primaryRunId: job.primaryRunId,
+  role: job.role,
+  status: job.status,
+  updatedAt: job.updatedAt,
+  url: job.url,
 })
 
 const toStepItem = (step: PreparationStepSummary): WorkflowStepListItem => ({
@@ -66,20 +77,33 @@ const artifactSummary = (
   }
 }
 
+const toArtifactItem = (run: PreparationRun): WorkflowArtifactScreenItem => ({
+  artifact: {
+    error: run.error,
+    kind: run.kind,
+    message: run.message,
+    runId: run.runId,
+    stage: run.stage,
+    status: run.status,
+  },
+  steps: preparationStepTimeline(run).map(toStepItem),
+  summary: artifactSummary(run),
+})
+
 export const WorkflowJobPage = () => {
-  const { batchId = '', runId = '' } = useParams()
-  const runResult = useAtomValue(preparationRunAtom(runId))
-  const [cancelResult, cancel] = useAtom(cancelPreparationRunAtom(runId), {
+  const { batchId = '', jobId = '' } = useParams()
+  const jobResult = useAtomValue(preparationJobAtom(jobId))
+  const [cancelResult, cancel] = useAtom(cancelPreparationAtom, {
     mode: 'promiseExit',
   })
 
-  if (AsyncResult.isFailure(runResult)) {
+  if (AsyncResult.isFailure(jobResult)) {
     return (
       <WorkflowNotFound
         title="Workflow runtime unavailable"
         description={
           asyncResultErrorMessage(
-            runResult,
+            jobResult,
             'The workflow job could not be loaded.'
           ) ?? 'The workflow job could not be loaded.'
         }
@@ -87,7 +111,7 @@ export const WorkflowJobPage = () => {
     )
   }
 
-  if (!AsyncResult.isSuccess(runResult)) {
+  if (!AsyncResult.isSuccess(jobResult)) {
     return (
       <WorkflowNotFound
         title="Loading workflow job"
@@ -96,8 +120,8 @@ export const WorkflowJobPage = () => {
     )
   }
 
-  const run = runResult.value
-  if (run === null || run.batchId !== batchId) {
+  const job = jobResult.value
+  if (job === null || job.batchId !== batchId) {
     return (
       <WorkflowNotFound
         title="Workflow job not found"
@@ -115,13 +139,12 @@ export const WorkflowJobPage = () => {
 
   return (
     <WorkflowJobScreen
-      artifact={artifactSummary(run)}
+      artifacts={job.artifacts.map(toArtifactItem)}
       cancelError={cancelError}
       cancelling={cancelling}
-      job={toJobItem(run)}
-      steps={preparationStepTimeline(run).map(toStepItem)}
+      job={toJobItem(job)}
       onCancel={() => {
-        void cancel({ runId })
+        void cancel({ runId: job.primaryRunId })
       }}
     />
   )

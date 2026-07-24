@@ -5,11 +5,13 @@ import { compact, partition, uniq } from 'es-toolkit/array'
 import {
   canonicalPreparationUrl,
   HttpUrlSchema,
+  normalizePreparationJobInput,
   PreparationBatchUrlsSchema,
+  PreparationJobInputSchema,
   PreparationWorkflowError,
-  type PreparationWorkflowInput,
-  PreparationWorkflowInputSchema,
+  type PreparationWorkflowPayload,
   PrepareApplicationWorkflow,
+  preparationJobArtifactInputs,
   type StartPreparationBatchInput,
   type StartPreparationInput,
   type StartPreparationResult,
@@ -40,22 +42,41 @@ export type PreparedStart = {
   readonly batchId: string
   readonly batchPosition: number
   readonly executionId: string
-  readonly payload: PreparationWorkflowInput
+  readonly payload: PreparationWorkflowPayload
   readonly result: StartPreparationResult
 }
 
-const prepareStart = Effect.fn('PreparationWorkflow.prepareStart')(function* (
-  input: StartPreparationInput,
+type PrepareJobInput = {
+  readonly coverLetterPrompt: string | null
+  readonly cvGenerationGuidance:
+    | StartPreparationBatchInput['cvGenerationGuidance']
+    | null
+  readonly includeCoverLetter: boolean
+  readonly includeCv: boolean
+  readonly locale: StartPreparationBatchInput['locale']
+  readonly source: StartPreparationInput['source']
+}
+
+const prepareJob = Effect.fn('PreparationWorkflow.prepareJob')(function* (
+  input: PrepareJobInput,
   batchId: string,
   batchPosition: number
 ) {
-  const runId = yield* randomId
-  const decoded = yield* PreparationWorkflowInputSchema.makeEffect({
+  const jobId = yield* randomId
+  const coverLetterRunId = input.includeCoverLetter
+    ? input.includeCv
+      ? yield* randomId
+      : jobId
+    : null
+  const decoded = yield* PreparationJobInputSchema.makeEffect({
     coverLetterPrompt: input.coverLetterPrompt,
     cvGenerationGuidance: input.cvGenerationGuidance,
-    kind: input.kind,
+    jobId,
     locale: input.locale,
-    runId,
+    runIds: {
+      coverLetter: coverLetterRunId,
+      cv: input.includeCv ? jobId : null,
+    },
     source: {
       ...input.source,
       url: input.source.url.trim(),
@@ -74,8 +95,27 @@ const prepareStart = Effect.fn('PreparationWorkflow.prepareStart')(function* (
     batchPosition,
     executionId,
     payload,
-    result: { batchId, runId },
+    result: { batchId, jobId, runId: jobId },
   } satisfies PreparedStart
+})
+
+const prepareStart = Effect.fn('PreparationWorkflow.prepareStart')(function* (
+  input: StartPreparationInput,
+  batchId: string,
+  batchPosition: number
+) {
+  return yield* prepareJob(
+    {
+      coverLetterPrompt: input.coverLetterPrompt,
+      cvGenerationGuidance: input.cvGenerationGuidance,
+      includeCoverLetter: input.kind === 'cover_letter',
+      includeCv: input.kind === 'cv',
+      locale: input.locale,
+      source: input.source,
+    },
+    batchId,
+    batchPosition
+  )
 })
 
 export const startReservedPreparations = Effect.fn(
@@ -88,11 +128,15 @@ export const startReservedPreparations = Effect.fn(
     Effect.gen(function* () {
       const attempted = yield* Ref.make<ReadonlySet<string>>(new Set())
       yield* progress.reserve(
-        prepared.map(({ batchId, batchPosition, payload }) => ({
-          batchId,
-          batchPosition,
-          input: payload,
-        }))
+        prepared.flatMap(({ batchId, batchPosition, payload }) => {
+          const job = normalizePreparationJobInput(payload)
+          return preparationJobArtifactInputs(job).map((input) => ({
+            batchId,
+            batchPosition,
+            input,
+            jobId: job.jobId,
+          }))
+        })
       )
       return attempted
     }),
@@ -101,9 +145,10 @@ export const startReservedPreparations = Effect.fn(
         prepared,
         ({ executionId: expectedExecutionId, payload, result }) =>
           Effect.gen(function* () {
+            const job = normalizePreparationJobInput(payload)
             yield* Effect.uninterruptibleMask((restore) =>
               Effect.gen(function* () {
-                yield* progress.setExecution(payload.runId, expectedExecutionId)
+                yield* progress.setExecution(job.jobId, expectedExecutionId)
                 yield* Ref.update(attempted, (current) => {
                   const next = new Set(current)
                   next.add(expectedExecutionId)
@@ -121,7 +166,7 @@ export const startReservedPreparations = Effect.fn(
                   return next
                 })
                 return yield* Effect.die(
-                  `Workflow execution id mismatch for preparation run ${payload.runId}.`
+                  `Workflow execution id mismatch for preparation job ${job.jobId}.`
                 )
               })
             )
@@ -139,15 +184,22 @@ export const startReservedPreparations = Effect.fn(
               ({ executionId }) => attemptedIds.has(executionId)
             )
             yield* progress.releaseReservations(
-              unattemptedRuns.map(({ payload }) => payload.runId)
+              unattemptedRuns.flatMap(({ payload }) => {
+                const job = normalizePreparationJobInput(payload)
+                return preparationJobArtifactInputs(job).map(
+                  ({ runId }) => runId
+                )
+              })
             )
             yield* Effect.forEach(
               attemptedRuns,
-              ({ payload }) =>
-                progress.fail(
-                  payload.runId,
+              ({ payload }) => {
+                const job = normalizePreparationJobInput(payload)
+                return progress.failJob(
+                  job.jobId,
                   'The batch could not finish launching every preparation job.'
-                ),
+                )
+              },
               { discard: true }
             )
             yield* Effect.forEach(
@@ -189,14 +241,15 @@ export const startPreparationBatch = Effect.fn(
   )
   const urls = uniq(decodedUrls.map(canonicalPreparationUrl))
   const validated = yield* PreparationBatchUrlsSchema.makeEffect(urls)
-  const prepared = yield* Effect.forEach(
+  const preparedByUrl = yield* Effect.forEach(
     validated,
     (url, batchPosition) =>
-      prepareStart(
+      prepareJob(
         {
           coverLetterPrompt: input.coverLetterPrompt,
           cvGenerationGuidance: input.cvGenerationGuidance,
-          kind: input.kind,
+          includeCoverLetter: input.includeCoverLetter,
+          includeCv: true,
           locale: input.locale,
           source: {
             _tag: 'CaptureUrl',
@@ -208,5 +261,5 @@ export const startPreparationBatch = Effect.fn(
       ),
     { concurrency: 4 }
   )
-  return yield* startReservedPreparations(prepared)
+  return yield* startReservedPreparations(preparedByUrl)
 }, inputError)

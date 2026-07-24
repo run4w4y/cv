@@ -29,9 +29,10 @@ import {
 } from 'lucide-react'
 import { NuqsAdapter } from 'nuqs/adapters/react-router/v7'
 import * as React from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router'
+import { Link, NavLink, Outlet, useMatches } from 'react-router'
 import { isDesktopHost } from '@/host/desktop'
 import { RegistryConnectionControl } from '@/host/registry-connection-dialog'
+import { isRegistryRouteHandle, useRegistryDocumentTitle } from './breadcrumbs'
 import { HeaderActionsProvider } from './header-actions'
 
 const navItems = [
@@ -46,27 +47,6 @@ const navItems = [
     icon: Settings2,
   },
 ] as const
-
-const routeTitle = (pathname: string) => {
-  if (pathname.startsWith('/facts')) return 'Reviewed facts'
-  if (pathname === '/preparation/cv-guidance') return 'CV guidance'
-  if (pathname === '/workflows/new') return 'New URL workflow'
-  if (pathname.startsWith('/workflows/')) return 'Workflow details'
-  if (pathname === '/workflows') return 'URL workflows'
-  if (pathname.startsWith('/activities')) return 'Activities'
-  if (pathname.startsWith('/analytics')) return 'CV analytics'
-  if (/^\/applications\/[^/]+\/prepare$/u.test(pathname)) {
-    return 'Prepare tailored CV'
-  }
-  if (/^\/applications\/[^/]+\/cover-letter$/u.test(pathname)) {
-    return 'Prepare cover letter'
-  }
-  if (/^\/applications\/[^/]+\/publish$/u.test(pathname)) {
-    return 'Publish CV'
-  }
-  if (/^\/applications\/[^/]+/u.test(pathname)) return 'Application details'
-  return 'Applications'
-}
 
 const ShellNavigation = () => {
   const { setOpen } = useSidebar()
@@ -108,10 +88,28 @@ const ShellNavigation = () => {
 }
 
 const AppShellContent = () => {
-  const { pathname } = useLocation()
+  const matches = useMatches()
   const [actionsTarget, setActionsTarget] =
     React.useState<HTMLDivElement | null>(null)
-  const title = routeTitle(pathname)
+  const handledMatches = matches.filter((match) =>
+    isRegistryRouteHandle(match.handle)
+  )
+  const breadcrumbs = handledMatches.flatMap((match) =>
+    isRegistryRouteHandle(match.handle) ? match.handle.breadcrumbs(match) : []
+  )
+  const lastBreadcrumb = breadcrumbs.at(-1)
+  const titleManagedByRoute = handledMatches.some(
+    (match) =>
+      isRegistryRouteHandle(match.handle) &&
+      match.handle.managesDocumentTitle === true
+  )
+  useRegistryDocumentTitle(
+    titleManagedByRoute
+      ? null
+      : typeof lastBreadcrumb?.label === 'string'
+        ? lastBreadcrumb.label
+        : 'Applications'
+  )
 
   return (
     <>
@@ -124,12 +122,29 @@ const AppShellContent = () => {
               <Breadcrumb>
                 <BreadcrumbList>
                   <BreadcrumbItem>
-                    <span>Registry</span>
+                    <Link
+                      to="/applications"
+                      className="transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                    >
+                      Registry
+                    </Link>
                   </BreadcrumbItem>
-                  <BreadcrumbSeparator />
-                  <BreadcrumbItem>
-                    <BreadcrumbPage>{title}</BreadcrumbPage>
-                  </BreadcrumbItem>
+                  {breadcrumbs.flatMap((breadcrumb, index) => [
+                    <BreadcrumbSeparator key={`${breadcrumb.key}-separator`} />,
+                    <BreadcrumbItem key={breadcrumb.key}>
+                      {index === breadcrumbs.length - 1 ||
+                      breadcrumb.to === undefined ? (
+                        <BreadcrumbPage>{breadcrumb.label}</BreadcrumbPage>
+                      ) : (
+                        <Link
+                          to={breadcrumb.to}
+                          className="max-w-56 truncate transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                        >
+                          {breadcrumb.label}
+                        </Link>
+                      )}
+                    </BreadcrumbItem>,
+                  ])}
                 </BreadcrumbList>
               </Breadcrumb>
             </div>

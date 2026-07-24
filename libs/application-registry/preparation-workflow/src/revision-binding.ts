@@ -29,5 +29,13 @@ export const isRevisionBoundToPreparationRun = (
     return false
   }
 
-  return selected.id === expected.id || selected.source === 'human'
+  if (selected.id === expected.id || selected.source === 'human') return true
+  const refinementPrefix = `${run.runId}:refinement:`
+  const operationId = selected.operationId
+  return (
+    selected.source === 'ai_adjustment' &&
+    expected.operationId === `${run.runId}:candidate` &&
+    operationId?.startsWith(refinementPrefix) === true &&
+    operationId.length > refinementPrefix.length
+  )
 }

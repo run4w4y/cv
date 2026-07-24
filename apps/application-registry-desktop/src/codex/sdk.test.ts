@@ -11,6 +11,7 @@ import {
   type CodexFactory,
   CodexSdk,
   CodexSdkError,
+  normalizeCodexSdkError,
   resolveCodexExecutable,
 } from './sdk'
 
@@ -45,6 +46,20 @@ describe('Codex executable resolution', () => {
 })
 
 describe('Codex SDK adapter', () => {
+  test('identifies a provider schema rejection as an invalid request', () => {
+    const error = normalizeCodexSdkError(
+      new Error(
+        "Invalid schema for response_format 'job_analysis': allOf is not permitted."
+      )
+    )
+
+    expect(error).toMatchObject({
+      code: 'invalid_request',
+      message: 'Codex rejected the structured-output schema.',
+    })
+    expect(error.details).toContain('allOf is not permitted')
+  })
+
   test('uses local auth, local model configuration, structured output, and restricted thread options', async () => {
     let codexOptions: CodexOptions | undefined
     let threadOptions: ThreadOptions | undefined

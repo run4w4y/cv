@@ -8,7 +8,7 @@ import { reviewedFactIdsForGeneration } from '../../generation/prompts'
 export const validateCvProvenance = (
   catalogue: FactsCatalogueV1,
   document: CvDocumentV1
-) => {
+): Effect.Effect<void, PreparationWorkflowError> => {
   const identities = catalogue.sections.filter(
     (section) => section.kind === 'identity'
   )
@@ -182,11 +182,15 @@ export const validateCvProvenance = (
     }
   }
   const reviewedFactIds = reviewedFactIdsForGeneration(catalogue)
+  const reviewedAdditionalEvidenceIds = new Set([
+    ...reviewedFactIds,
+    ...identities.flatMap(({ languages }) => languages.map(({ id }) => id)),
+  ])
   for (const section of document.additionalSections) {
     for (const item of section.items) {
-      if (!reviewedFactIds.has(item.id)) {
+      if (!reviewedAdditionalEvidenceIds.has(item.id)) {
         issues.push(
-          `additional:${section.id}:${item.id} is not a reviewed fact ID`
+          `additional:${section.id}:${item.id} is not a reviewed additional-section evidence ID`
         )
       }
     }

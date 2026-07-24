@@ -104,6 +104,18 @@ export const WorkflowDocumentBadge = ({
   readonly kind: 'cv' | 'cover_letter'
 }) => <Badge variant="outline">{documentKindLabel(kind)}</Badge>
 
+export const WorkflowDocumentBadges = ({
+  kinds,
+}: {
+  readonly kinds: ReadonlyArray<'cv' | 'cover_letter'>
+}) => (
+  <>
+    {kinds.map((kind) => (
+      <WorkflowDocumentBadge key={kind} kind={kind} />
+    ))}
+  </>
+)
+
 export const WorkflowMetricCard = ({
   description,
   icon: Icon,

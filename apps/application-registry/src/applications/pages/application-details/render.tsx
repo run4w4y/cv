@@ -18,7 +18,6 @@ import {
   applicationActivitiesAtom,
   applicationAtom,
   applicationCompensationsAtom,
-  compensationFxRateTableAtom,
 } from '../../data'
 import type { CompensationDisplayCurrency } from '../../model/currency'
 import {
@@ -36,9 +35,6 @@ export const ApplicationDetailsPage = () => {
   const compensationResult = useAtomValue(
     applicationCompensationsAtom(applicationId)
   )
-  const compensationFxRatesResult = useAtomValue(
-    compensationFxRateTableAtom(compensationCurrency)
-  )
   const activitiesResult = useAtomValue(
     applicationActivitiesAtom(applicationId)
   )
@@ -47,10 +43,6 @@ export const ApplicationDetailsPage = () => {
     compensationResult,
     () => undefined
   )?.items
-  const compensationFxRateTable = AsyncResult.getOrElse(
-    compensationFxRatesResult,
-    () => undefined
-  )
   const activities = AsyncResult.getOrElse(
     activitiesResult,
     () => undefined
@@ -63,13 +55,6 @@ export const ApplicationDetailsPage = () => {
     compensationResult,
     'The application compensation could not be loaded.'
   )
-  const compensationConversionError =
-    compensationCurrency === 'original'
-      ? undefined
-      : asyncResultErrorMessage(
-          compensationFxRatesResult,
-          'The compensation exchange rates could not be loaded.'
-        )
   const activitiesError = asyncResultErrorMessage(
     activitiesResult,
     'The related activities could not be loaded.'
@@ -121,8 +106,6 @@ export const ApplicationDetailsPage = () => {
               onCurrencyChange={setCompensationCurrency}
               compensations={compensations}
               error={compensationError}
-              conversionError={compensationConversionError}
-              rateTable={compensationFxRateTable ?? undefined}
             />
             <ApplicationActivitiesTable
               activities={activities}

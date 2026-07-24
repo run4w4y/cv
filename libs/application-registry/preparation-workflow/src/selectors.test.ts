@@ -21,10 +21,13 @@ const run = (
     batchId: `batch-${runId}`,
     batchPosition: 0,
     candidate: null,
+    company: 'Example',
     createdAt: 1,
+    jobId: runId,
     kind,
     locale,
     message: 'test',
+    role: 'Platform Engineer',
     runId,
     stepHistory: [],
     updatedAt: 1,
@@ -131,6 +134,38 @@ describe('preparation run selection', () => {
       failed: 1,
       running: 2,
     })
+  })
+
+  test('counts paired artifacts as one active URL job', () => {
+    const cv = {
+      ...run('run-cv', 'en', 'cv', 'running'),
+      batchId: 'batch-paired',
+      jobId: 'job-paired',
+    }
+    const letter = {
+      ...run('run-letter', 'en', 'cover_letter', 'queued'),
+      batchId: 'batch-paired',
+      jobId: 'job-paired',
+    }
+    const batch = selectPreparationBatches(
+      new Map([
+        [cv.runId, cv],
+        [letter.runId, letter],
+      ])
+    )[0]
+
+    expect(batch).toMatchObject({
+      activeCount: 1,
+      needsReviewCount: 0,
+      status: 'running',
+      terminalCount: 0,
+      urlCount: 1,
+    })
+    expect(batch?.jobs).toHaveLength(1)
+    expect(batch?.jobs[0]?.artifacts.map(({ kind }) => kind)).toEqual([
+      'cv',
+      'cover_letter',
+    ])
   })
 
   test('derives a complete CI-style timeline from append-only step history', () => {

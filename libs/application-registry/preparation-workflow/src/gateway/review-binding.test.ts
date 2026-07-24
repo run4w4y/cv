@@ -166,7 +166,27 @@ describe('server-backed workflow approval binding', () => {
     expect(error.message).toContain('currently approved head')
   })
 
-  test('rejects non-human ancestry and changed provenance pins', async () => {
+  test('accepts only Codex adjustments bound to the candidate run', async () => {
+    const adjusted: ContentRevision = {
+      ...humanRevision('revision-adjusted', candidateRevision),
+      operationId: 'run-1:refinement:operation-1',
+      source: 'ai_adjustment',
+    }
+    const selected = humanRevision('revision-human-after-adjustment', adjusted)
+
+    const result = await Effect.runPromise(
+      verifyRevisionSelectionBinding(
+        candidate,
+        selected.id,
+        { ...draftEntry, headRevisionId: selected.id, version: 4 },
+        [candidateRevision, adjusted, selected]
+      )
+    )
+
+    expect(result.revision.id).toBe(selected.id)
+  })
+
+  test('rejects unbound AI ancestry and changed provenance pins', async () => {
     const adjusted: ContentRevision = {
       ...humanRevision('revision-adjusted', candidateRevision),
       source: 'ai_adjustment',
@@ -193,7 +213,7 @@ describe('server-backed workflow approval binding', () => {
       ).pipe(Effect.flip)
     )
 
-    expect(nonHumanError.message).toContain('not a human edit')
+    expect(nonHumanError.message).toContain('trusted Codex refinement')
     expect(pinError.message).toContain('contract or provenance pins')
   })
 
@@ -214,10 +234,10 @@ describe('server-backed workflow approval binding', () => {
     )
 
     expect(error.message).toContain(`Revision ${otherAi.id}`)
-    expect(error.message).toContain('not a human edit')
+    expect(error.message).toContain('trusted Codex refinement')
   })
 
-  test('bounds the number of accepted human descendants', async () => {
+  test('bounds the number of accepted review descendants', async () => {
     const chain: Array<ContentRevision> = [candidateRevision]
     for (let index = 1; index <= 33; index += 1) {
       const parent = chain[index - 1]
@@ -236,6 +256,6 @@ describe('server-backed workflow approval binding', () => {
       ).pipe(Effect.flip)
     )
 
-    expect(error.message).toContain('more than 32 human edits')
+    expect(error.message).toContain('more than 32 review edits')
   })
 })

@@ -69,7 +69,7 @@ const validDocument = {
 }
 
 describe('cv.document.v1', () => {
-  test('decodes the flattened one-page document shape', () => {
+  test('decodes the flattened ATS-readable document shape', () => {
     const document = Schema.decodeUnknownSync(CvDocumentV1Schema)({
       ...validDocument,
       experienceDuration: '6+ years',

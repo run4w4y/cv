@@ -27,11 +27,13 @@ import {
   submitPreparationReview,
 } from '../commands/review'
 import {
-  HumanReview,
   type PreparationBootstrap,
+  type PreparationJobInput,
   PreparationWorkflowError,
   type PreparationWorkflowInput,
   PrepareApplicationWorkflow,
+  preparationJobArtifactInputs,
+  preparationReviewDeferred,
   ReviewDecisionSchema,
   type SavedCandidate,
 } from '../domain'
@@ -141,6 +143,8 @@ const bootstrap: PreparationBootstrap = {
   factsReleaseId: 'facts-release-1',
   jobContext: 'Platform role',
   jobSnapshot,
+  referenceCv: null,
+  referenceCvRevisionId: null,
 }
 
 const generationMetadata = {
@@ -164,6 +168,49 @@ const savedCandidate: SavedCandidate = {
     entry: { ...entry, headRevisionId: revision.id, version: 2 },
     revision,
   },
+}
+
+const cvEntry: ContentEntry = {
+  ...entry,
+  id: 'entry-cv',
+  kind: 'cv',
+}
+
+const cvRevision: ContentRevision = {
+  ...revision,
+  contentEntryId: cvEntry.id,
+  contractId: 'cv.document.v1',
+  id: 'revision-cv',
+  objectKey: 'objects/revision-cv',
+  operationId: 'run-paired-cv:candidate',
+}
+
+const cvCandidate: SavedCandidate['candidate'] = {
+  _tag: 'Cv',
+  document: {
+    $schema: 'cv.document.v1',
+    additionalSections: [],
+    direction: 'ltr',
+    education: [],
+    experience: [],
+    locale: 'en',
+    person: {
+      contacts: [
+        {
+          href: 'mailto:ada@example.test',
+          kind: 'email',
+          label: 'Email',
+          value: 'ada@example.test',
+        },
+      ],
+      headline: 'Platform engineer',
+      name: 'Ada Example',
+      summary: 'Builds reliable platforms.',
+    },
+    projects: [],
+    skills: [],
+  },
+  metadata: [generationMetadata],
 }
 
 const input: PreparationWorkflowInput = {
@@ -207,7 +254,7 @@ const fakeGateway: PreparationGatewayService = {
   brief: (_input, _context, _analysis, _plan, sectionId) =>
     Effect.succeed({
       brief: {
-        factIds: ['fact-1'],
+        evidenceIds: ['fact-1'],
         notes: ['Use the reviewed platform fact.'],
         objective: 'Show platform experience.',
         sectionId,
@@ -223,7 +270,7 @@ const fakeGateway: PreparationGatewayService = {
       plan: {
         matches: [
           {
-            factIds: ['fact-1'],
+            evidenceIds: ['fact-1'],
             rationale: 'Direct platform evidence.',
             requirementId: 'requirement-1',
           },
@@ -264,6 +311,347 @@ const makeTestLayer = (
   )
 
 describe('in-memory application preparation workflow', () => {
+  test('shares role analysis and passes the generated CV directly to the paired cover letter', async () => {
+    const pairedInput: PreparationJobInput = {
+      coverLetterPrompt: 'Keep the letter concise.',
+      cvGenerationGuidance: cvGenerationGuidanceTestFixture,
+      jobId: 'job-paired',
+      locale: 'en',
+      runIds: {
+        coverLetter: 'run-paired-letter',
+        cv: 'run-paired-cv',
+      },
+      source: {
+        _tag: 'CaptureUrl',
+        url: application.postingUrl,
+      },
+    }
+    const calls = {
+      analyze: 0,
+      bootstrap: 0,
+      compose: 0,
+      ensure: 0,
+      evidence: 0,
+      save: 0,
+    }
+    const observedReferenceCvRevisionId: { current: string | null } = {
+      current: null,
+    }
+    const pairedGateway: PreparationGatewayService = {
+      ...fakeGateway,
+      analyze: (...args) =>
+        Effect.sync(() => {
+          calls.analyze += 1
+          return fakeGateway.analyze(...args)
+        }).pipe(Effect.flatten),
+      bootstrap: (artifactInput) =>
+        Effect.sync(() => {
+          calls.bootstrap += 1
+          return {
+            ...bootstrap,
+            entry: artifactInput.kind === 'cv' ? cvEntry : entry,
+          }
+        }),
+      compose: (artifactInput, context) =>
+        Effect.sync(() => {
+          calls.compose += 1
+          if (artifactInput.kind === 'cover_letter') {
+            observedReferenceCvRevisionId.current =
+              context.referenceCvRevisionId
+            expect(context.referenceCv).toEqual(cvCandidate.document)
+            return savedCandidate.candidate
+          }
+          return cvCandidate
+        }),
+      ensureApplication: () =>
+        Effect.sync(() => {
+          calls.ensure += 1
+          return application
+        }),
+      planEvidence: (...args) =>
+        Effect.sync(() => {
+          calls.evidence += 1
+          return fakeGateway.planEvidence(...args)
+        }).pipe(Effect.flatten),
+      saveCandidate: (artifactInput, _context, candidate) =>
+        Effect.sync(() => {
+          calls.save += 1
+          return artifactInput.kind === 'cv'
+            ? {
+                application,
+                candidate,
+                result: {
+                  entry: {
+                    ...cvEntry,
+                    headRevisionId: cvRevision.id,
+                    version: 2,
+                  },
+                  revision: cvRevision,
+                },
+              }
+            : { ...savedCandidate, candidate }
+        }),
+      approveBoundRevision: (candidate, approvedRevisionId) =>
+        Effect.succeed({
+          entry: {
+            ...candidate.result.entry,
+            approvedRevisionId,
+            headRevisionId: approvedRevisionId,
+            state: 'approved',
+          },
+          revision: candidate.result.revision,
+        }),
+    }
+
+    const observed = await Effect.runPromise(
+      Effect.gen(function* () {
+        const progress = yield* PreparationProgress
+        yield* progress.reserve(
+          preparationJobArtifactInputs(pairedInput).map((artifactInput) => ({
+            batchId: 'batch-paired',
+            batchPosition: 0,
+            input: artifactInput,
+            jobId: pairedInput.jobId,
+          }))
+        )
+        const executionId =
+          yield* PrepareApplicationWorkflow.executionId(pairedInput)
+        yield* progress.setExecution(pairedInput.jobId, executionId)
+
+        const bothReady = yield* SubscriptionRef.changes(progress.runs).pipe(
+          Stream.filter(
+            (runs) =>
+              runs.get('run-paired-cv')?.status === 'awaiting_review' &&
+              runs.get('run-paired-letter')?.status === 'awaiting_review'
+          ),
+          Stream.runHead,
+          Effect.forkChild
+        )
+
+        yield* PrepareApplicationWorkflow.execute(pairedInput, {
+          discard: true,
+        })
+        const ready = yield* Fiber.join(bothReady).pipe(
+          Effect.timeoutOption('1 second')
+        )
+        if (Option.isNone(ready)) {
+          const runs = yield* SubscriptionRef.get(progress.runs)
+          return yield* Effect.die(
+            JSON.stringify(
+              [...runs].map(([runId, run]) => ({
+                error: run.error,
+                runId,
+                stage: run.stage,
+                status: run.status,
+              }))
+            )
+          )
+        }
+
+        const letterReview = preparationReviewDeferred('cover_letter')
+        const letterToken = yield* DurableDeferred.tokenFromPayload(
+          letterReview,
+          {
+            payload: pairedInput,
+            workflow: PrepareApplicationWorkflow,
+          }
+        )
+        const letterCompleted = yield* SubscriptionRef.changes(
+          progress.runs
+        ).pipe(
+          Stream.filter(
+            (runs) =>
+              runs.get('run-paired-letter')?.status === 'review_submitted' &&
+              runs.get('run-paired-cv')?.status === 'awaiting_review'
+          ),
+          Stream.runHead,
+          Effect.forkChild
+        )
+        yield* submitPreparationReview({
+          decision: ReviewDecisionSchema.cases.Rejected.make({
+            reason: 'Prefer a shorter letter.',
+          }),
+          runId: 'run-paired-letter',
+          token: letterToken,
+        })
+        yield* Fiber.join(letterCompleted)
+
+        const cvReview = preparationReviewDeferred('cv')
+        const cvToken = yield* DurableDeferred.tokenFromPayload(cvReview, {
+          payload: pairedInput,
+          workflow: PrepareApplicationWorkflow,
+        })
+        yield* DurableDeferred.succeed(cvReview, {
+          token: cvToken,
+          value: ReviewDecisionSchema.cases.Approved.make({
+            revisionId: cvRevision.id,
+          }),
+        })
+
+        const result = yield* PrepareApplicationWorkflow.execute(pairedInput)
+        return {
+          result,
+          runs: yield* SubscriptionRef.get(progress.runs),
+        }
+      }).pipe(Effect.provide(makeTestLayer(pairedGateway)))
+    )
+
+    expect(calls).toEqual({
+      analyze: 1,
+      bootstrap: 2,
+      compose: 2,
+      ensure: 1,
+      evidence: 1,
+      save: 2,
+    })
+    expect(observedReferenceCvRevisionId.current).toBe(cvRevision.id)
+    expect(observed.result).toMatchObject({
+      applicationId: application.id,
+      artifacts: [
+        {
+          kind: 'cv',
+          revisionId: cvRevision.id,
+          runId: 'run-paired-cv',
+          status: 'approved',
+        },
+        {
+          kind: 'cover_letter',
+          revisionId: null,
+          runId: 'run-paired-letter',
+          status: 'rejected',
+        },
+      ],
+      jobId: pairedInput.jobId,
+    })
+    expect(observed.runs.get('run-paired-cv')?.status).toBe('approved')
+    expect(observed.runs.get('run-paired-letter')?.status).toBe('rejected')
+  })
+
+  test('keeps a generated CV reviewable when its paired cover letter fails', async () => {
+    const pairedInput: PreparationJobInput = {
+      coverLetterPrompt: 'Keep the letter concise.',
+      cvGenerationGuidance: cvGenerationGuidanceTestFixture,
+      jobId: 'job-partial',
+      locale: 'en',
+      runIds: {
+        coverLetter: 'run-partial-letter',
+        cv: 'run-partial-cv',
+      },
+      source: {
+        _tag: 'CaptureUrl',
+        url: application.postingUrl,
+      },
+    }
+    const partialGateway: PreparationGatewayService = {
+      ...fakeGateway,
+      bootstrap: (artifactInput) =>
+        Effect.succeed({
+          ...bootstrap,
+          entry: artifactInput.kind === 'cv' ? cvEntry : entry,
+        }),
+      compose: (artifactInput) =>
+        artifactInput.kind === 'cv'
+          ? Effect.succeed(cvCandidate)
+          : Effect.fail(
+              new PreparationWorkflowError({
+                message: 'Cover-letter generation failed.',
+                stage: 'composition',
+              })
+            ),
+      saveCandidate: (_artifactInput, _context, candidate) =>
+        Effect.succeed({
+          application,
+          candidate,
+          result: {
+            entry: {
+              ...cvEntry,
+              headRevisionId: cvRevision.id,
+              version: 2,
+            },
+            revision: cvRevision,
+          },
+        }),
+      approveBoundRevision: (candidate, approvedRevisionId) =>
+        Effect.succeed({
+          entry: {
+            ...candidate.result.entry,
+            approvedRevisionId,
+            headRevisionId: approvedRevisionId,
+            state: 'approved',
+          },
+          revision: candidate.result.revision,
+        }),
+    }
+
+    const observed = await Effect.runPromise(
+      Effect.gen(function* () {
+        const progress = yield* PreparationProgress
+        yield* progress.reserve(
+          preparationJobArtifactInputs(pairedInput).map((artifactInput) => ({
+            batchId: 'batch-partial',
+            batchPosition: 0,
+            input: artifactInput,
+            jobId: pairedInput.jobId,
+          }))
+        )
+        yield* progress.setExecution(
+          pairedInput.jobId,
+          yield* PrepareApplicationWorkflow.executionId(pairedInput)
+        )
+
+        const partialResult = yield* SubscriptionRef.changes(
+          progress.runs
+        ).pipe(
+          Stream.filter(
+            (runs) =>
+              runs.get('run-partial-cv')?.status === 'awaiting_review' &&
+              runs.get('run-partial-letter')?.status === 'failed'
+          ),
+          Stream.runHead,
+          Effect.forkChild
+        )
+        yield* PrepareApplicationWorkflow.execute(pairedInput, {
+          discard: true,
+        })
+        yield* Fiber.join(partialResult)
+
+        const review = preparationReviewDeferred('cv')
+        const token = yield* DurableDeferred.tokenFromPayload(review, {
+          payload: pairedInput,
+          workflow: PrepareApplicationWorkflow,
+        })
+        yield* DurableDeferred.succeed(review, {
+          token,
+          value: ReviewDecisionSchema.cases.Approved.make({
+            revisionId: cvRevision.id,
+          }),
+        })
+        const result = yield* PrepareApplicationWorkflow.execute(pairedInput)
+        return {
+          result,
+          runs: yield* SubscriptionRef.get(progress.runs),
+        }
+      }).pipe(Effect.provide(makeTestLayer(partialGateway)))
+    )
+
+    expect(observed.result.artifacts).toEqual([
+      {
+        kind: 'cv',
+        revisionId: cvRevision.id,
+        runId: 'run-partial-cv',
+        status: 'approved',
+      },
+      {
+        kind: 'cover_letter',
+        revisionId: null,
+        runId: 'run-partial-letter',
+        status: 'failed',
+      },
+    ])
+    expect(observed.runs.get('run-partial-cv')?.status).toBe('approved')
+    expect(observed.runs.get('run-partial-letter')?.status).toBe('failed')
+  })
+
   test('persists a candidate, suspends for review, and resumes on approval', async () => {
     const calls = {
       approve: 0,
@@ -322,11 +710,12 @@ describe('in-memory application preparation workflow', () => {
           observed.pipe(Option.getOrThrow).get(input.runId)?.candidate
         ).not.toBeNull()
 
-        const token = yield* DurableDeferred.tokenFromPayload(HumanReview, {
+        const review = preparationReviewDeferred(input.kind)
+        const token = yield* DurableDeferred.tokenFromPayload(review, {
           payload: input,
           workflow: PrepareApplicationWorkflow,
         })
-        yield* DurableDeferred.succeed(HumanReview, {
+        yield* DurableDeferred.succeed(review, {
           token,
           value: ReviewDecisionSchema.cases.Approved.make({
             revisionId: revision.id,
@@ -341,7 +730,7 @@ describe('in-memory application preparation workflow', () => {
       }).pipe(Effect.provide(makeTestLayer(countedGateway)))
     )
 
-    expect(result.workflowResult).toEqual({
+    expect(result.workflowResult).toMatchObject({
       applicationId: application.id,
       revisionId: revision.id,
       runId: input.runId,
@@ -395,11 +784,12 @@ describe('in-memory application preparation workflow', () => {
         })
         yield* Fiber.join(awaitingReview)
 
-        const token = yield* DurableDeferred.tokenFromPayload(HumanReview, {
+        const review = preparationReviewDeferred(rejectedInput.kind)
+        const token = yield* DurableDeferred.tokenFromPayload(review, {
           payload: rejectedInput,
           workflow: PrepareApplicationWorkflow,
         })
-        yield* DurableDeferred.succeed(HumanReview, {
+        yield* DurableDeferred.succeed(review, {
           token,
           value: ReviewDecisionSchema.cases.Rejected.make({
             reason: 'Needs stronger evidence.',
@@ -410,7 +800,7 @@ describe('in-memory application preparation workflow', () => {
       }).pipe(Effect.provide(makeTestLayer()))
     )
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       applicationId: application.id,
       revisionId: null,
       runId: rejectedInput.runId,
@@ -560,10 +950,13 @@ describe('in-memory application preparation workflow', () => {
           yield* PrepareApplicationWorkflow.executionId(reviewInput)
         yield* progress.setExecution(reviewInput.runId, executionId)
         yield* progress.stage(reviewInput.runId, 'review', 'Reviewing')
-        const token = DurableDeferred.tokenFromExecutionId(HumanReview, {
-          executionId,
-          workflow: PrepareApplicationWorkflow,
-        })
+        const token = DurableDeferred.tokenFromExecutionId(
+          preparationReviewDeferred(reviewInput.kind),
+          {
+            executionId,
+            workflow: PrepareApplicationWorkflow,
+          }
+        )
         yield* progress.reviewReady(
           reviewInput.runId,
           application.id,
@@ -630,10 +1023,13 @@ describe('in-memory application preparation workflow', () => {
           yield* PrepareApplicationWorkflow.executionId(reviewInput)
         yield* progress.setExecution(reviewInput.runId, executionId)
         yield* progress.stage(reviewInput.runId, 'review', 'Reviewing')
-        const token = DurableDeferred.tokenFromExecutionId(HumanReview, {
-          executionId,
-          workflow: PrepareApplicationWorkflow,
-        })
+        const token = DurableDeferred.tokenFromExecutionId(
+          preparationReviewDeferred(reviewInput.kind),
+          {
+            executionId,
+            workflow: PrepareApplicationWorkflow,
+          }
+        )
         yield* progress.reviewReady(
           reviewInput.runId,
           application.id,

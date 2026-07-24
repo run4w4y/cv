@@ -30,6 +30,8 @@ export const PreparationBootstrapSchema = Schema.Struct({
   factsReleaseId: Schema.NonEmptyString,
   jobContext: Schema.Json,
   jobSnapshot: JobPostingSnapshotSchema,
+  referenceCv: Schema.NullOr(CvDocumentV1Schema),
+  referenceCvRevisionId: Schema.NullOr(Schema.NonEmptyString),
 })
 export interface PreparationBootstrap
   extends Schema.Schema.Type<typeof PreparationBootstrapSchema> {}

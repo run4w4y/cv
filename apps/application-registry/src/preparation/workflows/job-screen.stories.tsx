@@ -17,12 +17,22 @@ const meta = {
     layout: 'fullscreen',
   },
   args: {
-    artifact: null,
+    artifacts: [
+      {
+        artifact: parallelWorkflowJobs[0].artifacts[0],
+        steps: runningWorkflowSteps,
+        summary: null,
+      },
+      {
+        artifact: parallelWorkflowJobs[0].artifacts[1],
+        steps: runningWorkflowSteps,
+        summary: null,
+      },
+    ],
     cancelError: null,
     cancelling: false,
     job: parallelWorkflowJobs[0],
     onCancel: () => undefined,
-    steps: runningWorkflowSteps,
   },
 } satisfies Meta<typeof WorkflowJobScreen>
 
@@ -33,21 +43,29 @@ export const Running: Story = {}
 
 export const NeedsReview: Story = {
   args: {
-    artifact: {
-      codexCalls: 8,
-      revisionNumber: 3,
-      tokens: 24_812,
-    },
+    artifacts: parallelWorkflowJobs[1].artifacts.map((artifact) => ({
+      artifact,
+      steps: reviewWorkflowSteps,
+      summary: {
+        codexCalls: 8,
+        revisionNumber: 3,
+        tokens: 24_812,
+      },
+    })),
     job: parallelWorkflowJobs[1],
-    steps: reviewWorkflowSteps,
   },
 }
 
 export const FailedValidation: Story = {
   args: {
-    artifact: null,
+    artifacts: [
+      {
+        artifact: parallelWorkflowJobs[2].artifacts[0],
+        steps: failedWorkflowSteps,
+        summary: null,
+      },
+    ],
     job: parallelWorkflowJobs[2],
-    steps: failedWorkflowSteps,
   },
 }
 

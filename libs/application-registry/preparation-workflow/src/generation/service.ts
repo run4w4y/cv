@@ -1,10 +1,13 @@
 import { Context, type Effect, Schema } from 'effect'
 import type { JsonSchema } from 'effect/JsonSchema'
 
-export type StructuredGenerationRequest = {
+export type StructuredGenerationPrompt = {
   readonly instructions?: string
-  readonly outputSchema: JsonSchema
   readonly prompt: string
+}
+
+export type StructuredGenerationRequest = StructuredGenerationPrompt & {
+  readonly outputSchema: JsonSchema
 }
 
 export type StructuredGenerationUsage = {

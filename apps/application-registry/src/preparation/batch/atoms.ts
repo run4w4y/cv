@@ -1,6 +1,5 @@
 import {
   canonicalPreparationUrl,
-  type DocumentKind,
   HttpUrlSchema,
   maximumCoverLetterPromptLength,
   maximumPreparationBatchSize,
@@ -9,14 +8,14 @@ import { Result, Schema, SchemaIssue } from 'effect'
 import * as Atom from 'effect/unstable/reactivity/Atom'
 
 export type BatchPreparationForm = {
-  readonly kind: DocumentKind
+  readonly includeCoverLetter: boolean
   readonly locale: string
   readonly prompt: string
   readonly urls: string
 }
 
 export const initialBatchPreparationForm: BatchPreparationForm = {
-  kind: 'cv',
+  includeCoverLetter: true,
   locale: '',
   prompt: 'Write a concise, specific, professional cover letter.',
   urls: '',
@@ -113,9 +112,9 @@ export const batchPreparationValidationAtom = Atom.make((get) => {
   const tooLarge = urls.length > maximumPreparationBatchSize
   const invalidUrls = rows.filter((row) => row.canonicalUrl === null)
   const promptMissing =
-    form.kind === 'cover_letter' && form.prompt.trim().length === 0
+    form.includeCoverLetter && form.prompt.trim().length === 0
   const promptTooLong =
-    form.kind === 'cover_letter' &&
+    form.includeCoverLetter &&
     form.prompt.length > maximumCoverLetterPromptLength
   const urlsValid = urls.length > 0 && invalidUrls.length === 0 && !tooLarge
   const settingsValid =

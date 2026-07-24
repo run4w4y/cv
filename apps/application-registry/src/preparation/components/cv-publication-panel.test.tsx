@@ -136,7 +136,7 @@ describe('CvPublicationPanel', () => {
         ...publication.artifact,
         byteLength: null,
         errorCode: 'cv_page_overflow',
-        errorMessage: 'The CV exceeds one A4 page.',
+        errorMessage: 'The CV exceeds two A4 pages.',
         generatedAt: null,
         mediaType: null,
         objectKey: null,
@@ -166,7 +166,7 @@ describe('CvPublicationPanel', () => {
 
     expect(view.getByText('Private draft')).toBeTruthy()
     expect(view.getByText('PDF generation failed')).toBeTruthy()
-    expect(view.getByText('The CV exceeds one A4 page.')).toBeTruthy()
+    expect(view.getByText('The CV exceeds two A4 pages.')).toBeTruthy()
     expect(view.queryByRole('link', { name: /Open published CV/ })).toBeNull()
     expect(
       (view.getByRole('button', { name: 'Download PDF' }) as HTMLButtonElement)
@@ -200,7 +200,7 @@ describe('CvPublicationPanel', () => {
         ...publication.artifact,
         byteLength: null,
         errorCode: 'cv_page_overflow',
-        errorMessage: 'The CV exceeds one A4 page.',
+        errorMessage: 'The CV exceeds two A4 pages.',
         generatedAt: null,
         mediaType: null,
         objectKey: null,

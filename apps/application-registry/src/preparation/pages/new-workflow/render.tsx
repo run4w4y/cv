@@ -133,7 +133,7 @@ const NewWorkflowController = ({
       startResult,
       'The workflow batch could not be started.'
     ) ?? null
-  const canStart = validation.canStart && (form.kind !== 'cv' || guidanceReady)
+  const canStart = validation.canStart && guidanceReady && guidance !== null
 
   const start = async () => {
     if (!canStart || starting) return
@@ -148,10 +148,9 @@ const NewWorkflowController = ({
     resetStart(Atom.Reset)
     try {
       const exit = await startBatch({
-        coverLetterPrompt:
-          form.kind === 'cover_letter' ? form.prompt.trim() : null,
-        cvGenerationGuidance: form.kind === 'cv' ? guidance : null,
-        kind: form.kind,
+        coverLetterPrompt: form.includeCoverLetter ? form.prompt.trim() : null,
+        cvGenerationGuidance: guidance,
+        includeCoverLetter: form.includeCoverLetter,
         locale: form.locale,
         urls: validation.urls,
       })
@@ -195,7 +194,7 @@ const NewWorkflowWithMetadata = ({
 }: {
   readonly locales: ReadonlyArray<string>
 }) => {
-  const [form, setForm] = useAtom(batchPreparationFormAtom)
+  const setForm = useAtomSet(batchPreparationFormAtom)
   const setStep = useAtomSet(batchPreparationStepAtom)
   const [searchParams] = useSearchParams()
   const prefilled = React.useRef(false)
@@ -216,10 +215,12 @@ const NewWorkflowWithMetadata = ({
 
     setForm((current) => ({
       ...current,
-      kind:
-        requestedKind === 'cv' || requestedKind === 'cover_letter'
-          ? requestedKind
-          : current.kind,
+      includeCoverLetter:
+        requestedKind === 'cover_letter'
+          ? true
+          : requestedKind === 'cv'
+            ? false
+            : current.includeCoverLetter,
       locale:
         requestedLocale !== null && locales.includes(requestedLocale)
           ? requestedLocale
@@ -228,21 +229,6 @@ const NewWorkflowWithMetadata = ({
     }))
     setStep(1)
   }, [locales, searchParams, setForm, setStep])
-
-  if (form.kind !== 'cv') {
-    return (
-      <NewWorkflowController
-        guidance={null}
-        guidancePanel={
-          <p className="text-sm text-muted-foreground">
-            CV writing guidance is only used for CV workflows.
-          </p>
-        }
-        guidanceReady={true}
-        locales={locales}
-      />
-    )
-  }
 
   return (
     <CvGuidanceController>

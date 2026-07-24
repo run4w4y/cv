@@ -1,5 +1,7 @@
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
+@import "@fontsource/arimo/400.css";
+@import "@fontsource/arimo/700.css";
 
 :root {
   color-scheme: light;
@@ -18,6 +20,7 @@
   --cv-font-mono:
     "Geist Mono Variable", "SFMono-Regular", "Roboto Mono", "Cascadia Code",
     "Liberation Mono", monospace;
+  --cv-font-print: "Arimo", "Arial", "Liberation Sans", sans-serif;
 }
 
 html.dark {

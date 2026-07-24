@@ -16,6 +16,7 @@ import { preparationCommandGateKey } from '@/preparation/command-gate'
 import {
   makeAppendPreparationRevisionAtom,
   makeApprovePreparationRevisionAtom,
+  makeRefinePreparationRevisionAtom,
 } from '@/preparation/data'
 import {
   editPreparationDraftAtom,
@@ -40,6 +41,10 @@ const submitReviewFamily = keyedCommandFamily(
   'preparation/cover-letter/command/submit-review',
   makeSubmitPreparationReviewAtom
 )
+const refineRevisionFamily = keyedCommandFamily(
+  'preparation/cover-letter/command/refine-revision',
+  makeRefinePreparationRevisionAtom
+)
 
 export const useCoverLetterEditorCommands = ({
   identity,
@@ -52,6 +57,7 @@ export const useCoverLetterEditorCommands = ({
   const appendRevisionCommandAtom = appendRevisionFamily(commandKey)
   const approveRevisionCommandAtom = approveRevisionFamily(commandKey)
   const submitReviewCommandAtom = submitReviewFamily(commandKey)
+  const refineRevisionCommandAtom = refineRevisionFamily(commandKey)
   const [saveResult, appendRevision] = useAtom(appendRevisionCommandAtom, {
     mode: 'promiseExit',
   })
@@ -61,9 +67,13 @@ export const useCoverLetterEditorCommands = ({
   const [reviewResult, submitReview] = useAtom(submitReviewCommandAtom, {
     mode: 'promiseExit',
   })
+  const [refineResult, refineRevision] = useAtom(refineRevisionCommandAtom, {
+    mode: 'promiseExit',
+  })
   const resetSaveResult = useAtomSet(appendRevisionCommandAtom)
   const resetApproveResult = useAtomSet(approveRevisionCommandAtom)
   const resetReviewResult = useAtomSet(submitReviewCommandAtom)
+  const resetRefineResult = useAtomSet(refineRevisionCommandAtom)
   const editDraft = useAtomSet(editPreparationDraftAtom)
   const recordSave = useAtomSet(recordPreparationSaveAtom)
   const releaseDetachedCandidate = useAtomSet(
@@ -73,10 +83,12 @@ export const useCoverLetterEditorCommands = ({
   const saving = AsyncResult.isWaiting(saveResult)
   const approving = AsyncResult.isWaiting(approveResult)
   const reviewPending = AsyncResult.isWaiting(reviewResult)
+  const refining = AsyncResult.isWaiting(refineResult)
   const mutationPending =
     AsyncResult.isWaiting(saveResult) ||
     AsyncResult.isWaiting(approveResult) ||
-    AsyncResult.isWaiting(reviewResult)
+    AsyncResult.isWaiting(reviewResult) ||
+    AsyncResult.isWaiting(refineResult)
   const workflowReviewBound =
     workspace === null ||
     workspace.editor.approvalMode !== 'workflow' ||
@@ -169,6 +181,42 @@ export const useCoverLetterEditorCommands = ({
     })
   }
 
+  const refine = async (instruction: string) => {
+    const revision = workspace?.editor.baseRevision ?? null
+    if (
+      workspace === null ||
+      mutationPending ||
+      workflowIsExecuting(run) ||
+      workspace.editor.dirty ||
+      revision === null ||
+      !workspace.editor.validation.valid ||
+      instruction.trim().length === 0
+    ) {
+      return
+    }
+    const operationId =
+      workspace.editor.approvalMode === 'workflow' && run !== null
+        ? `${run.runId}:refinement:${globalThis.crypto.randomUUID()}`
+        : `direct:refinement:${globalThis.crypto.randomUUID()}`
+    const exit = await refineRevision({
+      applicationId: identity.applicationId,
+      currentDocument: workspace.editor.validation.value,
+      entry: revision.entry,
+      factsCatalogue: workspace.bootstrap.context.factsCatalogue,
+      factsReleaseId:
+        revision.revision.factsReleaseId ??
+        workspace.bootstrap.context.factsReleaseId,
+      instruction,
+      jobContext: workspace.bootstrap.context.jobContext,
+      jobSnapshotId:
+        revision.revision.jobSnapshotId ??
+        workspace.bootstrap.context.jobSnapshot.id,
+      operationId,
+    })
+    if (Exit.isFailure(exit)) return
+    recordSave({ identity, revision: exit.value })
+  }
+
   const adoptDetachedCandidate = () => {
     const candidate = workspace?.editor.workflowCandidate
     if (
@@ -188,6 +236,7 @@ export const useCoverLetterEditorCommands = ({
     resetSaveResult(Atom.Reset)
     resetApproveResult(Atom.Reset)
     resetReviewResult(Atom.Reset)
+    resetRefineResult(Atom.Reset)
   }
 
   return {
@@ -209,9 +258,15 @@ export const useCoverLetterEditorCommands = ({
         fallback: 'The Workflow review decision could not be recorded.',
         result: reviewResult,
       },
+      {
+        fallback: 'Codex could not refine the cover letter.',
+        result: refineResult,
+      },
     ]),
     mutationPending,
     reject,
+    refine,
+    refining,
     reset,
     reviewPending,
     save,

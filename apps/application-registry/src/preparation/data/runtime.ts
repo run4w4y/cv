@@ -13,8 +13,9 @@ const preparationBrowserAdapters = Layer.mergeAll(
   BrowserCrypto.layer
 )
 
-export const preparationDataLayer = preparationRepositoryLayer.pipe(
-  Layer.provide(preparationBrowserAdapters)
+export const preparationDataLayer = Layer.merge(
+  preparationRepositoryLayer.pipe(Layer.provide(preparationBrowserAdapters)),
+  hostStructuredGenerationLayer()
 )
 
 /** Browser-safe Effect services shared by preparation query and command atoms. */

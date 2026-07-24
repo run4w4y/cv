@@ -3,9 +3,9 @@ import * as DurableDeferred from 'effect/unstable/workflow/DurableDeferred'
 import * as WorkflowEngine from 'effect/unstable/workflow/WorkflowEngine'
 
 import {
-  HumanReview,
   PreparationWorkflowError,
   PrepareApplicationWorkflow,
+  preparationReviewDeferred,
   type ReviewDecision,
   type SubmitPreparationReviewInput,
 } from '../domain'
@@ -93,10 +93,18 @@ export const preflightPreparationReview = Effect.fn(
 
 export const submitPreparationReview = makePreflightedSubmitPreparationReview(
   preflightPreparationReview,
-  ({ decision, token }) =>
-    DurableDeferred.succeed(HumanReview, {
-      token,
-      value: decision,
+  ({ decision, runId, token }) =>
+    Effect.gen(function* () {
+      const progress = yield* PreparationProgress
+      const runs = yield* SubscriptionRef.get(progress.runs)
+      const run = runs.get(runId)
+      if (run === undefined) {
+        return yield* Effect.fail(reviewNoLongerAwaiting())
+      }
+      yield* DurableDeferred.succeed(preparationReviewDeferred(run.kind), {
+        token,
+        value: decision,
+      })
     })
 )
 

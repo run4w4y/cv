@@ -49,7 +49,7 @@ describe('batch preparation form', () => {
   test('enforces cover-letter instructions and their schema length boundary', () => {
     const registry = AtomRegistry.make()
     registry.set(batchPreparationFormAtom, {
-      kind: 'cover_letter',
+      includeCoverLetter: true,
       locale: 'en',
       prompt: '',
       urls: 'https://jobs.example.test/role',
@@ -61,7 +61,7 @@ describe('batch preparation form', () => {
     })
 
     registry.set(batchPreparationFormAtom, {
-      kind: 'cover_letter',
+      includeCoverLetter: true,
       locale: 'en',
       prompt: 'x'.repeat(20_001),
       urls: 'https://jobs.example.test/role',

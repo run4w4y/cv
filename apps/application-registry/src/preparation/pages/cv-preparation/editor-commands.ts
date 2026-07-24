@@ -16,6 +16,7 @@ import { preparationCommandGateKey } from '@/preparation/command-gate'
 import {
   makeAppendPreparationRevisionAtom,
   makeApprovePreparationRevisionAtom,
+  makeRefinePreparationRevisionAtom,
 } from '@/preparation/data'
 import {
   editPreparationDraftAtom,
@@ -40,6 +41,10 @@ const submitReviewFamily = keyedCommandFamily(
   'preparation/cv/command/submit-review',
   makeSubmitPreparationReviewAtom
 )
+const refineRevisionFamily = keyedCommandFamily(
+  'preparation/cv/command/refine-revision',
+  makeRefinePreparationRevisionAtom
+)
 
 export const useCvEditorCommands = (workspace: PreparationWorkspace) => {
   const { bootstrap, editor, run } = workspace
@@ -48,6 +53,7 @@ export const useCvEditorCommands = (workspace: PreparationWorkspace) => {
   const appendRevisionCommandAtom = appendRevisionFamily(commandKey)
   const approveRevisionCommandAtom = approveRevisionFamily(commandKey)
   const submitReviewCommandAtom = submitReviewFamily(commandKey)
+  const refineRevisionCommandAtom = refineRevisionFamily(commandKey)
   const editDraft = useAtomSet(editPreparationDraftAtom)
   const recordSave = useAtomSet(recordPreparationSaveAtom)
   const releaseDetached = useAtomSet(releaseDetachedPreparationWorkflowAtom)
@@ -60,17 +66,23 @@ export const useCvEditorCommands = (workspace: PreparationWorkspace) => {
   const [reviewResult, submitReview] = useAtom(submitReviewCommandAtom, {
     mode: 'promiseExit',
   })
+  const [refineResult, refineRevision] = useAtom(refineRevisionCommandAtom, {
+    mode: 'promiseExit',
+  })
   const resetSaveResult = useAtomSet(appendRevisionCommandAtom)
   const resetApproveResult = useAtomSet(approveRevisionCommandAtom)
   const resetReviewResult = useAtomSet(submitReviewCommandAtom)
+  const resetRefineResult = useAtomSet(refineRevisionCommandAtom)
 
   const saving = AsyncResult.isWaiting(saveResult)
   const approving = AsyncResult.isWaiting(approveResult)
   const reviewPending = AsyncResult.isWaiting(reviewResult)
+  const refining = AsyncResult.isWaiting(refineResult)
   const mutationPending =
     AsyncResult.isWaiting(saveResult) ||
     AsyncResult.isWaiting(approveResult) ||
-    AsyncResult.isWaiting(reviewResult)
+    AsyncResult.isWaiting(reviewResult) ||
+    AsyncResult.isWaiting(refineResult)
   const workflowReviewBound =
     editor.approvalMode !== 'workflow' ||
     (editor.baseRevision !== null &&
@@ -151,6 +163,39 @@ export const useCvEditorCommands = (workspace: PreparationWorkspace) => {
     })
   }
 
+  const refine = async (instruction: string) => {
+    const base = editor.baseRevision
+    if (
+      mutationPending ||
+      workflowIsExecuting(run) ||
+      editor.dirty ||
+      base === null ||
+      !editor.validation.valid ||
+      instruction.trim().length === 0
+    ) {
+      return
+    }
+    const operationId =
+      editor.approvalMode === 'workflow' && run !== null
+        ? `${run.runId}:refinement:${globalThis.crypto.randomUUID()}`
+        : `direct:refinement:${globalThis.crypto.randomUUID()}`
+    const exit = await refineRevision({
+      applicationId: identity.applicationId,
+      currentDocument: editor.validation.value,
+      entry: base.entry,
+      factsCatalogue: bootstrap.context.factsCatalogue,
+      factsReleaseId:
+        base.revision.factsReleaseId ?? bootstrap.context.factsReleaseId,
+      instruction,
+      jobContext: bootstrap.context.jobContext,
+      jobSnapshotId:
+        base.revision.jobSnapshotId ?? bootstrap.context.jobSnapshot.id,
+      operationId,
+    })
+    if (Exit.isFailure(exit)) return
+    recordSave({ identity, revision: exit.value })
+  }
+
   const releaseDetachedCandidate = () => {
     if (
       editor.workflowCandidate._tag !== 'Detached' ||
@@ -173,6 +218,7 @@ export const useCvEditorCommands = (workspace: PreparationWorkspace) => {
     resetSaveResult(Atom.Reset)
     resetApproveResult(Atom.Reset)
     resetReviewResult(Atom.Reset)
+    resetRefineResult(Atom.Reset)
   }
 
   return {
@@ -195,9 +241,15 @@ export const useCvEditorCommands = (workspace: PreparationWorkspace) => {
         fallback: 'The Workflow review could not be recorded.',
         result: reviewResult,
       },
+      {
+        fallback: 'Codex could not refine the CV.',
+        result: refineResult,
+      },
     ]),
     mutationPending,
     reject,
+    refine,
+    refining,
     releaseDetachedCandidate,
     reset,
     reviewPending,

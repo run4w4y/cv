@@ -16,7 +16,12 @@ const section = (locale: 'en' | 'ru') => ({
           : 'Работает инженером-программистом.',
     },
   ],
-  languages: [],
+  languages: [
+    {
+      name: locale === 'en' ? 'English' : 'Английский',
+      proficiency: locale === 'en' ? 'Fluent' : 'Свободно',
+    },
+  ],
 })
 
 const input = {
@@ -77,6 +82,52 @@ describe('facts repository composition', () => {
       throw new Error('Expected the first English section to be identity.')
     }
     expect(englishIdentity.facts[0]?.id).toBe('identity.facts.0')
+    expect(englishIdentity.languages[0]?.id).toBe('identity.languages.0')
+  })
+
+  test('generates stable IDs for selectable skill entries', async () => {
+    const skills = (locale: 'en' | 'ru') => ({
+      groups: [
+        {
+          skills: [
+            {
+              name: locale === 'en' ? 'Effect' : 'Effect',
+            },
+          ],
+          title: locale === 'en' ? 'Engineering' : 'Разработка',
+        },
+      ],
+      kind: 'skills',
+    })
+    const compilation = await Effect.runPromise(
+      composeFactsRepository({
+        ...input,
+        sections: [
+          ...input.sections,
+          {
+            locale: 'en',
+            relativePath: 'facts/en/skills.ts',
+            value: skills('en'),
+          },
+          {
+            locale: 'ru',
+            relativePath: 'facts/ru/skills.ts',
+            value: skills('ru'),
+          },
+        ],
+      })
+    )
+    const englishSkills = compilation.catalogues[0]?.sections.find(
+      ({ kind }) => kind === 'skills'
+    )
+    if (englishSkills?.kind !== 'skills') {
+      throw new Error('Expected an English skills section.')
+    }
+
+    expect(englishSkills.groups[0]?.id).toBe('skills.groups.0')
+    expect(englishSkills.groups[0]?.skills[0]?.id).toBe(
+      'skills.groups.0.skills.0'
+    )
   })
 
   test('rejects a configured locale without authored sections', async () => {

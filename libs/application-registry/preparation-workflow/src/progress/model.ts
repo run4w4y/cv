@@ -15,11 +15,12 @@ export type PreparationRunReservation = {
   readonly batchId: string
   readonly batchPosition: number
   readonly input: PreparationWorkflowInput
+  readonly jobId?: string
 }
 
 export type CancellationClaim = {
   readonly mode: 'active' | 'suspended'
-  readonly previous: PreparationRunState
+  readonly previous: ReadonlyMap<string, PreparationRunState>
 }
 
 export type ProgressService = {
@@ -38,6 +39,15 @@ export type ProgressService = {
         }
   ) => Effect.Effect<void>
   readonly fail: (runId: string, message: string) => Effect.Effect<void>
+  readonly failJob: (jobId: string, message: string) => Effect.Effect<void>
+  readonly identify: (
+    jobId: string,
+    identity: {
+      readonly applicationId: string
+      readonly company: string | null
+      readonly role: string
+    }
+  ) => Effect.Effect<void>
   readonly register: (
     reservation: PreparationRunReservation
   ) => Effect.Effect<void, PreparationWorkflowError>
@@ -72,7 +82,7 @@ export type ProgressService = {
   ) => Effect.Effect<void>
   readonly runs: SubscriptionRef.SubscriptionRef<PreparationRunStates>
   readonly setExecution: (
-    runId: string,
+    jobId: string,
     executionId: string
   ) => Effect.Effect<void>
   readonly stage: (

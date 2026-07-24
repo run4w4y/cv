@@ -50,6 +50,12 @@ export type ContentRevisionHistory = {
   readonly revisions: ReadonlyArray<ContentRevision>
 }
 
+export type PreparationContentHead = {
+  readonly entry: ContentEntry
+  readonly revision: ContentRevision
+  readonly value: unknown
+}
+
 export type AppendCandidateRevisionInput = {
   readonly applicationId: string
   readonly contractId: string
@@ -92,6 +98,11 @@ export type PreparationStoreShape = {
   readonly loadContentRevisionHistory: (
     input: ContentRevisionHistoryInput
   ) => Effect.Effect<ContentRevisionHistory, PreparationStoreError>
+  readonly loadPreparationHead: (input: {
+    readonly applicationId: string
+    readonly kind: ContentEntry['kind']
+    readonly locale: string
+  }) => Effect.Effect<PreparationContentHead | null, PreparationStoreError>
   readonly loadWorkflowBootstrap: (
     input: LoadPreparationBootstrapInput
   ) => Effect.Effect<PreparationStoreBootstrap, PreparationStoreError>

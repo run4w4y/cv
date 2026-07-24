@@ -50,7 +50,7 @@ const responseHeaderEntries = (values: Readonly<Record<string, string>>) =>
 const requestHeaders = (
   values: DesktopFetchRequest['headers'],
   authorization: string
-) => ({
+): Record<string, string> => ({
   ...Object.fromEntries(
     values.map(([name, value]) => [name.toLowerCase(), value])
   ),
@@ -129,7 +129,11 @@ export const desktopNetworkLayer = (
             >[0]
           )(target.href, { headers })
           if (input.body !== null) {
-            outbound = HttpClientRequest.bodyUint8Array(outbound, input.body)
+            outbound = HttpClientRequest.bodyUint8Array(
+              outbound,
+              input.body,
+              headers['content-type']
+            )
           }
 
           const response = yield* client.execute(outbound)

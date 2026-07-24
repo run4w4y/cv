@@ -5,6 +5,7 @@ import {
   dashboardMetrics,
   formatWorkflowDuration,
   type WorkflowBatchListItem,
+  workflowJobTitle,
   workflowStageLabel,
   workflowStatusLabel,
 } from './presentation'
@@ -18,12 +19,13 @@ const batch = (
   completed: 1,
   createdAt: 1_000,
   failed: 1,
-  kind: 'cv',
+  kinds: ['cv'],
   locale: 'en',
   needsReview: 1,
   status: 'running',
   total: 5,
   updatedAt: 2_000,
+  urlCount: 5,
   ...overrides,
 })
 
@@ -45,6 +47,23 @@ describe('workflow presentation', () => {
   test('uses workflow language instead of raw enum labels', () => {
     expect(workflowStatusLabel('needs_review')).toBe('Needs review')
     expect(workflowStageLabel('composition')).toBe('Compose candidate')
+  })
+
+  test('replaces the URL hostname with the analyzed role and company', () => {
+    expect(
+      workflowJobTitle({
+        company: null,
+        role: null,
+        url: 'https://careers.example.test/jobs/platform',
+      })
+    ).toBe('careers.example.test')
+    expect(
+      workflowJobTitle({
+        company: 'Example',
+        role: 'Platform Engineer',
+        url: 'https://careers.example.test/jobs/platform',
+      })
+    ).toBe('Platform Engineer · Example')
   })
 
   test('formats short and long run durations', () => {

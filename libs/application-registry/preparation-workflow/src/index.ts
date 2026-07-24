@@ -5,6 +5,7 @@ export {
   applicationPreparationLayer,
   type PreparationRuns,
 } from './application-preparation'
+export { validateCvProvenance } from './gateway/validation/provenance'
 export {
   StructuredGeneration,
   StructuredGenerationError,

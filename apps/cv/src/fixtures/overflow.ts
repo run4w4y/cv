@@ -16,7 +16,7 @@ const overflowDocument = {
   ...completeCvDocument,
   person: {
     ...completeCvDocument.person,
-    summary: `${completeCvDocument.person.summary} This intentionally dense development fixture exercises the one-page overflow guard at valid schema limits.`,
+    summary: `${completeCvDocument.person.summary} This intentionally dense development fixture exercises the two-page overflow guard at valid schema limits.`,
   },
   experience: Array.from({ length: 6 }, (_, index) => ({
     ...baseExperience,

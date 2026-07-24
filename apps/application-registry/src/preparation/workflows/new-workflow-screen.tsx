@@ -1,7 +1,4 @@
-import {
-  type DocumentKind,
-  maximumPreparationBatchSize,
-} from '@cv/application-preparation-workflow/domain'
+import { maximumPreparationBatchSize } from '@cv/application-preparation-workflow/domain'
 import {
   Alert,
   AlertDescription,
@@ -13,6 +10,7 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
+  Checkbox,
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -20,8 +18,6 @@ import {
   Field,
   FieldDescription,
   FieldLabel,
-  RadioGroup,
-  RadioGroupItem,
   Select,
   Spinner,
   Stepper,
@@ -54,7 +50,6 @@ import type {
   BatchPreparationUrlRow,
 } from '@/preparation/batch/atoms'
 import { WorkflowPage, WorkflowPageHeader } from './components'
-import { documentKindLabel } from './presentation'
 
 const localeDisplayNames = new Intl.DisplayNames(undefined, {
   type: 'language',
@@ -71,24 +66,34 @@ const localeLabel = (locale: string): string => {
 const DocumentChoice = ({
   checked,
   description,
+  disabled = false,
   icon: Icon,
   label,
+  onCheckedChange,
   value,
 }: {
   readonly checked: boolean
   readonly description: string
+  readonly disabled?: boolean
   readonly icon: typeof FileText
   readonly label: string
-  readonly value: DocumentKind
+  readonly onCheckedChange?: (checked: boolean) => void
+  readonly value: 'cv' | 'cover-letter'
 }) => (
   <label
-    htmlFor={`workflow-kind-${value}`}
+    htmlFor={`workflow-document-${value}`}
     className={cn(
       'flex cursor-pointer gap-4 rounded-lg border border-border bg-card p-4 transition-colors hover:bg-muted/50',
+      disabled && 'cursor-default',
       checked && 'border-primary bg-primary/5 ring-2 ring-primary/10'
     )}
   >
-    <RadioGroupItem id={`workflow-kind-${value}`} value={value} />
+    <Checkbox
+      id={`workflow-document-${value}`}
+      checked={checked}
+      disabled={disabled}
+      onCheckedChange={onCheckedChange}
+    />
     <span className="grid min-w-0 gap-1">
       <span className="flex items-center gap-2 font-medium">
         <Icon className="size-4 text-muted-foreground" />
@@ -207,10 +212,10 @@ export const NewWorkflowScreen = ({
 }: NewWorkflowScreenProps) => {
   const settingsValid =
     form.locale.length > 0 &&
-    (form.kind === 'cv' || form.prompt.trim().length > 0) &&
+    (!form.includeCoverLetter || form.prompt.trim().length > 0) &&
     promptCharactersRemaining >= 0
-  const reviewReady =
-    urlsValid && settingsValid && (form.kind !== 'cv' || guidanceReady)
+  const reviewReady = urlsValid && settingsValid && guidanceReady
+  const artifactsPerUrl = form.includeCoverLetter ? 2 : 1
   const goTo = (nextStep: number) => {
     if (starting) return
     if (nextStep === 1) onStepChange(1)
@@ -342,27 +347,27 @@ export const NewWorkflowScreen = ({
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-6 px-0">
-                <RadioGroup<DocumentKind>
-                  aria-label="Document type"
-                  className="grid gap-3 md:grid-cols-2"
-                  value={form.kind}
-                  onValueChange={(kind) => onFormChange({ ...form, kind })}
-                >
+                <fieldset className="grid gap-3 md:grid-cols-2">
+                  <legend className="sr-only">Documents to generate</legend>
                   <DocumentChoice
-                    checked={form.kind === 'cv'}
+                    checked
                     description="Generate an evidence-backed, schema-valid CV candidate for each role."
+                    disabled
                     icon={FileText}
-                    label="Tailored CV"
+                    label="Tailored CV · required"
                     value="cv"
                   />
                   <DocumentChoice
-                    checked={form.kind === 'cover_letter'}
-                    description="Generate a concise letter using the same captured job context and reviewed facts."
+                    checked={form.includeCoverLetter}
+                    description="Also generate a concise letter after the CV, grounded in that exact tailored document."
                     icon={ScrollText}
                     label="Cover letter"
-                    value="cover_letter"
+                    value="cover-letter"
+                    onCheckedChange={(includeCoverLetter) =>
+                      onFormChange({ ...form, includeCoverLetter })
+                    }
                   />
-                </RadioGroup>
+                </fieldset>
 
                 <Field>
                   <FieldLabel id="workflow-locale-label">
@@ -393,7 +398,7 @@ export const NewWorkflowScreen = ({
                   )}
                 </Field>
 
-                {form.kind !== 'cover_letter' ? null : (
+                {!form.includeCoverLetter ? null : (
                   <Field>
                     <div className="flex items-center justify-between gap-3">
                       <FieldLabel htmlFor="workflow-prompt">
@@ -427,30 +432,27 @@ export const NewWorkflowScreen = ({
                   </Field>
                 )}
 
-                {form.kind !== 'cv' ? null : (
-                  <Collapsible className="rounded-lg border border-border">
-                    <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 rounded-lg px-4 py-3 text-left hover:bg-muted/50">
-                      <span className="flex items-center gap-3">
-                        <Settings2 className="size-4 text-muted-foreground" />
-                        <span>
-                          <span className="block text-sm font-medium">
-                            Advanced CV guidance
-                          </span>
-                          <span className="block text-xs text-muted-foreground">
-                            Using reviewed guidance from the active facts
-                            release
-                          </span>
+                <Collapsible className="rounded-lg border border-border">
+                  <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 rounded-lg px-4 py-3 text-left hover:bg-muted/50">
+                    <span className="flex items-center gap-3">
+                      <Settings2 className="size-4 text-muted-foreground" />
+                      <span>
+                        <span className="block text-sm font-medium">
+                          Advanced CV guidance
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          Using reviewed guidance from the active facts release
                         </span>
                       </span>
-                      <ChevronDown className="size-4 text-muted-foreground" />
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <div className="border-t border-border p-4">
-                        {guidancePanel}
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-                )}
+                    </span>
+                    <ChevronDown className="size-4 text-muted-foreground" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="border-t border-border p-4">
+                      {guidancePanel}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
 
                 {executionEnvironment}
               </CardContent>
@@ -495,10 +497,12 @@ export const NewWorkflowScreen = ({
                     </div>
                     <div>
                       <dt className="text-xs text-muted-foreground">
-                        Document
+                        Documents
                       </dt>
                       <dd className="mt-1 font-medium">
-                        {documentKindLabel(form.kind)}
+                        {form.includeCoverLetter
+                          ? 'Tailored CV + cover letter'
+                          : 'Tailored CV'}
                       </dd>
                     </div>
                     <div>
@@ -512,7 +516,8 @@ export const NewWorkflowScreen = ({
                         Execution
                       </dt>
                       <dd className="mt-1 font-medium">
-                        3 jobs · 2 Codex calls concurrently
+                        {uniqueUrls.length * artifactsPerUrl} artifacts · up to
+                        2 Codex calls concurrently
                       </dd>
                     </div>
                   </dl>
@@ -560,12 +565,12 @@ export const NewWorkflowScreen = ({
                     }
                   />
                   <PreflightRow
-                    ready={form.kind !== 'cv' || guidanceReady}
+                    ready={guidanceReady}
                     label="Generation settings"
                     description={
-                      form.kind === 'cv'
-                        ? 'CV guidance loaded and schema-valid'
-                        : 'Cover-letter instructions are ready'
+                      form.includeCoverLetter
+                        ? 'CV guidance and cover-letter instructions are ready'
+                        : 'CV guidance loaded and schema-valid'
                     }
                   />
                   <PreflightRow
@@ -598,7 +603,7 @@ export const NewWorkflowScreen = ({
                 {starting ? <Spinner aria-hidden /> : <Sparkles />}
                 {starting
                   ? 'Starting batch…'
-                  : `Start ${uniqueUrls.length} workflow${uniqueUrls.length === 1 ? '' : 's'}`}
+                  : `Start ${uniqueUrls.length} URL job${uniqueUrls.length === 1 ? '' : 's'}`}
               </Button>
             </div>
           </div>

@@ -89,6 +89,8 @@ export const useCvPreparationActions = ({
     refreshPublication: () => execute(publication.refreshPage),
     refreshingPublication: publication.refreshingPage,
     reject: () => execute(editor.reject),
+    refine: (instruction: string) => execute(() => editor.refine(instruction)),
+    refining: editor.refining,
     releaseDetachedCandidate,
     resetCommandResults,
     reviewPending: editor.reviewPending,

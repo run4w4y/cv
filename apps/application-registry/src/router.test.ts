@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { RouteObject } from 'react-router'
 
 import { registryRoutes } from './router'
+import { isRegistryRouteHandle } from './shell/breadcrumbs'
 
 const routePaths = (
   routes: ReadonlyArray<RouteObject>,
@@ -27,11 +28,28 @@ describe('management route wiring', () => {
     expect(paths).toContain('/workflows')
     expect(paths).toContain('/workflows/new')
     expect(paths).toContain('/workflows/:batchId')
-    expect(paths).toContain('/workflows/:batchId/jobs/:runId')
-    expect(paths).toContain('/workflows/:batchId/jobs/:runId/review')
+    expect(paths).toContain('/workflows/:batchId/jobs/:jobId')
+    expect(paths).toContain('/workflows/:batchId/jobs/:jobId/review')
+    expect(paths).toContain(
+      '/workflows/:batchId/jobs/:jobId/artifacts/:kind/review'
+    )
     expect(paths).toContain('/preparation/cv-guidance')
     expect(paths).not.toContain('/preparation/batch')
     expect(paths).not.toContain('/schema/cv-document')
     expect(paths).toContain('/activities')
+  })
+
+  test('gives every user-facing route breadcrumb metadata', async () => {
+    const routes = registryRoutes[0]?.children ?? []
+    for (const route of routes) {
+      if (route.index === true || route.path === undefined) continue
+      if (isRegistryRouteHandle(route.handle)) continue
+      const lazyRoute =
+        typeof route.lazy === 'function' ? await route.lazy() : null
+      expect(
+        isRegistryRouteHandle(lazyRoute?.handle),
+        `${route.path} should define breadcrumb metadata`
+      ).toBe(true)
+    }
   })
 })

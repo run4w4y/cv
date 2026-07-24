@@ -7,6 +7,7 @@ import type {
   PreparationWorkflowError,
   SectionBrief,
 } from '../../domain'
+import { evidenceReferencesForGeneration } from '../../generation/prompts'
 
 import { validateEvidencePlan, validateSectionBrief } from './evidence'
 
@@ -22,7 +23,13 @@ const factsCatalogue: FactsCatalogueV1 = {
         { id: 'fact.certification', text: 'Holds a cloud certification.' },
       ],
       kind: 'identity',
-      languages: [],
+      languages: [
+        {
+          id: 'identity.languages.0',
+          name: 'English',
+          proficiency: 'Fluent',
+        },
+      ],
       location: 'London, UK',
       name: 'Ada Example',
     },
@@ -75,8 +82,25 @@ const factsCatalogue: FactsCatalogueV1 = {
       ],
       kind: 'experience',
     },
+    {
+      groups: [
+        {
+          id: 'skills.groups.0',
+          skills: [
+            {
+              id: 'skills.groups.0.skills.2',
+              name: 'Effect',
+            },
+          ],
+          title: 'Engineering',
+        },
+      ],
+      kind: 'skills',
+    },
   ],
 }
+
+const evidenceReferences = evidenceReferencesForGeneration(factsCatalogue)
 
 const effectRequirement: JobAnalysis['requirements'][number] = {
   id: 'req.effect',
@@ -101,7 +125,7 @@ const analysis: JobAnalysis = {
 }
 
 const validEvidenceMatch: EvidencePlan['matches'][number] = {
-  factIds: ['fact.platforms'],
+  evidenceIds: ['fact.platforms'],
   rationale: 'Direct platform experience.',
   requirementId: 'req.effect',
 }
@@ -119,7 +143,7 @@ const failureOf = async <A>(
 describe('preparation workflow validation', () => {
   test('rejects evidence plans that omit a requirement', async () => {
     const error = await failureOf(
-      validateEvidencePlan(analysis, factsCatalogue, {
+      validateEvidencePlan(analysis, evidenceReferences, {
         ...validPlan,
         uncoveredRequirementIds: [],
       })
@@ -130,7 +154,7 @@ describe('preparation workflow validation', () => {
 
   test('rejects a requirement covered by both a match and uncovered', async () => {
     const error = await failureOf(
-      validateEvidencePlan(analysis, factsCatalogue, {
+      validateEvidencePlan(analysis, evidenceReferences, {
         ...validPlan,
         uncoveredRequirementIds: ['req.effect', 'req.queues'],
       })
@@ -141,9 +165,9 @@ describe('preparation workflow validation', () => {
     )
   })
 
-  test('rejects extraneous requirement and unknown reviewed-fact IDs', async () => {
+  test('rejects extraneous requirement and unknown evidence IDs', async () => {
     const requirementError = await failureOf(
-      validateEvidencePlan(analysis, factsCatalogue, {
+      validateEvidencePlan(analysis, evidenceReferences, {
         ...validPlan,
         uncoveredRequirementIds: ['req.queues', 'req.unknown'],
       })
@@ -153,47 +177,63 @@ describe('preparation workflow validation', () => {
     )
 
     const factError = await failureOf(
-      validateEvidencePlan(analysis, factsCatalogue, {
+      validateEvidencePlan(analysis, evidenceReferences, {
         ...validPlan,
         matches: [
           {
             ...validEvidenceMatch,
-            factIds: ['fact.unknown'],
+            evidenceIds: ['fact.unknown'],
           },
         ],
       })
     )
-    expect(factError.message).toContain('unknown fact IDs: fact.unknown')
+    expect(factError.message).toContain('unknown evidence IDs: fact.unknown')
 
     const privateFactError = await failureOf(
-      validateEvidencePlan(analysis, factsCatalogue, {
+      validateEvidencePlan(analysis, evidenceReferences, {
         ...validPlan,
         matches: [
           {
             ...validEvidenceMatch,
-            factIds: ['fact.private-work'],
+            evidenceIds: ['fact.private-work'],
           },
         ],
       })
     )
     expect(privateFactError.message).toContain(
-      'unknown fact IDs: fact.private-work'
+      'unknown evidence IDs: fact.private-work'
     )
   })
 
-  test('limits section briefs to reviewed facts selected by the evidence plan', async () => {
+  test('accepts compiler-generated language and bare skill evidence IDs', async () => {
+    await Effect.runPromise(
+      validateEvidencePlan(analysis, evidenceReferences, {
+        matches: [
+          {
+            evidenceIds: ['identity.languages.0', 'skills.groups.0.skills.2'],
+            rationale: 'Reviewed language and skill evidence.',
+            requirementId: 'req.effect',
+          },
+        ],
+        strategy: 'Use reviewed structured evidence.',
+        uncoveredRequirementIds: ['req.queues'],
+      })
+    )
+  })
+
+  test('limits section briefs to evidence selected by the plan', async () => {
     const brief: SectionBrief = {
-      factIds: ['fact.certification'],
+      evidenceIds: ['fact.certification'],
       notes: [],
       objective: 'Summarize evidence.',
       sectionId: 'profile',
     }
     const error = await failureOf(
-      validateSectionBrief(factsCatalogue, validPlan, 'profile', brief)
+      validateSectionBrief(evidenceReferences, validPlan, 'profile', brief)
     )
 
     expect(error.message).toContain(
-      'fact IDs outside the validated evidence plan: fact.certification'
+      'evidence IDs outside the validated evidence plan: fact.certification'
     )
   })
 })

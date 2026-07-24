@@ -77,6 +77,60 @@ const startInput = (url: string) => ({
 })
 
 describe('preparation batch startup', () => {
+  test('hands execution to the engine before the starting caller returns', async () => {
+    const observed = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const engine = yield* WorkflowEngine.WorkflowEngine
+          const launched = yield* Deferred.make<void>()
+          const release = yield* Deferred.make<void>()
+          const completed = yield* Deferred.make<void>()
+          yield* engine.register(PrepareApplicationWorkflow, (payload) =>
+            Effect.gen(function* () {
+              yield* Deferred.succeed(launched, undefined)
+              yield* Deferred.await(release)
+              yield* Deferred.succeed(completed, undefined)
+              const runId = payload.runId ?? payload.jobId ?? 'run'
+              return {
+                applicationId: 'application-1',
+                artifacts: [
+                  {
+                    kind: 'cv' as const,
+                    revisionId: null,
+                    runId,
+                    status: 'rejected' as const,
+                  },
+                ],
+                jobId: payload.jobId ?? runId,
+                revisionId: null,
+                runId,
+                status: 'rejected' as const,
+              }
+            })
+          )
+
+          const prepared = yield* prepare(
+            workflowInput(
+              'run-background',
+              'https://jobs.example.test/background'
+            )
+          )
+          const result = yield* startReservedPreparations([prepared])
+          yield* Deferred.await(launched)
+          const completedBeforeRelease = yield* Deferred.isDone(completed)
+          yield* Deferred.succeed(release, undefined)
+          yield* Deferred.await(completed)
+          return { completedBeforeRelease, result }
+        })
+      ).pipe(Effect.provide(startupTestLayer))
+    )
+
+    expect(observed.result).toEqual([
+      { batchId: 'batch-1', runId: 'run-background' },
+    ])
+    expect(observed.completedBeforeRelease).toBe(false)
+  })
+
   test('assigns a distinct batch to each single start and one shared batch to a batch start', async () => {
     const observed = await Effect.runPromise(
       Effect.scoped(
@@ -95,7 +149,10 @@ describe('preparation batch startup', () => {
             startInput('https://jobs.example.test/single-2')
           ).pipe(Effect.provideService(WorkflowEngine.WorkflowEngine, engine))
           const batch = yield* startPreparationBatch({
-            ...startInput('https://jobs.example.test/unused'),
+            coverLetterPrompt: null,
+            cvGenerationGuidance: cvGenerationGuidanceTestFixture,
+            includeCoverLetter: false,
+            locale: 'en',
             urls: [
               'https://jobs.example.test/batch-1',
               'https://jobs.example.test/batch-2',
@@ -125,6 +182,53 @@ describe('preparation batch startup', () => {
     expect(
       observed.batch.map(({ runId }) => observed.runs.get(runId)?.batchPosition)
     ).toEqual([0, 1])
+  })
+
+  test('launches one job with CV and cover-letter artifacts for every URL', async () => {
+    const observed = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const progress = yield* PreparationProgress
+          const memoryEngine = yield* WorkflowEngine.WorkflowEngine
+          const engine = WorkflowEngine.WorkflowEngine.of({
+            ...memoryEngine,
+            execute: (_workflow, options) =>
+              Effect.succeed(options.executionId),
+          })
+          const batch = yield* startPreparationBatch({
+            coverLetterPrompt: 'Keep it concise.',
+            cvGenerationGuidance: cvGenerationGuidanceTestFixture,
+            includeCoverLetter: true,
+            locale: 'en',
+            urls: [
+              'https://jobs.example.test/batch-1',
+              'https://jobs.example.test/batch-2',
+            ],
+          }).pipe(Effect.provideService(WorkflowEngine.WorkflowEngine, engine))
+          const runs = yield* SubscriptionRef.get(progress.runs)
+          return {
+            batch,
+            runs: [...runs.values()],
+          }
+        })
+      ).pipe(
+        Effect.provide([
+          preparationProgressLayer,
+          WorkflowEngine.layerMemory,
+          makeCryptoLayer(),
+        ])
+      )
+    )
+
+    expect(observed.batch).toHaveLength(2)
+    expect(observed.runs.map((run) => run?.batchPosition)).toEqual([0, 0, 1, 1])
+    expect(observed.runs.map((run) => run?.kind)).toEqual([
+      'cv',
+      'cover_letter',
+      'cv',
+      'cover_letter',
+    ])
+    expect(new Set(observed.runs.map((run) => run?.jobId)).size).toBe(2)
   })
 
   test('rejects the whole batch before invoking the workflow engine', async () => {
@@ -306,7 +410,7 @@ describe('preparation batch startup', () => {
       ({ executionId }) => !observed.attempted.includes(executionId)
     )
     expect(unlaunched).toBeDefined()
-    expect(observed.runs.has(unlaunched?.payload.runId ?? '')).toBe(false)
+    expect(observed.runs.has(unlaunched?.result.runId ?? '')).toBe(false)
     expect([...observed.runs.values()].map(({ status }) => status)).toEqual([
       'failed',
       'failed',

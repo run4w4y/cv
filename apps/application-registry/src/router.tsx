@@ -6,6 +6,7 @@ import {
 } from 'react-router'
 import { isDesktopHost } from './host/desktop'
 import { AppShell } from './shell/app-shell'
+import { staticBreadcrumbHandle } from './shell/breadcrumbs'
 import { RouteErrorPage } from './shell/route-error-page'
 
 export const registryRoutes: RouteObject[] = [
@@ -17,15 +18,34 @@ export const registryRoutes: RouteObject[] = [
       { index: true, element: <Navigate to="/applications" replace /> },
       {
         path: 'applications',
+        handle: staticBreadcrumbHandle({
+          key: 'applications',
+          label: 'Applications',
+        }),
         lazy: () => import('./applications/pages/applications'),
       },
-      { path: 'activities', lazy: () => import('./events/pages/events') },
+      {
+        path: 'activities',
+        handle: staticBreadcrumbHandle({
+          key: 'activities',
+          label: 'Activities',
+        }),
+        lazy: () => import('./events/pages/events'),
+      },
       {
         path: 'analytics',
+        handle: staticBreadcrumbHandle({
+          key: 'analytics',
+          label: 'CV analytics',
+        }),
         lazy: () => import('./analytics/pages/cv-analytics'),
       },
       {
         path: 'facts',
+        handle: staticBreadcrumbHandle({
+          key: 'facts',
+          label: 'Reviewed facts',
+        }),
         lazy: () => import('./facts/pages/facts'),
       },
       {
@@ -41,11 +61,15 @@ export const registryRoutes: RouteObject[] = [
         lazy: () => import('./preparation/pages/workflow-batch'),
       },
       {
-        path: 'workflows/:batchId/jobs/:runId',
+        path: 'workflows/:batchId/jobs/:jobId',
         lazy: () => import('./preparation/pages/workflow-job'),
       },
       {
-        path: 'workflows/:batchId/jobs/:runId/review',
+        path: 'workflows/:batchId/jobs/:jobId/review',
+        lazy: () => import('./preparation/pages/workflow-review'),
+      },
+      {
+        path: 'workflows/:batchId/jobs/:jobId/artifacts/:kind/review',
         lazy: () => import('./preparation/pages/workflow-review'),
       },
       {
@@ -66,6 +90,10 @@ export const registryRoutes: RouteObject[] = [
       },
       {
         path: 'preparation/cv-guidance',
+        handle: staticBreadcrumbHandle({
+          key: 'cv-guidance',
+          label: 'CV guidance',
+        }),
         lazy: () => import('./preparation/pages/cv-guidance'),
       },
     ],

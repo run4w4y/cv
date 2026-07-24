@@ -77,15 +77,143 @@ export interface PreparationWorkflowInput
 
 export type StartPreparationInput = Omit<PreparationWorkflowInput, 'runId'>
 
+export const PreparationArtifactRunIdsSchema = Schema.Struct({
+  coverLetter: Schema.NullOr(Schema.NonEmptyString),
+  cv: Schema.NullOr(Schema.NonEmptyString),
+})
+export interface PreparationArtifactRunIds
+  extends Schema.Schema.Type<typeof PreparationArtifactRunIdsSchema> {}
+
+const PreparationJobInputStructureSchema = Schema.Struct({
+  coverLetterPrompt: Schema.NullOr(CoverLetterPromptSchema),
+  cvGenerationGuidance: Schema.NullOr(CvGenerationGuidanceV1Schema),
+  jobId: Schema.NonEmptyString,
+  locale: CvLocaleSchema,
+  runIds: PreparationArtifactRunIdsSchema,
+  source: PreparationSourceSchema,
+})
+
+export const PreparationJobInputSchema =
+  PreparationJobInputStructureSchema.pipe(
+    Schema.check(
+      Schema.makeFilter(
+        (input) =>
+          input.runIds.cv !== null || input.runIds.coverLetter !== null,
+        {
+          message: 'A preparation job must request at least one artifact.',
+        }
+      )
+    ),
+    Schema.check(
+      Schema.makeFilter(
+        (input) =>
+          input.runIds.cv === null
+            ? input.cvGenerationGuidance === null
+            : input.cvGenerationGuidance !== null,
+        {
+          message:
+            'CV generation guidance must be present exactly when a CV artifact is requested.',
+        }
+      )
+    ),
+    Schema.check(
+      Schema.makeFilter(
+        (input) =>
+          input.source._tag !== 'CaptureUrl' || input.runIds.cv !== null,
+        {
+          message:
+            'URL preparation jobs must include a CV; the cover letter is an optional dependent artifact.',
+        }
+      )
+    )
+  )
+export interface PreparationJobInput
+  extends Schema.Schema.Type<typeof PreparationJobInputSchema> {}
+
+const isPreparationJobInput = Schema.is(PreparationJobInputSchema)
+const isPreparationArtifactInput = Schema.is(PreparationWorkflowInputSchema)
+
+export const PreparationWorkflowPayloadSchema = Schema.Struct({
+  coverLetterPrompt: Schema.NullOr(CoverLetterPromptSchema),
+  cvGenerationGuidance: Schema.NullOr(CvGenerationGuidanceV1Schema),
+  jobId: Schema.optionalKey(Schema.NonEmptyString),
+  kind: Schema.optionalKey(DocumentKindSchema),
+  locale: CvLocaleSchema,
+  runId: Schema.optionalKey(Schema.NonEmptyString),
+  runIds: Schema.optionalKey(PreparationArtifactRunIdsSchema),
+  source: PreparationSourceSchema,
+}).pipe(
+  Schema.check(
+    Schema.makeFilter(
+      (input) =>
+        isPreparationJobInput(input) || isPreparationArtifactInput(input),
+      {
+        message:
+          'A workflow payload must describe either one preparation job or one legacy artifact run.',
+      }
+    )
+  )
+)
+export interface PreparationWorkflowPayload
+  extends Schema.Schema.Type<typeof PreparationWorkflowPayloadSchema> {}
+
+export const normalizePreparationJobInput = (
+  input: PreparationWorkflowPayload
+): PreparationJobInput => {
+  if (isPreparationJobInput(input)) return input
+  if (isPreparationArtifactInput(input)) {
+    return {
+      coverLetterPrompt: input.coverLetterPrompt,
+      cvGenerationGuidance: input.cvGenerationGuidance,
+      jobId: input.runId,
+      locale: input.locale,
+      runIds: {
+        coverLetter: input.kind === 'cover_letter' ? input.runId : null,
+        cv: input.kind === 'cv' ? input.runId : null,
+      },
+      source: input.source,
+    }
+  }
+  throw new Error('Invalid decoded preparation workflow payload.')
+}
+
+export const preparationJobArtifactInput = (
+  input: PreparationJobInput,
+  kind: DocumentKind
+): PreparationWorkflowInput | null => {
+  const runId = kind === 'cv' ? input.runIds.cv : input.runIds.coverLetter
+  if (runId === null) return null
+  return {
+    coverLetterPrompt: kind === 'cover_letter' ? input.coverLetterPrompt : null,
+    cvGenerationGuidance: kind === 'cv' ? input.cvGenerationGuidance : null,
+    kind,
+    locale: input.locale,
+    runId,
+    source: input.source,
+  }
+}
+
+export const preparationJobArtifactInputs = (
+  input: PreparationJobInput
+): ReadonlyArray<PreparationWorkflowInput> => {
+  const cv = preparationJobArtifactInput(input, 'cv')
+  const coverLetter = preparationJobArtifactInput(input, 'cover_letter')
+  return [
+    ...(cv === null ? [] : [cv]),
+    ...(coverLetter === null ? [] : [coverLetter]),
+  ]
+}
+
 export type StartPreparationResult = {
   readonly batchId: string
+  readonly jobId?: string
   readonly runId: string
 }
 
 export type StartPreparationBatchInput = {
   readonly coverLetterPrompt: string | null
-  readonly cvGenerationGuidance: typeof CvGenerationGuidanceV1Schema.Type | null
-  readonly kind: DocumentKind
+  readonly cvGenerationGuidance: typeof CvGenerationGuidanceV1Schema.Type
+  readonly includeCoverLetter: boolean
   readonly locale: typeof CvLocaleSchema.Type
   readonly urls: ReadonlyArray<string>
 }

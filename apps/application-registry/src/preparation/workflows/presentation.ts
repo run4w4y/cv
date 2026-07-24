@@ -1,5 +1,6 @@
 import type {
   DocumentKind,
+  PreparationJobStatus,
   PreparationRunStatus,
   PreparationStage,
 } from '@cv/application-preparation-workflow/domain'
@@ -11,28 +12,40 @@ export type WorkflowBatchListItem = {
   readonly completed: number
   readonly createdAt: number
   readonly failed: number
-  readonly kind: DocumentKind
+  readonly kinds: ReadonlyArray<DocumentKind>
   readonly locale: string
   readonly needsReview: number
   readonly status: string
   readonly total: number
   readonly updatedAt: number
+  readonly urlCount: number
 }
 
 export type WorkflowJobListItem = {
   readonly applicationId: string | null
+  readonly artifacts: ReadonlyArray<WorkflowArtifactListItem>
   readonly batchId: string
+  readonly company: string | null
   readonly createdAt: number
-  readonly error: string | null
-  readonly kind: DocumentKind
+  readonly jobId: string
+  readonly kinds: ReadonlyArray<DocumentKind>
   readonly locale: string
   readonly message: string
   readonly position: number
+  readonly primaryRunId: string
+  readonly role: string | null
+  readonly status: PreparationJobStatus
+  readonly updatedAt: number
+  readonly url: string
+}
+
+export type WorkflowArtifactListItem = {
+  readonly error: string | null
+  readonly kind: DocumentKind
+  readonly message: string
   readonly runId: string
   readonly stage: PreparationStage
   readonly status: PreparationRunStatus
-  readonly updatedAt: number
-  readonly url: string
 }
 
 export type WorkflowStepListItem = {
@@ -59,6 +72,20 @@ export type WorkflowDashboardMetrics = {
 
 export const documentKindLabel = (kind: DocumentKind): string =>
   kind === 'cv' ? 'Tailored CV' : 'Cover letter'
+
+export const workflowJobTitle = (
+  job: Pick<WorkflowJobListItem, 'company' | 'role' | 'url'>
+): string => {
+  if (job.role !== null && job.company !== null) {
+    return `${job.role} · ${job.company}`
+  }
+  if (job.role !== null) return job.role
+  try {
+    return new URL(job.url).hostname
+  } catch {
+    return job.url
+  }
+}
 
 export const workflowStatusLabel = (status: string): string => {
   const labels: Readonly<Record<string, string>> = {

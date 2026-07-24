@@ -106,6 +106,7 @@ describe('desktop Registry network bridge', () => {
       'https://registry.example.test/api/registry/applications/app-1?include=compensation'
     )
     expect(requests[0]?.headers.authorization).toBe('Bearer machine-token')
+    expect(requests[0]?.headers['content-type']).toBe('application/json')
     expect(result.status).toBe(201)
     expect(new TextDecoder().decode(result.body)).toBe('{"ok":true}')
   })
@@ -223,6 +224,78 @@ describe('desktop Registry network bridge', () => {
         },
       ])
       expect(new TextDecoder().decode(result.body)).toBe('{"transport":"real"}')
+    } finally {
+      await new Promise<void>((resolve) => {
+        server.close(() => resolve())
+        server.closeAllConnections()
+      })
+    }
+  })
+
+  test('preserves a JSON body and content type through the real HTTP transport', async () => {
+    const received: Array<{
+      readonly authorization: string | undefined
+      readonly body: string
+      readonly contentType: string | undefined
+      readonly method: string | undefined
+      readonly url: string | undefined
+    }> = []
+    const server = createServer((request, response) => {
+      const chunks: Uint8Array[] = []
+      request.on('data', (chunk: Uint8Array) => {
+        chunks.push(chunk)
+      })
+      request.on('end', () => {
+        received.push({
+          authorization: request.headers.authorization,
+          body: new TextDecoder().decode(Buffer.concat(chunks)),
+          contentType: request.headers['content-type'],
+          method: request.method,
+          url: request.url,
+        })
+        response.writeHead(201, { 'content-type': 'application/json' })
+        response.end('{"created":true}')
+      })
+    })
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(0, '127.0.0.1', resolve)
+    })
+
+    try {
+      const address = server.address()
+      if (address === null || typeof address === 'string') {
+        throw new Error('Expected a local TCP server address.')
+      }
+      const origin = `http://127.0.0.1:${address.port}`
+      const layer = desktopNetworkLayer({ requestTimeout: '2 seconds' }).pipe(
+        Layer.provide(
+          Layer.merge(settingsLayer(origin), NodeHttpClient.layerNodeHttp)
+        )
+      )
+      const body = '{"role":"Pending job analysis"}'
+
+      const result = await Effect.gen(function* () {
+        const network = yield* DesktopNetwork
+        return yield* network.fetch({
+          body: new TextEncoder().encode(body),
+          headers: [['content-type', 'application/json']],
+          method: 'POST',
+          url: '/api/registry/applications',
+        })
+      }).pipe(Effect.provide(layer), Effect.runPromise)
+
+      expect(received).toEqual([
+        {
+          authorization: 'Bearer machine-token',
+          body,
+          contentType: 'application/json',
+          method: 'POST',
+          url: '/api/registry/applications',
+        },
+      ])
+      expect(result.status).toBe(201)
+      expect(new TextDecoder().decode(result.body)).toBe('{"created":true}')
     } finally {
       await new Promise<void>((resolve) => {
         server.close(() => resolve())

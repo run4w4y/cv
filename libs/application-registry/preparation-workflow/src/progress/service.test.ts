@@ -246,6 +246,58 @@ describe('preparation progress state machine', () => {
     expect(result.run?.status).toBe('cancelled')
   })
 
+  test('projects identity, execution, and cancellation across paired artifacts', async () => {
+    const letter: PreparationWorkflowInput = {
+      ...input,
+      coverLetterPrompt: 'Keep it concise.',
+      cvGenerationGuidance: null,
+      kind: 'cover_letter',
+      runId: 'run-letter',
+    }
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const progress = yield* PreparationProgress
+        yield* progress.reserve([
+          { ...reservation(input), jobId: 'job-paired' },
+          { ...reservation(letter), jobId: 'job-paired' },
+        ])
+        yield* progress.setExecution('job-paired', 'execution-paired')
+        yield* progress.identify('job-paired', {
+          applicationId: 'application-analyzed',
+          company: 'Analyzed Company',
+          role: 'Staff Engineer',
+        })
+        const claim = yield* progress.requestCancel(
+          input.runId,
+          'execution-paired'
+        )
+        const cancelling = yield* SubscriptionRef.get(progress.runs)
+        yield* progress.cancel(input.runId)
+        return {
+          cancelled: yield* SubscriptionRef.get(progress.runs),
+          cancelling,
+          claim,
+        }
+      }).pipe(Effect.provide(preparationProgressLayer))
+    )
+
+    expect(result.claim?.previous.size).toBe(2)
+    for (const run of result.cancelling.values()) {
+      expect(run).toMatchObject({
+        applicationId: 'application-analyzed',
+        company: 'Analyzed Company',
+        executionId: 'execution-paired',
+        jobId: 'job-paired',
+        role: 'Staff Engineer',
+        status: 'cancelling',
+      })
+    }
+    expect([...result.cancelled.values()].map(({ status }) => status)).toEqual([
+      'cancelled',
+      'cancelled',
+    ])
+  })
+
   test('does not cancel a reservation before its execution is activated', async () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {

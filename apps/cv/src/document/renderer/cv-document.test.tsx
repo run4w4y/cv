@@ -84,7 +84,7 @@ describe('CV renderers', () => {
     expect(markup).toContain('aria-label="Разделы резюме"')
   })
 
-  test('integrates the exact publication URL into the dedicated A4 preview', () => {
+  test('integrates the exact publication URL as ATS-readable text', () => {
     const publicUrl = 'https://cv.example.com/c/stable-token'
     const markup = renderToStaticMarkup(
       <PdfCvRenderer document={document} publicUrl={publicUrl} />
@@ -92,13 +92,28 @@ describe('CV renderers', () => {
 
     expect(markup).toContain('data-cv-renderer-mode="print-preview"')
     expect(markup).toContain('data-cv-print-only="true"')
-    expect(markup).toContain(`data-cv-public-url="${publicUrl}"`)
+    expect(markup).toContain(
+      `data-cv-public-url="${publicUrl}" href="${publicUrl}">${publicUrl}</a>`
+    )
     expect(markup).toContain(`href="${publicUrl}"`)
-    expect(markup).toContain('cv2-header-with-publication')
     expect(markup.indexOf('data-cv-print-only="true"')).toBeLessThan(
       markup.indexOf('</header>')
     )
+    expect(markup).not.toContain('<img')
+    expect(markup).not.toContain('cv2-column')
     expect(markup).not.toContain('data-cv-web-document')
+
+    const sectionIds = [
+      'cv-document-experience',
+      'cv-document-projects',
+      'cv-document-skills',
+      'cv-document-education',
+    ]
+    const sectionOffsets = sectionIds.map((id) => markup.indexOf(`id="${id}"`))
+    expect(sectionOffsets.every((offset) => offset >= 0)).toBe(true)
+    expect(sectionOffsets).toEqual(
+      [...sectionOffsets].toSorted((first, second) => first - second)
+    )
   })
 
   test('renders optional total experience with the PDF section heading', () => {

@@ -71,7 +71,6 @@ export const makePreparationContextGateway = (
         })
       )
     }
-
     return {
       application,
       cvGenerationGuidance: loaded.context.cvGenerationGuidance,
@@ -80,6 +79,8 @@ export const makePreparationContextGateway = (
       factsReleaseId: loaded.context.factsReleaseId,
       jobContext: loaded.context.jobContext,
       jobSnapshot: loaded.context.jobSnapshot,
+      referenceCv: null,
+      referenceCvRevisionId: null,
     }
   })
 
@@ -89,7 +90,10 @@ export const makePreparationContextGateway = (
       context: PreparationBootstrap,
       analysis: JobAnalysis
     ) {
-      if (input.source._tag === 'ReviewedContext') {
+      if (
+        input.source._tag === 'ReviewedContext' ||
+        input.kind === 'cover_letter'
+      ) {
         return context.application
       }
       return yield* repository

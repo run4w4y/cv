@@ -9,6 +9,7 @@ import { Schema } from 'effect'
 import {
   ApplicationCompensationInputSchema,
   CreateApplicationParametersSchema,
+  RecordApplicationCorrespondenceParametersSchema,
 } from './schemas'
 
 describe('MCP registry schemas', () => {
@@ -51,6 +52,37 @@ describe('MCP registry schemas', () => {
         postingUrl: 'https://example.test/jobs/one',
         role: 'Engineer',
       })
+    ).toThrow()
+  })
+
+  test('requires stable correspondence identity and canonical timestamps', () => {
+    expect(() =>
+      Schema.decodeUnknownSync(RecordApplicationCorrespondenceParametersSchema)(
+        {
+          classification: 'submission_confirmed',
+          evidenceSummary: 'Submission receipt.',
+          expectedVersion: 3,
+          gmailMessageId: 'message-123',
+          gmailThreadId: 'thread-456',
+          identifier: 'application-1',
+          occurredAt: 'not-a-timestamp',
+          operationId: 'gmail:message-123:application-1:submitted',
+        }
+      )
+    ).toThrow()
+    expect(() =>
+      Schema.decodeUnknownSync(RecordApplicationCorrespondenceParametersSchema)(
+        {
+          classification: 'unknown',
+          evidenceSummary: 'Submission receipt.',
+          expectedVersion: 3,
+          gmailMessageId: 'message-123',
+          gmailThreadId: 'thread-456',
+          identifier: 'application-1',
+          occurredAt: '2026-07-10T01:00:00.000Z',
+          operationId: 'gmail:message-123:application-1:submitted',
+        }
+      )
     ).toThrow()
   })
 })

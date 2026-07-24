@@ -12,15 +12,10 @@ import { WorkflowDashboardScreen } from '@/preparation/workflows/dashboard-scree
 import { WorkflowDesktopUnavailable } from '@/preparation/workflows/desktop-unavailable'
 import type { WorkflowBatchListItem } from '@/preparation/workflows/presentation'
 
-const activeStatuses = new Set([
-  'queued',
-  'running',
-  'review_submitted',
-  'cancelling',
-])
+const activeStatuses = new Set(['queued', 'running'])
 
 const toListItem = (batch: PreparationBatch): WorkflowBatchListItem => {
-  const statuses = batch.runs.map((run) => run.status)
+  const statuses = batch.jobs.map((job) => job.status)
   const count = (status: string) =>
     statuses.filter((candidate) => candidate === status).length
 
@@ -28,15 +23,16 @@ const toListItem = (batch: PreparationBatch): WorkflowBatchListItem => {
     active: statuses.filter((status) => activeStatuses.has(status)).length,
     batchId: batch.batchId,
     cancelled: count('cancelled'),
-    completed: count('approved') + count('rejected'),
+    completed: count('completed'),
     createdAt: batch.createdAt,
-    failed: count('failed'),
-    kind: batch.kind,
+    failed: count('failed') + count('mixed'),
+    kinds: batch.kinds,
     locale: batch.locale,
-    needsReview: count('awaiting_review'),
+    needsReview: count('needs_review'),
     status: batch.status,
-    total: batch.runs.length,
+    total: batch.jobs.length,
     updatedAt: batch.updatedAt,
+    urlCount: batch.urlCount,
   }
 }
 

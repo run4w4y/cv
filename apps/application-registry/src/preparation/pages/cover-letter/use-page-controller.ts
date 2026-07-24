@@ -118,6 +118,8 @@ export const useCoverLetterPageController = () => {
     prompt: preparation.prompt,
     refreshJobSnapshot: () => execute(preparation.refreshJobSnapshot),
     reject: () => execute(editor.reject),
+    refine: (instruction: string) => execute(() => editor.refine(instruction)),
+    refining: editor.refining,
     reviewPending: editor.reviewPending,
     save: () => execute(editor.save),
     savePending: editor.savePending,

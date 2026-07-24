@@ -1,21 +1,21 @@
-import type { FactsCatalogueV1 } from '@cv/contracts/facts'
 import { Effect } from 'effect'
 import { difference, uniq } from 'es-toolkit/array'
 import type { EvidencePlan, JobAnalysis, SectionBrief } from '../../domain'
 import { PreparationWorkflowError } from '../../domain'
-import { reviewedFactIdsForGeneration } from '../../generation/prompts'
+import type { EvidenceReference } from '../../generation/prompts'
+import { evidenceIdsForGeneration } from '../../generation/prompts'
 
 const duplicateIds = (ids: ReadonlyArray<string>): ReadonlyArray<string> =>
   uniq(ids.filter((id, index) => ids.indexOf(id) !== index))
 
 export const validateEvidencePlan = (
   analysis: JobAnalysis,
-  catalogue: FactsCatalogueV1,
+  references: ReadonlyArray<EvidenceReference>,
   plan: EvidencePlan
 ) =>
   Effect.gen(function* () {
     const requirementIds = analysis.requirements.map(({ id }) => id)
-    const factIds = [...reviewedFactIdsForGeneration(catalogue)]
+    const evidenceIds = [...evidenceIdsForGeneration(references)]
     const plannedRequirementIds = [
       ...plan.matches.map(({ requirementId }) => requirementId),
       ...plan.uncoveredRequirementIds,
@@ -24,9 +24,9 @@ export const validateEvidencePlan = (
       plannedRequirementIds,
       requirementIds
     )
-    const unknownFacts = difference(
-      plan.matches.flatMap(({ factIds: selected }) => selected),
-      factIds
+    const unknownEvidence = difference(
+      plan.matches.flatMap(({ evidenceIds: selected }) => selected),
+      evidenceIds
     )
 
     if (unknownRequirements.length > 0) {
@@ -37,10 +37,10 @@ export const validateEvidencePlan = (
         })
       )
     }
-    if (unknownFacts.length > 0) {
+    if (unknownEvidence.length > 0) {
       return yield* Effect.fail(
         new PreparationWorkflowError({
-          message: `Evidence plan referenced unknown fact IDs: ${uniq(unknownFacts).join(', ')}`,
+          message: `Evidence plan referenced unknown evidence IDs: ${uniq(unknownEvidence).join(', ')}`,
           stage: 'evidence',
         })
       )
@@ -70,7 +70,7 @@ export const validateEvidencePlan = (
   })
 
 export const validateSectionBrief = (
-  catalogue: FactsCatalogueV1,
+  references: ReadonlyArray<EvidenceReference>,
   plan: EvidencePlan,
   sectionId: string,
   brief: SectionBrief
@@ -84,22 +84,24 @@ export const validateSectionBrief = (
         })
       )
     }
-    const factIds = [...reviewedFactIdsForGeneration(catalogue)]
-    const unknown = difference(brief.factIds, factIds)
+    const evidenceIds = [...evidenceIdsForGeneration(references)]
+    const unknown = difference(brief.evidenceIds, evidenceIds)
     if (unknown.length > 0) {
       return yield* Effect.fail(
         new PreparationWorkflowError({
-          message: `Section ${sectionId} referenced unknown fact IDs: ${uniq(unknown).join(', ')}`,
+          message: `Section ${sectionId} referenced unknown evidence IDs: ${uniq(unknown).join(', ')}`,
           stage: 'briefs',
         })
       )
     }
-    const allowedFactIds = plan.matches.flatMap((match) => match.factIds)
-    const outsidePlan = difference(brief.factIds, allowedFactIds)
+    const allowedEvidenceIds = plan.matches.flatMap(
+      (match) => match.evidenceIds
+    )
+    const outsidePlan = difference(brief.evidenceIds, allowedEvidenceIds)
     if (outsidePlan.length > 0) {
       return yield* Effect.fail(
         new PreparationWorkflowError({
-          message: `Section ${sectionId} referenced fact IDs outside the validated evidence plan: ${uniq(outsidePlan).join(', ')}`,
+          message: `Section ${sectionId} referenced evidence IDs outside the validated evidence plan: ${uniq(outsidePlan).join(', ')}`,
           stage: 'briefs',
         })
       )

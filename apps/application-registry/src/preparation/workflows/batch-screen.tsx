@@ -52,7 +52,7 @@ import * as React from 'react'
 import { Link } from 'react-router'
 
 import {
-  WorkflowDocumentBadge,
+  WorkflowDocumentBadges,
   WorkflowPage,
   WorkflowPageHeader,
   WorkflowStatusBadge,
@@ -64,35 +64,27 @@ import {
   shortWorkflowId,
   type WorkflowBatchListItem,
   type WorkflowJobListItem,
+  workflowJobTitle,
   workflowStageLabel,
 } from './presentation'
 
 type JobFilter = 'all' | 'active' | 'review' | 'failed' | 'finished'
 
-const activeStatuses = new Set([
-  'queued',
-  'running',
-  'review_submitted',
-  'cancelling',
-])
+const activeStatuses = new Set(['queued', 'running'])
 
 const filterJob = (job: WorkflowJobListItem, filter: JobFilter): boolean => {
   if (filter === 'all') return true
   if (filter === 'active') return activeStatuses.has(job.status)
-  if (filter === 'review') return job.status === 'awaiting_review'
-  if (filter === 'failed') return job.status === 'failed'
-  return (
-    job.status === 'approved' ||
-    job.status === 'rejected' ||
-    job.status === 'cancelled'
-  )
+  if (filter === 'review') return job.status === 'needs_review'
+  if (filter === 'failed')
+    return job.status === 'failed' || job.status === 'mixed'
+  return job.status === 'completed' || job.status === 'cancelled'
 }
 
 const canCancel = (job: WorkflowJobListItem): boolean =>
   job.status === 'queued' ||
   job.status === 'running' ||
-  job.status === 'review_submitted' ||
-  job.status === 'awaiting_review'
+  job.status === 'needs_review'
 
 const JobRow = ({
   batchId,
@@ -108,11 +100,20 @@ const JobRow = ({
   <TableRow>
     <TableCell>
       <div className="grid max-w-md gap-1">
-        <span className="truncate font-medium" title={job.url}>
+        <span className="truncate font-medium" title={workflowJobTitle(job)}>
+          {workflowJobTitle(job)}
+        </span>
+        <span
+          className="truncate text-xs text-muted-foreground"
+          title={job.url}
+        >
           {job.url}
         </span>
         <span className="font-mono text-[11px] text-muted-foreground">
-          Job {job.position + 1} · {shortWorkflowId(job.runId)}
+          Job {job.position + 1} · {shortWorkflowId(job.jobId)}
+        </span>
+        <span>
+          <WorkflowDocumentBadges kinds={job.kinds} />
         </span>
       </div>
     </TableCell>
@@ -121,7 +122,14 @@ const JobRow = ({
     </TableCell>
     <TableCell>
       <div className="grid min-w-40 gap-1">
-        <span className="text-sm">{workflowStageLabel(job.stage)}</span>
+        <span className="text-sm">
+          {job.artifacts
+            .map(
+              (artifact) =>
+                `${artifact.kind === 'cv' ? 'CV' : 'Letter'}: ${workflowStageLabel(artifact.stage)}`
+            )
+            .join(' · ')}
+        </span>
         <span className="line-clamp-1 text-xs text-muted-foreground">
           {job.message}
         </span>
@@ -134,19 +142,15 @@ const JobRow = ({
       <div className="flex justify-end gap-1">
         <Button
           size="sm"
-          variant={job.status === 'awaiting_review' ? 'default' : 'outline'}
+          variant={job.status === 'needs_review' ? 'default' : 'outline'}
           render={
             <Link
-              to={
-                job.status === 'awaiting_review'
-                  ? `/workflows/${encodeURIComponent(batchId)}/jobs/${encodeURIComponent(job.runId)}/review`
-                  : `/workflows/${encodeURIComponent(batchId)}/jobs/${encodeURIComponent(job.runId)}`
-              }
+              to={`/workflows/${encodeURIComponent(batchId)}/jobs/${encodeURIComponent(job.jobId)}`}
             />
           }
         >
           <ExternalLink />
-          {job.status === 'awaiting_review' ? 'Review' : 'Details'}
+          {job.status === 'needs_review' ? 'Review' : 'Details'}
         </Button>
         {!canCancel(job) ? null : (
           <Button
@@ -154,7 +158,7 @@ const JobRow = ({
             size="icon-sm"
             variant="ghost"
             disabled={cancelling}
-            onClick={() => onCancel(job.runId)}
+            onClick={() => onCancel(job.primaryRunId)}
           >
             {cancelling ? <Spinner aria-hidden /> : <Ban />}
           </Button>
@@ -166,7 +170,7 @@ const JobRow = ({
             variant="ghost"
             render={
               <Link
-                to={`/workflows/new?url=${encodeURIComponent(job.url)}&kind=${job.kind}&locale=${encodeURIComponent(job.locale)}`}
+                to={`/workflows/new?url=${encodeURIComponent(job.url)}&locale=${encodeURIComponent(job.locale)}`}
               />
             }
           >
@@ -203,7 +207,7 @@ export const WorkflowBatchScreen = ({
       filterJob(job, filter) &&
       (normalizedQuery.length === 0 ||
         job.url.toLocaleLowerCase().includes(normalizedQuery) ||
-        job.runId.toLocaleLowerCase().includes(normalizedQuery))
+        job.jobId.toLocaleLowerCase().includes(normalizedQuery))
   )
   const cancellableJobs = jobs.filter(canCancel)
   const percent = batchCompletionPercent(batch)
@@ -218,7 +222,7 @@ export const WorkflowBatchScreen = ({
         metadata={
           <>
             <WorkflowStatusBadge status={batch.status} />
-            <WorkflowDocumentBadge kind={batch.kind} />
+            <WorkflowDocumentBadges kinds={batch.kinds} />
             <Badge variant="outline">Locale {batch.locale}</Badge>
             <span className="text-xs text-muted-foreground">
               Started {formatWorkflowTime(batch.createdAt)}
@@ -315,7 +319,13 @@ export const WorkflowBatchScreen = ({
           <div>
             <CardTitle>Jobs</CardTitle>
             <CardDescription>
-              {jobs.length} independent workflow{jobs.length === 1 ? '' : 's'}
+              {batch.urlCount} URL job{batch.urlCount === 1 ? '' : 's'} ·{' '}
+              {jobs.reduce((count, job) => count + job.artifacts.length, 0)}{' '}
+              document workflow
+              {jobs.reduce((count, job) => count + job.artifacts.length, 0) ===
+              1
+                ? ''
+                : 's'}
             </CardDescription>
           </div>
           <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
@@ -376,9 +386,9 @@ export const WorkflowBatchScreen = ({
                 <TableBody>
                   {filteredJobs.map((job) => (
                     <JobRow
-                      key={job.runId}
+                      key={job.jobId}
                       batchId={batch.batchId}
-                      cancelling={cancellingRunIds.has(job.runId)}
+                      cancelling={cancellingRunIds.has(job.primaryRunId)}
                       job={job}
                       onCancel={onCancelJob}
                     />

@@ -1,10 +1,38 @@
 import { expect, test } from '@playwright/test'
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 
 const fixturePath = '/c/fixture'
 const previewPath = '/c/_preview/fixture?access=fixture-preview'
 const overflowPreviewPath =
   '/c/_preview/fixture-overflow?access=fixture-overflow-preview'
 const colorSchemeStorageKey = 'cv:color-scheme:v1'
+const fixturePort = Number(process.env.CV_E2E_PORT ?? 4381)
+const fixturePublicUrl = `http://localhost:${fixturePort}/c/fixture`
+
+const inspectPdf = async (bytes: Uint8Array) => {
+  const loadingTask = getDocument({ data: bytes })
+  try {
+    const pdf = await loadingTask.promise
+    const pages = await Promise.all(
+      Array.from({ length: pdf.numPages }, async (_, index) => {
+        const page = await pdf.getPage(index + 1)
+        const content = await page.getTextContent()
+        return content.items
+          .flatMap((item) => ('str' in item ? [item.str] : []))
+          .join('\n')
+      })
+    )
+    const metadata = await pdf.getMetadata()
+
+    return {
+      pageCount: pdf.numPages,
+      text: pages.join('\n'),
+      title: String(metadata.info.Title ?? ''),
+    }
+  } finally {
+    await loadingTask.destroy()
+  }
+}
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript((storageKey) => {
@@ -75,7 +103,7 @@ test('behaves as a navigable website instead of an A4 sheet', async ({
   await expect(experience).toBeInViewport()
 })
 
-test('renders the A4 capability preview without interactive controls', async ({
+test('renders the single-column A4 capability preview without interactive controls', async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium-desktop')
@@ -83,6 +111,7 @@ test('renders the A4 capability preview without interactive controls', async ({
   const response = await page.goto(previewPath)
 
   expect(response?.status()).toBe(200)
+  await expect(page).toHaveTitle('Ada Lovelace — CV')
   await expect(page.locator('[data-cv-document]')).toHaveAttribute(
     'data-cv-renderer-mode',
     'print-preview'
@@ -92,26 +121,29 @@ test('renders the A4 capability preview without interactive controls', async ({
   const document = page.locator('[data-cv-pdf-document]')
   await expect(document).toBeVisible()
   await expect(page.locator('[data-cv-print-only]')).toBeVisible()
+  await expect(page.locator('[data-cv-public-url]')).toHaveAttribute(
+    'href',
+    fixturePublicUrl
+  )
+  await expect(page.locator('.cv2-qr')).toHaveCount(0)
+  await expect(page.locator('.cv2-column')).toHaveCount(0)
+  await expect(page.locator('.cv2-layout')).toHaveCSS('display', 'block')
+  await expect(document).toHaveCSS('font-family', /Arimo/u)
   await expect(page.locator('.cv2-entry-list').first()).toHaveCSS(
     'padding-inline-start',
     '0px'
   )
 
-  const [documentBox, headerBox, qrBox, mainColumnBox, sidebarColumnBox] =
-    await Promise.all([
-      document.boundingBox(),
-      page.locator('.cv2-header').boundingBox(),
-      page.locator('.cv2-qr').boundingBox(),
-      page.locator('.cv2-column').nth(0).boundingBox(),
-      page.locator('.cv2-column').nth(1).boundingBox(),
-    ])
-  if (
-    documentBox === null ||
-    headerBox === null ||
-    qrBox === null ||
-    mainColumnBox === null ||
-    sidebarColumnBox === null
-  ) {
+  const [documentBox, sectionBoxes] = await Promise.all([
+    document.boundingBox(),
+    page.locator('.cv2-layout > .cv2-section').evaluateAll((sections) =>
+      sections.map((section) => {
+        const rectangle = section.getBoundingClientRect()
+        return { left: rectangle.left, width: rectangle.width }
+      })
+    ),
+  ])
+  if (documentBox === null || sectionBoxes.length < 4) {
     throw new Error('Expected measurable PDF layout bounds')
   }
 
@@ -125,19 +157,25 @@ test('renders the A4 capability preview without interactive controls', async ({
       style.paddingLeft,
     ].map(Number.parseFloat)
   })
-  const expectedPaddingInCssPixels = (8 * 96) / 25.4
-  for (const padding of pagePadding) {
-    expect(padding).toBeCloseTo(expectedPaddingInCssPixels, 1)
+  const millimetresToCssPixels = (millimetres: number) =>
+    (millimetres * 96) / 25.4
+  expect(pagePadding[0]).toBeCloseTo(millimetresToCssPixels(12), 1)
+  expect(pagePadding[1]).toBeCloseTo(millimetresToCssPixels(14), 1)
+  expect(pagePadding[2]).toBeCloseTo(millimetresToCssPixels(12), 1)
+  expect(pagePadding[3]).toBeCloseTo(millimetresToCssPixels(14), 1)
+
+  for (const sectionBox of sectionBoxes) {
+    expect(sectionBox.left).toBeCloseTo(sectionBoxes[0]?.left ?? 0, 1)
+    expect(sectionBox.width).toBeCloseTo(sectionBoxes[0]?.width ?? 0, 1)
   }
 
-  const columnRatio = mainColumnBox.width / sidebarColumnBox.width
-  expect(columnRatio).toBeGreaterThan(1.75)
-  expect(columnRatio).toBeLessThan(2)
-  expect(qrBox.x).toBeGreaterThan(documentBox.x + documentBox.width / 2)
-  expect(qrBox.y).toBeGreaterThanOrEqual(headerBox.y)
-  expect(qrBox.y + qrBox.height).toBeLessThanOrEqual(
-    headerBox.y + headerBox.height
-  )
+  const minimumTextSize = await page
+    .locator('.cv2-chip')
+    .first()
+    .evaluate((element) =>
+      Number.parseFloat(getComputedStyle(element).fontSize)
+    )
+  expect(minimumTextSize).toBeGreaterThanOrEqual(12)
 })
 
 test('switches the public route to its dedicated PDF tree for printing', async ({
@@ -154,37 +192,63 @@ test('switches the public route to its dedicated PDF tree for printing', async (
     'background-color',
     'rgb(255, 255, 255)'
   )
-
-  const pdf = await page.pdf({ format: 'A4', printBackground: true })
-  expect(pdf.subarray(0, 4).toString()).toBe('%PDF')
-  expect(pdf.byteLength).toBeGreaterThan(10_000)
 })
 
-test('keeps a deliberate overflow fixture to exercise the PDF guard', async ({
+test('generates an ordered two-page ATS PDF with safe metadata', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-desktop')
+
+  await page.goto(previewPath)
+  await page.emulateMedia({ media: 'print' })
+  const bytes = await page.pdf({
+    format: 'A4',
+    preferCSSPageSize: true,
+    printBackground: true,
+  })
+  const pdf = await inspectPdf(new Uint8Array(bytes))
+
+  expect(bytes.subarray(0, 4).toString()).toBe('%PDF')
+  expect(bytes.byteLength).toBeGreaterThan(10_000)
+  expect(pdf.pageCount).toBe(2)
+  expect(pdf.title).toBe('Ada Lovelace — CV')
+  expect(pdf.title).not.toContain('access=')
+  expect(pdf.text).toContain('Selected projects')
+  expect(pdf.text).toContain('Current web CV')
+  expect(pdf.text).toContain(fixturePublicUrl)
+  expect(pdf.text).not.toContain('PROJ ECTS')
+  expect(pdf.text).not.toContain('COMM U NIT Y')
+
+  const orderedSections = [
+    'Experience',
+    'Selected projects',
+    'Skills',
+    'Education',
+    'Languages',
+    'Community',
+  ]
+  const sectionOffsets = orderedSections.map((section) =>
+    pdf.text.indexOf(section)
+  )
+  expect(sectionOffsets.every((offset) => offset >= 0)).toBe(true)
+  expect(sectionOffsets).toEqual([...sectionOffsets].toSorted((a, b) => a - b))
+})
+
+test('keeps a deliberate overflow fixture above the two-page guard', async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium-desktop')
 
   await page.goto(overflowPreviewPath)
-  const measurement = await page
-    .locator('[data-cv-pdf-document]')
-    .evaluate((element) => {
-      const probe = document.createElement('div')
-      probe.style.cssText =
-        'position:fixed;left:-10000px;width:210mm;height:297mm;visibility:hidden'
-      document.documentElement.appendChild(probe)
-      const pageHeight = probe.getBoundingClientRect().height
-      probe.remove()
-      return {
-        pageHeight,
-        renderedHeight: element.getBoundingClientRect().height,
-        scrollHeight: element.scrollHeight,
-      }
-    })
+  await page.emulateMedia({ media: 'print' })
+  const bytes = await page.pdf({
+    format: 'A4',
+    preferCSSPageSize: true,
+    printBackground: true,
+  })
+  const pdf = await inspectPdf(new Uint8Array(bytes))
 
-  expect(
-    Math.max(measurement.renderedHeight, measurement.scrollHeight)
-  ).toBeGreaterThan(measurement.pageHeight)
+  expect(pdf.pageCount).toBeGreaterThan(2)
 })
 
 test('switches and persists explicit color-scheme preferences', async ({

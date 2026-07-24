@@ -6,7 +6,6 @@ import { asyncResultErrorMessage } from '@/lib/async-result'
 import {
   type ApplicationsListRequest,
   applicationsAtom,
-  compensationFxRateTableAtom,
   refreshApplicationLists,
 } from '../../data'
 import type { useApplicationsWorkspace } from './use-workspace'
@@ -25,9 +24,6 @@ export const useApplicationsList = (workspace: ApplicationsWorkspace) => {
     enabled: requestEnabled,
   })
   const applicationsResult = useAtomValue(listAtom)
-  const fxRatesResult = useAtomValue(
-    compensationFxRateTableAtom(workspace.queryState.currency)
-  )
   const [loadingMore, setLoadingMore] = React.useState(false)
   const [refreshResult, runRefresh] = useAtom(refreshApplicationLists, {
     mode: 'promiseExit',
@@ -35,17 +31,6 @@ export const useApplicationsList = (workspace: ApplicationsWorkspace) => {
   const pullApplications = useAtomSet(listAtom, { mode: 'promiseExit' })
   const page = AsyncResult.getOrElse(applicationsResult, () => undefined)
   const applications = requestEnabled ? (page?.items ?? []) : []
-  const compensationFxRateTable = AsyncResult.getOrElse(
-    fxRatesResult,
-    () => undefined
-  )
-  const conversionError =
-    workspace.queryState.currency === 'original'
-      ? undefined
-      : asyncResultErrorMessage(
-          fxRatesResult,
-          'Compensation conversion rates could not be loaded.'
-        )
   const loading =
     requestEnabled && applicationsResult.waiting && page === undefined
   const refreshPending = AsyncResult.isWaiting(refreshResult)
@@ -71,8 +56,6 @@ export const useApplicationsList = (workspace: ApplicationsWorkspace) => {
 
   return {
     applications,
-    compensationFxRateTable: compensationFxRateTable ?? undefined,
-    conversionError,
     error,
     hasNextPage: page?.done === false,
     loadMore,

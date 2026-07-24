@@ -32,6 +32,9 @@ export const makePreparationStoreTestLayer = (
       loadContentRevisionHistory:
         overrides.loadContentRevisionHistory ??
         (() => unimplemented('loadContentRevisionHistory')),
+      loadPreparationHead:
+        overrides.loadPreparationHead ??
+        (() => unimplemented('loadPreparationHead')),
       loadWorkflowBootstrap:
         overrides.loadWorkflowBootstrap ??
         (() => unimplemented('loadWorkflowBootstrap')),

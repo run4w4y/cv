@@ -18,7 +18,6 @@ import {
   type Updater,
   type VisibilityState,
 } from '@tanstack/react-table'
-import { createParser, useQueryState } from 'nuqs'
 import * as React from 'react'
 import { useSearchParams } from 'react-router'
 
@@ -40,27 +39,32 @@ import {
   writeApplicationViewQueryState,
 } from './query-state'
 
-const applicationCurrencyParser = createParser({
-  parse: parseCompensationDisplayCurrency,
-  serialize: (value) => value,
-})
-  .withDefault('original')
-  .withOptions({ history: 'replace', shallow: false, scroll: false })
-
 export const useApplicationsWorkspace = (
   facets: ApplicationFacetsResponse | undefined
 ) => {
   const [searchParams, setSearchParams] = useSearchParams()
+  // Router updates can arrive before this hook rerenders. Keep one advancing
+  // snapshot so consecutive controls merge instead of overwriting each other.
+  const pendingSearchParams = React.useRef(searchParams)
+  if (pendingSearchParams.current.toString() !== searchParams.toString()) {
+    pendingSearchParams.current = searchParams
+  }
+  const updateSearchParams = React.useCallback(
+    (update: (current: URLSearchParams) => URLSearchParams) => {
+      const next = update(new URLSearchParams(pendingSearchParams.current))
+      pendingSearchParams.current = next
+      setSearchParams(next, { replace: true })
+    },
+    [setSearchParams]
+  )
   const parameterState = decodeQueryParameterState(
     applicationQueryBoundary,
     searchParams
   )
   const query: ListApplicationsQuery =
     parameterState.status === 'valid' ? parameterState.value : {}
-  const [currency, setCurrency] = useQueryState(
-    'currency',
-    applicationCurrencyParser
-  )
+  const currency =
+    parseCompensationDisplayCurrency(searchParams.get('currency')) ?? 'original'
   const [initialState] = React.useState<ApplicationSavedViewState | null>(() =>
     typeof window === 'undefined'
       ? null
@@ -78,20 +82,34 @@ export const useApplicationsWorkspace = (
     urlInitiallyConfigured || initialState === null
   )
 
-  const writeQuery = (next: ListApplicationsQuery) =>
-    setSearchParams(
-      writeQueryParameterState(applicationQueryBoundary, searchParams, next),
-      { replace: true }
-    )
+  const writeQuery = React.useCallback(
+    (update: (current: ListApplicationsQuery) => ListApplicationsQuery): void =>
+      updateSearchParams((currentSearchParams) => {
+        const currentParameterState = decodeQueryParameterState(
+          applicationQueryBoundary,
+          currentSearchParams
+        )
+        const currentQuery =
+          currentParameterState.status === 'valid'
+            ? currentParameterState.value
+            : {}
+        return writeQueryParameterState(
+          applicationQueryBoundary,
+          currentSearchParams,
+          update(currentQuery)
+        )
+      }),
+    [updateSearchParams]
+  )
   const keyword = query.q ?? ''
   const [keywordDraft, setKeywordDraft] = useDebouncedDraft(
     keyword,
     300,
     (nextKeyword) =>
-      writeQuery({
-        ...query,
+      writeQuery((current) => ({
+        ...current,
         q: nextKeyword.trim().length === 0 ? undefined : nextKeyword.trim(),
-      })
+      }))
   )
   const fieldPresentation = createApplicationFilterFieldPresentation(facets)
   const appliedFilters = query.filters ?? []
@@ -102,8 +120,8 @@ export const useApplicationsWorkspace = (
     definition: applicationListQuery,
     presentation: fieldPresentation,
     onFiltersChange: (nextFilters) =>
-      writeQuery({ ...query, filters: nextFilters }),
-    onClearInvalidQuery: () => writeQuery({}),
+      writeQuery((current) => ({ ...current, filters: nextFilters })),
+    onClearInvalidQuery: () => writeQuery(() => ({})),
   })
   const effectiveOrderBy = query.orderBy ?? defaultApplicationOrderBy
   const sorting: SortingState = sortingStateFromOrderBy(effectiveOrderBy).map(
@@ -136,8 +154,8 @@ export const useApplicationsWorkspace = (
       setReady(true)
       return
     }
-    setSearchParams(target, { replace: true })
-  }, [filters, initialState, ready, searchParams, setSearchParams])
+    updateSearchParams(() => target)
+  }, [filters, initialState, ready, searchParams, updateSearchParams])
 
   // localStorage is the durable boundary for the last visited workspace.
   // biome-ignore lint/correctness/useExhaustiveDependencies: the canonical state fingerprint covers every persisted field.
@@ -153,9 +171,9 @@ export const useApplicationsWorkspace = (
     )
     setColumnVisibility(state.columnVisibility)
     setDensity(state.density)
-    setSearchParams(writeApplicationViewQueryState(searchParams, state), {
-      replace: true,
-    })
+    updateSearchParams((current) =>
+      writeApplicationViewQueryState(current, state)
+    )
   }
 
   return {
@@ -172,17 +190,31 @@ export const useApplicationsWorkspace = (
     ready,
     setColumnVisibility: (updater: Updater<VisibilityState>) =>
       setColumnVisibility((current) => functionalUpdate(updater, current)),
-    setCurrency: (nextCurrency: string) => void setCurrency(nextCurrency),
+    setCurrency: (nextCurrency: string) => {
+      const parsedCurrency = parseCompensationDisplayCurrency(nextCurrency)
+      if (parsedCurrency === null) return
+      updateSearchParams((current) => {
+        if (parsedCurrency === 'original') {
+          current.delete('currency')
+        } else {
+          current.set('currency', parsedCurrency)
+        }
+        return current
+      })
+    },
     setDensity,
     setKeyword: (nextKeyword: string) =>
-      writeQuery({
-        ...query,
+      writeQuery((current) => ({
+        ...current,
         q: nextKeyword.trim().length === 0 ? undefined : nextKeyword.trim(),
-      }),
+      })),
     setKeywordDraft,
     setSorting: (updater: Updater<SortingState>) => {
       const next = functionalUpdate(updater, sorting)
-      writeQuery({ ...query, orderBy: applicationOrderByFromSorting(next) })
+      writeQuery((current) => ({
+        ...current,
+        orderBy: applicationOrderByFromSorting(next),
+      }))
     },
     sorting,
   }

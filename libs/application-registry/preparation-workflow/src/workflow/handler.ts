@@ -16,15 +16,23 @@ import * as WorkflowEngine from 'effect/unstable/workflow/WorkflowEngine'
 import {
   ContentRevisionResultSchema,
   candidateMatchesDocumentKind,
+  type EvidencePlan,
   EvidencePlanResultSchema,
   type GeneratedCandidate,
   GeneratedCandidateSchema,
-  HumanReview,
+  type JobAnalysis,
   JobAnalysisResultSchema,
+  normalizePreparationJobInput,
+  type PreparationArtifactWorkflowResult,
+  type PreparationBootstrap,
   PreparationBootstrapSchema,
   PreparationWorkflowError,
   type PreparationWorkflowInput,
+  type PreparationWorkflowPayload,
   PrepareApplicationWorkflow,
+  preparationJobArtifactInput,
+  preparationJobArtifactInputs,
+  preparationReviewDeferred,
   preparationSourceApplicationId,
   SavedCandidateSchema,
   SectionBriefResultSchema,
@@ -83,18 +91,136 @@ const withActivityTimeout = <A, R>(
   )
 
 const executePreparation = Effect.fn('PrepareApplication.run')(
-  function* (input: PreparationWorkflowInput) {
+  function* (payload: PreparationWorkflowPayload) {
+    const input = normalizePreparationJobInput(payload)
     const gateway = yield* PreparationGateway
     const progress = yield* PreparationProgress
     const concurrency = yield* PreparationConcurrency
+    const artifactInputs = preparationJobArtifactInputs(input)
+    const cvInput = preparationJobArtifactInput(input, 'cv')
+    const coverLetterInput = preparationJobArtifactInput(input, 'cover_letter')
+    const primaryInput = cvInput ?? coverLetterInput
+    if (primaryInput === null) {
+      return yield* Effect.die(
+        'Decoded preparation job did not contain an artifact input.'
+      )
+    }
 
-    // One permit represents one actively preparing job. Activities within a
-    // job do not compete for this semaphore; the gateway separately bounds AI
-    // calls. Human-review suspension releases the job permit.
-    const prepared = yield* concurrency.withJobSlot(
-      Effect.gen(function* () {
+    const stageArtifacts = (
+      stage: Parameters<typeof progress.stage>[1],
+      message: string,
+      applicationId?: string
+    ) =>
+      Effect.forEach(
+        artifactInputs,
+        ({ runId }) => progress.stage(runId, stage, message, applicationId),
+        { discard: true }
+      )
+
+    const prepareArtifact = Effect.fn('PrepareApplication.prepareArtifact')(
+      function* (
+        artifactInput: PreparationWorkflowInput,
+        context: PreparationBootstrap,
+        analysis: JobAnalysis,
+        evidence: EvidencePlan
+      ) {
+        const { kind, runId } = artifactInput
         yield* progress.stage(
-          input.runId,
+          runId,
+          'briefs',
+          'Building section briefs with bounded parallel generation calls.'
+        )
+        const briefs = yield* Effect.forEach(
+          gateway.sectionIds(kind),
+          (sectionId) =>
+            Activity.make({
+              name: `${kind}/section-brief/${sectionId}`,
+              success: SectionBriefResultSchema,
+              error: PreparationWorkflowError,
+              interruptRetryPolicy: stopActivityInterruptRetries,
+              execute: withActivityTimeout(
+                'briefs',
+                '2 minutes',
+                gateway.brief(
+                  artifactInput,
+                  context,
+                  analysis,
+                  evidence,
+                  sectionId
+                )
+              ),
+            }),
+          { concurrency: 2 }
+        )
+
+        yield* progress.stage(
+          runId,
+          'composition',
+          'Composing one coherent final document from the plan.'
+        )
+        const composed = yield* Activity.make({
+          name: `${kind}/compose-document`,
+          success: GeneratedCandidateSchema,
+          error: PreparationWorkflowError,
+          interruptRetryPolicy: stopActivityInterruptRetries,
+          execute: withActivityTimeout(
+            'composition',
+            '3 minutes',
+            gateway.compose(
+              artifactInput,
+              context,
+              analysis,
+              evidence,
+              briefs.map(({ brief }) => brief)
+            )
+          ),
+        })
+        const candidate: GeneratedCandidate = {
+          ...composed,
+          metadata: [
+            ...briefs.map(({ metadata }) => metadata),
+            ...composed.metadata,
+          ],
+        }
+
+        yield* progress.stage(
+          runId,
+          'validation',
+          'Validating the generated document and its requested format.'
+        )
+        if (!candidateMatchesDocumentKind(candidate, kind)) {
+          return yield* Effect.fail(
+            new PreparationWorkflowError({
+              message: `Generated ${candidate._tag} candidate did not match requested document kind ${kind}.`,
+              stage: 'validation',
+            })
+          )
+        }
+
+        yield* progress.stage(
+          runId,
+          'saving',
+          'Saving the AI candidate as an unapproved revision.'
+        )
+        return yield* Activity.make({
+          name: `${kind}/save-candidate`,
+          success: SavedCandidateSchema,
+          error: PreparationWorkflowError,
+          interruptRetryPolicy: stopActivityInterruptRetries,
+          execute: withActivityTimeout(
+            'saving',
+            '30 seconds',
+            gateway.saveCandidate(artifactInput, context, candidate)
+          ),
+        })
+      }
+    )
+
+    // One permit represents one URL job. Shared analysis and evidence selection
+    // happen once; document-specific generation remains independently visible.
+    const generated = yield* concurrency.withJobSlot(
+      Effect.gen(function* () {
+        yield* stageArtifacts(
           'application',
           preparationSourceApplicationId(input.source) === null
             ? 'Creating an application record for this URL.'
@@ -108,11 +234,10 @@ const executePreparation = Effect.fn('PrepareApplication.run')(
           execute: withActivityTimeout(
             'application',
             '30 seconds',
-            gateway.ensureApplication(input)
+            gateway.ensureApplication(primaryInput)
           ),
         })
-        yield* progress.stage(
-          input.runId,
+        yield* stageArtifacts(
           'capture',
           'Application ready. Capturing the canonical job posting.',
           initialApplication.id
@@ -125,20 +250,13 @@ const executePreparation = Effect.fn('PrepareApplication.run')(
           execute: withActivityTimeout(
             'capture',
             '90 seconds',
-            gateway.bootstrap(input, initialApplication)
+            gateway.bootstrap(primaryInput, initialApplication)
           ),
         })
-        yield* progress.stage(
-          input.runId,
+        yield* stageArtifacts(
           'analysis',
-          'Captured the posting and loaded the active facts release.',
+          'Captured the posting. Extracting the role, responsibilities, and requirements.',
           initialContext.application.id
-        )
-
-        yield* progress.stage(
-          input.runId,
-          'analysis',
-          'Extracting the role, responsibilities, and requirements.'
         )
         const analysis = yield* Activity.make({
           name: 'job-analysis',
@@ -148,7 +266,7 @@ const executePreparation = Effect.fn('PrepareApplication.run')(
           execute: withActivityTimeout(
             'analysis',
             '2 minutes',
-            gateway.analyze(input, initialContext)
+            gateway.analyze(primaryInput, initialContext)
           ),
         })
 
@@ -160,18 +278,26 @@ const executePreparation = Effect.fn('PrepareApplication.run')(
           execute: withActivityTimeout(
             'application',
             '30 seconds',
-            gateway.enrichApplication(input, initialContext, analysis.analysis)
+            gateway.enrichApplication(
+              primaryInput,
+              initialContext,
+              analysis.analysis
+            )
           ),
+        })
+        yield* progress.identify(input.jobId, {
+          applicationId: application.id,
+          company: analysis.analysis.company,
+          role: analysis.analysis.role,
         })
         const context = {
           ...initialContext,
           application,
         }
 
-        yield* progress.stage(
-          input.runId,
+        yield* stageArtifacts(
           'evidence',
-          'Mapping requirements to reviewed fact IDs.',
+          'Mapping requirements to reviewed evidence.',
           application.id
         )
         const evidence = yield* Activity.make({
@@ -182,152 +308,241 @@ const executePreparation = Effect.fn('PrepareApplication.run')(
           execute: withActivityTimeout(
             'evidence',
             '2 minutes',
-            gateway.planEvidence(input, context, analysis.analysis)
+            gateway.planEvidence(primaryInput, context, analysis.analysis)
           ),
         })
 
-        yield* progress.stage(
-          input.runId,
-          'briefs',
-          'Building section briefs with bounded parallel generation calls.'
-        )
-        const briefs = yield* Effect.forEach(
-          gateway.sectionIds(input.kind),
-          (sectionId) =>
-            Activity.make({
-              name: `section-brief/${sectionId}`,
-              success: SectionBriefResultSchema,
-              error: PreparationWorkflowError,
-              interruptRetryPolicy: stopActivityInterruptRetries,
-              execute: withActivityTimeout(
-                'briefs',
-                '2 minutes',
-                gateway.brief(
-                  input,
-                  context,
-                  analysis.analysis,
-                  evidence.plan,
-                  sectionId
+        const sharedMetadata = [analysis.metadata, evidence.metadata]
+        const cvSaved =
+          cvInput === null
+            ? null
+            : yield* prepareArtifact(
+                cvInput,
+                context,
+                analysis.analysis,
+                evidence.plan
+              ).pipe(
+                Effect.map((saved) => ({
+                  ...saved,
+                  candidate: {
+                    ...saved.candidate,
+                    metadata: [...sharedMetadata, ...saved.candidate.metadata],
+                  },
+                })),
+                Effect.tapError((error) =>
+                  Effect.gen(function* () {
+                    yield* progress.fail(cvInput.runId, error.message)
+                    if (coverLetterInput !== null) {
+                      yield* progress.fail(
+                        coverLetterInput.runId,
+                        'Cover-letter generation was blocked because the tailored CV failed.'
+                      )
+                    }
+                  })
                 )
-              ),
-            }),
-          { concurrency: 2 }
-        )
+              )
 
-        yield* progress.stage(
-          input.runId,
-          'composition',
-          'Composing one coherent final document from the plan.'
-        )
-        const composed = yield* Activity.make({
-          name: 'compose-document',
-          success: GeneratedCandidateSchema,
-          error: PreparationWorkflowError,
-          interruptRetryPolicy: stopActivityInterruptRetries,
-          execute: withActivityTimeout(
-            'composition',
-            '3 minutes',
-            gateway.compose(
-              input,
-              context,
-              analysis.analysis,
-              evidence.plan,
-              briefs.map(({ brief }) => brief)
-            )
-          ),
-        })
-        const candidate: GeneratedCandidate = {
-          ...composed,
-          metadata: [
-            analysis.metadata,
-            evidence.metadata,
-            ...briefs.map(({ metadata }) => metadata),
-            ...composed.metadata,
-          ],
-        }
-
-        yield* progress.stage(
-          input.runId,
-          'validation',
-          'Validating the generated document and its requested format.'
-        )
-        if (!candidateMatchesDocumentKind(candidate, input.kind)) {
-          return yield* Effect.fail(
-            new PreparationWorkflowError({
-              message: `Generated ${candidate._tag} candidate did not match requested document kind ${input.kind}.`,
-              stage: 'validation',
-            })
+        if (cvSaved !== null) {
+          const reviewToken = yield* DurableDeferred.token(
+            preparationReviewDeferred('cv')
+          )
+          yield* progress.reviewReady(
+            cvInput?.runId ?? input.jobId,
+            cvSaved.application.id,
+            cvSaved,
+            reviewToken
           )
         }
 
-        yield* progress.stage(
-          input.runId,
-          'saving',
-          'Saving the AI candidate as an unapproved revision.'
-        )
-        const saved = yield* Activity.make({
-          name: 'save-candidate',
-          success: SavedCandidateSchema,
-          error: PreparationWorkflowError,
-          interruptRetryPolicy: stopActivityInterruptRetries,
-          execute: withActivityTimeout(
-            'saving',
-            '30 seconds',
-            gateway.saveCandidate(input, context, candidate)
-          ),
-        })
+        const prepareCoverLetter =
+          coverLetterInput === null
+            ? null
+            : Effect.gen(function* () {
+                const letterContext =
+                  cvSaved === null
+                    ? context
+                    : yield* Activity.make({
+                        name: 'cover_letter/load-context',
+                        success: PreparationBootstrapSchema,
+                        error: PreparationWorkflowError,
+                        interruptRetryPolicy: stopActivityInterruptRetries,
+                        execute: withActivityTimeout(
+                          'capture',
+                          '30 seconds',
+                          gateway
+                            .bootstrap(
+                              {
+                                ...coverLetterInput,
+                                source: {
+                                  _tag: 'ReviewedContext',
+                                  applicationId: application.id,
+                                  factsReleaseId: context.factsReleaseId,
+                                  jobSnapshotId: context.jobSnapshot.id,
+                                  url: input.source.url,
+                                },
+                              },
+                              application
+                            )
+                            .pipe(
+                              Effect.map((loaded) => ({
+                                ...loaded,
+                                application,
+                                referenceCv:
+                                  cvSaved.candidate._tag === 'Cv'
+                                    ? cvSaved.candidate.document
+                                    : null,
+                                referenceCvRevisionId:
+                                  cvSaved.result.revision.id,
+                              }))
+                            )
+                        ),
+                      })
+                const saved = yield* prepareArtifact(
+                  coverLetterInput,
+                  letterContext,
+                  analysis.analysis,
+                  evidence.plan
+                )
+                return {
+                  ...saved,
+                  candidate: {
+                    ...saved.candidate,
+                    metadata: [...sharedMetadata, ...saved.candidate.metadata],
+                  },
+                }
+              })
 
-        return saved
+        const coverLetterResult =
+          prepareCoverLetter === null
+            ? null
+            : cvInput === null
+              ? yield* prepareCoverLetter
+              : yield* prepareCoverLetter.pipe(
+                  Effect.matchEffect({
+                    onFailure: (error) =>
+                      progress
+                        .fail(
+                          coverLetterInput?.runId ?? input.jobId,
+                          error.message
+                        )
+                        .pipe(Effect.as(null)),
+                    onSuccess: Effect.succeed,
+                  })
+                )
+
+        if (coverLetterResult !== null) {
+          const reviewToken = yield* DurableDeferred.token(
+            preparationReviewDeferred('cover_letter')
+          )
+          yield* progress.reviewReady(
+            coverLetterInput?.runId ?? input.jobId,
+            coverLetterResult.application.id,
+            coverLetterResult,
+            reviewToken
+          )
+        }
+
+        return {
+          applicationId: application.id,
+          failed:
+            coverLetterInput !== null && coverLetterResult === null
+              ? ([
+                  {
+                    kind: 'cover_letter',
+                    revisionId: null,
+                    runId: coverLetterInput.runId,
+                    status: 'failed',
+                  },
+                ] satisfies ReadonlyArray<PreparationArtifactWorkflowResult>)
+              : [],
+          ready: [
+            ...(cvInput === null || cvSaved === null
+              ? []
+              : [{ input: cvInput, saved: cvSaved }]),
+            ...(coverLetterInput === null || coverLetterResult === null
+              ? []
+              : [{ input: coverLetterInput, saved: coverLetterResult }]),
+          ],
+        }
       })
     )
 
-    const reviewToken = yield* DurableDeferred.token(HumanReview)
-    yield* progress.reviewReady(
-      input.runId,
-      prepared.application.id,
-      prepared,
-      reviewToken
-    )
-    const decision = yield* DurableDeferred.await(HumanReview)
+    const reviewed = yield* Effect.forEach(
+      generated.ready,
+      ({ input: artifactInput, saved }) =>
+        Effect.gen(function* () {
+          const decision = yield* DurableDeferred.await(
+            preparationReviewDeferred(artifactInput.kind)
+          )
 
-    if (decision._tag === 'Approved') {
-      const approved = yield* Activity.make({
-        name: 'approve-bound-revision',
-        success: ContentRevisionResultSchema,
-        error: PreparationWorkflowError,
-        interruptRetryPolicy: stopActivityInterruptRetries,
-        execute: withActivityTimeout(
-          'review',
-          '30 seconds',
-          gateway.approveBoundRevision(prepared, decision.revisionId)
+          if (decision._tag === 'Approved') {
+            const approved = yield* Activity.make({
+              name: `${artifactInput.kind}/approve-bound-revision`,
+              success: ContentRevisionResultSchema,
+              error: PreparationWorkflowError,
+              interruptRetryPolicy: stopActivityInterruptRetries,
+              execute: withActivityTimeout(
+                'review',
+                '30 seconds',
+                gateway.approveBoundRevision(saved, decision.revisionId)
+              ),
+            })
+            yield* progress.complete(artifactInput.runId, {
+              message: 'Human review approved the prepared revision.',
+              result: approved,
+              status: 'approved',
+            })
+            return {
+              kind: artifactInput.kind,
+              revisionId: approved.revision.id,
+              runId: artifactInput.runId,
+              status: 'approved' as const,
+            }
+          }
+
+          yield* progress.complete(artifactInput.runId, {
+            message: `Human review rejected the candidate: ${decision.reason}`,
+            status: 'rejected',
+          })
+          return {
+            kind: artifactInput.kind,
+            revisionId: null,
+            runId: artifactInput.runId,
+            status: 'rejected' as const,
+          }
+        }).pipe(
+          Effect.catch((error) =>
+            progress.fail(artifactInput.runId, error.message).pipe(
+              Effect.as({
+                kind: artifactInput.kind,
+                revisionId: null,
+                runId: artifactInput.runId,
+                status: 'failed' as const,
+              })
+            )
+          )
         ),
-      })
-      yield* progress.complete(input.runId, {
-        message: 'Human review approved the prepared revision.',
-        result: approved,
-        status: 'approved',
-      })
-      return {
-        applicationId: prepared.application.id,
-        revisionId: approved.revision.id,
-        runId: input.runId,
-        status: 'approved' as const,
-      }
-    }
+      { concurrency: 1 }
+    )
 
-    yield* progress.complete(input.runId, {
-      message: `Human review rejected the candidate: ${decision.reason}`,
-      status: 'rejected',
-    })
+    const artifacts = [...reviewed, ...generated.failed]
+    const onlyArtifact = artifacts.length === 1 ? artifacts[0] : undefined
     return {
-      applicationId: prepared.application.id,
-      revisionId: null,
-      runId: input.runId,
-      status: 'rejected' as const,
+      applicationId: generated.applicationId,
+      artifacts,
+      jobId: input.jobId,
+      ...(onlyArtifact === undefined || onlyArtifact.status === 'failed'
+        ? {}
+        : {
+            revisionId: onlyArtifact.revisionId,
+            runId: onlyArtifact.runId,
+            status: onlyArtifact.status,
+          }),
     }
   },
-  (effect, input) =>
+  (effect, payload) =>
     Effect.gen(function* () {
+      const input = normalizePreparationJobInput(payload)
       const progress = yield* PreparationProgress
       const instance = yield* WorkflowEngine.WorkflowInstance
       return yield* effect.pipe(
@@ -337,9 +552,9 @@ const executePreparation = Effect.fn('PrepareApplication.run')(
             if (instance.suspended && !instance.interrupted) {
               return Effect.void
             }
-            return progress.cancel(input.runId)
+            return progress.cancel(input.jobId)
           }
-          return progress.fail(input.runId, Cause.pretty(exit.cause))
+          return progress.failJob(input.jobId, Cause.pretty(exit.cause))
         })
       )
     })

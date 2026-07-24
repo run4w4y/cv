@@ -1,3 +1,4 @@
+import { applicationBreadcrumbHandle } from '../../../applications/pages/application-breadcrumb'
 import { CvPublicationWorkflowProvider } from '../../publication/provider'
 import { CvPublicationPage as Page } from './render'
 
@@ -8,3 +9,8 @@ export const CvPublicationPage = () => (
 )
 
 export const Component = CvPublicationPage
+
+export const handle = applicationBreadcrumbHandle({
+  key: 'publish-cv',
+  label: 'Publish CV',
+})

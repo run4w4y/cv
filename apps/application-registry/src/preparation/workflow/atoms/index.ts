@@ -18,6 +18,7 @@ export {
   latestApplicationRunAtom,
   latestOpenApplicationRun,
   latestOpenApplicationRunAtom,
+  preparationJobAtom,
   preparationRunAtom,
 } from './selectors'
 export { makeStartPreparationAtom, startPreparationBatchAtom } from './start'

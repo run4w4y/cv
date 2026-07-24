@@ -54,6 +54,22 @@ export const updatePreparationRun = (
   return next
 }
 
+export const updatePreparationJob = (
+  runs: PreparationRunStates,
+  jobId: string,
+  update: (run: PreparationRunState) => PreparationRunState
+): PreparationRunStates => {
+  let next: Map<string, PreparationRunState> | null = null
+  for (const [runId, run] of runs) {
+    if (run.jobId !== jobId) continue
+    const updated = update(run)
+    if (updated === run) continue
+    next ??= new Map(runs)
+    next.set(runId, updated)
+  }
+  return next ?? runs
+}
+
 const lastStepEntry = (
   history: ReadonlyArray<PreparationStepHistoryEntry>
 ): PreparationStepHistoryEntry | undefined => history.at(-1)

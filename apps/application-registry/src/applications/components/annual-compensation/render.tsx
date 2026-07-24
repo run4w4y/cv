@@ -1,8 +1,12 @@
 import type { ApplicationListItem } from '@cv/application-registry-api-contract'
+import { Skeleton } from '@cv/internal-ui'
+import { useAtomSuspense } from '@effect/atom-react'
+import * as React from 'react'
+import { compensationFxRateAtom } from '../../data'
 import {
   type CompensationDisplayCurrency,
-  type CompensationFxRateTable,
   currencyFractionDigits,
+  type DisplayedAnnualCompensation,
   displayAnnualCompensation,
   minorAmountToMajor,
 } from '../../model/currency'
@@ -35,16 +39,13 @@ export const formatCompensationAmount = (
   )
 }
 
-export const AnnualCompensation = ({
-  value,
-  displayCurrency = 'original',
-  rateTable,
+const AnnualCompensationValue = ({
+  displayed,
+  displayCurrency,
 }: {
-  readonly value: ApplicationListItem['annualCompensation']
-  readonly displayCurrency?: CompensationDisplayCurrency
-  readonly rateTable?: CompensationFxRateTable
+  readonly displayed: DisplayedAnnualCompensation
+  readonly displayCurrency: CompensationDisplayCurrency
 }) => {
-  const displayed = displayAnnualCompensation(value, displayCurrency, rateTable)
   if (displayed.value === null) {
     return <span className="text-sm text-muted-foreground">Not provided</span>
   }
@@ -84,5 +85,79 @@ export const AnnualCompensation = ({
             : ''}
       </p>
     </div>
+  )
+}
+
+export const AnnualCompensationSkeleton = () => (
+  <div className="min-w-48" aria-busy="true">
+    <div className="grid grid-cols-2 gap-1" aria-hidden="true">
+      <div>
+        <Skeleton className="h-2.5 w-8" />
+        <Skeleton className="mt-1 h-5 w-20" />
+      </div>
+      <div>
+        <Skeleton className="h-2.5 w-5" />
+        <Skeleton className="mt-1 h-5 w-20" />
+      </div>
+    </div>
+    <Skeleton className="mt-1.5 h-3 w-24" aria-hidden="true" />
+  </div>
+)
+
+const ConvertedAnnualCompensation = ({
+  value,
+  displayCurrency,
+}: {
+  readonly value: NonNullable<ApplicationListItem['annualCompensation']>
+  readonly displayCurrency: string
+}) => {
+  const result = useAtomSuspense(
+    compensationFxRateAtom({
+      sourceCurrency: value.currencyCode,
+      targetCurrency: displayCurrency,
+    }),
+    { includeFailure: true }
+  )
+  const displayed = displayAnnualCompensation(
+    value,
+    displayCurrency,
+    result._tag === 'Success' ? result.value : undefined
+  )
+
+  return (
+    <AnnualCompensationValue
+      displayed={displayed}
+      displayCurrency={displayCurrency}
+    />
+  )
+}
+
+export const AnnualCompensation = ({
+  value,
+  displayCurrency = 'original',
+}: {
+  readonly value: ApplicationListItem['annualCompensation']
+  readonly displayCurrency?: CompensationDisplayCurrency
+}) => {
+  if (
+    value === null ||
+    displayCurrency === 'original' ||
+    value.currencyCode === displayCurrency
+  ) {
+    return (
+      <AnnualCompensationValue
+        displayed={displayAnnualCompensation(value, displayCurrency)}
+        displayCurrency={displayCurrency}
+      />
+    )
+  }
+
+  return (
+    <React.Suspense fallback={<AnnualCompensationSkeleton />}>
+      <ConvertedAnnualCompensation
+        value={value}
+        displayCurrency={displayCurrency}
+      />
+    </React.Suspense>
   )
 }

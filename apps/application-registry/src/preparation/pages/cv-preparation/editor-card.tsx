@@ -29,6 +29,7 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router'
 
+import { CodexRefinement } from '@/preparation/components/codex-refinement'
 import type { PreparationWorkspace } from '@/preparation/workspace/atoms'
 import type { CvPreparationActions } from './actions'
 
@@ -132,6 +133,18 @@ export const CvEditorCard = ({
             />
           </TabsContent>
         </Tabs>
+        <CodexRefinement
+          canRefine={
+            editor.baseRevision !== null &&
+            !editor.dirty &&
+            editor.validation.valid
+          }
+          codexAvailable={actions.codexAvailable}
+          disabled={actions.commandPending || actions.workflowExecuting}
+          documentLabel="CV"
+          onRefine={actions.refine}
+          refining={actions.refining}
+        />
         <div className="mt-5 flex flex-wrap gap-2 border-t border-border pt-4">
           <Button
             disabled={actions.commandPending || !editor.canSave}

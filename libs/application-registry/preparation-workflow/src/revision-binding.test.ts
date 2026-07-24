@@ -95,11 +95,14 @@ const run: PreparationRun = {
   batchId: 'batch-1',
   batchPosition: 0,
   candidate,
+  company: 'Example',
   createdAt: 1,
   error: null,
+  jobId: 'run-1',
   kind: 'cv',
   locale: 'en',
   message: 'Review',
+  role: 'Platform Engineer',
   runId: 'run-1',
   stage: 'review',
   status: 'review_submitted',
@@ -109,7 +112,7 @@ const run: PreparationRun = {
 }
 
 describe('workflow review binding', () => {
-  test('accepts the generated candidate and human revisions with identical pins', () => {
+  test('accepts the candidate, human edits, and run-bound Codex refinements with identical pins', () => {
     expect(isRevisionBoundToPreparationRun(run, result)).toBe(true)
     expect(
       isRevisionBoundToPreparationRun(run, {
@@ -119,6 +122,18 @@ describe('workflow review binding', () => {
           id: 'revision-human',
           parentRevisionId: revision.id,
           source: 'human',
+        },
+      })
+    ).toBe(true)
+    expect(
+      isRevisionBoundToPreparationRun(run, {
+        entry: { ...entry, headRevisionId: 'revision-refined', version: 3 },
+        revision: {
+          ...revision,
+          id: 'revision-refined',
+          operationId: 'run-1:refinement:request-1',
+          parentRevisionId: revision.id,
+          source: 'ai_adjustment',
         },
       })
     ).toBe(true)
@@ -139,6 +154,17 @@ describe('workflow review binding', () => {
           factsReleaseId: 'facts-release-other',
           id: 'revision-human',
           source: 'human',
+        },
+      })
+    ).toBe(false)
+    expect(
+      isRevisionBoundToPreparationRun(run, {
+        entry,
+        revision: {
+          ...revision,
+          id: 'revision-refined',
+          operationId: 'other-run:refinement:request-1',
+          source: 'ai_adjustment',
         },
       })
     ).toBe(false)
