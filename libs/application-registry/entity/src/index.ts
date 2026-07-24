@@ -1,6 +1,7 @@
 export * from './codecs/activities'
 export * from './codecs/annotations'
 export * from './codecs/applications'
+export * from './codecs/artifacts'
 export * from './codecs/compensations'
 export * from './codecs/content'
 export * from './codecs/listing-checks'

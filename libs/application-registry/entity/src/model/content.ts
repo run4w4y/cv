@@ -43,4 +43,27 @@ export const ArtifactStatusSchema = Schema.Literals([
 export const artifactStatusValues = ArtifactStatusSchema.literals
 export type ArtifactStatus = Schema.Schema.Type<typeof ArtifactStatusSchema>
 
+export const ApplicationArtifactCategorySchema = Schema.Literals([
+  'resume',
+  'cover_letter',
+  'supporting_document',
+  'other',
+])
+export const applicationArtifactCategoryValues =
+  ApplicationArtifactCategorySchema.literals
+export type ApplicationArtifactCategory = Schema.Schema.Type<
+  typeof ApplicationArtifactCategorySchema
+>
+
+export const ApplicationArtifactSourceSchema = Schema.Literals([
+  'generated',
+  'uploaded',
+  'imported',
+])
+export const applicationArtifactSourceValues =
+  ApplicationArtifactSourceSchema.literals
+export type ApplicationArtifactSource = Schema.Schema.Type<
+  typeof ApplicationArtifactSourceSchema
+>
+
 export const pdfGenerationFailedDisableReason = 'pdf_generation_failed'

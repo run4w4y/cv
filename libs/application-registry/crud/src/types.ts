@@ -1,6 +1,7 @@
 import type {
   Application,
   ApplicationActivity,
+  ApplicationArtifact,
   ApplicationCompensation,
   ApplicationCompensationInput,
   ApplicationListingCheck,
@@ -208,5 +209,11 @@ export type CvAnalyticsLinkRecord = {
 }
 
 export type PersistedGeneratedArtifact = GeneratedArtifact
+
+export type PersistedUploadedApplicationArtifact = {
+  readonly artifact: ApplicationArtifact
+  readonly idempotencyKey: string
+  readonly requestHash: string
+}
 
 export type PersistedJobPostingSnapshot = JobPostingSnapshot

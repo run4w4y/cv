@@ -77,6 +77,10 @@ export const registryRoutes: RouteObject[] = [
         lazy: () => import('./applications/pages/application-details'),
       },
       {
+        path: 'applications/:applicationId/artifacts/:artifactId',
+        lazy: () => import('./applications/pages/application-artifact'),
+      },
+      {
         path: 'applications/:applicationId/prepare',
         lazy: () => import('./preparation/pages/cv-preparation'),
       },

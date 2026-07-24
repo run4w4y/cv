@@ -1,15 +1,24 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
 import type {
+  CreateApplicationArtifactResponse,
   UpdateApplicationRequest,
   UpdateApplicationResponse,
 } from '@cv/application-registry-api-contract'
-import type { Application } from '@cv/application-registry-entity'
+import type {
+  Application,
+  ApplicationArtifact,
+} from '@cv/application-registry-entity'
 import { useAtom, useAtomValue } from '@effect/atom-react'
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 
 import { TestRegistryProvider } from '../../test/render-with-registry'
-import { applicationAtom, updateManagedApplication } from '.'
+import {
+  applicationArtifactsAtom,
+  applicationAtom,
+  updateManagedApplication,
+  uploadApplicationArtifact,
+} from '.'
 
 const originalFetch = globalThis.fetch
 
@@ -165,5 +174,113 @@ describe('application mutation atoms', () => {
     if (!(error instanceof Error)) throw new Error('Expected mutation failure')
     expect(error.message).toBe('The application was updated elsewhere.')
     expect(requests.filter(({ method }) => method === 'GET')).toHaveLength(1)
+  })
+})
+
+describe('application artifact mutation atoms', () => {
+  test('uploads content before registration and refreshes the artifact list', async () => {
+    const requests: Request[] = []
+    const bytes = new TextEncoder().encode('resume-pdf')
+    const sha256 = Array.from(
+      new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))
+    )
+      .map((byte) => byte.toString(16).padStart(2, '0'))
+      .join('')
+    const artifact: ApplicationArtifact = {
+      applicationId: application.id,
+      byteLength: bytes.byteLength,
+      category: 'resume',
+      contentRevisionId: null,
+      createdAt: '2026-07-24T09:00:00.000Z',
+      filename: 'staff-engineer-resume.pdf',
+      generatedArtifactId: null,
+      id: 'artifact-1',
+      locale: 'en',
+      mediaType: 'application/pdf',
+      objectKey: `sha256/${sha256}`,
+      sha256,
+      source: 'uploaded',
+    }
+    const created: CreateApplicationArtifactResponse = {
+      artifact,
+      replayed: false,
+    }
+    let registered = false
+    globalThis.fetch = mock(async (input: string | URL | Request, init) => {
+      const request =
+        input instanceof Request
+          ? input
+          : new Request(new URL(String(input), 'http://localhost'), init)
+      requests.push(request.clone())
+      if (request.method === 'PUT') {
+        return Response.json({
+          byteLength: (await request.arrayBuffer()).byteLength,
+          sha256,
+        })
+      }
+      if (request.method === 'POST') {
+        registered = true
+        return Response.json(created, { status: 201 })
+      }
+      return Response.json({ items: registered ? [artifact] : [] })
+    }) as unknown as typeof fetch
+
+    const hook = renderHook(
+      () => {
+        const [, upload] = useAtom(uploadApplicationArtifact, {
+          mode: 'promise',
+        })
+        return {
+          artifacts: useAtomValue(applicationArtifactsAtom(application.id)),
+          upload,
+        }
+      },
+      { wrapper }
+    )
+
+    await waitFor(() =>
+      expect(hook.result.current.artifacts._tag).toBe('Success')
+    )
+    let result: CreateApplicationArtifactResponse | undefined
+    await act(async () => {
+      result = await hook.result.current.upload({
+        applicationId: application.id,
+        category: 'resume',
+        file: new File([bytes], artifact.filename),
+        filename: artifact.filename,
+        locale: 'en',
+        operationId: 'artifact-operation-1',
+      })
+    })
+    await waitFor(() => {
+      const current = hook.result.current.artifacts
+      expect(current._tag).toBe('Success')
+      if (current._tag === 'Success') {
+        expect(current.value.items).toEqual([artifact])
+      }
+    })
+
+    expect(result).toEqual(created)
+    expect(requests.map(({ method }) => method)).toEqual([
+      'GET',
+      'PUT',
+      'POST',
+      'GET',
+    ])
+    const put = requests.find(({ method }) => method === 'PUT')
+    if (put === undefined) throw new Error('Expected artifact blob upload')
+    expect(put.url).toEndWith(`/api/registry/blobs/${sha256}`)
+    expect(new Uint8Array(await put.arrayBuffer())).toEqual(bytes)
+    const post = requests.find(({ method }) => method === 'POST')
+    expect(post?.url).toEndWith(
+      `/api/registry/applications/${application.id}/artifacts`
+    )
+    expect(post?.headers.get('idempotency-key')).toBe('artifact-operation-1')
+    expect(await post?.json()).toEqual({
+      blob: { mediaType: artifact.mediaType, sha256 },
+      category: artifact.category,
+      filename: artifact.filename,
+      locale: artifact.locale,
+    })
   })
 })

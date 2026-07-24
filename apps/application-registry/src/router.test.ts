@@ -21,6 +21,9 @@ describe('management route wiring', () => {
 
     expect(paths).toContain('/applications')
     expect(paths).toContain('/applications/:applicationId')
+    expect(paths).toContain(
+      '/applications/:applicationId/artifacts/:artifactId'
+    )
     expect(paths).toContain('/applications/:applicationId/prepare')
     expect(paths).toContain('/applications/:applicationId/cover-letter')
     expect(paths).toContain('/applications/:applicationId/publish')

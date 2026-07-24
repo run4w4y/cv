@@ -11,6 +11,13 @@ import {
 } from 'effect/unstable/httpapi'
 
 import { CvAnalyticsQuerySchema, CvAnalyticsResponseSchema } from './analytics'
+import {
+  ApplicationArtifactParamsSchema,
+  ApplicationArtifactResponseSchema,
+  CreateApplicationArtifactRequestSchema,
+  CreateApplicationArtifactResponseSchema,
+  ListApplicationArtifactsResponseSchema,
+} from './application-artifacts'
 import { RegistryAuthorization } from './auth'
 import {
   AppendContentRevisionRequestSchema,
@@ -96,6 +103,8 @@ const endpointErrors = [
 const CreatedApplicationResponseSchema = ApplicationResponseSchema.pipe(
   HttpApiSchema.status('Created')
 )
+const CreatedApplicationArtifactResponseSchema =
+  CreateApplicationArtifactResponseSchema.pipe(HttpApiSchema.status('Created'))
 const CreatedNoteResponseSchema = AddApplicationNoteResponseSchema.pipe(
   HttpApiSchema.status('Created')
 )
@@ -234,6 +243,60 @@ export const ApplicationsApi = HttpApiGroup.make('applications')
   .add(applicationEndpoints[10])
   .add(applicationEndpoints[11])
   .add(applicationEndpoints[12])
+  .prefix(applicationRegistryApiPrefix)
+  .middleware(RegistryAuthorization)
+
+const applicationArtifactEndpoints = [
+  HttpApiEndpoint.get(
+    'listApplicationArtifacts',
+    '/applications/:id/artifacts',
+    {
+      error: endpointErrors,
+      params: ApplicationIdentifierParamsSchema,
+      success: ListApplicationArtifactsResponseSchema,
+    }
+  ),
+  HttpApiEndpoint.post(
+    'createApplicationArtifact',
+    '/applications/:id/artifacts',
+    {
+      error: endpointErrors,
+      headers: IdempotencyHeadersSchema,
+      params: ApplicationIdentifierParamsSchema,
+      payload: CreateApplicationArtifactRequestSchema,
+      success: CreatedApplicationArtifactResponseSchema,
+    }
+  ),
+  HttpApiEndpoint.get(
+    'getApplicationArtifact',
+    '/applications/:id/artifacts/:artifactId',
+    {
+      error: endpointErrors,
+      params: ApplicationArtifactParamsSchema,
+      success: ApplicationArtifactResponseSchema,
+    }
+  ),
+  HttpApiEndpoint.get(
+    'readApplicationArtifact',
+    '/applications/:id/artifacts/:artifactId/content',
+    {
+      error: endpointErrors,
+      params: ApplicationArtifactParamsSchema,
+      success: BinaryBodySchema,
+    }
+  ),
+] as const
+
+assertUniqueHttpApiEndpoints(
+  'applicationArtifacts',
+  applicationArtifactEndpoints
+)
+
+export const ApplicationArtifactsApi = HttpApiGroup.make('applicationArtifacts')
+  .add(applicationArtifactEndpoints[0])
+  .add(applicationArtifactEndpoints[1])
+  .add(applicationArtifactEndpoints[2])
+  .add(applicationArtifactEndpoints[3])
   .prefix(applicationRegistryApiPrefix)
   .middleware(RegistryAuthorization)
 
@@ -526,6 +589,7 @@ export const ApplicationRegistryApi = HttpApi.make('applicationRegistry').add(
   PublicApi,
   RegistryHealthApi,
   ApplicationsApi,
+  ApplicationArtifactsApi,
   ContentApi,
   PublicationsApi,
   AutomationApi,

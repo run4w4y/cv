@@ -214,4 +214,102 @@ test('uses raw blob bodies and content-addressed references for revisions', asyn
   )
 })
 
+test('uploads, catalogs, and downloads application artifacts over HTTP', async () => {
+  const createdResponse = await harness.fetchRegistry(
+    '/api/registry/applications',
+    jsonRequest(
+      {
+        ...applicationInput,
+        postingUrl: 'https://example.com/jobs/artifact-http',
+      },
+      'POST'
+    )
+  )
+  assert.equal(createdResponse.status, 201)
+  const application = (await createdResponse.json()) as {
+    readonly id: string
+  }
+
+  const bytes = new TextEncoder().encode('%PDF application artifact')
+  const sha256 = createHash('sha256').update(bytes).digest('hex')
+  const uploaded = await harness.fetchRegistry(
+    `/api/registry/blobs/${sha256}`,
+    {
+      body: bytes,
+      headers: { 'content-type': 'application/octet-stream' },
+      method: 'PUT',
+    }
+  )
+  assert.equal(uploaded.status, 200)
+
+  const request = jsonRequest(
+    {
+      blob: { mediaType: 'application/pdf', sha256 },
+      category: 'resume',
+      filename: 'resume.pdf',
+      locale: 'en',
+    },
+    'POST',
+    { 'idempotency-key': 'artifact-http-1' }
+  )
+  const createdArtifactResponse = await harness.fetchRegistry(
+    `/api/registry/applications/${application.id}/artifacts`,
+    request
+  )
+  assert.equal(createdArtifactResponse.status, 201)
+  const createdArtifact = (await createdArtifactResponse.json()) as {
+    readonly artifact: {
+      readonly id: string
+      readonly sha256: string
+      readonly source: string
+    }
+    readonly replayed: boolean
+  }
+  assert.equal(createdArtifact.replayed, false)
+  assert.equal(createdArtifact.artifact.sha256, sha256)
+  assert.equal(createdArtifact.artifact.source, 'uploaded')
+
+  const replayResponse = await harness.fetchRegistry(
+    `/api/registry/applications/${application.id}/artifacts`,
+    request
+  )
+  assert.equal(replayResponse.status, 201)
+  assert.deepEqual(await replayResponse.json(), {
+    ...createdArtifact,
+    replayed: true,
+  })
+
+  const listed = await harness.fetchRegistry(
+    `/api/registry/applications/${application.id}/artifacts`
+  )
+  assert.equal(listed.status, 200)
+  assert.deepEqual(
+    (
+      (await listed.json()) as {
+        readonly items: readonly { readonly id: string }[]
+      }
+    ).items.map(({ id }) => id),
+    [createdArtifact.artifact.id]
+  )
+
+  const metadata = await harness.fetchRegistry(
+    `/api/registry/applications/${application.id}/artifacts/${createdArtifact.artifact.id}`
+  )
+  assert.equal(metadata.status, 200)
+  assert.equal(
+    ((await metadata.json()) as { readonly id: string }).id,
+    createdArtifact.artifact.id
+  )
+
+  const downloaded = await harness.fetchRegistry(
+    `/api/registry/applications/${application.id}/artifacts/${createdArtifact.artifact.id}/content`
+  )
+  assert.equal(downloaded.status, 200)
+  assert.equal(
+    downloaded.headers.get('content-type'),
+    'application/octet-stream'
+  )
+  assert.deepEqual(new Uint8Array(await downloaded.arrayBuffer()), bytes)
+})
+
 registerApplicationRegistryE2eTests(() => harness)

@@ -9,6 +9,7 @@ export interface PostgresTestContainerOptions {
   readonly database?: string
   readonly image?: string
   readonly initScriptPath?: string
+  readonly initScriptPaths?: readonly string[]
   readonly password?: string
   readonly username?: string
 }
@@ -31,12 +32,16 @@ export const startPostgresTestContainer = async (
     .withDatabase(options.database ?? 'application')
     .withUsername(options.username ?? 'application')
     .withPassword(options.password ?? 'application-test')
-  if (options.initScriptPath !== undefined) {
+  const initScriptPaths = [
+    ...(options.initScriptPath === undefined ? [] : [options.initScriptPath]),
+    ...(options.initScriptPaths ?? []),
+  ]
+  if (initScriptPaths.length > 0) {
     definition = definition.withCopyFilesToContainer([
-      {
-        source: options.initScriptPath,
-        target: '/docker-entrypoint-initdb.d/001-schema.sql',
-      },
+      ...initScriptPaths.map((source, index) => ({
+        source,
+        target: `/docker-entrypoint-initdb.d/${String(index + 1).padStart(3, '0')}-schema.sql`,
+      })),
     ])
   }
   const container = await definition.start()

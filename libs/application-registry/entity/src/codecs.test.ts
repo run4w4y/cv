@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { Schema } from 'effect'
 import {
   ApplicationActivityInsertSchema,
+  ApplicationArtifactSchema,
   ApplicationCompensationInputSchema,
   ApplicationMutableSchema,
   ApplicationRowSelectSchema,
@@ -222,6 +223,34 @@ describe('application registry database schemas', () => {
       Schema.decodeUnknownSync(ContentRevisionSchema)({
         ...revision,
         byteLength: -1,
+      })
+    ).toThrow()
+  })
+
+  test('models application artifacts as immutable content descriptors', () => {
+    const sha256 = 'a'.repeat(64)
+    const artifact = Schema.decodeUnknownSync(ApplicationArtifactSchema)({
+      applicationId: 'application-1',
+      byteLength: 42,
+      category: 'resume',
+      contentRevisionId: null,
+      createdAt: '2026-07-24T00:00:00.000Z',
+      filename: 'resume.pdf',
+      generatedArtifactId: null,
+      id: 'artifact-1',
+      locale: 'en',
+      mediaType: 'application/pdf',
+      objectKey: `sha256/${sha256}`,
+      sha256,
+      source: 'uploaded',
+    })
+
+    expect(artifact.category).toBe('resume')
+    expect(artifact.source).toBe('uploaded')
+    expect(() =>
+      Schema.decodeUnknownSync(ApplicationArtifactSchema)({
+        ...artifact,
+        sha256: 'not-a-digest',
       })
     ).toThrow()
   })

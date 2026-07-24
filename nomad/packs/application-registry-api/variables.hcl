@@ -39,6 +39,20 @@ variable "postgres_max_connections" {
   default     = 6
 }
 
+variable "migration_resources" {
+  description = "One-shot database migration task resources"
+  type = object({
+    cpu        = number
+    memory     = number
+    memory_max = number
+  })
+  default = {
+    cpu        = 50
+    memory     = 64
+    memory_max = 128
+  }
+}
+
 variable "resources" {
   description = "API task resources"
   type = object({

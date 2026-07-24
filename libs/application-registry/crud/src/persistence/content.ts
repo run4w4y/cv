@@ -1,4 +1,6 @@
 import {
+  type ApplicationArtifact,
+  applicationArtifacts,
   contentEntries,
   contentRevisions,
   cvLinks,
@@ -675,47 +677,57 @@ export const persistPendingArtifact = (
   )
 
 export const markArtifactReady = (
-  database: RegistryExecutor,
-  artifact: PersistedGeneratedArtifact
+  database: RegistryDatabase,
+  artifact: PersistedGeneratedArtifact,
+  applicationArtifact: ApplicationArtifact
 ) =>
-  database
-    .update(generatedArtifacts)
-    .set({
-      status: 'ready',
-      objectKey: artifact.objectKey,
-      sha256: artifact.sha256,
-      byteLength: artifact.byteLength,
-      mediaType: artifact.mediaType,
-      rendererVersion: artifact.rendererVersion,
-      errorCode: null,
-      errorMessage: null,
-      generatedAt: artifact.generatedAt,
-      updatedAt: artifact.updatedAt,
-    })
-    .where(
-      and(
-        eq(generatedArtifacts.id, artifact.id),
-        eq(generatedArtifacts.status, 'pending'),
-        exists(
-          database
-            .select({ id: cvLinks.id })
-            .from(cvLinks)
-            .where(
-              and(
-                eq(cvLinks.id, artifact.cvLinkId),
-                eq(cvLinks.publicationVersion, artifact.publicationVersion),
-                eq(cvLinks.publicUrl, artifact.qrTarget),
-                eq(cvLinks.currentRevisionId, artifact.contentRevisionId)
-              )
+  runTransaction(database, 'generated artifact completion', (transaction) =>
+    Effect.gen(function* () {
+      const updated = yield* transaction
+        .update(generatedArtifacts)
+        .set({
+          status: 'ready',
+          objectKey: artifact.objectKey,
+          sha256: artifact.sha256,
+          byteLength: artifact.byteLength,
+          mediaType: artifact.mediaType,
+          rendererVersion: artifact.rendererVersion,
+          errorCode: null,
+          errorMessage: null,
+          generatedAt: artifact.generatedAt,
+          updatedAt: artifact.updatedAt,
+        })
+        .where(
+          and(
+            eq(generatedArtifacts.id, artifact.id),
+            eq(generatedArtifacts.status, 'pending'),
+            exists(
+              transaction
+                .select({ id: cvLinks.id })
+                .from(cvLinks)
+                .where(
+                  and(
+                    eq(cvLinks.id, artifact.cvLinkId),
+                    eq(cvLinks.publicationVersion, artifact.publicationVersion),
+                    eq(cvLinks.publicUrl, artifact.qrTarget),
+                    eq(cvLinks.currentRevisionId, artifact.contentRevisionId)
+                  )
+                )
             )
+          )
         )
-      )
-    )
-    .returning({ id: generatedArtifacts.id })
-    .pipe(
-      Effect.map((rows) => rows.length > 0),
-      Effect.mapError(databaseFailure('Failed to complete generated artifact'))
-    )
+        .returning({ id: generatedArtifacts.id })
+      if (updated.length === 0) return false
+
+      yield* transaction
+        .insert(applicationArtifacts)
+        .values(applicationArtifact)
+        .onConflictDoNothing({
+          target: applicationArtifacts.generatedArtifactId,
+        })
+      return true
+    })
+  )
 
 export const markArtifactFailed = (
   database: RegistryExecutor,

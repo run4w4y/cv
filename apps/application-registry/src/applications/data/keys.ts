@@ -9,6 +9,8 @@ export const applicationReactivity = {
     `registry:applications:${applicationId}:compensations`,
   activities: (applicationId: string) =>
     `registry:applications:${applicationId}:activities`,
+  artifacts: (applicationId: string) =>
+    `registry:applications:${applicationId}:artifacts`,
 } as const
 
 export const applicationMutationKeys = (applicationId: string) => [

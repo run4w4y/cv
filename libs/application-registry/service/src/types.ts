@@ -1,6 +1,8 @@
 import type { ArtifactMetadata } from '@cv/application-registry-artifact-store'
 import type {
   Application,
+  ApplicationArtifact,
+  ApplicationArtifactCategory,
   ApplicationCompensation,
   ApplicationCompensationInput,
   ApplicationLabel,
@@ -134,6 +136,25 @@ export type ApplicationAnnotations = {
 export type AddApplicationNoteResult = {
   readonly note: ApplicationNote
   readonly replayed: boolean
+}
+
+export type CreateApplicationArtifactInput = {
+  readonly category: ApplicationArtifactCategory
+  readonly filename: string
+  readonly locale?: string
+  readonly mediaType: string
+  readonly operationId: string
+  readonly sha256: string
+}
+
+export type CreateApplicationArtifactResult = {
+  readonly artifact: ApplicationArtifact
+  readonly replayed: boolean
+}
+
+export type ApplicationArtifactContent = {
+  readonly artifact: ApplicationArtifact
+  readonly bytes: Uint8Array
 }
 
 export type CreateApplicationInput = ApplicationWritable & {

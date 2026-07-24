@@ -227,6 +227,7 @@ export type ApplicationNoteKind = Schema.Schema.Type<
 export const IdempotencyScopeSchema = Schema.Literals([
   'application_update',
   'application_note',
+  'application_artifact',
   'listing_check',
 ])
 

@@ -3,6 +3,7 @@ import { after, afterEach, before, test } from 'node:test'
 import { Effect } from 'effect'
 
 import {
+  ApplicationArtifactsCrud,
   ApplicationsCrud,
   ArtifactsCrud,
   ContentCrud,
@@ -91,6 +92,7 @@ const runCrud = <A, E>(
     A,
     E,
     | ApplicationsCrud
+    | ApplicationArtifactsCrud
     | ArtifactsCrud
     | ContentCrud
     | CvAnalyticsCrud
@@ -396,6 +398,7 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
   const result = await runCrud(
     Effect.gen(function* () {
       const artifacts = yield* ArtifactsCrud
+      const applicationArtifacts = yield* ApplicationArtifactsCrud
       const content = yield* ContentCrud
       const links = yield* CvLinksCrud
       const snapshots = yield* JobPostingSnapshotsCrud
@@ -485,15 +488,31 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
         requestId: 'request-2',
       })
       yield* artifacts.persistPending(duplicate, 2)
-      const ready = yield* artifacts.markReady({
+      const readySha256 = 'a'.repeat(64)
+      const readyArtifact = {
         ...retryArtifact,
         byteLength: 8_192,
         generatedAt: '2026-07-17T16:00:00.000Z',
         mediaType: 'application/pdf',
-        objectKey: 'sha256/pdf-ready',
-        sha256: 'pdf-ready',
+        objectKey: `sha256/${readySha256}`,
+        sha256: readySha256,
         status: 'ready',
         updatedAt: '2026-07-17T16:00:00.000Z',
+      } as const
+      const ready = yield* artifacts.markReady(readyArtifact, {
+        applicationId: application.applicationId,
+        byteLength: readyArtifact.byteLength,
+        category: 'resume',
+        contentRevisionId: readyArtifact.contentRevisionId,
+        createdAt: readyArtifact.generatedAt,
+        filename: 'resume-en.pdf',
+        generatedArtifactId: readyArtifact.id,
+        id: readyArtifact.id,
+        locale: 'en',
+        mediaType: readyArtifact.mediaType,
+        objectKey: readyArtifact.objectKey,
+        sha256: readyArtifact.sha256,
+        source: 'generated',
       })
       const published = yield* links.findByEntry('content-entry-1')
       const disabled = yield* links.setEnabled(
@@ -557,6 +576,9 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
           'https://cv.example.test/cv/public-token-1'
         ),
         published,
+        registeredArtifacts: yield* applicationArtifacts.listByApplication(
+          application.applicationId
+        ),
         ready,
         initiallyEnabled,
         linkAfterStaleFailure,
@@ -569,6 +591,8 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
   )
 
   assert.equal(result.ready, true)
+  assert.equal(result.registeredArtifacts.length, 1)
+  assert.equal(result.registeredArtifacts[0]?.id, 'pdf-artifact-2')
   assert.equal(result.initiallyEnabled, true)
   assert.equal(result.failed, true)
   assert.equal(result.disabled, true)
@@ -593,7 +617,7 @@ test('moves a PDF artifact from pending to ready without losing its QR target', 
   assert.equal(result.retryByRequest?.id, 'pdf-artifact-2')
   assert.equal(result.found?.status, 'ready')
   assert.equal(result.found?.mediaType, 'application/pdf')
-  assert.equal(result.found?.objectKey, 'sha256/pdf-ready')
+  assert.equal(result.found?.objectKey, `sha256/${'a'.repeat(64)}`)
   assert.equal(
     result.found?.qrTarget,
     'https://cv.example.test/cv/public-token-1'

@@ -17,12 +17,14 @@ import { RegistryPostgresHarness } from '../../crud/test/postgres-harness.ts'
 import {
   ActivitiesService,
   AnnotationsService,
+  ApplicationArtifactsService,
   ApplicationsService,
   ContentEntriesService,
   type CreateApplicationInput,
   CvAnalyticsTrafficSource,
   CvPublicationConfiguration,
   CvPublicationsService,
+  OpaqueObjectsService,
   PdfArtifactsService,
   ScheduledListingChecksRunner,
 } from '../src'
@@ -287,6 +289,87 @@ test('persists notes idempotently and issues their activity on the backend', asy
   )
 })
 
+test('attaches multiple uploaded artifacts independently of content workflows', async () => {
+  const resumeBytes = new TextEncoder().encode('%PDF uploaded resume')
+  const coverLetterBytes = new TextEncoder().encode(
+    'Uploaded cover letter text'
+  )
+  const result = await runtime.runPromise(
+    Effect.gen(function* () {
+      const applications = yield* ApplicationsService
+      const artifacts = yield* ApplicationArtifactsService
+      const objects = yield* OpaqueObjectsService
+      const application = yield* applications.create(
+        applicationInput('artifacts')
+      )
+      const otherApplication = yield* applications.create(
+        applicationInput('other-artifacts')
+      )
+      const resumeBlob = yield* objects.put(resumeBytes)
+      const coverLetterBlob = yield* objects.put(coverLetterBytes)
+      const resumeRequest = {
+        category: 'resume' as const,
+        filename: 'resume.pdf',
+        locale: 'en',
+        mediaType: 'application/pdf',
+        operationId: 'artifact-resume-1',
+        sha256: resumeBlob.sha256,
+      }
+      const first = yield* artifacts.create(application.id, resumeRequest)
+      const replay = yield* artifacts.create(application.id, resumeRequest)
+      const second = yield* artifacts.create(application.id, {
+        category: 'cover_letter',
+        filename: 'cover-letter.txt',
+        mediaType: 'text/plain',
+        operationId: 'artifact-cover-letter-1',
+        sha256: coverLetterBlob.sha256,
+      })
+      const listed = yield* artifacts.list(application.id)
+      const found = yield* artifacts.find(application.id, first.artifact.id)
+      const downloaded = yield* artifacts.read(
+        application.id,
+        first.artifact.id
+      )
+      const crossApplicationRead = yield* Effect.result(
+        artifacts.read(otherApplication.id, first.artifact.id)
+      )
+
+      return {
+        crossApplicationRead,
+        downloaded,
+        first,
+        found,
+        listed,
+        replay,
+        second,
+      }
+    })
+  )
+
+  assert.equal(result.first.replayed, false)
+  assert.equal(result.replay.replayed, true)
+  assert.equal(result.replay.artifact.id, result.first.artifact.id)
+  assert.equal(result.first.artifact.source, 'uploaded')
+  assert.equal(result.first.artifact.generatedArtifactId, null)
+  assert.equal(result.first.artifact.contentRevisionId, null)
+  assert.equal(result.found.id, result.first.artifact.id)
+  assert.deepEqual(result.downloaded.bytes, resumeBytes)
+  assert.equal(result.downloaded.artifact.id, result.first.artifact.id)
+  assert.equal(result.listed.length, 2)
+  assert.deepEqual(result.listed.map(({ filename }) => filename).toSorted(), [
+    'cover-letter.txt',
+    'resume.pdf',
+  ])
+  assert.notEqual(result.second.artifact.id, result.first.artifact.id)
+  assert.equal(Result.isFailure(result.crossApplicationRead), true)
+  if (Result.isFailure(result.crossApplicationRead)) {
+    assert.equal(
+      result.crossApplicationRead.failure._tag,
+      'RegistryNotFoundError'
+    )
+  }
+})
+
 test('keeps content payloads as exact opaque bytes across revision history', async () => {
   const bytes = new TextEncoder().encode(
     JSON.stringify({ sections: [{ type: 'summary', value: 'Exact bytes' }] })
@@ -353,6 +436,7 @@ test('restores a rejection-disabled publication only after its current PDF is re
     Effect.gen(function* () {
       const applications = yield* ApplicationsService
       const content = yield* ContentEntriesService
+      const artifacts = yield* ApplicationArtifactsService
       const publications = yield* CvPublicationsService
       const pdfs = yield* PdfArtifactsService
       const application = yield* applications.create(
@@ -443,7 +527,9 @@ test('restores a rejection-disabled publication only after its current PDF is re
         application.id,
         entry.id
       )
+      const applicationArtifacts = yield* artifacts.list(application.id)
       return {
+        applicationArtifacts,
         linkWhilePending,
         ready,
         reopened,
@@ -458,6 +544,24 @@ test('restores a rejection-disabled publication only after its current PDF is re
   assert.equal(result.restoredWhilePending, 0)
   assert.equal(result.linkWhilePending.enabled, false)
   assert.equal(result.ready.status, 'ready')
+  assert.deepEqual(
+    result.applicationArtifacts.map(
+      ({ category, generatedArtifactId, mediaType, source }) => ({
+        category,
+        generatedArtifactId,
+        mediaType,
+        source,
+      })
+    ),
+    [
+      {
+        category: 'resume',
+        generatedArtifactId: result.ready.id,
+        mediaType: 'application/pdf',
+        source: 'generated',
+      },
+    ]
+  )
   assert.equal(result.restoredWhenReady, 1)
   assert.equal(result.restoredLink.enabled, true)
 })

@@ -64,7 +64,10 @@ environment and project explicitly, and list only the required
 ## Deployment
 
 Pushes to `main` build and publish the application images to GHCR, then deploy
-them through their Nomad Packs. The generic Chromium service and Consul
+them through their Nomad Packs. The registry API allocation applies pending
+checked-in PostgreSQL migrations as a pre-start task, and the deployment
+workflow waits for the migration and API rollout to become healthy before
+deploying the management web app. The generic Chromium service and Consul
 intentions must already be applied from `~/infrastructure`; the JetStream stack
 under `terraform/live/prod/jetstream` must also exist.
 

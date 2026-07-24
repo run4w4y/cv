@@ -1,6 +1,7 @@
 import { Layer } from 'effect'
 import { ActivitiesServiceLive } from './activities'
 import { AnnotationsServiceLive } from './annotations'
+import { ApplicationArtifactsServiceLive } from './application-artifacts'
 import { ApplicationsServiceLive } from './applications'
 import { CompensationsServiceLive } from './compensations'
 import { ContentEntriesServiceLive } from './content'
@@ -29,6 +30,7 @@ const RegistryCoreServicesLive = Layer.mergeAll(
   CompensationsServiceLive,
   CvAnalyticsServiceLive,
   ActivitiesServiceLive,
+  ApplicationArtifactsServiceLive,
   ListingChecksServiceLive,
   RegistryContentServicesLive
 )
