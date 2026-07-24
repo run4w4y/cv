@@ -1,4 +1,5 @@
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
+import { access, readdir } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { fileURLToPath } from 'node:url'
 import {
@@ -23,18 +24,47 @@ import { PgClient } from '@effect/sql-pg'
 import { Effect, ManagedRuntime, Redacted } from 'effect'
 
 const workspaceRoot = fileURLToPath(new URL('../../../..', import.meta.url))
-const migrationPath = fileURLToPath(
-  new URL(
-    '../../../../libs/application-registry/entity/drizzle/20260721150524_registry_baseline/migration.sql',
-    import.meta.url
-  )
+const migrationsUrl = new URL(
+  '../../../../libs/application-registry/entity/drizzle/',
+  import.meta.url
 )
+
+const isMissingFile = (error: unknown) =>
+  typeof error === 'object' &&
+  error !== null &&
+  'code' in error &&
+  error.code === 'ENOENT'
+
+const findMigrationPaths = async () =>
+  (
+    await Promise.all(
+      (
+        await readdir(migrationsUrl, { withFileTypes: true })
+      )
+        .filter((entry) => entry.isDirectory())
+        .toSorted((left, right) => left.name.localeCompare(right.name))
+        .map(async (entry) => {
+          const path = fileURLToPath(
+            new URL(`${entry.name}/migration.sql`, migrationsUrl)
+          )
+          try {
+            await access(path)
+            return [path]
+          } catch (error) {
+            if (isMissingFile(error)) return []
+            throw error
+          }
+        })
+    )
+  ).flat()
+
 const apiEntryPath = fileURLToPath(
   new URL('../../dist/main.js', import.meta.url)
 )
 
 const tableNames = [
   'application_activities',
+  'application_artifacts',
   'application_compensations',
   'application_labels',
   'application_listing_check_schedules',
@@ -174,9 +204,10 @@ export class RegistryApiHarness {
   }
 
   static async make(): Promise<RegistryApiHarness> {
+    const migrationPaths = await findMigrationPaths()
     const postgres = await startPostgresTestContainer({
       database: 'application_registry',
-      initScriptPath: migrationPath,
+      initScriptPaths: migrationPaths,
       password: 'registry-test',
       username: 'registry',
     })

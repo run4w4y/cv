@@ -131,6 +131,10 @@ describe('application registry API contract', () => {
   test('publishes one unversioned registry surface', () => {
     const paths = Object.keys(applicationRegistryOpenApi.paths)
     expect(paths).toContain('/api/registry/applications')
+    expect(paths).toContain('/api/registry/applications/{id}/artifacts')
+    expect(paths).toContain(
+      '/api/registry/applications/{id}/artifacts/{artifactId}/content'
+    )
     expect(paths).toContain('/api/registry/activities')
     expect(paths).toContain('/api/registry/blobs/{sha256}')
     expect(paths).toContain('/api/registry/health')

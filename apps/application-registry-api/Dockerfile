@@ -11,7 +11,10 @@ RUN bunx nx run application-registry-api:build --skip-nx-cache
 FROM oven/bun:1.3.13-alpine
 
 WORKDIR /app
+RUN apk add --no-cache postgresql-client
 COPY --from=build /workspace/apps/application-registry-api/dist/main.js ./application-registry-api.js
+COPY --from=build /workspace/libs/application-registry/entity/drizzle ./migrations
+COPY --chmod=755 apps/application-registry-api/scripts/run-migrations.sh ./run-migrations.sh
 
 ENV SERVER_HOST=0.0.0.0
 ENV SERVER_PORT=3000

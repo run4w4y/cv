@@ -12,10 +12,12 @@ import * as React from 'react'
 import { Link, useParams } from 'react-router'
 import { asyncResultErrorMessage } from '@/lib/async-result'
 import { HeaderActions } from '../../../shell/header-actions'
+import { ApplicationArtifactsCard } from '../../components/application-artifacts'
 import { ApplicationEditDialog } from '../../components/application-editor'
 import { ApplicationActivitiesTable } from '../../components/application-events-table'
 import {
   applicationActivitiesAtom,
+  applicationArtifactsAtom,
   applicationAtom,
   applicationCompensationsAtom,
 } from '../../data'
@@ -38,6 +40,7 @@ export const ApplicationDetailsPage = () => {
   const activitiesResult = useAtomValue(
     applicationActivitiesAtom(applicationId)
   )
+  const artifactsResult = useAtomValue(applicationArtifactsAtom(applicationId))
   const application = AsyncResult.getOrElse(applicationResult, () => undefined)
   const compensations = AsyncResult.getOrElse(
     compensationResult,
@@ -47,6 +50,10 @@ export const ApplicationDetailsPage = () => {
     activitiesResult,
     () => undefined
   )?.items.slice(0, 8)
+  const artifacts = AsyncResult.getOrElse(
+    artifactsResult,
+    () => undefined
+  )?.items
   const error = asyncResultErrorMessage(
     applicationResult,
     'The application could not be loaded.'
@@ -58,6 +65,10 @@ export const ApplicationDetailsPage = () => {
   const activitiesError = asyncResultErrorMessage(
     activitiesResult,
     'The related activities could not be loaded.'
+  )
+  const artifactsError = asyncResultErrorMessage(
+    artifactsResult,
+    'The application artifacts could not be loaded.'
   )
 
   return (
@@ -101,6 +112,11 @@ export const ApplicationDetailsPage = () => {
           <>
             <ApplicationSummary application={application} />
             <ApplicationMetadata application={application} />
+            <ApplicationArtifactsCard
+              applicationId={application.id}
+              artifacts={artifacts}
+              error={artifactsError}
+            />
             <ApplicationCompensation
               currency={compensationCurrency}
               onCurrencyChange={setCompensationCurrency}

@@ -67,6 +67,14 @@ jobs:
             --var "cors_allowed_origins=${API_CORS_ALLOWED_ORIGINS}" \
             --var "traefik_subdomain=${API_SUBDOMAIN}"
 
+      - name: Wait for registry migration and API rollout
+        run: |
+          deployment_id="$(
+            nomad job deployments -latest -json cv-registry |
+              jq -er 'if type == "array" then .[0].ID else .ID end'
+          )"
+          nomad deployment status -monitor "$deployment_id"
+
   deploy-registry-web:
     name: Register registry management web
     needs: deploy-registry-api-server

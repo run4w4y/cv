@@ -1,4 +1,5 @@
 import {
+  type ApplicationArtifactsApi,
   ApplicationRegistryApi,
   type ApplicationsApi,
   type AutomationApi,
@@ -36,6 +37,7 @@ export class RegistryClient extends AtomHttpApi.Service<RegistryClient>()(
 ) {}
 
 type RegistryGroups = {
+  readonly applicationArtifacts: typeof ApplicationArtifactsApi
   readonly applications: typeof ApplicationsApi
   readonly automation: typeof AutomationApi
   readonly content: typeof ContentApi
@@ -134,9 +136,11 @@ const endpointGroups = {
   appendContentRevision: 'content',
   approveContentRevision: 'content',
   captureJobPostingSnapshot: 'content',
+  createApplicationArtifact: 'applicationArtifacts',
   createApplication: 'applications',
   ensureContentEntry: 'content',
   getApplication: 'applications',
+  getApplicationArtifact: 'applicationArtifacts',
   getBlob: 'content',
   getContentEntry: 'content',
   getCurrentPdfArtifact: 'publications',
@@ -148,6 +152,7 @@ const endpointGroups = {
   getListingCheckRun: 'automation',
   listActivities: 'applications',
   listApplicationActivities: 'applications',
+  listApplicationArtifacts: 'applicationArtifacts',
   listApplicationAnnotations: 'applications',
   listApplicationCompensations: 'applications',
   listApplicationFacets: 'applications',
@@ -159,6 +164,7 @@ const endpointGroups = {
   putBlob: 'content',
   readContentRevision: 'content',
   readContentRevisionPayload: 'content',
+  readApplicationArtifact: 'applicationArtifacts',
   readCurrentPdfArtifact: 'publications',
   resolveApplicationListingAvailability: 'applications',
   setCvLinkAvailability: 'publications',

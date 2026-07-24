@@ -20,8 +20,8 @@ import {
 } from './errors'
 import { ApplicationRegistryGateway } from './gateway'
 import {
-  ApplicationResultSchema,
   ApplicationAnnotationsResponseSchema,
+  ApplicationResultSchema,
   type CorrespondenceClassificationSchema,
   CreateApplicationParametersSchema,
   GetApplicationParametersSchema,

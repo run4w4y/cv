@@ -70,6 +70,55 @@ job [[ .my.job_name | quote ]] {
       }
     }
 
+    task "migrate" {
+      driver = "docker"
+
+      lifecycle {
+        hook    = "prestart"
+        sidecar = false
+      }
+
+      vault {}
+
+      config {
+        image   = [[ .my.docker_image | quote ]]
+        command = "/app/run-migrations.sh"
+      }
+
+      env {
+        POSTGRES_HOST = "127.0.0.1"
+        POSTGRES_PORT = "5432"
+      }
+
+      template {
+        data = <<EOH
+{{ with secret "secret/data/cv-registry/postgres-credentials" -}}
+POSTGRES_DATABASE={{ .Data.data.database }}
+POSTGRES_PASSWORD={{ .Data.data.password }}
+POSTGRES_USER={{ .Data.data.username }}
+{{- end }}
+EOH
+        destination = "secrets/migration-postgres.env"
+        env         = true
+        change_mode = "noop"
+      }
+
+      resources {
+        cpu        = [[ .my.migration_resources.cpu ]]
+        memory     = [[ .my.migration_resources.memory ]]
+        memory_max = [[ .my.migration_resources.memory_max ]]
+      }
+
+      restart {
+        attempts = 2
+        interval = "2m"
+        delay    = "5s"
+        mode     = "fail"
+      }
+
+      kill_timeout = "2m"
+    }
+
     task "api" {
       driver = "docker"
 

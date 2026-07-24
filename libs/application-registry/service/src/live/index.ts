@@ -1,5 +1,6 @@
 export * from './activities'
 export * from './annotations'
+export * from './application-artifacts'
 export * from './applications'
 export * from './compensations'
 export * from './content'

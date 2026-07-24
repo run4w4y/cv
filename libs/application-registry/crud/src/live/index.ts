@@ -6,6 +6,7 @@ import {
 } from '../internal/connection'
 import { makeActivitiesCrudLive } from './activities'
 import { makeAnnotationsCrudLive } from './annotations'
+import { makeApplicationArtifactsCrudLive } from './application-artifacts'
 import { makeApplicationsCrudLive } from './applications'
 import { makeCompensationsCrudLive } from './compensations'
 import { makeContentCrudLive } from './content'
@@ -17,6 +18,7 @@ import { makeIdempotencyCrudLive } from './operations'
 export const makeRegistryCrudLive = (database: RegistryDatabaseShape) =>
   Layer.mergeAll(
     makeAnnotationsCrudLive(database),
+    makeApplicationArtifactsCrudLive(database),
     makeActivitiesCrudLive(database),
     makeApplicationsCrudLive(database),
     makeCompensationsCrudLive(database),
@@ -40,5 +42,6 @@ export {
   type RegistryTransaction,
   registryPgCodecs,
 } from '../internal/connection'
+export { makeApplicationArtifactsCrudLive } from './application-artifacts'
 export { makeContentCrudLive } from './content'
 export { makeCvAnalyticsCrudLive } from './cv-analytics'

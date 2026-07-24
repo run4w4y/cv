@@ -6,6 +6,7 @@ import {
   CvLinksCrud,
 } from '@cv/application-registry-crud'
 import {
+  type ApplicationArtifact,
   type GeneratedArtifact,
   pdfGenerationFailedDisableReason,
 } from '@cv/application-registry-entity'
@@ -415,7 +416,7 @@ const make = Effect.gen(function* () {
         bytes: Uint8Array
       ) =>
         Effect.gen(function* () {
-          const { artifact, link } = yield* findArtifactForApplication(
+          const { artifact, entry, link } = yield* findArtifactForApplication(
             applicationIdentifier,
             artifactId
           )
@@ -468,7 +469,22 @@ const make = Effect.gen(function* () {
             status: 'ready',
             updatedAt: now,
           }
-          const updated = yield* artifacts.markReady(ready)
+          const applicationArtifact: ApplicationArtifact = {
+            applicationId: entry.applicationId,
+            byteLength: storedPayload.byteLength,
+            category: 'resume',
+            contentRevisionId: artifact.contentRevisionId,
+            createdAt: now,
+            filename: `resume-${entry.locale}.pdf`,
+            generatedArtifactId: artifact.id,
+            id: artifact.id,
+            locale: entry.locale,
+            mediaType: 'application/pdf',
+            objectKey: storedPayload.key,
+            sha256: storedPayload.sha256,
+            source: 'generated',
+          }
+          const updated = yield* artifacts.markReady(ready, applicationArtifact)
           if (!updated) {
             return yield* new RegistryConflictError({
               message:

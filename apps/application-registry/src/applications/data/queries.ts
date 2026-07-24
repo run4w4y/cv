@@ -11,6 +11,11 @@ import { uniqBy } from 'es-toolkit'
 import { RegistryClient, registryQuery } from '../../lib/registry-client'
 import { applicationReactivity } from './keys'
 
+export type ApplicationArtifactIdentity = {
+  readonly applicationId: string
+  readonly artifactId: string
+}
+
 export type ApplicationsListRequest = Omit<
   ListApplicationsQuery,
   'pagination'
@@ -133,6 +138,55 @@ export const applicationActivitiesAtom = Atom.family((applicationId: string) =>
     reactivityKeys: [applicationReactivity.activities(applicationId)],
     timeToLive: '2 minutes',
   })
+)
+
+export const applicationArtifactsAtom = Atom.family((applicationId: string) =>
+  registryQuery('listApplicationArtifacts', {
+    params: { id: applicationId },
+    reactivityKeys: [applicationReactivity.artifacts(applicationId)],
+    timeToLive: '2 minutes',
+  }).pipe(
+    Atom.swr({
+      staleTime: 0,
+      revalidateOnMount: true,
+      revalidateOnFocus: false,
+    })
+  )
+)
+
+export const applicationArtifactAtom = Atom.family(
+  (identity: ApplicationArtifactIdentity) =>
+    registryQuery('getApplicationArtifact', {
+      params: {
+        artifactId: identity.artifactId,
+        id: identity.applicationId,
+      },
+      reactivityKeys: [applicationReactivity.artifacts(identity.applicationId)],
+      timeToLive: '5 minutes',
+    })
+)
+
+export const applicationArtifactContentAtom = Atom.family(
+  (identity: ApplicationArtifactIdentity) =>
+    registryQuery('readApplicationArtifact', {
+      params: {
+        artifactId: identity.artifactId,
+        id: identity.applicationId,
+      },
+      timeToLive: '1 minute',
+    }).pipe(Atom.setIdleTTL('1 minute'))
+)
+
+export const readApplicationArtifactContent =
+  RegistryClient.runtime.fn<ApplicationArtifactIdentity>()((identity, get) =>
+    get.result(applicationArtifactContentAtom(identity), {
+      suspendOnWaiting: true,
+    })
+  )
+
+export const refreshApplicationArtifacts = RegistryClient.runtime.fn<string>()(
+  (applicationId) =>
+    Reactivity.invalidate([applicationReactivity.artifacts(applicationId)])
 )
 
 export const reloadLatestApplication = RegistryClient.runtime.fn<string>()(

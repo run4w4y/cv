@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import {
   type StartedPostgresTestContainer,
   startPostgresTestContainer,
@@ -12,13 +12,17 @@ import {
   type RegistryDatabaseShape,
 } from '../src/live'
 
-const migrationUrl = new URL(
-  '../../entity/drizzle/20260721150524_registry_baseline/migration.sql',
-  import.meta.url
-)
+const migrationsUrl = new URL('../../entity/drizzle/', import.meta.url)
+
+const isMissingFile = (error: unknown) =>
+  typeof error === 'object' &&
+  error !== null &&
+  'code' in error &&
+  error.code === 'ENOENT'
 
 const tableNames = [
   'application_activities',
+  'application_artifacts',
   'application_compensations',
   'application_labels',
   'application_listing_check_schedules',
@@ -76,11 +80,33 @@ export class RegistryPostgresHarness {
     const runtime = makePostgresRuntime(container)
 
     try {
-      const migration = await readFile(migrationUrl, 'utf8')
-      const statements = migration
-        .split('--> statement-breakpoint')
-        .map((statement) => statement.trim())
-        .filter(Boolean)
+      const migrationEntries = await readdir(migrationsUrl, {
+        withFileTypes: true,
+      })
+      const migrations = (
+        await Promise.all(
+          migrationEntries
+            .filter((entry) => entry.isDirectory())
+            .toSorted((left, right) => left.name.localeCompare(right.name))
+            .map(async (entry) => {
+              try {
+                return await readFile(
+                  new URL(`${entry.name}/migration.sql`, migrationsUrl),
+                  'utf8'
+                )
+              } catch (error) {
+                if (isMissingFile(error)) return undefined
+                throw error
+              }
+            })
+        )
+      ).filter((migration) => migration !== undefined)
+      const statements = migrations.flatMap((migration) =>
+        migration
+          .split('--> statement-breakpoint')
+          .map((statement) => statement.trim())
+          .filter(Boolean)
+      )
       await runtime.runPromise(
         Effect.gen(function* () {
           const client = yield* PgClient.PgClient

@@ -157,7 +157,8 @@ export const makeContentCrudLive = (database: RegistryDatabase) =>
         ),
       markFailed: (id, errorCode, errorMessage, updatedAt) =>
         markArtifactFailed(database, id, errorCode, errorMessage, updatedAt),
-      markReady: (artifact) => markArtifactReady(database, artifact),
+      markReady: (artifact, applicationArtifact) =>
+        markArtifactReady(database, artifact, applicationArtifact),
       persistPending: (artifact, expectedLinkVersion) =>
         persistPendingArtifact(database, artifact, expectedLinkVersion),
     })

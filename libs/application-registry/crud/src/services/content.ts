@@ -1,4 +1,5 @@
 import type {
+  ApplicationArtifact,
   ContentEntry,
   ContentRevision,
   CvLink,
@@ -137,7 +138,8 @@ export interface ArtifactsCrud {
     updatedAt: string
   ) => Effect.Effect<boolean, RegistryDatabaseError>
   readonly markReady: (
-    artifact: PersistedGeneratedArtifact
+    artifact: PersistedGeneratedArtifact,
+    applicationArtifact: ApplicationArtifact
   ) => Effect.Effect<boolean, RegistryDatabaseError>
   readonly persistPending: (
     artifact: PersistedGeneratedArtifact,

@@ -9,6 +9,7 @@ import {
 import {
   ActivitiesService,
   AnnotationsService,
+  ApplicationArtifactsService,
   type ApplicationRegistryError,
   ApplicationsService,
   applicationRejectedDisableReason,
@@ -136,6 +137,39 @@ export const ApplicationsHandlersLayer = HttpApiBuilder.group(
               )
               return updated
             })
+          ),
+      })
+    })
+)
+
+export const ApplicationArtifactsHandlersLayer = HttpApiBuilder.group(
+  ApplicationRegistryApi,
+  'applicationArtifacts',
+  (handlers) =>
+    Effect.gen(function* () {
+      const artifacts = yield* ApplicationArtifactsService
+
+      return handlers.handleAll({
+        createApplicationArtifact: ({ headers, params, payload }) =>
+          expose(
+            artifacts.create(params.id, {
+              category: payload.category,
+              filename: payload.filename,
+              locale: payload.locale,
+              mediaType: payload.blob.mediaType,
+              operationId: headers['idempotency-key'],
+              sha256: payload.blob.sha256,
+            })
+          ),
+        getApplicationArtifact: ({ params }) =>
+          expose(artifacts.find(params.id, params.artifactId)),
+        listApplicationArtifacts: ({ params }) =>
+          expose(artifacts.list(params.id)).pipe(
+            Effect.map((items) => ({ items }))
+          ),
+        readApplicationArtifact: ({ params }) =>
+          expose(artifacts.read(params.id, params.artifactId)).pipe(
+            Effect.map(({ bytes }) => bytes)
           ),
       })
     })
@@ -334,6 +368,7 @@ export const AutomationHandlersLayer = HttpApiBuilder.group(
 )
 
 export const RegistryHandlersLayers = [
+  ApplicationArtifactsHandlersLayer,
   ApplicationsHandlersLayer,
   AutomationHandlersLayer,
   ContentHandlersLayer,

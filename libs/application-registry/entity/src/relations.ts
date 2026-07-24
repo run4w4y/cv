@@ -2,7 +2,7 @@ import { defineRelations } from 'drizzle-orm'
 import { applicationActivities } from './tables/activities'
 import { applicationLabels, applicationNotes } from './tables/annotations'
 import { applications } from './tables/applications'
-import { generatedArtifacts } from './tables/artifacts'
+import { applicationArtifacts, generatedArtifacts } from './tables/artifacts'
 import { applicationCompensations } from './tables/compensations'
 import { contentEntries, contentRevisions } from './tables/content'
 import { cvLinks } from './tables/cv-links'
@@ -10,6 +10,7 @@ import { jobPostingSnapshots } from './tables/job-posting-snapshots'
 
 const relationalTables = {
   applicationCompensations,
+  applicationArtifacts,
   applicationActivities,
   applicationLabels,
   applicationNotes,
@@ -26,6 +27,10 @@ export const applicationRegistryRelations = defineRelations(
   relationalTables,
   (relation) => ({
     applications: {
+      artifacts: relation.many.applicationArtifacts({
+        from: relation.applications.id,
+        to: relation.applicationArtifacts.applicationId,
+      }),
       compensations: relation.many.applicationCompensations({
         from: relation.applications.id,
         to: relation.applicationCompensations.applicationId,
@@ -114,6 +119,10 @@ export const applicationRegistryRelations = defineRelations(
         from: relation.contentRevisions.id,
         to: relation.generatedArtifacts.contentRevisionId,
       }),
+      applicationArtifacts: relation.many.applicationArtifacts({
+        from: relation.contentRevisions.id,
+        to: relation.applicationArtifacts.contentRevisionId,
+      }),
     },
     cvLinks: {
       application: relation.one.applications({
@@ -146,6 +155,28 @@ export const applicationRegistryRelations = defineRelations(
         from: relation.generatedArtifacts.contentRevisionId,
         to: relation.contentRevisions.id,
         optional: false,
+      }),
+      applicationArtifact: relation.one.applicationArtifacts({
+        from: relation.generatedArtifacts.id,
+        to: relation.applicationArtifacts.generatedArtifactId,
+        optional: true,
+      }),
+    },
+    applicationArtifacts: {
+      application: relation.one.applications({
+        from: relation.applicationArtifacts.applicationId,
+        to: relation.applications.id,
+        optional: false,
+      }),
+      contentRevision: relation.one.contentRevisions({
+        from: relation.applicationArtifacts.contentRevisionId,
+        to: relation.contentRevisions.id,
+        optional: true,
+      }),
+      generatedArtifact: relation.one.generatedArtifacts({
+        from: relation.applicationArtifacts.generatedArtifactId,
+        to: relation.generatedArtifacts.id,
+        optional: true,
       }),
     },
     jobPostingSnapshots: {

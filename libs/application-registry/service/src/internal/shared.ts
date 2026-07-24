@@ -127,7 +127,7 @@ export const requireReceiptResourceId = (receipt: IdempotencyReceipt) =>
     ? Effect.succeed(receipt.resourceId)
     : Effect.fail(
         new RegistryDatabaseError({
-          cause: new Error('Application note receipt has no note id.'),
+          cause: new Error('Idempotency receipt has no resource id.'),
           message: `Idempotency receipt is invalid: ${receipt.idempotencyKey}`,
         })
       )

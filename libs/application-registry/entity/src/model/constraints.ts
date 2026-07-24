@@ -6,6 +6,10 @@ export const NonEmptyTrimmedStringSchema = Schema.Trim.pipe(
   Schema.check(Schema.isNonEmpty())
 )
 
+export const Sha256HexSchema = Schema.String.pipe(
+  Schema.check(Schema.isPattern(/^[0-9a-f]{64}$/u))
+)
+
 const ParsedHttpUrlSchema = Schema.URLFromString.pipe(
   Schema.check(
     Schema.makeFilter((url) =>

@@ -40,6 +40,7 @@ describe('ApplicationDetailsPage', () => {
     globalThis.fetch = mock(async (input: string | URL | Request) => {
       const url = String(input)
       if (url.includes('/compensations')) return Response.json({ items: [] })
+      if (url.includes('/artifacts')) return Response.json({ items: [] })
       if (url.includes('/activities')) {
         activityRequests.push(url)
         return Response.json({
@@ -72,6 +73,7 @@ describe('ApplicationDetailsPage', () => {
     )
 
     expect(await view.findByText('Related activities')).toBeTruthy()
+    expect(await view.findByText('No artifacts yet')).toBeTruthy()
     expect(await view.findByText('Status changed')).toBeTruthy()
     expect(activityRequests[0]).toContain(
       '/api/registry/applications/application-1/activities'
