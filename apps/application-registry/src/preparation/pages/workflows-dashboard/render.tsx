@@ -7,12 +7,12 @@ import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 
 import { isDesktopHost } from '@/host/desktop'
 import { asyncResultErrorMessage } from '@/lib/async-result'
-import { preparationRunsAtom } from '@/preparation/workflow/atoms'
+import { preparationJobsAtom } from '@/preparation/workflow/atoms'
 import { WorkflowDashboardScreen } from '@/preparation/workflows/dashboard-screen'
 import { WorkflowDesktopUnavailable } from '@/preparation/workflows/desktop-unavailable'
 import type { WorkflowBatchListItem } from '@/preparation/workflows/presentation'
 
-const activeStatuses = new Set(['queued', 'running'])
+const activeStatuses = new Set(['queued', 'running', 'cancelling'])
 
 const toListItem = (batch: PreparationBatch): WorkflowBatchListItem => {
   const statuses = batch.jobs.map((job) => job.status)
@@ -32,32 +32,32 @@ const toListItem = (batch: PreparationBatch): WorkflowBatchListItem => {
     status: batch.status,
     total: batch.jobs.length,
     updatedAt: batch.updatedAt,
-    urlCount: batch.urlCount,
+    targetCount: batch.targetCount,
   }
 }
 
 export const WorkflowsDashboardPage = () => {
-  const runsResult = useAtomValue(preparationRunsAtom)
+  const jobsResult = useAtomValue(preparationJobsAtom)
 
   if (!isDesktopHost()) return <WorkflowDesktopUnavailable />
 
-  if (AsyncResult.isFailure(runsResult)) {
+  if (AsyncResult.isFailure(jobsResult)) {
     const error =
       asyncResultErrorMessage(
-        runsResult,
+        jobsResult,
         'The in-memory workflow runtime could not be created.'
       ) ?? 'The in-memory workflow runtime could not be created.'
     return <WorkflowDashboardScreen batches={[]} error={error} />
   }
 
-  const batches = AsyncResult.isSuccess(runsResult)
-    ? selectPreparationBatches(runsResult.value).map(toListItem)
+  const batches = AsyncResult.isSuccess(jobsResult)
+    ? selectPreparationBatches(jobsResult.value).map(toListItem)
     : []
 
   return (
     <WorkflowDashboardScreen
       batches={batches}
-      loading={!AsyncResult.isSuccess(runsResult)}
+      loading={!AsyncResult.isSuccess(jobsResult)}
     />
   )
 }

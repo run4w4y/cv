@@ -40,7 +40,7 @@ const repairConfiguration: RegistryConnectionConfiguration = {
 }
 
 export const HostBootstrap = ({ children }: React.PropsWithChildren) => {
-  const connection = React.useMemo<RegistryConnection>(registryConnection, [])
+  const [connection] = React.useState<RegistryConnection>(registryConnection)
   const [state, setState] = React.useState<BootstrapState>({
     kind: 'checking',
   })

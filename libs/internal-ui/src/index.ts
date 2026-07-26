@@ -131,6 +131,10 @@ export { Popover, PopoverContent, PopoverTrigger } from './popover'
 export { Progress, type ProgressProps } from './progress'
 export { RadioGroup, RadioGroupItem } from './radio-group'
 export {
+  ReorderableList,
+  type ReorderableListProps,
+} from './reorderable-list'
+export {
   ScrollArea,
   type ScrollAreaProps,
   ScrollBar,

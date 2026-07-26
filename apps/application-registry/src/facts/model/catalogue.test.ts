@@ -30,7 +30,6 @@ const catalogue = {
         {
           id: 'experience-example',
           company: 'Example Company',
-          companyVisibility: 'public',
           period: '2024–present',
           roles: ['Staff Engineer'],
           highlights: [fact('experience-highlight', 'Built a registry')],

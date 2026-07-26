@@ -1,4 +1,5 @@
 import {
+  type AiWorkflowTarget,
   canonicalPreparationUrl,
   HttpUrlSchema,
   maximumCoverLetterPromptLength,
@@ -6,22 +7,50 @@ import {
 } from '@cv/application-preparation-workflow/domain'
 import { Result, Schema, SchemaIssue } from 'effect'
 import * as Atom from 'effect/unstable/reactivity/Atom'
+import {
+  coverLetterPromptAtom,
+  initialCoverLetterPrompt,
+} from '@/preparation/forms/atoms'
 
 export type BatchPreparationForm = {
   readonly includeCoverLetter: boolean
   readonly locale: string
+  readonly postingUrls: string
   readonly prompt: string
-  readonly urls: string
 }
 
 export const initialBatchPreparationForm: BatchPreparationForm = {
   includeCoverLetter: true,
   locale: '',
-  prompt: 'Write a concise, specific, professional cover letter.',
-  urls: '',
+  postingUrls: '',
+  prompt: initialCoverLetterPrompt,
 }
 
-export const batchPreparationFormAtom = Atom.make(initialBatchPreparationForm)
+const batchPreparationFieldsAtom = Atom.make({
+  includeCoverLetter: initialBatchPreparationForm.includeCoverLetter,
+  locale: initialBatchPreparationForm.locale,
+  postingUrls: initialBatchPreparationForm.postingUrls,
+})
+
+export const batchPreparationFormAtom = Atom.writable<
+  BatchPreparationForm,
+  BatchPreparationForm
+>(
+  (get): BatchPreparationForm => ({
+    ...get(batchPreparationFieldsAtom),
+    prompt: get(coverLetterPromptAtom),
+  }),
+  (context, form) => {
+    context.set(batchPreparationFieldsAtom, {
+      includeCoverLetter: form.includeCoverLetter,
+      locale: form.locale,
+      postingUrls: form.postingUrls,
+    })
+    if (form.prompt !== context.get(coverLetterPromptAtom)) {
+      context.set(coverLetterPromptAtom, form.prompt)
+    }
+  }
+)
 
 /** Atomically prevents duplicate batch launches before React can rerender. */
 export const batchPreparationCommandGateAtom = Atom.make(false).pipe(
@@ -32,7 +61,7 @@ export const batchPreparationStepAtom = Atom.make<1 | 2 | 3>(1).pipe(
   Atom.withLabel('preparation/batch/step')
 )
 
-export type BatchPreparationUrlRow = {
+export type BatchPreparationPostingUrlRow = {
   readonly canonicalUrl: string | null
   readonly duplicateOf: number | null
   readonly line: number
@@ -57,12 +86,12 @@ const validateUrl = (
   }
 }
 
-export const batchPreparationUrlRowsAtom = Atom.make((get) => {
-  const { urls } = get(batchPreparationFormAtom)
+export const batchPreparationPostingUrlRowsAtom = Atom.make((get) => {
+  const { postingUrls } = get(batchPreparationFormAtom)
   const firstLineByUrl = new Map<string, number>()
-  const rows: Array<BatchPreparationUrlRow> = []
+  const rows: Array<BatchPreparationPostingUrlRow> = []
 
-  for (const [index, rawLine] of urls.split(/\r?\n/u).entries()) {
+  for (const [index, rawLine] of postingUrls.split(/\r?\n/u).entries()) {
     const value = rawLine.trim()
     if (value.length === 0) continue
 
@@ -96,32 +125,34 @@ export const batchPreparationUrlRowsAtom = Atom.make((get) => {
   return rows
 })
 
-export const parsedBatchUrlsAtom = Atom.make((get) => {
-  const rows = get(batchPreparationUrlRowsAtom)
-  return rows.flatMap((row) =>
-    row.canonicalUrl !== null && row.duplicateOf === null
-      ? [row.canonicalUrl]
-      : []
+export const parsedBatchPostingTargetsAtom = Atom.make((get) => {
+  const rows = get(batchPreparationPostingUrlRowsAtom)
+  return rows.flatMap(
+    (row): ReadonlyArray<AiWorkflowTarget> =>
+      row.canonicalUrl !== null && row.duplicateOf === null
+        ? [{ _tag: 'PostingUrl', url: row.canonicalUrl }]
+        : []
   )
 })
 
 export const batchPreparationValidationAtom = Atom.make((get) => {
   const form = get(batchPreparationFormAtom)
-  const rows = get(batchPreparationUrlRowsAtom)
-  const urls = get(parsedBatchUrlsAtom)
-  const tooLarge = urls.length > maximumPreparationBatchSize
+  const rows = get(batchPreparationPostingUrlRowsAtom)
+  const targets = get(parsedBatchPostingTargetsAtom)
+  const tooLarge = targets.length > maximumPreparationBatchSize
   const invalidUrls = rows.filter((row) => row.canonicalUrl === null)
   const promptMissing =
     form.includeCoverLetter && form.prompt.trim().length === 0
   const promptTooLong =
     form.includeCoverLetter &&
     form.prompt.length > maximumCoverLetterPromptLength
-  const urlsValid = urls.length > 0 && invalidUrls.length === 0 && !tooLarge
+  const targetsValid =
+    targets.length > 0 && invalidUrls.length === 0 && !tooLarge
   const settingsValid =
     form.locale.length > 0 && !promptMissing && !promptTooLong
 
   return {
-    canStart: urlsValid && settingsValid,
+    canStart: targetsValid && settingsValid,
     invalidUrls,
     promptCharactersRemaining:
       maximumCoverLetterPromptLength - form.prompt.length,
@@ -129,8 +160,8 @@ export const batchPreparationValidationAtom = Atom.make((get) => {
     promptTooLong,
     rows,
     settingsValid,
+    targets,
+    targetsValid,
     tooLarge,
-    urls,
-    urlsValid,
   } as const
 })

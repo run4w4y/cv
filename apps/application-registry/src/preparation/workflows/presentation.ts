@@ -1,7 +1,9 @@
 import type {
+  ArtifactPreparationStage,
   DocumentKind,
+  PreparationArtifactStatus,
   PreparationJobStatus,
-  PreparationRunStatus,
+  PreparationNodeStatus,
   PreparationStage,
 } from '@cv/application-preparation-workflow/domain'
 
@@ -18,7 +20,7 @@ export type WorkflowBatchListItem = {
   readonly status: string
   readonly total: number
   readonly updatedAt: number
-  readonly urlCount: number
+  readonly targetCount: number
 }
 
 export type WorkflowJobListItem = {
@@ -32,7 +34,6 @@ export type WorkflowJobListItem = {
   readonly locale: string
   readonly message: string
   readonly position: number
-  readonly primaryRunId: string
   readonly role: string | null
   readonly status: PreparationJobStatus
   readonly updatedAt: number
@@ -43,9 +44,8 @@ export type WorkflowArtifactListItem = {
   readonly error: string | null
   readonly kind: DocumentKind
   readonly message: string
-  readonly runId: string
-  readonly stage: PreparationStage
-  readonly status: PreparationRunStatus
+  readonly stage: ArtifactPreparationStage | null
+  readonly status: PreparationArtifactStatus
 }
 
 export type WorkflowStepListItem = {
@@ -53,13 +53,7 @@ export type WorkflowStepListItem = {
   readonly description: string
   readonly stage: PreparationStage
   readonly startedAt: number | null
-  readonly status:
-    | 'pending'
-    | 'running'
-    | 'waiting'
-    | 'completed'
-    | 'failed'
-    | 'cancelled'
+  readonly status: PreparationNodeStatus
   readonly title: string
 }
 
@@ -92,6 +86,7 @@ export const workflowStatusLabel = (status: string): string => {
     active: 'Running',
     approved: 'Approved',
     awaiting_review: 'Needs review',
+    blocked: 'Blocked',
     cancelled: 'Cancelled',
     cancelling: 'Cancelling',
     complete: 'Complete',
@@ -99,23 +94,24 @@ export const workflowStatusLabel = (status: string): string => {
     failed: 'Failed',
     mixed: 'Needs attention',
     needs_review: 'Needs review',
+    pending: 'Pending',
     queued: 'Queued',
-    rejected: 'Rejected',
-    review_submitted: 'Finishing review',
+    review_submitted: 'Finishing approval',
     running: 'Running',
   }
   return labels[status] ?? status.replaceAll('_', ' ')
 }
 
-export const workflowStageLabel = (stage: PreparationStage): string => {
+export const workflowStageLabel = (stage: PreparationStage | null): string => {
+  if (stage === null) return 'Waiting'
   const labels: Readonly<Record<PreparationStage, string>> = {
     analysis: 'Analyze role',
     application: 'Create application',
-    briefs: 'Plan document',
     capture: 'Capture job posting',
     complete: 'Complete',
     composition: 'Compose candidate',
     evidence: 'Select evidence',
+    planning: 'Plan composition',
     queued: 'Queued',
     review: 'Human review',
     saving: 'Save candidate',
@@ -127,11 +123,12 @@ export const workflowStageLabel = (stage: PreparationStage): string => {
 export const workflowStatusTone = (
   status: string
 ): 'outline' | 'secondary' | 'success' | 'warning' | 'danger' => {
-  if (status === 'failed' || status === 'rejected' || status === 'mixed') {
+  if (status === 'failed' || status === 'mixed') {
     return 'danger'
   }
   if (status === 'awaiting_review' || status === 'needs_review')
     return 'warning'
+  if (status === 'blocked') return 'warning'
   if (
     status === 'approved' ||
     status === 'complete' ||

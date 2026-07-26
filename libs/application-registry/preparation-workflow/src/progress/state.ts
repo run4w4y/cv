@@ -1,99 +1,115 @@
 import type {
-  PreparationRunState,
+  ArtifactPreparationStage,
+  DocumentKind,
+  PreparationArtifactState,
+  PreparationHistoryEntry,
+  PreparationJobInput,
+  PreparationJobState,
+  PreparationJobStatus,
+  PreparationNodeStatus,
   PreparationStage,
-  PreparationStepHistoryEntry,
-  PreparationWorkflowInput,
+  SharedPreparationStage,
 } from '../domain'
-import { preparationSourceApplicationId, preparationSourceUrl } from '../domain'
-import type { PreparationRunStates } from './model'
+import type { PreparationJobStates } from './model'
 
-export const openPreparationStatuses = new Set<PreparationRunState['status']>([
+export const openPreparationStatuses = new Set<PreparationJobStatus>([
   'queued',
   'running',
-  'awaiting_review',
-  'review_submitted',
+  'needs_review',
   'cancelling',
 ])
 
-export const samePreparationIdentity = (
-  left: PreparationWorkflowInput,
-  right: PreparationRunState
-): boolean => {
-  if (left.kind !== right.kind || left.locale !== right.locale) return false
-  const applicationId = preparationSourceApplicationId(left.source)
-  if (applicationId !== null && right.applicationId !== null) {
-    return applicationId === right.applicationId
-  }
-  return preparationSourceUrl(left.source) === right.url
-}
-
 export const sameRequestedPreparationIdentity = (
-  left: PreparationWorkflowInput,
-  right: PreparationWorkflowInput
+  left: PreparationJobInput,
+  right: PreparationJobInput
 ): boolean => {
-  if (left.kind !== right.kind || left.locale !== right.locale) return false
-  const leftApplicationId = preparationSourceApplicationId(left.source)
-  const rightApplicationId = preparationSourceApplicationId(right.source)
-  if (leftApplicationId !== null && rightApplicationId !== null) {
-    return leftApplicationId === rightApplicationId
+  if (left.locale !== right.locale) return false
+  if (
+    left.target._tag === 'ExistingApplication' &&
+    right.target._tag === 'ExistingApplication'
+  ) {
+    return left.target.applicationId === right.target.applicationId
   }
-  return (
-    preparationSourceUrl(left.source) === preparationSourceUrl(right.source)
-  )
+  return left.target.url === right.target.url
 }
 
-export const updatePreparationRun = (
-  runs: PreparationRunStates,
-  runId: string,
-  update: (run: PreparationRunState) => PreparationRunState
-): PreparationRunStates => {
-  const run = runs.get(runId)
-  if (run === undefined) return runs
-  const next = new Map(runs)
-  next.set(runId, update(run))
-  return next
+export const samePreparationIdentity = (
+  input: PreparationJobInput,
+  job: PreparationJobState
+): boolean => {
+  if (input.locale !== job.locale) return false
+  if (
+    input.target._tag === 'ExistingApplication' &&
+    job.applicationId !== null
+  ) {
+    return input.target.applicationId === job.applicationId
+  }
+  return input.target.url === job.url
 }
 
 export const updatePreparationJob = (
-  runs: PreparationRunStates,
+  jobs: PreparationJobStates,
   jobId: string,
-  update: (run: PreparationRunState) => PreparationRunState
-): PreparationRunStates => {
-  let next: Map<string, PreparationRunState> | null = null
-  for (const [runId, run] of runs) {
-    if (run.jobId !== jobId) continue
-    const updated = update(run)
-    if (updated === run) continue
-    next ??= new Map(runs)
-    next.set(runId, updated)
-  }
-  return next ?? runs
+  update: (job: PreparationJobState) => PreparationJobState
+): PreparationJobStates => {
+  const job = jobs.get(jobId)
+  if (job === undefined) return jobs
+  const updated = update(job)
+  if (updated === job) return jobs
+  const next = new Map(jobs)
+  next.set(jobId, updated)
+  return next
 }
 
-const lastStepEntry = (
-  history: ReadonlyArray<PreparationStepHistoryEntry>
-): PreparationStepHistoryEntry | undefined => history.at(-1)
+export const artifactForKind = (
+  job: PreparationJobState,
+  kind: DocumentKind
+): PreparationArtifactState | null =>
+  kind === 'cv' ? job.artifacts.cv : job.artifacts.coverLetter
 
-const appendStepEntry = (
-  history: ReadonlyArray<PreparationStepHistoryEntry>,
-  entry: PreparationStepHistoryEntry
-): ReadonlyArray<PreparationStepHistoryEntry> => [...history, entry]
+export const updateJobArtifact = (
+  job: PreparationJobState,
+  kind: DocumentKind,
+  update: (artifact: PreparationArtifactState) => PreparationArtifactState
+): PreparationJobState => {
+  const artifact = artifactForKind(job, kind)
+  if (artifact === null) return job
+  const updated = update(artifact)
+  if (updated === artifact) return job
+  return {
+    ...job,
+    artifacts:
+      kind === 'cv'
+        ? { ...job.artifacts, cv: updated }
+        : { ...job.artifacts, coverLetter: updated },
+  }
+}
 
-const completeCurrentStep = (
-  history: ReadonlyArray<PreparationStepHistoryEntry>,
+const lastHistoryEntry = <Stage extends PreparationStage>(
+  history: ReadonlyArray<PreparationHistoryEntry<Stage>>
+): PreparationHistoryEntry<Stage> | undefined => history.at(-1)
+
+const appendHistoryEntry = <Stage extends PreparationStage>(
+  history: ReadonlyArray<PreparationHistoryEntry<Stage>>,
+  entry: PreparationHistoryEntry<Stage>
+): ReadonlyArray<PreparationHistoryEntry<Stage>> => [...history, entry]
+
+export const completeCurrentStep = <Stage extends PreparationStage>(
+  history: ReadonlyArray<PreparationHistoryEntry<Stage>>,
   occurredAt: number,
   message?: string
-): ReadonlyArray<PreparationStepHistoryEntry> => {
-  const current = lastStepEntry(history)
+): ReadonlyArray<PreparationHistoryEntry<Stage>> => {
+  const current = lastHistoryEntry(history)
   if (
     current === undefined ||
     current.status === 'completed' ||
     current.status === 'failed' ||
+    current.status === 'blocked' ||
     current.status === 'cancelled'
   ) {
     return history
   }
-  return appendStepEntry(history, {
+  return appendHistoryEntry(history, {
     ...current,
     ...(message === undefined ? {} : { message }),
     occurredAt,
@@ -101,10 +117,10 @@ const completeCurrentStep = (
   })
 }
 
-export const startPreparationHistory = (
+export const startSharedHistory = (
   message: string,
   occurredAt: number
-): ReadonlyArray<PreparationStepHistoryEntry> => [
+): ReadonlyArray<PreparationHistoryEntry<SharedPreparationStage>> => [
   {
     message,
     occurredAt,
@@ -113,19 +129,19 @@ export const startPreparationHistory = (
   },
 ]
 
-export const advancePreparationStep = (
-  history: ReadonlyArray<PreparationStepHistoryEntry>,
-  stage: PreparationStage,
+export const advancePreparationStep = <Stage extends PreparationStage>(
+  history: ReadonlyArray<PreparationHistoryEntry<Stage>>,
+  stage: Stage,
   message: string,
   occurredAt: number,
   status: 'running' | 'waiting' = 'running'
-): ReadonlyArray<PreparationStepHistoryEntry> => {
-  const current = lastStepEntry(history)
+): ReadonlyArray<PreparationHistoryEntry<Stage>> => {
+  const current = lastHistoryEntry(history)
   const completed =
     current === undefined || current.stage === stage
       ? history
       : completeCurrentStep(history, occurredAt)
-  return appendStepEntry(completed, {
+  return appendHistoryEntry(completed, {
     message,
     occurredAt,
     stage,
@@ -133,28 +149,116 @@ export const advancePreparationStep = (
   })
 }
 
-export const finishPreparationStep = (
-  history: ReadonlyArray<PreparationStepHistoryEntry>,
-  stage: PreparationStage,
+export const finishPreparationStep = <Stage extends PreparationStage>(
+  history: ReadonlyArray<PreparationHistoryEntry<Stage>>,
+  stage: Stage,
   message: string,
   occurredAt: number,
-  status: 'failed' | 'cancelled'
-): ReadonlyArray<PreparationStepHistoryEntry> =>
-  appendStepEntry(history, {
+  status: 'failed' | 'blocked' | 'cancelled'
+): ReadonlyArray<PreparationHistoryEntry<Stage>> =>
+  appendHistoryEntry(history, {
     message,
     occurredAt,
     stage,
     status,
   })
 
-export const completePreparationHistory = (
-  history: ReadonlyArray<PreparationStepHistoryEntry>,
+export const completeArtifactHistory = (
+  history: ReadonlyArray<PreparationHistoryEntry<ArtifactPreparationStage>>,
   message: string,
   occurredAt: number
-): ReadonlyArray<PreparationStepHistoryEntry> =>
-  appendStepEntry(completeCurrentStep(history, occurredAt, message), {
+): ReadonlyArray<PreparationHistoryEntry<ArtifactPreparationStage>> =>
+  appendHistoryEntry(completeCurrentStep(history, occurredAt, message), {
     message,
     occurredAt,
     stage: 'complete',
     status: 'completed',
   })
+
+const artifactStatuses = (
+  job: PreparationJobState
+): ReadonlyArray<PreparationArtifactState['status']> =>
+  [job.artifacts.cv, job.artifacts.coverLetter].flatMap((artifact) =>
+    artifact === null ? [] : [artifact.status]
+  )
+
+export const derivePreparationJobStatus = (
+  job: PreparationJobState
+): PreparationJobStatus => {
+  if (job.status === 'cancelling') return 'cancelling'
+  if (job.shared.status === 'failed') return 'failed'
+  if (job.shared.status === 'cancelled') return 'cancelled'
+
+  const statuses = artifactStatuses(job)
+  if (statuses.some((status) => status === 'awaiting_review')) {
+    return 'needs_review'
+  }
+  if (
+    statuses.some(
+      (status) =>
+        status === 'running' ||
+        status === 'review_submitted' ||
+        status === 'queued'
+    )
+  ) {
+    return job.shared.stage === 'queued' ? 'queued' : 'running'
+  }
+  const successes = statuses.filter((status) => status === 'approved').length
+  const failures = statuses.filter(
+    (status) =>
+      status === 'failed' || status === 'blocked' || status === 'cancelled'
+  ).length
+  if (failures === statuses.length) {
+    return statuses.every((status) => status === 'cancelled')
+      ? 'cancelled'
+      : 'failed'
+  }
+  if (successes > 0 && failures > 0) return 'mixed'
+  return 'completed'
+}
+
+export const withDerivedJobStatus = (
+  job: PreparationJobState
+): PreparationJobState => ({
+  ...job,
+  status: derivePreparationJobStatus(job),
+})
+
+export const cancelArtifact = (
+  artifact: PreparationArtifactState,
+  message: string,
+  updatedAt: number
+): PreparationArtifactState => {
+  if (
+    artifact.status === 'approved' ||
+    artifact.status === 'failed' ||
+    artifact.status === 'blocked' ||
+    artifact.status === 'cancelled'
+  ) {
+    return artifact
+  }
+  return {
+    ...artifact,
+    error: null,
+    history:
+      artifact.stage === null
+        ? artifact.history
+        : finishPreparationStep(
+            artifact.history,
+            artifact.stage,
+            message,
+            updatedAt,
+            'cancelled'
+          ),
+    message,
+    reviewToken: null,
+    status: 'cancelled',
+    updatedAt,
+  }
+}
+
+export const isTerminalNodeStatus = (status: PreparationNodeStatus): boolean =>
+  status === 'completed' ||
+  status === 'failed' ||
+  status === 'blocked' ||
+  status === 'cancelled'

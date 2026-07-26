@@ -4,9 +4,9 @@ import { Schema } from 'effect'
 
 import { CoverLetterDocumentSchema } from '../cover-letter/contract'
 import {
+  CvAuthoringPlanSchema,
   EvidencePlanSchema,
   JobAnalysisSchema,
-  SectionBriefSchema,
 } from '../domain'
 import { toGenerationContract } from './ai-schema'
 
@@ -66,7 +66,7 @@ const assertOpenAiStrictSchema = (
 const workflowSchemas = [
   ['job analysis', () => toGenerationContract(JobAnalysisSchema)],
   ['evidence plan', () => toGenerationContract(EvidencePlanSchema)],
-  ['section brief', () => toGenerationContract(SectionBriefSchema)],
+  ['CV authoring plan', () => toGenerationContract(CvAuthoringPlanSchema)],
   ['cover letter', () => toGenerationContract(CoverLetterDocumentSchema)],
   ['CV document', () => toGenerationContract(CvDocumentV1Schema)],
 ] as const

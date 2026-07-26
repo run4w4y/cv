@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type {
   Application,
   ContentEntry,
+  ContentRevision,
   JobPostingSnapshot,
 } from '@cv/application-registry-entity'
 import type { FactsCatalogueV1 } from '@cv/contracts/facts'
@@ -51,6 +52,57 @@ const coverLetterEntry: ContentEntry = {
   version: 1,
 }
 
+const cvEntry: ContentEntry = {
+  ...coverLetterEntry,
+  approvedRevisionId: 'cv-revision-1',
+  headRevisionId: 'cv-revision-1',
+  id: 'cv-entry-1',
+  kind: 'cv',
+  state: 'approved',
+}
+
+const cvRevision: ContentRevision = {
+  byteLength: 100,
+  contentEntryId: cvEntry.id,
+  contractId: 'cv.document.v1',
+  contractVersion: '1',
+  createdAt: application.createdAt,
+  factsReleaseId: 'facts-release-1',
+  id: 'cv-revision-1',
+  jobSnapshotId: 'snapshot-1',
+  mediaType: 'application/json',
+  objectKey: 'objects/cv-revision-1',
+  operationId: 'job-1:cv:candidate',
+  parentRevisionId: null,
+  revisionNumber: 1,
+  sha256: 'cv',
+  source: 'ai',
+}
+
+const cvDocument = {
+  $schema: 'cv.document.v1' as const,
+  additionalSections: [],
+  direction: 'ltr' as const,
+  education: [],
+  experience: [],
+  locale: 'en',
+  person: {
+    contacts: [
+      {
+        href: 'mailto:ada@example.test',
+        kind: 'email' as const,
+        label: 'Email',
+        value: 'ada@example.test',
+      },
+    ],
+    headline: 'Platform engineer',
+    name: 'Ada Example',
+    summary: 'Builds reliable platforms.',
+  },
+  projects: [],
+  skills: [],
+}
+
 const factsCatalogue: FactsCatalogueV1 = {
   $schema: 'cv.facts.v1',
   assets: [],
@@ -87,10 +139,9 @@ const jobSnapshot: JobPostingSnapshot = {
 }
 
 const input: PreparationWorkflowInput = {
-  coverLetterPrompt: 'Keep it concise.',
-  cvGenerationGuidance: null,
   kind: 'cover_letter',
   locale: 'en',
+  prompt: 'Keep it concise.',
   runId: 'cover-letter-run-1',
   source: {
     _tag: 'CaptureUrl',
@@ -99,7 +150,7 @@ const input: PreparationWorkflowInput = {
 }
 
 describe('preparation context gateway', () => {
-  test('does not poll the registry for a paired CV', async () => {
+  test('loads the exact approved CV revision for cover-letter alignment', async () => {
     let loadedSnapshotId: string | null | undefined
     let headLoads = 0
     const result = await Effect.runPromise(
@@ -114,7 +165,11 @@ describe('preparation context gateway', () => {
           makePreparationStoreTestLayer({
             loadPreparationHead: () => {
               headLoads += 1
-              return Effect.succeed(null)
+              return Effect.succeed({
+                entry: cvEntry,
+                revision: cvRevision,
+                value: cvDocument,
+              })
             },
             loadWorkflowBootstrap: (request) => {
               loadedSnapshotId = request.snapshotId
@@ -134,11 +189,11 @@ describe('preparation context gateway', () => {
       )
     )
 
-    expect(headLoads).toBe(0)
+    expect(headLoads).toBe(1)
     expect(loadedSnapshotId).toBeNull()
     expect(result.jobSnapshot.id).toBe('snapshot-1')
-    expect(result.referenceCvRevisionId).toBeNull()
-    expect(result.referenceCv).toBeNull()
+    expect(result.referenceCvRevisionId).toBe(cvRevision.id)
+    expect(result.referenceCv).toEqual(cvDocument)
   })
 
   test('rejects drift from a pinned reviewed facts release', async () => {

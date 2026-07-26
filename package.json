@@ -10,6 +10,24 @@
     "libs/application-registry/*",
     "tools/*"
   ],
+  "catalog": {
+    "@effect-state-tree/atom": "https://github.com/run4w4y/effect-state-tree/releases/download/snapshot-03e0af8a6c700f23a2ec7535dac23d2fd8662a01/effect-state-tree-atom-0.1.0.tgz",
+    "@effect-state-tree/core": "https://github.com/run4w4y/effect-state-tree/releases/download/snapshot-03e0af8a6c700f23a2ec7535dac23d2fd8662a01/effect-state-tree-core-0.1.0.tgz",
+    "@effect-state-tree/draft": "https://github.com/run4w4y/effect-state-tree/releases/download/snapshot-03e0af8a6c700f23a2ec7535dac23d2fd8662a01/effect-state-tree-draft-0.1.0.tgz",
+    "@effect-state-tree/history": "https://github.com/run4w4y/effect-state-tree/releases/download/snapshot-03e0af8a6c700f23a2ec7535dac23d2fd8662a01/effect-state-tree-history-0.1.0.tgz",
+    "@effect-state-tree/producer": "https://github.com/run4w4y/effect-state-tree/releases/download/snapshot-03e0af8a6c700f23a2ec7535dac23d2fd8662a01/effect-state-tree-producer-0.1.0.tgz",
+    "@effect-state-tree/runtime": "https://github.com/run4w4y/effect-state-tree/releases/download/snapshot-03e0af8a6c700f23a2ec7535dac23d2fd8662a01/effect-state-tree-runtime-0.1.0.tgz",
+    "@effect-state-tree/validation": "https://github.com/run4w4y/effect-state-tree/releases/download/snapshot-03e0af8a6c700f23a2ec7535dac23d2fd8662a01/effect-state-tree-validation-0.1.0.tgz"
+  },
+  "overrides": {
+    "@effect-state-tree/atom": "https://github.com/run4w4y/effect-state-tree/releases/download/snapshot-03e0af8a6c700f23a2ec7535dac23d2fd8662a01/effect-state-tree-atom-0.1.0.tgz",
+    "@effect-state-tree/core": "https://github.com/run4w4y/effect-state-tree/releases/download/snapshot-03e0af8a6c700f23a2ec7535dac23d2fd8662a01/effect-state-tree-core-0.1.0.tgz",
+    "@effect-state-tree/draft": "https://github.com/run4w4y/effect-state-tree/releases/download/snapshot-03e0af8a6c700f23a2ec7535dac23d2fd8662a01/effect-state-tree-draft-0.1.0.tgz",
+    "@effect-state-tree/history": "https://github.com/run4w4y/effect-state-tree/releases/download/snapshot-03e0af8a6c700f23a2ec7535dac23d2fd8662a01/effect-state-tree-history-0.1.0.tgz",
+    "@effect-state-tree/producer": "https://github.com/run4w4y/effect-state-tree/releases/download/snapshot-03e0af8a6c700f23a2ec7535dac23d2fd8662a01/effect-state-tree-producer-0.1.0.tgz",
+    "@effect-state-tree/runtime": "https://github.com/run4w4y/effect-state-tree/releases/download/snapshot-03e0af8a6c700f23a2ec7535dac23d2fd8662a01/effect-state-tree-runtime-0.1.0.tgz",
+    "@effect-state-tree/validation": "https://github.com/run4w4y/effect-state-tree/releases/download/snapshot-03e0af8a6c700f23a2ec7535dac23d2fd8662a01/effect-state-tree-validation-0.1.0.tgz"
+  },
   "scripts": {
     "format": "biome format --write .github apps fixtures libs tools biome.json nx.json package.json tsconfig.base.json tsconfig.json",
     "format:check": "biome format --error-on-warnings .github apps fixtures libs tools biome.json nx.json package.json tsconfig.base.json tsconfig.json",

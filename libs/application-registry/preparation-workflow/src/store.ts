@@ -45,6 +45,10 @@ export type ContentRevisionHistoryInput = {
   readonly entryId: string
 }
 
+export type LoadContentRevisionInput = ContentRevisionHistoryInput & {
+  readonly revisionId: string
+}
+
 export type ContentRevisionHistory = {
   readonly entry: ContentEntry
   readonly revisions: ReadonlyArray<ContentRevision>
@@ -98,6 +102,9 @@ export type PreparationStoreShape = {
   readonly loadContentRevisionHistory: (
     input: ContentRevisionHistoryInput
   ) => Effect.Effect<ContentRevisionHistory, PreparationStoreError>
+  readonly loadContentRevision: (
+    input: LoadContentRevisionInput
+  ) => Effect.Effect<PreparationContentHead, PreparationStoreError>
   readonly loadPreparationHead: (input: {
     readonly applicationId: string
     readonly kind: ContentEntry['kind']

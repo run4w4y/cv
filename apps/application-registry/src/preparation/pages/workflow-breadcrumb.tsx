@@ -4,7 +4,7 @@ import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
 
 import {
   preparationJobAtom,
-  preparationRunsAtom,
+  preparationJobsAtom,
 } from '@/preparation/workflow/atoms'
 import {
   shortWorkflowId,
@@ -18,9 +18,9 @@ const WorkflowBatchBreadcrumbLabel = ({
 }: {
   readonly batchId: string
 }) => {
-  const runsResult = useAtomValue(preparationRunsAtom)
-  const batch = AsyncResult.isSuccess(runsResult)
-    ? summarizePreparationBatch(batchId, [...runsResult.value.values()])
+  const jobsResult = useAtomValue(preparationJobsAtom)
+  const batch = AsyncResult.isSuccess(jobsResult)
+    ? summarizePreparationBatch(batchId, [...jobsResult.value.values()])
     : null
   const label =
     batch?.jobs.length === 1 && batch.jobs[0] !== undefined
@@ -64,7 +64,7 @@ export const workflowBatchBreadcrumbHandle: RegistryRouteHandle = {
   breadcrumbs: (match) => {
     const batchId = match.params.batchId ?? ''
     return [
-      { key: 'workflows', label: 'URL workflows', to: '/workflows' },
+      { key: 'workflows', label: 'AI workflows', to: '/ai-workflows' },
       {
         key: 'batch',
         label: <WorkflowBatchBreadcrumbLabel batchId={batchId} />,
@@ -84,11 +84,11 @@ export const workflowJobBreadcrumbHandle = (
     const batchId = match.params.batchId ?? ''
     const jobId = match.params.jobId ?? ''
     return [
-      { key: 'workflows', label: 'URL workflows', to: '/workflows' },
+      { key: 'workflows', label: 'AI workflows', to: '/ai-workflows' },
       {
         key: 'batch',
         label: `Batch ${shortWorkflowId(batchId)}`,
-        to: `/workflows/${encodeURIComponent(batchId)}`,
+        to: `/ai-workflows/${encodeURIComponent(batchId)}`,
       },
       {
         key: 'job',
@@ -101,7 +101,7 @@ export const workflowJobBreadcrumbHandle = (
         ...(page === null
           ? {}
           : {
-              to: `/workflows/${encodeURIComponent(batchId)}/jobs/${encodeURIComponent(jobId)}`,
+              to: `/ai-workflows/${encodeURIComponent(batchId)}/jobs/${encodeURIComponent(jobId)}`,
             }),
       },
       ...(page === null ? [] : [{ key: page.key, label: page.label }]),

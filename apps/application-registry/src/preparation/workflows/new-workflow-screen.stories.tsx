@@ -8,7 +8,7 @@ import type { BatchPreparationForm } from '@/preparation/batch/atoms'
 import { NewWorkflowScreen } from './new-workflow-screen'
 import {
   invalidWorkflowForm,
-  storyWorkflowUrlRows,
+  storyWorkflowPostingUrlRows,
   validWorkflowForm,
 } from './story-fixtures'
 
@@ -67,15 +67,15 @@ const NewWorkflowPreview = ({
   const [form, setForm] = React.useState(initialForm)
   const [starting, setStarting] = React.useState(initialStarting)
   const [step, setStep] = React.useState(initialStep)
-  const rows = storyWorkflowUrlRows(form.urls)
-  const uniqueUrls = rows.flatMap((row) =>
+  const rows = storyWorkflowPostingUrlRows(form.postingUrls)
+  const targetUrls = rows.flatMap((row) =>
     row.canonicalUrl !== null && row.duplicateOf === null
       ? [row.canonicalUrl]
       : []
   )
-  const tooLarge = uniqueUrls.length > 25
-  const urlsValid =
-    uniqueUrls.length > 0 &&
+  const tooLarge = targetUrls.length > 25
+  const targetsValid =
+    targetUrls.length > 0 &&
     !tooLarge &&
     rows.every((row) => row.canonicalUrl !== null)
   const localeError =
@@ -89,11 +89,12 @@ const NewWorkflowPreview = ({
     localeError === null &&
     (!form.includeCoverLetter || form.prompt.trim().length > 0) &&
     promptCharactersRemaining >= 0
-  const canStart = urlsValid && settingsValid && guidanceReady
+  const canStart = targetsValid && settingsValid && guidanceReady
 
   return (
     <NewWorkflowScreen
       canStart={canStart}
+      existingApplication={null}
       executionEnvironment={<StoryExecutionEnvironment />}
       form={form}
       guidancePanel={<StoryGuidancePanel ready={guidanceReady} />}
@@ -108,15 +109,16 @@ const NewWorkflowPreview = ({
       startError={startError}
       starting={starting}
       step={step}
+      targetContextReady
+      targetUrls={targetUrls}
+      targetsValid={targetsValid}
       tooLarge={tooLarge}
-      uniqueUrls={uniqueUrls}
-      urlsValid={urlsValid}
     />
   )
 }
 
 const meta = {
-  title: 'Application Registry/URL workflows/New workflow',
+  title: 'Application Registry/AI workflows/New workflow',
   component: NewWorkflowPreview,
   tags: ['autodocs'],
   parameters: {
@@ -172,7 +174,7 @@ export const StartFailed: Story = {
   args: {
     initialStep: 3,
     startError:
-      'The local workflow runtime rejected the batch before any jobs were created.',
+      'The local workflow runtime could not start the batch before any jobs were created.',
   },
 }
 

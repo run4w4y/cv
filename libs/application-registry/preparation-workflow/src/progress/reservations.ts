@@ -1,43 +1,62 @@
 import { uniq } from 'es-toolkit/array'
 
-import type { PreparationRunState } from '../domain'
-import { preparationSourceApplicationId, preparationSourceUrl } from '../domain'
-import type { PreparationRunReservation, PreparationRunStates } from './model'
+import type {
+  DocumentKind,
+  PreparationArtifactState,
+  PreparationJobState,
+} from '../domain'
+import { aiWorkflowTargetApplicationId, aiWorkflowTargetUrl } from '../domain'
+import type { PreparationJobReservation, PreparationJobStates } from './model'
 import {
   openPreparationStatuses,
   samePreparationIdentity,
   sameRequestedPreparationIdentity,
-  startPreparationHistory,
+  startSharedHistory,
 } from './state'
 
 export type PreparationReservationResult = {
   readonly conflict: string | null
-  readonly runs: PreparationRunStates
+  readonly jobs: PreparationJobStates
 }
 
-export const reservePreparationRuns = (
-  current: PreparationRunStates,
-  reservations: ReadonlyArray<PreparationRunReservation>,
+const queuedArtifact = (
+  kind: DocumentKind,
+  createdAt: number
+): PreparationArtifactState => ({
+  candidate: null,
+  error: null,
+  history: [],
+  kind,
+  message: 'Waiting for shared job analysis.',
+  reviewToken: null,
+  stage: null,
+  status: 'queued',
+  updatedAt: createdAt,
+})
+
+export const reservePreparationJobs = (
+  current: PreparationJobStates,
+  reservations: ReadonlyArray<PreparationJobReservation>,
   createdAt: number
 ): PreparationReservationResult => {
   for (const [index, reservation] of reservations.entries()) {
     const { input } = reservation
-    if (current.has(input.runId)) {
+    if (current.has(input.jobId)) {
       return {
-        conflict: `Preparation run ${input.runId} already exists.`,
-        runs: current,
+        conflict: `AI workflow job ${input.jobId} already exists.`,
+        jobs: current,
       }
     }
 
     const precedingReservations = reservations.slice(0, index)
     if (
       precedingReservations.some(
-        ({ input: requested }) => requested.runId === input.runId
+        ({ input: requested }) => requested.jobId === input.jobId
       )
     ) {
       return {
-        conflict: `Preparation run ${input.runId} is duplicated within this batch.`,
-        runs: current,
+        conflict: `AI workflow job ${input.jobId} is duplicated within this batch.`,
+        jobs: current,
       }
     }
 
@@ -47,69 +66,79 @@ export const reservePreparationRuns = (
     )
     if (requestedConflict !== undefined) {
       return {
-        conflict: `Preparation run ${requestedConflict.input.runId} is duplicated within this batch.`,
-        runs: current,
+        conflict: `The target for AI workflow job ${requestedConflict.input.jobId} is duplicated within this batch.`,
+        jobs: current,
       }
     }
 
     const existingConflict = [...current.values()].find(
-      (run) =>
-        openPreparationStatuses.has(run.status) &&
-        samePreparationIdentity(input, run)
+      (job) =>
+        openPreparationStatuses.has(job.status) &&
+        samePreparationIdentity(input, job)
     )
     if (existingConflict !== undefined) {
       return {
-        conflict: `Preparation run ${existingConflict.runId} is already open for this application, document kind, and locale.`,
-        runs: current,
+        conflict: `AI workflow job ${existingConflict.jobId} is already open for this target and locale.`,
+        jobs: current,
       }
     }
   }
 
-  const runs = new Map(current)
-  for (const { batchId, batchPosition, input, jobId } of reservations) {
-    const message = 'Waiting for a preparation slot.'
-    runs.set(input.runId, {
-      applicationId: preparationSourceApplicationId(input.source),
+  const jobs = new Map(current)
+  for (const { batchId, batchPosition, input, retryOfJobId } of reservations) {
+    const message = 'Waiting for an AI workflow slot.'
+    jobs.set(input.jobId, {
+      applicationId: aiWorkflowTargetApplicationId(input.target),
+      artifacts: {
+        coverLetter:
+          input.artifacts.coverLetter === null
+            ? null
+            : queuedArtifact('cover_letter', createdAt),
+        cv:
+          input.artifacts.cv === null ? null : queuedArtifact('cv', createdAt),
+      },
       batchId,
       batchPosition,
-      candidate: null,
       company: null,
       createdAt,
       error: null,
       executionId: null,
-      jobId: jobId ?? input.runId,
-      kind: input.kind,
+      input,
+      jobId: input.jobId,
       locale: input.locale,
       message,
-      reviewToken: null,
+      retryOfJobId,
       role: null,
-      runId: input.runId,
-      stage: 'queued',
+      shared: {
+        history: startSharedHistory(message, createdAt),
+        stage: 'queued',
+        status: 'running',
+      },
       status: 'queued',
-      stepHistory: startPreparationHistory(message, createdAt),
+      target: input.target,
       updatedAt: createdAt,
-      url: preparationSourceUrl(input.source),
+      url: aiWorkflowTargetUrl(input.target),
     })
   }
-  return { conflict: null, runs }
+  return { conflict: null, jobs }
 }
 
 export const releasePreparationReservations = (
-  current: PreparationRunStates,
-  runIds: ReadonlyArray<string>
-): PreparationRunStates => {
-  let runs: Map<string, PreparationRunState> | null = null
-  for (const runId of uniq(runIds)) {
-    const run = current.get(runId)
+  current: PreparationJobStates,
+  jobIds: ReadonlyArray<string>
+): PreparationJobStates => {
+  let jobs: Map<string, PreparationJobState> | null = null
+  for (const jobId of uniq(jobIds)) {
+    const job = current.get(jobId)
     if (
-      run === undefined ||
-      run.status !== 'queued' ||
-      run.executionId !== null
+      job === undefined ||
+      job.status !== 'queued' ||
+      job.executionId !== null
     ) {
       continue
     }
-    runs ??= new Map(current)
-    runs.delete(runId)
+    jobs ??= new Map(current)
+    jobs.delete(jobId)
   }
-  return runs ?? current
+  return jobs ?? current
 }

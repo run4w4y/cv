@@ -1,49 +1,54 @@
 # Preparation architecture
 
-Preparation has six state owners. Do not copy state from one owner into
+Preparation has seven state owners. Do not copy state from one owner into
 another.
 
-| Owner                                  | Owns                                                                                         | Does not own                            |
-| -------------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------- |
-| `data/`                                | Registry queries, remote mutations, cache invalidation                                       | Drafts, Workflow progress               |
-| `@cv/application-preparation-workflow` | CV/letter generation execution, private review/execution handles, cancellation, run progress | React form state, publication           |
-| `workflow/`                            | Browser layers, memory-engine composition, and Effect Atom adapters for the package          | Workflow invariants or generation logic |
-| `publication/`                         | Public-page enablement, PDF-readiness gating, publication run progress                       | Document generation or editing          |
-| `editor/` + `workspace/`               | Human document override, detached-candidate decision, pure joined read model                 | Registry heads or Workflow runs         |
-| `guidance/`                            | Release-keyed local overrides of content-owned CV writing guidance                           | CV document structure or facts releases |
+| Owner                                  | Owns                                                                                       | Does not own                            |
+| -------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------- |
+| `data/`                                | Registry queries, remote mutations, cache invalidation                                     | Drafts, workflow progress               |
+| `@cv/application-preparation-workflow` | Job-first execution, shared context work, artifact branches, review handles, cancellation  | React form state, publication           |
+| `workflow/`                            | Browser layers, memory-engine composition, and Effect Atom adapters for the package        | Workflow invariants or generation logic |
+| `publication/`                         | Public-page enablement, PDF-readiness gating, and publication progress                     | Document generation or editing          |
+| `document-state/`                      | Original/draft lifecycle, validation, history, preview fallback, and assistant patch state | Registry queries or workflow execution  |
+| `document-workspace/`                  | Semantic CV/letter editing, preview, changes, and right-rail interaction                   | Persistence or orchestration            |
+| `guidance/`                            | Release-keyed local overrides of content-owned CV writing guidance                         | CV document structure or facts releases |
 
-React routes subscribe to `preparationWorkspaceAtom` and issue commands through
-identity-keyed `Atom.fn` values. Each key owns its execution and result channel;
-an atomic command gate rejects duplicate clicks before React rerenders. Routes
-must not synchronize registry heads or Workflow
-candidates with `useEffect`, `useRef` loaded keys, or mirrored `useState`.
-Command results and the synchronous claim gate are keyed by application, kind,
-and locale so failures and busy state cannot leak between route identities or
-let a second click replace an in-flight command.
-Component-local state is reserved for actual DOM/widget lifecycles. Codex
+React routes subscribe to job and artifact projections and issue commands
+through Effect Atom mutation values. Document state is scoped to the selected
+artifact and is never mirrored into route query parameters. Codex
 authentication and model configuration belong to the native Codex installation
 and are not mirrored into React state.
 
+## effect-state-tree development snapshot
+
+The repository consumes commit-pinned effect-state-tree package archives from a
+GitHub development snapshot. The root catalog holds the direct dependencies,
+and root overrides keep their internal package graph on the same snapshot.
+
+No adjacent effect-state-tree checkout is required. To upgrade, replace every
+effect-state-tree catalog and override URL with assets from one complete
+`snapshot-<full commit SHA>` release, then run `bun install` from the repository
+root and commit the updated lockfile.
+
 ## Workflow routes
 
-The URL workflow UI follows the same hierarchy as the runtime:
+The AI workflow UI follows the same hierarchy as the runtime:
 
-- `/workflows` is the session dashboard and groups jobs by `batchId`.
-- `/workflows/new` is a three-step URL, document-settings, and preflight flow.
+- `/ai-workflows` is the session dashboard and groups jobs by `batchId`.
+- `/ai-workflows/new` is a three-step target, document-settings, and preflight
+  flow. Pasted URLs become `PostingUrl` targets. Starting from an existing
+  application resolves an `ExistingApplication` target with its application,
+  job snapshot, facts release, and posting URL pins.
   Its locale selector reads the active release metadata before requesting any
   locale-specific catalogue. A release without a declared default leaves the
   selector empty; the UI never guesses one.
-- `/workflows/:batchId` is the parallel job monitor. It renders compact rows,
-  aggregate progress, filtering, and batch cancellation instead of one card per
-  URL.
-- `/workflows/:batchId/jobs/:jobId` renders one URL job. Its CV and optional
-  cover letter have separate append-only timelines, candidates, errors, and
-  review actions.
-- `/workflows/:batchId/jobs/:jobId/artifacts/:kind/review` opens the existing
-  document workspace in focused review mode for one artifact. Supporting job
-  and generation context stays available without competing with the decision.
-- `/applications/:applicationId/publish` owns CV publication readiness, PDF,
-  and public availability after review.
+- `/ai-workflows/:batchId` is the parallel job monitor. It renders compact
+  rows, aggregate progress, filtering, and batch cancellation.
+- `/ai-workflows/:batchId/jobs/:jobId` renders one job-first activity stream:
+  shared context work appears once and CV/cover-letter work branches from it.
+- `/ai-workflows/:batchId/jobs/:jobId/artifacts/:kind` opens the document
+  workspace for one artifact. It loads its application and revision binding
+  from the authoritative job projection rather than route parameters.
 
 Pure screen stories under `preparation/workflows/` cover empty, parallel,
 review, failure, and confirmation states without requiring the native desktop
@@ -51,25 +56,27 @@ bridge.
 
 ## Preparation run
 
-1. A route starts one URL job with either a strict `ReviewedContext` source or
-   a batch-only `CaptureUrl` source. A URL job always includes a CV and may also
-   request a cover letter. CV starts freeze the effective release guidance,
-   including local client overrides, into the typed Workflow input.
-2. Reviewed sources pin application, snapshot, facts release, and URL. The
-   gateway rejects drift; it does not silently substitute current context.
+1. A route creates one job per `PostingUrl` or `ExistingApplication` target.
+   Posting targets always request a CV and may also request a cover letter. CV
+   requests freeze the effective release guidance, including local client
+   overrides, into the typed workflow input.
+2. Existing-application targets pin application, snapshot, facts release, and
+   URL. The gateway rejects drift; it does not silently substitute current
+   context.
 3. The package Workflow captures and analyzes the job and plans evidence once.
    It then generates the CV first. A requested cover letter receives that exact
    in-memory CV document and revision, so it never polls the registry or races
    a separate workflow.
-4. Each artifact independently builds briefs, composes a schema-decoded tagged
-   document, checks its provenance invariants, persists a candidate, and
-   suspends on its own typed human-review deferred. A cover-letter failure does
-   not discard a reviewable CV. Approval verifies revision ancestry and pins
-   before mutating the registry.
-5. The progress service projects a flat `PreparationRun` per artifact and
-   groups siblings by `jobId` for job and batch screens. Execution IDs and
-   review tokens remain package-private. Artifact run IDs remain the operation
-   IDs used by human edits and Codex refinements.
+4. CV generation creates one identifier-only authoring plan before composing
+   the schema-decoded document. Cover letters compose directly from the
+   approved CV and selected reviewed evidence. Each artifact checks its
+   invariants, persists a candidate, and suspends on its own typed human-review
+   deferred. A cover-letter failure does not discard a reviewable CV. Approval
+   verifies revision ancestry and pins before mutating the registry.
+5. The progress service projects one `PreparationJob` with a shared track and
+   typed artifact branches. Execution IDs and review tokens remain
+   package-private. The UI derives a single dependency-aware activity stream
+   without duplicating shared work.
 
 ### Desktop lifetime
 
@@ -82,31 +89,48 @@ The jobs also continue while their page is not visible.
 The boundary is the renderer session, not the route. The engine uses
 `WorkflowEngine.layerMemory`, so refreshing/reloading the renderer, closing the
 window, or quitting the desktop app loses active executions and review tokens.
-An already persisted candidate remains in the registry. `editor/` detects that
-detached candidate from its operation ID and requires an explicit decision
-before direct approval. Moving execution across renderer restarts requires a
-durable engine and is intentionally outside the current lifetime guarantee.
+An already persisted candidate remains in the registry, but resuming an
+interrupted review requires a new job because the matching deferred review
+handle is intentionally session-owned. Moving execution across renderer
+restarts requires a durable engine and is outside the current lifetime
+guarantee.
 
 ## Editor workspace
 
-`preparationWorkspaceAtom` combines the current registry bootstrap, selected
-Workflow run, and keyed editor-local atom. The pure projection in
-`editor/session.ts` is the only place that chooses the visible base revision and
-computes validation, dirty/source state, save and approval gates, detached
-state, and approval mode. `editor/atoms.ts` owns only local mutations.
+The artifact route loads the current stored revision before mounting one
+`document-state/` session for the artifact lifecycle. Reopening an approved
+artifact loads the exact approved revision rather than reusing the original
+generated payload. The session composes Effect State Tree draft, history,
+validation, and Atom adapters; it owns dirty state, undo/redo, valid-preview
+fallback, and atomic path-based assistant patches.
 
-CV approval depends on the document schema and review decision. The PDF event
-worker owns exact A4 measurement because its Chromium process is the
-authoritative print environment. A layout or generation failure is recorded on
-the PDF artifact and disables only the still-current matching publication.
+Semantic CV and cover-letter editors render compact inline fields over that
+session. Save accepts an authoritative immutable revision while preserving
+edits made during the request. Approval stays bound to the selected stored
+revision. Route and window navigation are blocked while a draft is dirty, and
+terminal artifacts disable both manual and Codex edits.
+
+CV fields copied from reviewed facts remain visibly read-only. A reviewer can
+add experience, projects, skill groups, education, and additional details only
+through compact selectors backed by the pinned facts catalogue; authored
+headlines, summaries, highlights, and presentation text remain inline-editable.
+The same deterministic provenance policy validates manual mutations, atomic
+Codex patch batches, save callbacks, and the workflow approval boundary, which
+reloads the exact selected revision before approving it.
+
+Editable reviews require the currently active facts release and job snapshot
+to match the revision's immutable source pins. Once an artifact is terminal,
+the workspace reopens its exact stored revision read-only without consulting
+newer active sources, so an approved CV remains viewable and publishable after
+facts or job context advances.
 
 ## Publication run
 
 Saving a CV revision stages the single page record as private and rotates its
-preview capability. The management iframe renders that protected stored
-preview; unsaved browser state is never a second rendering protocol. After the
-publication is enabled, the PDF worker renders the literal public URL that it
-also embeds in the document's QR code.
+preview capability. The document workspace preview is a local rendering of the
+current valid draft; publication remains a separate action bound to the exact
+approved stored revision. After publication is enabled, the PDF worker renders
+the literal public URL that it also embeds in the document's QR code.
 
 The publication Workflow accepts an approved staged revision and enables the
 exact page URL required by Chromium. That state change is authoritative even if
@@ -137,7 +161,8 @@ artifact attempt remain authoritative and survive browser runtime loss.
 - Change browser Workflow wiring and command/selector atoms in
   `workflow/atoms/`. These adapters call `ApplicationPreparation`; they do not
   manipulate engine execution IDs or review tokens.
-- Change editor policy in `editor/session.ts` and local mutations in
-  `editor/atoms.ts`.
+- Change draft, validation, history, and assistant patch policy in
+  `document-state/`; change semantic document presentation in
+  `document-workspace/`.
 - Keep route `render.tsx` files declarative; put commands and cohesive UI cards
   in adjacent modules.

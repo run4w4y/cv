@@ -1,6 +1,11 @@
 import { fileURLToPath } from 'node:url'
 import type { NextConfig } from 'next'
 
+// The unpublished Effect State Tree workspace lives beside this repository
+// during development. Turbopack must be rooted at their common parent so it
+// can follow Bun's workspace links until those packages are published.
+const localWorkspaceRoot = fileURLToPath(new URL('../../..', import.meta.url))
+
 const securityHeaders = [
   { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
   {
@@ -17,7 +22,7 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   basePath: '/c',
   output: 'standalone',
-  outputFileTracingRoot: fileURLToPath(new URL('../..', import.meta.url)),
+  outputFileTracingRoot: localWorkspaceRoot,
   poweredByHeader: false,
   reactStrictMode: true,
   skipTrailingSlashRedirect: true,
@@ -25,7 +30,7 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: '/:token((?!_preview$|_internal$)[^/]+)',
+        source: '/:token((?!_preview$|_render$|_internal$)[^/]+)',
         headers: [
           ...securityHeaders,
           { key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' },
@@ -44,6 +49,13 @@ const nextConfig: NextConfig = {
               key !== 'X-Frame-Options' &&
               key !== 'Cross-Origin-Resource-Policy'
           ),
+          { key: 'Cache-Control', value: 'private, no-store' },
+        ],
+      },
+      {
+        source: '/_render/:path*',
+        headers: [
+          ...securityHeaders,
           { key: 'Cache-Control', value: 'private, no-store' },
         ],
       },

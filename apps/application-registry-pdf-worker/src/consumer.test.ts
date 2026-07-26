@@ -206,7 +206,7 @@ describe('PDF registry-event consumer', () => {
     )
 
     expect(renderedUrls).toEqual([
-      'https://cv.example.test/c/_preview/token-1?access=preview-1',
+      'https://cv.example.test/c/_render/token-1?access=preview-1',
     ])
     expect(probe.acknowledgements).toEqual(['ack'])
   })

@@ -3,21 +3,27 @@ import { RegistryProvider } from '@effect/atom-react'
 import type { Preview } from '@storybook/react-vite'
 import { NuqsAdapter } from 'nuqs/adapters/react-router/v7'
 import type { ReactNode } from 'react'
-import { MemoryRouter } from 'react-router'
+import { createMemoryRouter, RouterProvider } from 'react-router'
 
 import './preview.css'
 
-const ManagementCanvas = ({ children }: { readonly children: ReactNode }) => (
-  <MemoryRouter>
-    <RegistryProvider>
-      <NuqsAdapter>
-        <TooltipProvider delay={0}>
-          <div className="storybook-canvas">{children}</div>
-        </TooltipProvider>
-      </NuqsAdapter>
-    </RegistryProvider>
-  </MemoryRouter>
-)
+const ManagementCanvas = ({ children }: { readonly children: ReactNode }) => {
+  const router = createMemoryRouter([
+    {
+      path: '*',
+      element: (
+        <RegistryProvider>
+          <NuqsAdapter>
+            <TooltipProvider delay={0}>
+              <div className="storybook-canvas">{children}</div>
+            </TooltipProvider>
+          </NuqsAdapter>
+        </RegistryProvider>
+      ),
+    },
+  ])
+  return <RouterProvider router={router} />
+}
 
 const preview: Preview = {
   decorators: [

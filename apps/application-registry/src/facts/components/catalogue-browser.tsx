@@ -314,13 +314,6 @@ const ExperienceSection = ({
             <span>{entry.roles.join(' · ')}</span>
             <span>{entry.period}</span>
             <OptionalText label="Location" value={entry.location} />
-            <Badge
-              variant={
-                entry.companyVisibility === 'private' ? 'warning' : 'success'
-              }
-            >
-              {entry.companyVisibility}
-            </Badge>
           </>
         }
         id={entry.id}

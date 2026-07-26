@@ -25,7 +25,7 @@ const batch = (
   status: 'running',
   total: 5,
   updatedAt: 2_000,
-  urlCount: 5,
+  targetCount: 5,
   ...overrides,
 })
 
@@ -46,6 +46,8 @@ describe('workflow presentation', () => {
 
   test('uses workflow language instead of raw enum labels', () => {
     expect(workflowStatusLabel('needs_review')).toBe('Needs review')
+    expect(workflowStatusLabel('review_submitted')).toBe('Finishing approval')
+    expect(workflowStageLabel('planning')).toBe('Plan composition')
     expect(workflowStageLabel('composition')).toBe('Compose candidate')
   })
 

@@ -1,8 +1,14 @@
-import type { CvGenerationGuidanceV1 } from '@cv/contracts/document'
-import type { FactsCatalogueV1 } from '@cv/contracts/facts'
-import { factsForGeneration } from './evidence'
+import type {
+  CvDocumentV1,
+  CvGenerationGuidanceV1,
+} from '@cv/contracts/document'
+import type { EvidenceReference } from './evidence'
 import type { StructuredGenerationPrompt } from './service'
 
+export {
+  type CvAuthoringSource,
+  cvAuthoringSourceForGeneration,
+} from './cv-bindings'
 export {
   type EvidenceReference,
   type EvidenceReferenceKind,
@@ -15,9 +21,13 @@ export {
 } from './evidence'
 
 export type CvDraftGenerationInput = {
-  readonly factsCatalogue: FactsCatalogueV1
   readonly guidance: CvGenerationGuidanceV1
-  readonly jobContext: unknown
+  readonly job: {
+    readonly keywords: ReadonlyArray<string>
+    readonly location: string | null
+    readonly responsibilities: ReadonlyArray<string>
+    readonly role: string
+  }
   readonly locale: string
 }
 
@@ -31,17 +41,22 @@ export const buildCvDraftGenerationRequest = (
     `Requested locale: ${input.locale}`,
     'CV generation guidance:',
     formatted(input.guidance),
-    'Current job posting snapshot:',
-    formatted(input.jobContext),
-    'Complete trusted facts catalogue:',
-    formatted(factsForGeneration(input.factsCatalogue)),
+    'Target role terminology and responsibilities:',
+    formatted(input.job),
     'Return one document accepted by the supplied JSON Schema. Keep it concise enough for an ATS-readable CV of no more than two pages.',
   ].join('\n\n'),
 })
 
 export type CoverLetterGenerationInput = {
-  readonly factsCatalogue: FactsCatalogueV1
-  readonly jobContext: unknown
+  readonly approvedCv: CvDocumentV1
+  readonly evidence: ReadonlyArray<EvidenceReference>
+  readonly job: {
+    readonly company: string | null
+    readonly keywords: ReadonlyArray<string>
+    readonly location: string | null
+    readonly responsibilities: ReadonlyArray<string>
+    readonly role: string
+  }
   readonly locale: string
   readonly prompt: string
 }
@@ -55,10 +70,12 @@ export const buildCoverLetterGenerationRequest = (
     `Requested locale: ${input.locale}`,
     'User-authored cover-letter instructions:',
     input.prompt,
-    'Current job posting snapshot:',
-    formatted(input.jobContext),
-    'Complete trusted facts catalogue:',
-    formatted(factsForGeneration(input.factsCatalogue)),
+    'Target role terminology and responsibilities:',
+    formatted(input.job),
+    'Approved tailored CV for positioning and factual consistency:',
+    formatted(input.approvedCv),
+    'Selected reviewed evidence available for additional factual detail:',
+    formatted(input.evidence),
     'Return only a document accepted by the supplied JSON Schema.',
   ].join('\n\n'),
 })

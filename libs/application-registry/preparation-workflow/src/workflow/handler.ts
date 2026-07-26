@@ -15,14 +15,16 @@ import * as WorkflowEngine from 'effect/unstable/workflow/WorkflowEngine'
 
 import {
   ContentRevisionResultSchema,
-  candidateMatchesDocumentKind,
+  type CoverLetterPreparationInput,
+  CvAuthoringPlanResultSchema,
+  type CvPreparationInput,
   type EvidencePlan,
   EvidencePlanResultSchema,
   type GeneratedCandidate,
-  GeneratedCandidateSchema,
+  GeneratedCoverLetterCandidateSchema,
+  GeneratedCvCandidateSchema,
   type JobAnalysis,
   JobAnalysisResultSchema,
-  normalizePreparationJobInput,
   type PreparationArtifactWorkflowResult,
   type PreparationBootstrap,
   PreparationBootstrapSchema,
@@ -30,12 +32,10 @@ import {
   type PreparationWorkflowInput,
   type PreparationWorkflowPayload,
   PrepareApplicationWorkflow,
-  preparationJobArtifactInput,
-  preparationJobArtifactInputs,
-  preparationReviewDeferred,
-  preparationSourceApplicationId,
+  preparationApprovalDeferred,
+  preparationJobCoverLetterInput,
+  preparationJobCvInput,
   SavedCandidateSchema,
-  SectionBriefResultSchema,
 } from '../domain'
 import { PreparationGateway } from '../gateway'
 import { PreparationProgress } from '../progress'
@@ -92,13 +92,12 @@ const withActivityTimeout = <A, R>(
 
 const executePreparation = Effect.fn('PrepareApplication.run')(
   function* (payload: PreparationWorkflowPayload) {
-    const input = normalizePreparationJobInput(payload)
+    const input = payload
     const gateway = yield* PreparationGateway
     const progress = yield* PreparationProgress
     const concurrency = yield* PreparationConcurrency
-    const artifactInputs = preparationJobArtifactInputs(input)
-    const cvInput = preparationJobArtifactInput(input, 'cv')
-    const coverLetterInput = preparationJobArtifactInput(input, 'cover_letter')
+    const cvInput = preparationJobCvInput(input)
+    const coverLetterInput = preparationJobCoverLetterInput(input)
     const primaryInput = cvInput ?? coverLetterInput
     if (primaryInput === null) {
       return yield* Effect.die(
@@ -106,123 +105,152 @@ const executePreparation = Effect.fn('PrepareApplication.run')(
       )
     }
 
-    const stageArtifacts = (
-      stage: Parameters<typeof progress.stage>[1],
-      message: string,
-      applicationId?: string
-    ) =>
-      Effect.forEach(
-        artifactInputs,
-        ({ runId }) => progress.stage(runId, stage, message, applicationId),
-        { discard: true }
+    const savePreparedCandidate = Effect.fn(
+      'PrepareApplication.savePreparedCandidate'
+    )(function* (
+      artifactInput: PreparationWorkflowInput,
+      context: PreparationBootstrap,
+      candidate: GeneratedCandidate
+    ) {
+      const { kind } = artifactInput
+      yield* progress.stageArtifact(
+        input.jobId,
+        kind,
+        'validation',
+        'Validating the generated document and its requested format.'
       )
-
-    const prepareArtifact = Effect.fn('PrepareApplication.prepareArtifact')(
-      function* (
-        artifactInput: PreparationWorkflowInput,
-        context: PreparationBootstrap,
-        analysis: JobAnalysis,
-        evidence: EvidencePlan
-      ) {
-        const { kind, runId } = artifactInput
-        yield* progress.stage(
-          runId,
-          'briefs',
-          'Building section briefs with bounded parallel generation calls.'
-        )
-        const briefs = yield* Effect.forEach(
-          gateway.sectionIds(kind),
-          (sectionId) =>
-            Activity.make({
-              name: `${kind}/section-brief/${sectionId}`,
-              success: SectionBriefResultSchema,
-              error: PreparationWorkflowError,
-              interruptRetryPolicy: stopActivityInterruptRetries,
-              execute: withActivityTimeout(
-                'briefs',
-                '2 minutes',
-                gateway.brief(
-                  artifactInput,
-                  context,
-                  analysis,
-                  evidence,
-                  sectionId
-                )
-              ),
-            }),
-          { concurrency: 2 }
-        )
-
-        yield* progress.stage(
-          runId,
-          'composition',
-          'Composing one coherent final document from the plan.'
-        )
-        const composed = yield* Activity.make({
-          name: `${kind}/compose-document`,
-          success: GeneratedCandidateSchema,
-          error: PreparationWorkflowError,
-          interruptRetryPolicy: stopActivityInterruptRetries,
-          execute: withActivityTimeout(
-            'composition',
-            '3 minutes',
-            gateway.compose(
-              artifactInput,
-              context,
-              analysis,
-              evidence,
-              briefs.map(({ brief }) => brief)
-            )
-          ),
-        })
-        const candidate: GeneratedCandidate = {
-          ...composed,
-          metadata: [
-            ...briefs.map(({ metadata }) => metadata),
-            ...composed.metadata,
-          ],
-        }
-
-        yield* progress.stage(
-          runId,
-          'validation',
-          'Validating the generated document and its requested format.'
-        )
-        if (!candidateMatchesDocumentKind(candidate, kind)) {
-          return yield* Effect.fail(
-            new PreparationWorkflowError({
-              message: `Generated ${candidate._tag} candidate did not match requested document kind ${kind}.`,
-              stage: 'validation',
-            })
-          )
-        }
-
-        yield* progress.stage(
-          runId,
+      yield* progress.stageArtifact(
+        input.jobId,
+        kind,
+        'saving',
+        'Saving the AI candidate as an unapproved revision.'
+      )
+      return yield* Activity.make({
+        name: `${kind}/save-candidate`,
+        success: SavedCandidateSchema,
+        error: PreparationWorkflowError,
+        interruptRetryPolicy: stopActivityInterruptRetries,
+        execute: withActivityTimeout(
           'saving',
-          'Saving the AI candidate as an unapproved revision.'
-        )
-        return yield* Activity.make({
-          name: `${kind}/save-candidate`,
-          success: SavedCandidateSchema,
-          error: PreparationWorkflowError,
-          interruptRetryPolicy: stopActivityInterruptRetries,
-          execute: withActivityTimeout(
-            'saving',
-            '30 seconds',
-            gateway.saveCandidate(artifactInput, context, candidate)
-          ),
-        })
-      }
-    )
+          '30 seconds',
+          gateway.saveCandidate(artifactInput, context, candidate)
+        ),
+      })
+    })
 
-    // One permit represents one URL job. Shared analysis and evidence selection
-    // happen once; document-specific generation remains independently visible.
-    const generated = yield* concurrency.withJobSlot(
+    const prepareCv = Effect.fn('PrepareApplication.prepareCv')(function* (
+      artifactInput: CvPreparationInput,
+      context: PreparationBootstrap,
+      analysis: JobAnalysis,
+      evidence: EvidencePlan
+    ) {
+      yield* progress.stageArtifact(
+        input.jobId,
+        'cv',
+        'planning',
+        'Selecting and allocating reviewed evidence for the tailored CV.'
+      )
+      const plan = yield* Activity.make({
+        name: 'cv/authoring-plan',
+        success: CvAuthoringPlanResultSchema,
+        error: PreparationWorkflowError,
+        interruptRetryPolicy: stopActivityInterruptRetries,
+        execute: withActivityTimeout(
+          'planning',
+          '2 minutes',
+          gateway.planCv(artifactInput, context, analysis, evidence)
+        ),
+      })
+      yield* progress.stageArtifact(
+        input.jobId,
+        'cv',
+        'composition',
+        'Composing one coherent CV from the validated authoring plan.'
+      )
+      const composed = yield* Activity.make({
+        name: 'cv/compose-document',
+        success: GeneratedCvCandidateSchema,
+        error: PreparationWorkflowError,
+        interruptRetryPolicy: stopActivityInterruptRetries,
+        execute: withActivityTimeout(
+          'composition',
+          '3 minutes',
+          gateway.composeCv(artifactInput, context, analysis, plan.plan)
+        ),
+      })
+      return yield* savePreparedCandidate(artifactInput, context, {
+        ...composed,
+        metadata: [plan.metadata, ...composed.metadata],
+      })
+    })
+
+    const prepareCoverLetter = Effect.fn(
+      'PrepareApplication.prepareCoverLetter'
+    )(function* (
+      artifactInput: CoverLetterPreparationInput,
+      context: PreparationBootstrap,
+      analysis: JobAnalysis,
+      evidence: EvidencePlan
+    ) {
+      yield* progress.stageArtifact(
+        input.jobId,
+        'cover_letter',
+        'composition',
+        'Composing a cover letter from the approved CV and reviewed evidence.'
+      )
+      const composed = yield* Activity.make({
+        name: 'cover_letter/compose-document',
+        success: GeneratedCoverLetterCandidateSchema,
+        error: PreparationWorkflowError,
+        interruptRetryPolicy: stopActivityInterruptRetries,
+        execute: withActivityTimeout(
+          'composition',
+          '3 minutes',
+          gateway.composeCoverLetter(artifactInput, context, analysis, evidence)
+        ),
+      })
+      return yield* savePreparedCandidate(artifactInput, context, composed)
+    })
+
+    const reviewSavedArtifact = Effect.fn(
+      'PrepareApplication.reviewSavedArtifact'
+    )(function* (
+      artifactInput: PreparationWorkflowInput,
+      saved: typeof SavedCandidateSchema.Type
+    ) {
+      const approval = yield* DurableDeferred.await(
+        preparationApprovalDeferred(artifactInput.kind)
+      )
+      const approved = yield* Activity.make({
+        name: `${artifactInput.kind}/approve-bound-revision`,
+        success: ContentRevisionResultSchema,
+        error: PreparationWorkflowError,
+        interruptRetryPolicy: stopActivityInterruptRetries,
+        execute: withActivityTimeout(
+          'review',
+          '30 seconds',
+          gateway.approveBoundRevision(saved, approval.revisionId)
+        ),
+      })
+      yield* progress.approveArtifact(input.jobId, artifactInput.kind, {
+        message: 'Human review approved the prepared revision.',
+        result: approved,
+      })
+      return {
+        kind: artifactInput.kind,
+        revisionId: approved.revision.id,
+        status: 'approved' as const,
+      }
+    })
+
+    // A generation permit is held only while machine work is active. Human
+    // review releases it. Shared analysis is authoritative and emitted once.
+    const prepared = yield* concurrency.withJobSlot(
       Effect.gen(function* () {
-        yield* stageArtifacts(
+        yield* progress.stageShared(
+          input.jobId,
           'application',
-          preparationSourceApplicationId(input.source) === null
+          input.target._tag === 'PostingUrl'
             ? 'Creating an application record for this URL.'
             : 'Starting application preparation.'
         )
@@ -237,7 +265,8 @@ const executePreparation = Effect.fn('PrepareApplication.run')(
             gateway.ensureApplication(primaryInput)
           ),
         })
-        yield* stageArtifacts(
+        yield* progress.stageShared(
+          input.jobId,
           'capture',
           'Application ready. Capturing the canonical job posting.',
           initialApplication.id
@@ -253,7 +282,8 @@ const executePreparation = Effect.fn('PrepareApplication.run')(
             gateway.bootstrap(primaryInput, initialApplication)
           ),
         })
-        yield* stageArtifacts(
+        yield* progress.stageShared(
+          input.jobId,
           'analysis',
           'Captured the posting. Extracting the role, responsibilities, and requirements.',
           initialContext.application.id
@@ -269,7 +299,6 @@ const executePreparation = Effect.fn('PrepareApplication.run')(
             gateway.analyze(primaryInput, initialContext)
           ),
         })
-
         const application = yield* Activity.make({
           name: 'enrich-application',
           success: ApplicationSchema,
@@ -290,12 +319,9 @@ const executePreparation = Effect.fn('PrepareApplication.run')(
           company: analysis.analysis.company,
           role: analysis.analysis.role,
         })
-        const context = {
-          ...initialContext,
-          application,
-        }
-
-        yield* stageArtifacts(
+        const context = { ...initialContext, application }
+        yield* progress.stageShared(
+          input.jobId,
           'evidence',
           'Mapping requirements to reviewed evidence.',
           application.id
@@ -311,12 +337,11 @@ const executePreparation = Effect.fn('PrepareApplication.run')(
             gateway.planEvidence(primaryInput, context, analysis.analysis)
           ),
         })
-
         const sharedMetadata = [analysis.metadata, evidence.metadata]
         const cvSaved =
           cvInput === null
             ? null
-            : yield* prepareArtifact(
+            : yield* prepareCv(
                 cvInput,
                 context,
                 analysis.analysis,
@@ -331,218 +356,205 @@ const executePreparation = Effect.fn('PrepareApplication.run')(
                 })),
                 Effect.tapError((error) =>
                   Effect.gen(function* () {
-                    yield* progress.fail(cvInput.runId, error.message)
+                    yield* progress.failArtifact(
+                      input.jobId,
+                      'cv',
+                      error.message
+                    )
                     if (coverLetterInput !== null) {
-                      yield* progress.fail(
-                        coverLetterInput.runId,
+                      yield* progress.blockArtifact(
+                        input.jobId,
+                        'cover_letter',
                         'Cover-letter generation was blocked because the tailored CV failed.'
                       )
                     }
                   })
                 )
               )
-
         if (cvSaved !== null) {
           const reviewToken = yield* DurableDeferred.token(
-            preparationReviewDeferred('cv')
+            preparationApprovalDeferred('cv')
           )
           yield* progress.reviewReady(
-            cvInput?.runId ?? input.jobId,
-            cvSaved.application.id,
+            input.jobId,
+            'cv',
+            application.id,
             cvSaved,
             reviewToken
           )
         }
+        return {
+          analysis,
+          application,
+          context,
+          cvSaved,
+          evidence,
+          sharedMetadata,
+        }
+      })
+    )
 
-        const prepareCoverLetter =
-          coverLetterInput === null
-            ? null
-            : Effect.gen(function* () {
+    const cvResult =
+      cvInput === null || prepared.cvSaved === null
+        ? null
+        : yield* reviewSavedArtifact(cvInput, prepared.cvSaved).pipe(
+            Effect.catch((error) =>
+              progress.failArtifact(input.jobId, 'cv', error.message).pipe(
+                Effect.as({
+                  kind: 'cv' as const,
+                  revisionId: null,
+                  status: 'failed' as const,
+                })
+              )
+            )
+          )
+
+    const coverLetterBlocked =
+      coverLetterInput !== null &&
+      cvInput !== null &&
+      cvResult?.status !== 'approved'
+    if (coverLetterBlocked) {
+      yield* progress.blockArtifact(
+        input.jobId,
+        'cover_letter',
+        'Cover-letter generation requires an accepted CV revision.'
+      )
+    }
+
+    const coverLetterSaved =
+      coverLetterInput === null || coverLetterBlocked
+        ? null
+        : yield* concurrency
+            .withJobSlot(
+              Effect.gen(function* () {
                 const letterContext =
-                  cvSaved === null
-                    ? context
+                  cvInput === null
+                    ? prepared.context
                     : yield* Activity.make({
-                        name: 'cover_letter/load-context',
+                        name: 'cover_letter/load-approved-cv-context',
                         success: PreparationBootstrapSchema,
                         error: PreparationWorkflowError,
                         interruptRetryPolicy: stopActivityInterruptRetries,
                         execute: withActivityTimeout(
                           'capture',
                           '30 seconds',
-                          gateway
-                            .bootstrap(
-                              {
-                                ...coverLetterInput,
-                                source: {
-                                  _tag: 'ReviewedContext',
-                                  applicationId: application.id,
-                                  factsReleaseId: context.factsReleaseId,
-                                  jobSnapshotId: context.jobSnapshot.id,
-                                  url: input.source.url,
-                                },
+                          gateway.bootstrap(
+                            {
+                              ...coverLetterInput,
+                              source: {
+                                _tag: 'ReviewedContext',
+                                applicationId: prepared.application.id,
+                                factsReleaseId: prepared.context.factsReleaseId,
+                                jobSnapshotId: prepared.context.jobSnapshot.id,
+                                url: input.target.url,
                               },
-                              application
-                            )
-                            .pipe(
-                              Effect.map((loaded) => ({
-                                ...loaded,
-                                application,
-                                referenceCv:
-                                  cvSaved.candidate._tag === 'Cv'
-                                    ? cvSaved.candidate.document
-                                    : null,
-                                referenceCvRevisionId:
-                                  cvSaved.result.revision.id,
-                              }))
-                            )
+                            },
+                            prepared.application
+                          )
                         ),
                       })
-                const saved = yield* prepareArtifact(
+                if (
+                  letterContext.referenceCvRevisionId === null ||
+                  (cvResult?.status === 'approved' &&
+                    letterContext.referenceCvRevisionId !== cvResult.revisionId)
+                ) {
+                  return yield* Effect.fail(
+                    new PreparationWorkflowError({
+                      message:
+                        'The approved CV changed before cover-letter generation could bind it.',
+                      stage: 'capture',
+                    })
+                  )
+                }
+                const saved = yield* prepareCoverLetter(
                   coverLetterInput,
                   letterContext,
-                  analysis.analysis,
-                  evidence.plan
+                  prepared.analysis.analysis,
+                  prepared.evidence.plan
                 )
                 return {
                   ...saved,
                   candidate: {
                     ...saved.candidate,
-                    metadata: [...sharedMetadata, ...saved.candidate.metadata],
+                    metadata: [
+                      ...prepared.sharedMetadata,
+                      ...saved.candidate.metadata,
+                    ],
                   },
                 }
               })
-
-        const coverLetterResult =
-          prepareCoverLetter === null
-            ? null
-            : cvInput === null
-              ? yield* prepareCoverLetter
-              : yield* prepareCoverLetter.pipe(
-                  Effect.matchEffect({
-                    onFailure: (error) =>
-                      progress
-                        .fail(
-                          coverLetterInput?.runId ?? input.jobId,
-                          error.message
-                        )
-                        .pipe(Effect.as(null)),
-                    onSuccess: Effect.succeed,
-                  })
-                )
-
-        if (coverLetterResult !== null) {
-          const reviewToken = yield* DurableDeferred.token(
-            preparationReviewDeferred('cover_letter')
-          )
-          yield* progress.reviewReady(
-            coverLetterInput?.runId ?? input.jobId,
-            coverLetterResult.application.id,
-            coverLetterResult,
-            reviewToken
-          )
-        }
-
-        return {
-          applicationId: application.id,
-          failed:
-            coverLetterInput !== null && coverLetterResult === null
-              ? ([
-                  {
-                    kind: 'cover_letter',
-                    revisionId: null,
-                    runId: coverLetterInput.runId,
-                    status: 'failed',
-                  },
-                ] satisfies ReadonlyArray<PreparationArtifactWorkflowResult>)
-              : [],
-          ready: [
-            ...(cvInput === null || cvSaved === null
-              ? []
-              : [{ input: cvInput, saved: cvSaved }]),
-            ...(coverLetterInput === null || coverLetterResult === null
-              ? []
-              : [{ input: coverLetterInput, saved: coverLetterResult }]),
-          ],
-        }
-      })
-    )
-
-    const reviewed = yield* Effect.forEach(
-      generated.ready,
-      ({ input: artifactInput, saved }) =>
-        Effect.gen(function* () {
-          const decision = yield* DurableDeferred.await(
-            preparationReviewDeferred(artifactInput.kind)
-          )
-
-          if (decision._tag === 'Approved') {
-            const approved = yield* Activity.make({
-              name: `${artifactInput.kind}/approve-bound-revision`,
-              success: ContentRevisionResultSchema,
-              error: PreparationWorkflowError,
-              interruptRetryPolicy: stopActivityInterruptRetries,
-              execute: withActivityTimeout(
-                'review',
-                '30 seconds',
-                gateway.approveBoundRevision(saved, decision.revisionId)
-              ),
-            })
-            yield* progress.complete(artifactInput.runId, {
-              message: 'Human review approved the prepared revision.',
-              result: approved,
-              status: 'approved',
-            })
-            return {
-              kind: artifactInput.kind,
-              revisionId: approved.revision.id,
-              runId: artifactInput.runId,
-              status: 'approved' as const,
-            }
-          }
-
-          yield* progress.complete(artifactInput.runId, {
-            message: `Human review rejected the candidate: ${decision.reason}`,
-            status: 'rejected',
-          })
-          return {
-            kind: artifactInput.kind,
-            revisionId: null,
-            runId: artifactInput.runId,
-            status: 'rejected' as const,
-          }
-        }).pipe(
-          Effect.catch((error) =>
-            progress.fail(artifactInput.runId, error.message).pipe(
-              Effect.as({
-                kind: artifactInput.kind,
-                revisionId: null,
-                runId: artifactInput.runId,
-                status: 'failed' as const,
+            )
+            .pipe(
+              Effect.matchEffect({
+                onFailure: (error) =>
+                  progress
+                    .failArtifact(input.jobId, 'cover_letter', error.message)
+                    .pipe(Effect.as(null)),
+                onSuccess: Effect.succeed,
               })
             )
-          )
-        ),
-      { concurrency: 1 }
-    )
 
-    const artifacts = [...reviewed, ...generated.failed]
-    const onlyArtifact = artifacts.length === 1 ? artifacts[0] : undefined
+    if (coverLetterSaved !== null) {
+      const reviewToken = yield* DurableDeferred.token(
+        preparationApprovalDeferred('cover_letter')
+      )
+      yield* progress.reviewReady(
+        input.jobId,
+        'cover_letter',
+        prepared.application.id,
+        coverLetterSaved,
+        reviewToken
+      )
+    }
+
+    const coverLetterResult =
+      coverLetterInput === null
+        ? null
+        : coverLetterSaved === null
+          ? ({
+              kind: 'cover_letter',
+              revisionId: null,
+              status: 'failed',
+            } satisfies PreparationArtifactWorkflowResult)
+          : yield* reviewSavedArtifact(coverLetterInput, coverLetterSaved).pipe(
+              Effect.catch((error) =>
+                progress
+                  .failArtifact(input.jobId, 'cover_letter', error.message)
+                  .pipe(
+                    Effect.as({
+                      kind: 'cover_letter' as const,
+                      revisionId: null,
+                      status: 'failed' as const,
+                    })
+                  )
+              )
+            )
+
+    const artifacts = [
+      ...(cvResult === null ? [] : [cvResult]),
+      ...(coverLetterResult === null ? [] : [coverLetterResult]),
+    ]
+    const successCount = artifacts.filter(
+      ({ status }) => status === 'approved'
+    ).length
+    const failureCount = artifacts.filter(
+      ({ status }) => status === 'failed'
+    ).length
     return {
-      applicationId: generated.applicationId,
+      applicationId: prepared.application.id,
       artifacts,
       jobId: input.jobId,
-      ...(onlyArtifact === undefined || onlyArtifact.status === 'failed'
-        ? {}
-        : {
-            revisionId: onlyArtifact.revisionId,
-            runId: onlyArtifact.runId,
-            status: onlyArtifact.status,
-          }),
+      status:
+        failureCount === 0
+          ? ('completed' as const)
+          : successCount === 0
+            ? ('failed' as const)
+            : ('mixed' as const),
     }
   },
   (effect, payload) =>
     Effect.gen(function* () {
-      const input = normalizePreparationJobInput(payload)
+      const input = payload
       const progress = yield* PreparationProgress
       const instance = yield* WorkflowEngine.WorkflowInstance
       return yield* effect.pipe(
@@ -552,7 +564,7 @@ const executePreparation = Effect.fn('PrepareApplication.run')(
             if (instance.suspended && !instance.interrupted) {
               return Effect.void
             }
-            return progress.cancel(input.jobId)
+            return progress.cancelJob(input.jobId)
           }
           return progress.failJob(input.jobId, Cause.pretty(exit.cause))
         })

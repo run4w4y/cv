@@ -47,6 +47,9 @@ export const GeneratedCandidateSchema = Schema.TaggedUnion({
   },
 })
 export type GeneratedCandidate = typeof GeneratedCandidateSchema.Type
+export const GeneratedCvCandidateSchema = GeneratedCandidateSchema.cases.Cv
+export const GeneratedCoverLetterCandidateSchema =
+  GeneratedCandidateSchema.cases.CoverLetter
 
 export const candidateMatchesDocumentKind = (
   candidate: GeneratedCandidate,

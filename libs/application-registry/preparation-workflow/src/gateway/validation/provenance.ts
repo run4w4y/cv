@@ -1,205 +1,288 @@
 import type { CvDocumentV1 } from '@cv/contracts/document'
 import type { FactsCatalogueV1 } from '@cv/contracts/facts'
 import { Effect } from 'effect'
-import { difference } from 'es-toolkit/array'
 import { PreparationWorkflowError } from '../../domain'
-import { reviewedFactIdsForGeneration } from '../../generation/prompts'
+import { cvAuthoringSourceForGeneration } from '../../generation/prompts'
+
+export type CvProvenanceIssue = {
+  readonly message: string
+  readonly path: ReadonlyArray<string | number>
+}
+
+export const cvProvenanceIssues = (
+  catalogue: FactsCatalogueV1,
+  document: CvDocumentV1
+): ReadonlyArray<CvProvenanceIssue> => {
+  const bindings = cvAuthoringSourceForGeneration(catalogue)
+  const experience = new Map(
+    bindings.experience.map((entry) => [entry.id, entry])
+  )
+  const projects = new Map(bindings.projects.map((entry) => [entry.id, entry]))
+  const education = new Map(
+    bindings.education.map((entry) => [entry.id, entry])
+  )
+  const skills = new Map(bindings.skillGroups.map((group) => [group.id, group]))
+  const issues: Array<CvProvenanceIssue> = []
+  if (!bindings.person.names.includes(document.person.name)) {
+    issues.push({
+      message: 'person.name was not copied from reviewed identity metadata',
+      path: ['person', 'name'],
+    })
+  }
+  if (
+    document.person.location !== undefined &&
+    !bindings.person.locations.includes(document.person.location)
+  ) {
+    issues.push({
+      message: 'person.location was not copied from reviewed identity metadata',
+      path: ['person', 'location'],
+    })
+  }
+  for (const [index, contact] of document.person.contacts.entries()) {
+    const contactPath = ['person', 'contacts', index] as const
+    const source =
+      bindings.person.contacts.find(
+        (candidate) =>
+          candidate.value === contact.value &&
+          candidate.kind === contact.kind &&
+          candidate.url === contact.href &&
+          (candidate.label === undefined || candidate.label === contact.label)
+      ) ??
+      bindings.person.contacts.find(
+        (candidate) => candidate.value === contact.value
+      ) ??
+      bindings.person.contacts.find(
+        (candidate) =>
+          candidate.url !== undefined && candidate.url === contact.href
+      ) ??
+      bindings.person.contacts.find(
+        (candidate) =>
+          candidate.label !== undefined && candidate.label === contact.label
+      ) ??
+      bindings.person.contacts.find(
+        (candidate) => candidate.kind === contact.kind
+      )
+    if (source === undefined) {
+      issues.push({
+        message: `contact:${contact.value} was not copied from a public contact`,
+        path: [...contactPath, 'value'],
+      })
+      continue
+    }
+    if (contact.value !== source.value) {
+      issues.push({
+        message: `contact:${source.sourceId}.value was changed`,
+        path: [...contactPath, 'value'],
+      })
+    }
+    if (contact.kind !== source.kind) {
+      issues.push({
+        message: `contact:${source.sourceId}.kind was changed`,
+        path: [...contactPath, 'kind'],
+      })
+    }
+    if (contact.href !== source.url) {
+      issues.push({
+        message: `contact:${source.sourceId}.href was changed`,
+        path: [...contactPath, 'href'],
+      })
+    }
+    if (source.label !== undefined && contact.label !== source.label) {
+      issues.push({
+        message: `contact:${source.sourceId}.label was changed`,
+        path: [...contactPath, 'label'],
+      })
+    }
+  }
+  for (const [index, item] of document.experience.entries()) {
+    const source = experience.get(item.id)
+    if (source === undefined) {
+      issues.push({
+        message: `experience:${item.id} is absent from the facts catalogue`,
+        path: ['experience', index, 'id'],
+      })
+      continue
+    }
+    if (item.company !== source.company)
+      issues.push({
+        message: `experience:${item.id}.company was changed`,
+        path: ['experience', index, 'company'],
+      })
+    if (!source.roles.includes(item.role))
+      issues.push({
+        message: `experience:${item.id}.role was changed`,
+        path: ['experience', index, 'role'],
+      })
+    if (item.period !== source.period)
+      issues.push({
+        message: `experience:${item.id}.period was changed`,
+        path: ['experience', index, 'period'],
+      })
+    if (item.location !== undefined && item.location !== source.location)
+      issues.push({
+        message: `experience:${item.id}.location was changed`,
+        path: ['experience', index, 'location'],
+      })
+    for (const [technologyIndex, technology] of item.technologies.entries()) {
+      if (!source.technologies.includes(technology)) {
+        issues.push({
+          message: `experience:${item.id}.technology:${technology} is unsupported`,
+          path: ['experience', index, 'technologies', technologyIndex],
+        })
+      }
+    }
+  }
+  for (const [index, item] of document.projects.entries()) {
+    const source = projects.get(item.id)
+    if (source === undefined) {
+      issues.push({
+        message: `project:${item.id} is absent from the facts catalogue`,
+        path: ['projects', index, 'id'],
+      })
+      continue
+    }
+    if (item.name !== source.name)
+      issues.push({
+        message: `project:${item.id}.name was changed`,
+        path: ['projects', index, 'name'],
+      })
+    for (const [technologyIndex, technology] of item.technologies.entries()) {
+      if (!source.technologies.includes(technology)) {
+        issues.push({
+          message: `project:${item.id}.technology:${technology} is unsupported`,
+          path: ['projects', index, 'technologies', technologyIndex],
+        })
+      }
+    }
+    for (const [linkIndex, link] of item.links.entries()) {
+      const linkPath = ['projects', index, 'links', linkIndex] as const
+      const linkSource =
+        source.links.find((candidate) => candidate.url === link.href) ??
+        source.links.find((candidate) => candidate.label === link.label) ??
+        source.links.find(
+          (candidate) =>
+            candidate.label === link.value || candidate.url === link.value
+        )
+      if (linkSource === undefined) {
+        issues.push(
+          {
+            message: `project:${item.id}.link:${linkIndex}.label is unsupported`,
+            path: [...linkPath, 'label'],
+          },
+          {
+            message: `project:${item.id}.link:${linkIndex}.value is unsupported`,
+            path: [...linkPath, 'value'],
+          }
+        )
+        if (link.href !== undefined) {
+          issues.push({
+            message: `project:${item.id}.link:${linkIndex}.href is unsupported`,
+            path: [...linkPath, 'href'],
+          })
+        }
+        continue
+      }
+      if (link.label !== linkSource.label) {
+        issues.push({
+          message: `project:${item.id}.link:${linkIndex}.label was changed`,
+          path: [...linkPath, 'label'],
+        })
+      }
+      if (link.value !== linkSource.label && link.value !== linkSource.url) {
+        issues.push({
+          message: `project:${item.id}.link:${linkIndex}.value was changed`,
+          path: [...linkPath, 'value'],
+        })
+      }
+      if (link.href !== linkSource.url) {
+        issues.push({
+          message: `project:${item.id}.link:${linkIndex}.href was changed`,
+          path: [...linkPath, 'href'],
+        })
+      }
+    }
+  }
+  for (const [index, item] of document.education.entries()) {
+    const source = education.get(item.id)
+    if (source === undefined) {
+      issues.push({
+        message: `education:${item.id} is absent from the facts catalogue`,
+        path: ['education', index, 'id'],
+      })
+      continue
+    }
+    if (item.institution !== source.institution)
+      issues.push({
+        message: `education:${item.id}.institution was changed`,
+        path: ['education', index, 'institution'],
+      })
+    if (item.qualification !== source.degree)
+      issues.push({
+        message: `education:${item.id}.qualification was changed`,
+        path: ['education', index, 'qualification'],
+      })
+    if (item.period !== undefined && item.period !== source.period)
+      issues.push({
+        message: `education:${item.id}.period was changed`,
+        path: ['education', index, 'period'],
+      })
+    if (item.location !== undefined && item.location !== source.location)
+      issues.push({
+        message: `education:${item.id}.location was changed`,
+        path: ['education', index, 'location'],
+      })
+  }
+  for (const [index, item] of document.skills.entries()) {
+    const source = skills.get(item.id)
+    if (source === undefined) {
+      issues.push({
+        message: `skills:${item.id} is absent from the facts catalogue`,
+        path: ['skills', index, 'id'],
+      })
+      continue
+    }
+    if (item.label !== source.label)
+      issues.push({
+        message: `skills:${item.id}.label was changed`,
+        path: ['skills', index, 'label'],
+      })
+    for (const [skillIndex, skill] of item.items.entries()) {
+      if (!source.items.includes(skill)) {
+        issues.push({
+          message: `skills:${item.id}.item:${skill} is unsupported`,
+          path: ['skills', index, 'items', skillIndex],
+        })
+      }
+    }
+  }
+  const reviewedAdditionalEvidenceIds = new Set(
+    bindings.additionalSectionItems.map(({ id }) => id)
+  )
+  for (const [sectionIndex, section] of document.additionalSections.entries()) {
+    for (const [itemIndex, item] of section.items.entries()) {
+      if (!reviewedAdditionalEvidenceIds.has(item.id)) {
+        issues.push({
+          message: `additional:${section.id}:${item.id} is not a reviewed additional-section evidence ID`,
+          path: ['additionalSections', sectionIndex, 'items', itemIndex, 'id'],
+        })
+      }
+    }
+  }
+  return issues
+}
 
 export const validateCvProvenance = (
   catalogue: FactsCatalogueV1,
   document: CvDocumentV1
 ): Effect.Effect<void, PreparationWorkflowError> => {
-  const identities = catalogue.sections.filter(
-    (section) => section.kind === 'identity'
-  )
-  const publicContacts = catalogue.sections
-    .filter((section) => section.kind === 'contact')
-    .flatMap((section) => section.items)
-    .filter((contact) => contact.visibility === 'public')
-  const experience = new Map<
-    string,
-    Extract<
-      FactsCatalogueV1['sections'][number],
-      { readonly kind: 'experience' }
-    >['entries'][number]
-  >()
-  const projects = new Map<
-    string,
-    Extract<
-      FactsCatalogueV1['sections'][number],
-      { readonly kind: 'projects' }
-    >['entries'][number]
-  >()
-  const education = new Map<
-    string,
-    Extract<
-      FactsCatalogueV1['sections'][number],
-      { readonly kind: 'education' }
-    >['entries'][number]
-  >()
-  const skills = new Map<
-    string,
-    Extract<
-      FactsCatalogueV1['sections'][number],
-      { readonly kind: 'skills' }
-    >['groups'][number]
-  >()
-  for (const section of catalogue.sections) {
-    switch (section.kind) {
-      case 'experience':
-        for (const entry of section.entries) {
-          if (entry.companyVisibility === 'public') {
-            experience.set(entry.id, entry)
-          }
-        }
-        break
-      case 'projects':
-        for (const entry of section.entries) {
-          if (entry.visibility === 'public') projects.set(entry.id, entry)
-        }
-        break
-      case 'education':
-        for (const entry of section.entries) education.set(entry.id, entry)
-        break
-      case 'skills':
-        for (const group of section.groups) skills.set(group.id, group)
-        break
-      case 'contact':
-      case 'identity':
-        break
-    }
-  }
-  const issues: Array<string> = []
-  if (!identities.some((identity) => identity.name === document.person.name)) {
-    issues.push('person.name was not copied from reviewed identity metadata')
-  }
-  if (
-    document.person.location !== undefined &&
-    !identities.some(
-      (identity) => identity.location === document.person.location
-    )
-  ) {
-    issues.push(
-      'person.location was not copied from reviewed identity metadata'
-    )
-  }
-  for (const contact of document.person.contacts) {
-    const source = publicContacts.find(
-      (candidate) =>
-        candidate.value === contact.value &&
-        (contact.href === undefined || candidate.url === contact.href)
-    )
-    if (source === undefined) {
-      issues.push(
-        `contact:${contact.value} was not copied from a public contact`
-      )
-    }
-  }
-  for (const item of document.experience) {
-    const source = experience.get(item.id)
-    if (source === undefined) {
-      issues.push(`experience:${item.id} is absent from the facts catalogue`)
-      continue
-    }
-    if (item.company !== source.company)
-      issues.push(`experience:${item.id}.company was changed`)
-    if (!source.roles.includes(item.role))
-      issues.push(`experience:${item.id}.role was changed`)
-    if (item.period !== source.period)
-      issues.push(`experience:${item.id}.period was changed`)
-    if (item.location !== undefined && item.location !== source.location)
-      issues.push(`experience:${item.id}.location was changed`)
-    const supportedTechnologies = [
-      ...source.technologies,
-      ...source.workstreams.flatMap((workstream) => workstream.technologies),
-    ]
-    for (const technology of difference(
-      item.technologies,
-      supportedTechnologies
-    )) {
-      issues.push(
-        `experience:${item.id}.technology:${technology} is unsupported`
-      )
-    }
-  }
-  for (const item of document.projects) {
-    const source = projects.get(item.id)
-    if (source === undefined) {
-      issues.push(`project:${item.id} is absent from the facts catalogue`)
-      continue
-    }
-    if (item.name !== source.name)
-      issues.push(`project:${item.id}.name was changed`)
-    const supportedTechnologies = [
-      ...source.technologies,
-      ...source.contributions.flatMap(
-        (contribution) => contribution.technologies
-      ),
-    ]
-    for (const technology of difference(
-      item.technologies,
-      supportedTechnologies
-    )) {
-      issues.push(`project:${item.id}.technology:${technology} is unsupported`)
-    }
-    const publicLinks = source.links.filter(
-      (link) => link.visibility !== 'private'
-    )
-    for (const link of item.links) {
-      const supported = publicLinks.some((candidate) =>
-        link.href === undefined
-          ? link.value === candidate.label || link.value === candidate.url
-          : link.href === candidate.url
-      )
-      if (!supported)
-        issues.push(`project:${item.id}.link:${link.value} is unsupported`)
-    }
-  }
-  for (const item of document.education) {
-    const source = education.get(item.id)
-    if (source === undefined) {
-      issues.push(`education:${item.id} is absent from the facts catalogue`)
-      continue
-    }
-    if (item.institution !== source.institution)
-      issues.push(`education:${item.id}.institution was changed`)
-    if (item.qualification !== source.degree)
-      issues.push(`education:${item.id}.qualification was changed`)
-    if (item.period !== undefined && item.period !== source.period)
-      issues.push(`education:${item.id}.period was changed`)
-    if (item.location !== undefined && item.location !== source.location)
-      issues.push(`education:${item.id}.location was changed`)
-  }
-  for (const item of document.skills) {
-    const source = skills.get(item.id)
-    if (source === undefined) {
-      issues.push(`skills:${item.id} is absent from the facts catalogue`)
-      continue
-    }
-    const supportedSkills = source.skills.map(({ name }) => name)
-    for (const skill of difference(item.items, supportedSkills)) {
-      issues.push(`skills:${item.id}.item:${skill} is unsupported`)
-    }
-  }
-  const reviewedFactIds = reviewedFactIdsForGeneration(catalogue)
-  const reviewedAdditionalEvidenceIds = new Set([
-    ...reviewedFactIds,
-    ...identities.flatMap(({ languages }) => languages.map(({ id }) => id)),
-  ])
-  for (const section of document.additionalSections) {
-    for (const item of section.items) {
-      if (!reviewedAdditionalEvidenceIds.has(item.id)) {
-        issues.push(
-          `additional:${section.id}:${item.id} is not a reviewed additional-section evidence ID`
-        )
-      }
-    }
-  }
+  const issues = cvProvenanceIssues(catalogue, document)
   return issues.length === 0
     ? Effect.void
     : Effect.fail(
         new PreparationWorkflowError({
-          message: `CV failed deterministic provenance checks: ${issues.join('; ')}`,
+          message: `CV failed deterministic provenance checks: ${issues
+            .map(({ message }) => message)
+            .join('; ')}`,
           stage: 'validation',
         })
       )

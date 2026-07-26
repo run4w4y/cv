@@ -63,6 +63,20 @@ export const preparationStoreLayer = Layer.effect(
         repository
           .loadContentRevisionHistory(input)
           .pipe(storeOperation('loadContentRevisionHistory')),
+      loadContentRevision: (input) =>
+        repository.loadContentHead(input).pipe(
+          Effect.flatMap((revision) =>
+            revision === null
+              ? Effect.fail(
+                  new PreparationStoreError({
+                    message: `Content revision ${input.revisionId} was not found.`,
+                    operation: 'loadContentRevision',
+                  })
+                )
+              : Effect.succeed(revision)
+          ),
+          storeOperation('loadContentRevision')
+        ),
       loadPreparationHead: (input) =>
         repository
           .loadPreparationHead(input)

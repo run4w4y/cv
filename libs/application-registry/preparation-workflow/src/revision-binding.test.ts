@@ -6,10 +6,10 @@ import type {
 
 import type {
   ContentRevisionResult,
-  PreparationRun,
+  PreparationArtifact,
   SavedCandidate,
 } from './domain'
-import { isRevisionBoundToPreparationRun } from './revision-binding'
+import { isRevisionBoundToPreparationArtifact } from './revision-binding'
 
 const entry: ContentEntry = {
   applicationId: 'application-1',
@@ -90,32 +90,22 @@ const candidate: SavedCandidate = {
   result,
 }
 
-const run: PreparationRun = {
-  applicationId: 'application-1',
-  batchId: 'batch-1',
-  batchPosition: 0,
+const artifact: PreparationArtifact = {
   candidate,
-  company: 'Example',
-  createdAt: 1,
   error: null,
-  jobId: 'run-1',
+  history: [],
   kind: 'cv',
-  locale: 'en',
   message: 'Review',
-  role: 'Platform Engineer',
-  runId: 'run-1',
   stage: 'review',
   status: 'review_submitted',
-  stepHistory: [],
   updatedAt: 2,
-  url: 'https://jobs.example.test/role',
 }
 
 describe('workflow review binding', () => {
   test('accepts the candidate, human edits, and run-bound Codex refinements with identical pins', () => {
-    expect(isRevisionBoundToPreparationRun(run, result)).toBe(true)
+    expect(isRevisionBoundToPreparationArtifact(artifact, result)).toBe(true)
     expect(
-      isRevisionBoundToPreparationRun(run, {
+      isRevisionBoundToPreparationArtifact(artifact, {
         entry: { ...entry, headRevisionId: 'revision-human', version: 3 },
         revision: {
           ...revision,
@@ -126,7 +116,7 @@ describe('workflow review binding', () => {
       })
     ).toBe(true)
     expect(
-      isRevisionBoundToPreparationRun(run, {
+      isRevisionBoundToPreparationArtifact(artifact, {
         entry: { ...entry, headRevisionId: 'revision-refined', version: 3 },
         revision: {
           ...revision,
@@ -141,13 +131,13 @@ describe('workflow review binding', () => {
 
   test('rejects unrelated revisions and changed provenance pins', () => {
     expect(
-      isRevisionBoundToPreparationRun(run, {
+      isRevisionBoundToPreparationArtifact(artifact, {
         entry,
         revision: { ...revision, id: 'revision-other' },
       })
     ).toBe(false)
     expect(
-      isRevisionBoundToPreparationRun(run, {
+      isRevisionBoundToPreparationArtifact(artifact, {
         entry,
         revision: {
           ...revision,
@@ -158,7 +148,7 @@ describe('workflow review binding', () => {
       })
     ).toBe(false)
     expect(
-      isRevisionBoundToPreparationRun(run, {
+      isRevisionBoundToPreparationArtifact(artifact, {
         entry,
         revision: {
           ...revision,

@@ -52,6 +52,8 @@ jobs:
         id: image
         uses: docker/build-push-action@v6
         with:
+          build-args: |
+            VITE_CV_WEB_ORIGIN=${{ vars.CV_WEB_ORIGIN || 'https://cv.4w4y.run' }}
           context: .
           file: apps/application-registry/Dockerfile
           push: true

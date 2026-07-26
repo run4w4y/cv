@@ -1,5 +1,6 @@
 import type { Application } from '@cv/application-registry-entity'
-import { Effect } from 'effect'
+import { CvDocumentV1Schema } from '@cv/contracts/document'
+import { Effect, Schema } from 'effect'
 
 import type {
   JobAnalysis,
@@ -71,6 +72,37 @@ export const makePreparationContextGateway = (
         })
       )
     }
+
+    const referenceCv =
+      input.kind === 'cover_letter'
+        ? yield* repository
+            .loadPreparationHead({
+              applicationId: application.id,
+              kind: 'cv',
+              locale: input.locale,
+            })
+            .pipe(stageError('capture'))
+        : null
+    if (
+      input.kind === 'cover_letter' &&
+      (referenceCv === null ||
+        referenceCv.entry.state !== 'approved' ||
+        referenceCv.entry.approvedRevisionId !== referenceCv.revision.id)
+    ) {
+      return yield* Effect.fail(
+        new PreparationWorkflowError({
+          message:
+            'Cover-letter generation requires a currently approved CV revision for this application and locale.',
+          stage: 'capture',
+        })
+      )
+    }
+    const referenceCvDocument =
+      referenceCv === null
+        ? null
+        : yield* Schema.decodeUnknownEffect(CvDocumentV1Schema)(
+            referenceCv.value
+          ).pipe(stageError('capture'))
     return {
       application,
       cvGenerationGuidance: loaded.context.cvGenerationGuidance,
@@ -79,8 +111,8 @@ export const makePreparationContextGateway = (
       factsReleaseId: loaded.context.factsReleaseId,
       jobContext: loaded.context.jobContext,
       jobSnapshot: loaded.context.jobSnapshot,
-      referenceCv: null,
-      referenceCvRevisionId: null,
+      referenceCv: referenceCvDocument,
+      referenceCvRevisionId: referenceCv?.revision.id ?? null,
     }
   })
 

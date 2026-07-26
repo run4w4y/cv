@@ -16,7 +16,7 @@ const routePaths = (
   })
 
 describe('management route wiring', () => {
-  test('keeps registry screens and exposes the workflow hierarchy', () => {
+  test('exposes one AI-workflow hierarchy without legacy document routes', () => {
     const paths = routePaths(registryRoutes)
 
     expect(paths).toContain('/applications')
@@ -24,18 +24,19 @@ describe('management route wiring', () => {
     expect(paths).toContain(
       '/applications/:applicationId/artifacts/:artifactId'
     )
-    expect(paths).toContain('/applications/:applicationId/prepare')
-    expect(paths).toContain('/applications/:applicationId/cover-letter')
-    expect(paths).toContain('/applications/:applicationId/publish')
     expect(paths).toContain('/facts')
-    expect(paths).toContain('/workflows')
-    expect(paths).toContain('/workflows/new')
-    expect(paths).toContain('/workflows/:batchId')
-    expect(paths).toContain('/workflows/:batchId/jobs/:jobId')
-    expect(paths).toContain('/workflows/:batchId/jobs/:jobId/review')
+    expect(paths).toContain('/ai-workflows')
+    expect(paths).toContain('/ai-workflows/new')
+    expect(paths).toContain('/ai-workflows/:batchId')
+    expect(paths).toContain('/ai-workflows/:batchId/jobs/:jobId')
     expect(paths).toContain(
-      '/workflows/:batchId/jobs/:jobId/artifacts/:kind/review'
+      '/ai-workflows/:batchId/jobs/:jobId/artifacts/:kind'
     )
+    expect(paths).not.toContain('/workflows')
+    expect(paths).not.toContain('/applications/:applicationId/prepare')
+    expect(paths).not.toContain('/applications/:applicationId/cover-letter')
+    expect(paths).not.toContain('/applications/:applicationId/publish')
+    expect(paths).not.toContain('/ai-workflows/:batchId/jobs/:jobId/review')
     expect(paths).toContain('/preparation/cv-guidance')
     expect(paths).not.toContain('/preparation/batch')
     expect(paths).not.toContain('/schema/cv-document')

@@ -2,6 +2,10 @@ import type { Application } from '@cv/application-registry-entity'
 import { Context, Effect, Layer } from 'effect'
 import type {
   ContentRevisionResult,
+  CoverLetterPreparationInput,
+  CvAuthoringPlan,
+  CvAuthoringPlanResult,
+  CvPreparationInput,
   EvidencePlan,
   EvidencePlanResult,
   GeneratedCandidate,
@@ -11,24 +15,12 @@ import type {
   PreparationWorkflowError,
   PreparationWorkflowInput,
   SavedCandidate,
-  SectionBrief,
-  SectionBriefResult,
 } from '../domain'
 import { StructuredGeneration } from '../generation/service'
 import { PreparationStore } from '../store'
 import { makePreparationContextGateway } from './context'
 import { makePreparationGenerationGateway } from './generation'
 import { makePreparationPersistenceGateway } from './persistence'
-
-export {
-  verifyApprovedRevisionBinding,
-  verifyRevisionSelectionBinding,
-} from './review-binding'
-export {
-  validateCvProvenance,
-  validateEvidencePlan,
-  validateSectionBrief,
-} from './validation'
 
 export type PreparationGatewayService = {
   readonly analyze: (
@@ -39,20 +31,24 @@ export type PreparationGatewayService = {
     input: PreparationWorkflowInput,
     application: Application
   ) => Effect.Effect<PreparationBootstrap, PreparationWorkflowError>
-  readonly brief: (
-    input: PreparationWorkflowInput,
+  readonly composeCoverLetter: (
+    input: CoverLetterPreparationInput,
     bootstrap: PreparationBootstrap,
     analysis: JobAnalysis,
-    plan: EvidencePlan,
-    sectionId: string
-  ) => Effect.Effect<SectionBriefResult, PreparationWorkflowError>
-  readonly compose: (
-    input: PreparationWorkflowInput,
+    evidencePlan: EvidencePlan
+  ) => Effect.Effect<
+    Extract<GeneratedCandidate, { readonly _tag: 'CoverLetter' }>,
+    PreparationWorkflowError
+  >
+  readonly composeCv: (
+    input: CvPreparationInput,
     bootstrap: PreparationBootstrap,
     analysis: JobAnalysis,
-    plan: EvidencePlan,
-    briefs: ReadonlyArray<SectionBrief>
-  ) => Effect.Effect<GeneratedCandidate, PreparationWorkflowError>
+    plan: CvAuthoringPlan
+  ) => Effect.Effect<
+    Extract<GeneratedCandidate, { readonly _tag: 'Cv' }>,
+    PreparationWorkflowError
+  >
   readonly enrichApplication: (
     input: PreparationWorkflowInput,
     bootstrap: PreparationBootstrap,
@@ -66,6 +62,12 @@ export type PreparationGatewayService = {
     bootstrap: PreparationBootstrap,
     analysis: JobAnalysis
   ) => Effect.Effect<EvidencePlanResult, PreparationWorkflowError>
+  readonly planCv: (
+    input: CvPreparationInput,
+    bootstrap: PreparationBootstrap,
+    analysis: JobAnalysis,
+    evidencePlan: EvidencePlan
+  ) => Effect.Effect<CvAuthoringPlanResult, PreparationWorkflowError>
   readonly saveCandidate: (
     input: PreparationWorkflowInput,
     bootstrap: PreparationBootstrap,
@@ -79,9 +81,6 @@ export type PreparationGatewayService = {
     candidate: SavedCandidate,
     selectedRevisionId: string
   ) => Effect.Effect<ContentRevisionResult, PreparationWorkflowError>
-  readonly sectionIds: (
-    kind: PreparationWorkflowInput['kind']
-  ) => ReadonlyArray<string>
 }
 
 export class PreparationGateway extends Context.Service<

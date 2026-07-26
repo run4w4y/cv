@@ -5,9 +5,9 @@ preview routes. It resolves publications from the private `cv-registry`
 service through a Consul Connect upstream; it has no database, object-store,
 management-token, or Cloudflare binding.
 
-The public and print layouts are intentionally separate. The public route is a
-responsive website, while the deterministic A4 renderer is shared by previews
-and the PDF worker.
+The public and private web-preview routes use the same responsive renderer.
+The deterministic A4 renderer has a separate, capability-protected route used
+only by the PDF worker.
 
 ## Development and testing
 
@@ -25,8 +25,9 @@ For fixture-backed development:
 bun x nx run cv:dev:fixture
 ```
 
-Fixture mode serves `/c/fixture` and
-`/c/_preview/fixture?access=fixture-preview`; it cannot activate in production.
+Fixture mode serves `/c/fixture`,
+`/c/_preview/fixture?access=fixture-preview`, and
+`/c/_render/fixture?access=fixture-preview`; it cannot activate in production.
 
 ```sh
 bun x nx run cv:test:e2e
@@ -38,7 +39,11 @@ docker build -f apps/cv/Dockerfile .
 
 The Next.js build uses `output: standalone`; the image runs the generated Node
 server on port 3000. `CV_PUBLIC_RESOLVER_URL` points to the local Consul
-upstream and `CV_DEPLOYMENT_ID` identifies the deployed revision.
+upstream, `CV_DEPLOYMENT_ID` identifies the deployed revision, and
+`CV_REGISTRY_ORIGIN` is the exact HTTPS Registry origin allowed to frame private
+web previews. The packaged desktop origin is allowed separately; development
+also permits the fixed Registry localhost origins. Invalid or insecure
+production origins fail closed.
 
 Public CV responses advertise a one-day Cloudflare edge TTL plus seven days of
 stale-while-revalidate and 30 days of stale-if-error. Preview and internal

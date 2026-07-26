@@ -33,7 +33,7 @@ export const WorkflowPageHeader = ({
   backLabel,
   backTo,
   description,
-  eyebrow = 'URL workflows',
+  eyebrow = 'AI workflows',
   metadata,
   title,
 }: {
@@ -49,6 +49,7 @@ export const WorkflowPageHeader = ({
     {backTo === undefined ? null : (
       <Button
         className="w-fit"
+        nativeButton={false}
         size="sm"
         variant="ghost"
         render={<Link to={backTo} />}

@@ -113,7 +113,7 @@ export const mapPdfRenderError = (
       ) {
         return new PdfGenerationPermanentError({
           cause: error,
-          code: 'pdf_public_page_unavailable',
+          code: 'pdf_render_page_unavailable',
           message: error.message,
         })
       }

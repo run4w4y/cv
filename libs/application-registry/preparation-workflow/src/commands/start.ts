@@ -1,20 +1,28 @@
-import { Crypto, Effect, Exit, Match, Predicate, Ref, Schema } from 'effect'
+import {
+  Crypto,
+  Effect,
+  Exit,
+  Match,
+  Predicate,
+  Ref,
+  Schema,
+  SubscriptionRef,
+} from 'effect'
 import * as WorkflowEngine from 'effect/unstable/workflow/WorkflowEngine'
-import { compact, partition, uniq } from 'es-toolkit/array'
+import { partition } from 'es-toolkit/array'
 
 import {
+  type AiWorkflowTarget,
+  AiWorkflowTargetSchema,
+  type CreateAiWorkflowBatchInput,
+  type CreateAiWorkflowJobInput,
+  type CreateAiWorkflowJobResult,
   canonicalPreparationUrl,
-  HttpUrlSchema,
-  normalizePreparationJobInput,
-  PreparationBatchUrlsSchema,
+  PreparationBatchTargetsSchema,
   PreparationJobInputSchema,
   PreparationWorkflowError,
   type PreparationWorkflowPayload,
   PrepareApplicationWorkflow,
-  preparationJobArtifactInputs,
-  type StartPreparationBatchInput,
-  type StartPreparationInput,
-  type StartPreparationResult,
 } from '../domain'
 import { PreparationProgress } from '../progress'
 
@@ -38,89 +46,50 @@ const inputError = Effect.mapError((cause: unknown) =>
   )
 )
 
-export type PreparedStart = {
+const canonicalTarget = (target: AiWorkflowTarget): AiWorkflowTarget => ({
+  ...target,
+  url: canonicalPreparationUrl(target.url),
+})
+
+export type PreparedJobStart = {
   readonly batchId: string
   readonly batchPosition: number
   readonly executionId: string
   readonly payload: PreparationWorkflowPayload
-  readonly result: StartPreparationResult
-}
-
-type PrepareJobInput = {
-  readonly coverLetterPrompt: string | null
-  readonly cvGenerationGuidance:
-    | StartPreparationBatchInput['cvGenerationGuidance']
-    | null
-  readonly includeCoverLetter: boolean
-  readonly includeCv: boolean
-  readonly locale: StartPreparationBatchInput['locale']
-  readonly source: StartPreparationInput['source']
+  readonly result: CreateAiWorkflowJobResult
+  readonly retryOfJobId: string | null
 }
 
 const prepareJob = Effect.fn('PreparationWorkflow.prepareJob')(function* (
-  input: PrepareJobInput,
+  input: CreateAiWorkflowJobInput,
   batchId: string,
-  batchPosition: number
+  batchPosition: number,
+  retryOfJobId: string | null
 ) {
   const jobId = yield* randomId
-  const coverLetterRunId = input.includeCoverLetter
-    ? input.includeCv
-      ? yield* randomId
-      : jobId
-    : null
-  const decoded = yield* PreparationJobInputSchema.makeEffect({
-    coverLetterPrompt: input.coverLetterPrompt,
-    cvGenerationGuidance: input.cvGenerationGuidance,
-    jobId,
-    locale: input.locale,
-    runIds: {
-      coverLetter: coverLetterRunId,
-      cv: input.includeCv ? jobId : null,
-    },
-    source: {
-      ...input.source,
-      url: input.source.url.trim(),
-    },
+  const decodedTarget = yield* AiWorkflowTargetSchema.makeEffect({
+    ...input.target,
+    url: input.target.url.trim(),
   })
-  const payload = {
-    ...decoded,
-    source: {
-      ...decoded.source,
-      url: canonicalPreparationUrl(decoded.source.url),
-    },
-  }
+  const payload = yield* PreparationJobInputSchema.makeEffect({
+    ...input,
+    jobId,
+    target: canonicalTarget(decodedTarget),
+  })
   const executionId = yield* PrepareApplicationWorkflow.executionId(payload)
   return {
     batchId,
     batchPosition,
     executionId,
     payload,
-    result: { batchId, jobId, runId: jobId },
-  } satisfies PreparedStart
+    result: { batchId, jobId },
+    retryOfJobId,
+  } satisfies PreparedJobStart
 })
 
-const prepareStart = Effect.fn('PreparationWorkflow.prepareStart')(function* (
-  input: StartPreparationInput,
-  batchId: string,
-  batchPosition: number
-) {
-  return yield* prepareJob(
-    {
-      coverLetterPrompt: input.coverLetterPrompt,
-      cvGenerationGuidance: input.cvGenerationGuidance,
-      includeCoverLetter: input.kind === 'cover_letter',
-      includeCv: input.kind === 'cv',
-      locale: input.locale,
-      source: input.source,
-    },
-    batchId,
-    batchPosition
-  )
-})
-
-export const startReservedPreparations = Effect.fn(
-  'PreparationWorkflow.startReserved'
-)(function* (prepared: ReadonlyArray<PreparedStart>) {
+export const startReservedJobs = Effect.fn(
+  'PreparationWorkflow.startReservedJobs'
+)(function* (prepared: ReadonlyArray<PreparedJobStart>) {
   const engine = yield* WorkflowEngine.WorkflowEngine
   const progress = yield* PreparationProgress
 
@@ -128,15 +97,12 @@ export const startReservedPreparations = Effect.fn(
     Effect.gen(function* () {
       const attempted = yield* Ref.make<ReadonlySet<string>>(new Set())
       yield* progress.reserve(
-        prepared.flatMap(({ batchId, batchPosition, payload }) => {
-          const job = normalizePreparationJobInput(payload)
-          return preparationJobArtifactInputs(job).map((input) => ({
-            batchId,
-            batchPosition,
-            input,
-            jobId: job.jobId,
-          }))
-        })
+        prepared.map(({ batchId, batchPosition, payload, retryOfJobId }) => ({
+          batchId,
+          batchPosition,
+          input: payload,
+          retryOfJobId,
+        }))
       )
       return attempted
     }),
@@ -145,10 +111,9 @@ export const startReservedPreparations = Effect.fn(
         prepared,
         ({ executionId: expectedExecutionId, payload, result }) =>
           Effect.gen(function* () {
-            const job = normalizePreparationJobInput(payload)
             yield* Effect.uninterruptibleMask((restore) =>
               Effect.gen(function* () {
-                yield* progress.setExecution(job.jobId, expectedExecutionId)
+                yield* progress.setExecution(payload.jobId, expectedExecutionId)
                 yield* Ref.update(attempted, (current) => {
                   const next = new Set(current)
                   next.add(expectedExecutionId)
@@ -166,7 +131,7 @@ export const startReservedPreparations = Effect.fn(
                   return next
                 })
                 return yield* Effect.die(
-                  `Workflow execution id mismatch for preparation job ${job.jobId}.`
+                  `Workflow execution id mismatch for AI workflow job ${payload.jobId}.`
                 )
               })
             )
@@ -179,27 +144,20 @@ export const startReservedPreparations = Effect.fn(
         ? Effect.void
         : Effect.gen(function* () {
             const attemptedIds = yield* Ref.get(attempted)
-            const [attemptedRuns, unattemptedRuns] = partition(
+            const [attemptedJobs, unattemptedJobs] = partition(
               prepared,
               ({ executionId }) => attemptedIds.has(executionId)
             )
             yield* progress.releaseReservations(
-              unattemptedRuns.flatMap(({ payload }) => {
-                const job = normalizePreparationJobInput(payload)
-                return preparationJobArtifactInputs(job).map(
-                  ({ runId }) => runId
-                )
-              })
+              unattemptedJobs.map(({ payload }) => payload.jobId)
             )
             yield* Effect.forEach(
-              attemptedRuns,
-              ({ payload }) => {
-                const job = normalizePreparationJobInput(payload)
-                return progress.failJob(
-                  job.jobId,
-                  'The batch could not finish launching every preparation job.'
-                )
-              },
+              attemptedJobs,
+              ({ payload }) =>
+                progress.failJob(
+                  payload.jobId,
+                  'The batch could not finish launching every AI workflow job.'
+                ),
               { discard: true }
             )
             yield* Effect.forEach(
@@ -217,49 +175,77 @@ export const startReservedPreparations = Effect.fn(
   )
 })
 
-export const startPreparation = Effect.fn('PreparationWorkflow.start')(
-  function* (input: StartPreparationInput) {
+export const createAiWorkflowJob = Effect.fn('PreparationWorkflow.createJob')(
+  function* (input: CreateAiWorkflowJobInput) {
     const batchId = yield* randomId
-    const prepared = yield* prepareStart(input, batchId, 0)
-    const results = yield* startReservedPreparations([prepared])
+    const prepared = yield* prepareJob(input, batchId, 0, null)
+    const results = yield* startReservedJobs([prepared])
     const result = results[0]
     if (result === undefined) {
-      return yield* Effect.die('Single preparation startup returned no result.')
+      return yield* Effect.die('AI workflow startup returned no job.')
     }
     return result
   },
   inputError
 )
 
-export const startPreparationBatch = Effect.fn(
-  'PreparationWorkflow.startBatch'
-)(function* (input: StartPreparationBatchInput) {
+export const createAiWorkflowBatch = Effect.fn(
+  'PreparationWorkflow.createBatch'
+)(function* (input: CreateAiWorkflowBatchInput) {
   const batchId = yield* randomId
-  const decodedUrls = yield* Effect.forEach(
-    compact(input.urls.map((url) => url.trim())),
-    (url) => HttpUrlSchema.makeEffect(url)
-  )
-  const urls = uniq(decodedUrls.map(canonicalPreparationUrl))
-  const validated = yield* PreparationBatchUrlsSchema.makeEffect(urls)
-  const preparedByUrl = yield* Effect.forEach(
-    validated,
-    (url, batchPosition) =>
+  const targets = yield* PreparationBatchTargetsSchema.makeEffect(input.targets)
+  const prepared = yield* Effect.forEach(
+    targets,
+    (target, batchPosition) =>
       prepareJob(
         {
-          coverLetterPrompt: input.coverLetterPrompt,
-          cvGenerationGuidance: input.cvGenerationGuidance,
-          includeCoverLetter: input.includeCoverLetter,
-          includeCv: true,
+          artifacts: input.artifacts,
           locale: input.locale,
-          source: {
-            _tag: 'CaptureUrl',
-            url,
-          },
+          target,
         },
         batchId,
-        batchPosition
+        batchPosition,
+        null
       ),
     { concurrency: 4 }
   )
-  return yield* startReservedPreparations(preparedByUrl)
+  return yield* startReservedJobs(prepared)
 }, inputError)
+
+const retryNotAllowed = (message: string) =>
+  new PreparationWorkflowError({ message, stage: 'input' })
+
+export const retryAiWorkflowJob = Effect.fn('PreparationWorkflow.retryJob')(
+  function* (jobId: string) {
+    const progress = yield* PreparationProgress
+    const current = yield* SubscriptionRef.get(progress.jobs)
+    const previous = current.get(jobId)
+    if (previous === undefined) {
+      return yield* Effect.fail(
+        retryNotAllowed(`AI workflow job ${jobId} was not found.`)
+      )
+    }
+    if (
+      previous.status !== 'failed' &&
+      previous.status !== 'cancelled' &&
+      previous.status !== 'mixed'
+    ) {
+      return yield* Effect.fail(
+        retryNotAllowed(
+          `AI workflow job ${jobId} is not in a retryable terminal state.`
+        )
+      )
+    }
+
+    const batchId = yield* randomId
+    const { jobId: _previousJobId, ...input } = previous.input
+    const prepared = yield* prepareJob(input, batchId, 0, jobId)
+    const results = yield* startReservedJobs([prepared])
+    const result = results[0]
+    if (result === undefined) {
+      return yield* Effect.die('AI workflow retry returned no job.')
+    }
+    return result
+  },
+  inputError
+)

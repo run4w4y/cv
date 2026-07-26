@@ -3,7 +3,7 @@ import { cleanup } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 
 import { renderWithRegistry } from '../../../test/render-with-registry'
-import { ApplicationDetailsPage } from './render'
+import { ApplicationDetailsPage, applicationAiWorkflowHref } from './render'
 
 const originalFetch = globalThis.fetch
 afterEach(() => {
@@ -75,6 +75,9 @@ describe('ApplicationDetailsPage', () => {
     expect(await view.findByText('Related activities')).toBeTruthy()
     expect(await view.findByText('No artifacts yet')).toBeTruthy()
     expect(await view.findByText('Status changed')).toBeTruthy()
+    expect(applicationAiWorkflowHref(application.id)).toBe(
+      '/ai-workflows/new?applicationId=application-1'
+    )
     expect(activityRequests[0]).toContain(
       '/api/registry/applications/application-1/activities'
     )

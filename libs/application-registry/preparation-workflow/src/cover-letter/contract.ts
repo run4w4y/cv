@@ -12,8 +12,13 @@ export const CoverLetterDocumentSchema = Schema.Struct({
     title: 'Locale',
     description: 'The single locale used by the complete letter.',
   }),
-  body: Schema.NonEmptyString.pipe(
-    Schema.check(Schema.isMaxLength(12_000))
+  referenceCvRevisionId: Schema.NonEmptyString.annotate({
+    title: 'Accepted CV revision',
+    description:
+      'The immutable approved CV revision this cover letter is aligned with.',
+  }),
+  body: Schema.String.pipe(
+    Schema.check(Schema.isMinLength(1), Schema.isMaxLength(12_000))
   ).annotate({
     title: 'Letter',
     description: 'The complete tailored cover letter, without invented facts.',
@@ -24,8 +29,12 @@ export interface CoverLetterDocument
   extends Schema.Schema.Type<typeof CoverLetterDocumentSchema> {}
 
 /** An intentionally incomplete editor value; it is not a valid document yet. */
-export const initialCoverLetterDraft = (locale: string): unknown => ({
+export const initialCoverLetterDraft = (
+  locale: string,
+  referenceCvRevisionId: string
+): unknown => ({
   $schema: coverLetterContractId,
   locale,
+  referenceCvRevisionId,
   body: '',
 })

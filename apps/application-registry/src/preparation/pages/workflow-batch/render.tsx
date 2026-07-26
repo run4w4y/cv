@@ -10,8 +10,8 @@ import { useParams } from 'react-router'
 
 import { asyncResultErrorMessage } from '@/lib/async-result'
 import {
-  cancelPreparationAtom,
-  preparationRunsAtom,
+  cancelAiWorkflowJobAtom,
+  preparationJobsAtom,
 } from '@/preparation/workflow/atoms'
 import { WorkflowBatchScreen } from '@/preparation/workflows/batch-screen'
 import { WorkflowNotFound } from '@/preparation/workflows/not-found'
@@ -20,7 +20,7 @@ import type {
   WorkflowJobListItem,
 } from '@/preparation/workflows/presentation'
 
-const activeStatuses = new Set(['queued', 'running'])
+const activeStatuses = new Set(['queued', 'running', 'cancelling'])
 
 const toBatchItem = (batch: PreparationBatch): WorkflowBatchListItem => {
   const statuses = batch.jobs.map((job) => job.status)
@@ -39,42 +39,50 @@ const toBatchItem = (batch: PreparationBatch): WorkflowBatchListItem => {
     status: batch.status,
     total: batch.jobs.length,
     updatedAt: batch.updatedAt,
-    urlCount: batch.urlCount,
+    targetCount: batch.targetCount,
   }
 }
 
-const toJobItem = (job: PreparationJob): WorkflowJobListItem => ({
-  applicationId: job.applicationId,
-  artifacts: job.artifacts.map((run) => ({
-    error: run.error,
-    kind: run.kind,
-    message: run.message,
-    runId: run.runId,
-    stage: run.stage,
-    status: run.status,
-  })),
-  batchId: job.batchId,
-  company: job.company,
-  createdAt: job.createdAt,
-  jobId: job.jobId,
-  kinds: job.artifacts.map(({ kind }) => kind),
-  locale: job.locale,
-  message: job.message,
-  position: job.batchPosition,
-  primaryRunId: job.primaryRunId,
-  role: job.role,
-  status: job.status,
-  updatedAt: job.updatedAt,
-  url: job.url,
-})
+const toJobItem = (job: PreparationJob): WorkflowJobListItem => {
+  const artifacts = [job.artifacts.cv, job.artifacts.coverLetter].flatMap(
+    (artifact) =>
+      artifact === null
+        ? []
+        : [
+            {
+              error: artifact.error,
+              kind: artifact.kind,
+              message: artifact.message,
+              stage: artifact.stage,
+              status: artifact.status,
+            },
+          ]
+  )
+  return {
+    applicationId: job.applicationId,
+    artifacts,
+    batchId: job.batchId,
+    company: job.company,
+    createdAt: job.createdAt,
+    jobId: job.jobId,
+    kinds: artifacts.map(({ kind }) => kind),
+    locale: job.locale,
+    message: job.message,
+    position: job.batchPosition,
+    role: job.role,
+    status: job.status,
+    updatedAt: job.updatedAt,
+    url: job.url,
+  }
+}
 
 export const WorkflowBatchPage = () => {
   const { batchId = '' } = useParams()
-  const runsResult = useAtomValue(preparationRunsAtom)
-  const [cancelResult, cancel] = useAtom(cancelPreparationAtom, {
+  const jobsResult = useAtomValue(preparationJobsAtom)
+  const [cancelResult, cancel] = useAtom(cancelAiWorkflowJobAtom, {
     mode: 'promiseExit',
   })
-  const [cancellingRunIds, setCancellingRunIds] = React.useState<
+  const [cancellingJobIds, setCancellingJobIds] = React.useState<
     ReadonlySet<string>
   >(new Set())
   const cancelError =
@@ -83,13 +91,13 @@ export const WorkflowBatchPage = () => {
       'One or more workflows could not be cancelled.'
     ) ?? null
 
-  if (AsyncResult.isFailure(runsResult)) {
+  if (AsyncResult.isFailure(jobsResult)) {
     return (
       <WorkflowNotFound
         title="Workflow runtime unavailable"
         description={
           asyncResultErrorMessage(
-            runsResult,
+            jobsResult,
             'The in-memory workflow runtime could not be loaded.'
           ) ?? 'The in-memory workflow runtime could not be loaded.'
         }
@@ -97,7 +105,7 @@ export const WorkflowBatchPage = () => {
     )
   }
 
-  if (!AsyncResult.isSuccess(runsResult)) {
+  if (!AsyncResult.isSuccess(jobsResult)) {
     return (
       <WorkflowNotFound
         title="Loading workflow batch"
@@ -107,7 +115,7 @@ export const WorkflowBatchPage = () => {
   }
 
   const batch = summarizePreparationBatch(batchId, [
-    ...runsResult.value.values(),
+    ...jobsResult.value.values(),
   ])
   if (batch === null) {
     return (
@@ -118,12 +126,12 @@ export const WorkflowBatchPage = () => {
     )
   }
 
-  const requestCancellation = async (runIds: ReadonlyArray<string>) => {
-    setCancellingRunIds((current) => new Set([...current, ...runIds]))
-    await Promise.allSettled(runIds.map((runId) => cancel({ runId })))
-    setCancellingRunIds((current) => {
+  const requestCancellation = async (jobIds: ReadonlyArray<string>) => {
+    setCancellingJobIds((current) => new Set([...current, ...jobIds]))
+    await Promise.allSettled(jobIds.map((jobId) => cancel({ jobId })))
+    setCancellingJobIds((current) => {
       const next = new Set(current)
-      for (const runId of runIds) next.delete(runId)
+      for (const jobId of jobIds) next.delete(jobId)
       return next
     })
   }
@@ -135,16 +143,16 @@ export const WorkflowBatchPage = () => {
         job.status === 'running' ||
         job.status === 'needs_review'
     )
-    .map((job) => job.primaryRunId)
+    .map((job) => job.jobId)
 
   return (
     <WorkflowBatchScreen
       batch={toBatchItem(batch)}
       cancelError={cancelError}
-      cancellingRunIds={cancellingRunIds}
+      cancellingJobIds={cancellingJobIds}
       jobs={batch.jobs.map(toJobItem)}
       onCancelAll={() => void requestCancellation(cancellableIds)}
-      onCancelJob={(runId) => void requestCancellation([runId])}
+      onCancelJob={(jobId) => void requestCancellation([jobId])}
     />
   )
 }

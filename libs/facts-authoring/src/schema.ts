@@ -240,7 +240,6 @@ export interface ExperienceWorkstreamSource
 
 export const ExperienceEntrySourceSchema = Schema.Struct({
   company: ExperienceEntryV1Schema.fields.company,
-  companyVisibility: ExperienceEntryV1Schema.fields.companyVisibility,
   location: ExperienceEntryV1Schema.fields.location,
   period: ExperienceEntryV1Schema.fields.period,
   roles: ExperienceEntryV1Schema.fields.roles,

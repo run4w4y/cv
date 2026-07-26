@@ -12,6 +12,13 @@ const request = {
 const bridge = (
   overrides: Partial<DesktopCodexBridge> = {}
 ): DesktopCodexBridge => ({
+  assist: async () => ({
+    error: {
+      code: 'invalid_request',
+      message: 'Document assistance is not exercised by this test.',
+    },
+    ok: false,
+  }),
   cancel: async () => ({ ok: true, value: undefined }),
   generate: async () => ({
     ok: true,

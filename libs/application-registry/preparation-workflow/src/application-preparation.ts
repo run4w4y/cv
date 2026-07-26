@@ -1,18 +1,19 @@
 import { Context, Crypto, Effect, Layer, Stream, SubscriptionRef } from 'effect'
 import * as WorkflowEngine from 'effect/unstable/workflow/WorkflowEngine'
+import { approveArtifact, cancelAiWorkflowJob } from './commands/review'
 import {
-  cancelPreparationRun,
-  submitPreparationReviewForRun,
-} from './commands/review'
-import { startPreparation, startPreparationBatch } from './commands/start'
+  createAiWorkflowBatch,
+  createAiWorkflowJob,
+  retryAiWorkflowJob,
+} from './commands/start'
 import type {
-  PreparationRun,
-  StartPreparationBatchInput,
-  StartPreparationInput,
-  StartPreparationResult,
-  SubmitPreparationReviewInput,
+  ApproveArtifactInput,
+  CreateAiWorkflowBatchInput,
+  CreateAiWorkflowJobInput,
+  CreateAiWorkflowJobResult,
+  PreparationJob,
 } from './domain'
-import { projectPreparationRuns } from './domain'
+import { projectPreparationJobs } from './domain'
 import { makePreparationGatewayLayer, PreparationGateway } from './gateway'
 import { PreparationProgress, preparationProgressLayer } from './progress'
 import {
@@ -20,29 +21,32 @@ import {
   preparationWorkflowLayer,
 } from './workflow/handler'
 
-export type PreparationRuns = ReadonlyMap<string, PreparationRun>
+export type PreparationJobs = ReadonlyMap<string, PreparationJob>
 
 export type ApplicationPreparationService = {
-  readonly cancel: (runId: string) => Effect.Effect<void>
-  readonly runs: SubscriptionRef.SubscriptionRef<PreparationRuns>
-  readonly start: (
-    input: StartPreparationInput
+  readonly cancelJob: (jobId: string) => Effect.Effect<void>
+  readonly createBatch: (
+    input: CreateAiWorkflowBatchInput
   ) => Effect.Effect<
-    StartPreparationResult,
-    Effect.Error<ReturnType<typeof startPreparation>>
+    ReadonlyArray<CreateAiWorkflowJobResult>,
+    Effect.Error<ReturnType<typeof createAiWorkflowBatch>>
   >
-  readonly startBatch: (
-    input: StartPreparationBatchInput
+  readonly createJob: (
+    input: CreateAiWorkflowJobInput
   ) => Effect.Effect<
-    ReadonlyArray<StartPreparationResult>,
-    Effect.Error<ReturnType<typeof startPreparationBatch>>
+    CreateAiWorkflowJobResult,
+    Effect.Error<ReturnType<typeof createAiWorkflowJob>>
   >
-  readonly submitReview: (
-    input: SubmitPreparationReviewInput
+  readonly jobs: SubscriptionRef.SubscriptionRef<PreparationJobs>
+  readonly retryJob: (
+    jobId: string
   ) => Effect.Effect<
-    void,
-    Effect.Error<ReturnType<typeof submitPreparationReviewForRun>>
+    CreateAiWorkflowJobResult,
+    Effect.Error<ReturnType<typeof retryAiWorkflowJob>>
   >
+  readonly approveArtifact: (
+    input: ApproveArtifactInput
+  ) => Effect.Effect<void, Effect.Error<ReturnType<typeof approveArtifact>>>
 }
 
 export class ApplicationPreparation extends Context.Service<
@@ -57,14 +61,14 @@ const applicationPreparationServiceLayer = Layer.effect(
     const engine = yield* WorkflowEngine.WorkflowEngine
     const gateway = yield* PreparationGateway
     const progress = yield* PreparationProgress
-    const initialStates = yield* SubscriptionRef.get(progress.runs)
-    const runs = yield* SubscriptionRef.make(
-      projectPreparationRuns(initialStates)
+    const initialStates = yield* SubscriptionRef.get(progress.jobs)
+    const jobs = yield* SubscriptionRef.make(
+      projectPreparationJobs(initialStates)
     )
 
-    yield* SubscriptionRef.changes(progress.runs).pipe(
-      Stream.map(projectPreparationRuns),
-      Stream.runForEach((next) => SubscriptionRef.set(runs, next)),
+    yield* SubscriptionRef.changes(progress.jobs).pipe(
+      Stream.map(projectPreparationJobs),
+      Stream.runForEach((next) => SubscriptionRef.set(jobs, next)),
       Effect.forkScoped
     )
 
@@ -77,13 +81,14 @@ const applicationPreparationServiceLayer = Layer.effect(
       )
 
     return ApplicationPreparation.of({
-      cancel: (runId) => provideCommandServices(cancelPreparationRun(runId)),
-      runs,
-      start: (input) => provideCommandServices(startPreparation(input)),
-      startBatch: (input) =>
-        provideCommandServices(startPreparationBatch(input)),
-      submitReview: (input) =>
-        provideCommandServices(submitPreparationReviewForRun(input)),
+      cancelJob: (jobId) => provideCommandServices(cancelAiWorkflowJob(jobId)),
+      createBatch: (input) =>
+        provideCommandServices(createAiWorkflowBatch(input)),
+      createJob: (input) => provideCommandServices(createAiWorkflowJob(input)),
+      jobs,
+      retryJob: (jobId) => provideCommandServices(retryAiWorkflowJob(jobId)),
+      approveArtifact: (input) =>
+        provideCommandServices(approveArtifact(input)),
     })
   })
 )

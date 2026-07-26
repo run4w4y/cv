@@ -1,8 +1,18 @@
+import type {
+  ArtifactPreparationStage,
+  DocumentKind,
+  PreparationArtifact,
+  PreparationHistoryEntry,
+  PreparationJob,
+  PreparationJobStatus,
+  PreparationNodeStatus,
+  PreparationNodeSummary,
+  PreparationStage,
+  SharedPreparationStage,
+} from './domain'
 import {
-  type PreparationRun,
-  type PreparationRunStatus,
-  type PreparationStepSummary,
-  preparationStages,
+  artifactPreparationStagesForKind,
+  sharedPreparationStages,
 } from './domain'
 
 export type PreparationBatchStatus =
@@ -14,62 +24,78 @@ export type PreparationBatchStatus =
   | 'cancelled'
 
 export type PreparationBatchStatusCounts = Readonly<
-  Record<PreparationRunStatus, number>
+  Record<PreparationJobStatus, number>
 >
-
-export type PreparationJobStatus =
-  | 'queued'
-  | 'running'
-  | 'needs_review'
-  | 'failed'
-  | 'completed'
-  | 'cancelled'
-  | 'mixed'
-
-export type PreparationJob = {
-  readonly applicationId: string | null
-  readonly artifacts: ReadonlyArray<PreparationRun>
-  readonly batchId: string
-  readonly batchPosition: number
-  readonly company: string | null
-  readonly createdAt: number
-  readonly jobId: string
-  readonly locale: string
-  readonly message: string
-  readonly primaryRunId: string
-  readonly role: string | null
-  readonly status: PreparationJobStatus
-  readonly updatedAt: number
-  readonly url: string
-}
 
 export type PreparationBatch = {
   readonly activeCount: number
   readonly batchId: string
   readonly createdAt: number
   readonly jobs: ReadonlyArray<PreparationJob>
-  readonly kind: PreparationRun['kind']
-  readonly kinds: ReadonlyArray<PreparationRun['kind']>
+  readonly kinds: ReadonlyArray<DocumentKind>
   readonly locale: string
   readonly needsReviewCount: number
-  readonly runs: ReadonlyArray<PreparationRun>
   readonly status: PreparationBatchStatus
   readonly statusCounts: PreparationBatchStatusCounts
   readonly terminalCount: number
   readonly updatedAt: number
-  readonly urlCount: number
+  readonly targetCount: number
 }
 
-const isTerminalStepStatus = (
-  status: PreparationStepSummary['status']
-): boolean =>
-  status === 'completed' || status === 'failed' || status === 'cancelled'
+export type PreparationActivityScope = 'shared' | DocumentKind
 
-export const preparationStepTimeline = (
-  run: PreparationRun
-): ReadonlyArray<PreparationStepSummary> =>
-  preparationStages.map((stage) => {
-    const entries = run.stepHistory.filter((entry) => entry.stage === stage)
+export type PreparationActivityNode = {
+  readonly completedAt: number | null
+  readonly dependsOn: ReadonlyArray<string>
+  readonly id: string
+  readonly label: string
+  readonly message: string | null
+  readonly scope: PreparationActivityScope
+  readonly stage: PreparationStage
+  readonly startedAt: number | null
+  readonly status: PreparationNodeStatus
+}
+
+export type PreparationActivityEvent = {
+  readonly id: string
+  readonly message: string
+  readonly occurredAt: number
+  readonly scope: PreparationActivityScope
+  readonly stage: PreparationStage
+  readonly status: Exclude<PreparationNodeStatus, 'pending'>
+}
+
+export type PreparationActivityProjection = {
+  readonly events: ReadonlyArray<PreparationActivityEvent>
+  readonly nodes: ReadonlyArray<PreparationActivityNode>
+}
+
+const stageLabels: Readonly<Record<PreparationStage, string>> = {
+  analysis: 'Analyze role',
+  application: 'Resolve application',
+  capture: 'Capture context',
+  complete: 'Complete',
+  composition: 'Compose document',
+  evidence: 'Plan evidence',
+  planning: 'Plan composition',
+  queued: 'Queued',
+  review: 'Review',
+  saving: 'Save draft',
+  validation: 'Validate',
+}
+
+const isTerminalStepStatus = (status: PreparationNodeStatus): boolean =>
+  status === 'completed' ||
+  status === 'failed' ||
+  status === 'blocked' ||
+  status === 'cancelled'
+
+export const preparationTrackTimeline = <Stage extends PreparationStage>(
+  stages: ReadonlyArray<Stage>,
+  history: ReadonlyArray<PreparationHistoryEntry<Stage>>
+): ReadonlyArray<PreparationNodeSummary<Stage>> =>
+  stages.map((stage) => {
+    const entries = history.filter((entry) => entry.stage === stage)
     const first = entries[0]
     const latest = entries.at(-1)
     return {
@@ -84,120 +110,140 @@ export const preparationStepTimeline = (
     }
   })
 
-const compareBatchRuns = (left: PreparationRun, right: PreparationRun) =>
+const activityNodeId = (
+  scope: PreparationActivityScope,
+  stage: PreparationStage
+): string => `${scope}:${stage}`
+
+const nodeDependencies = (
+  scope: PreparationActivityScope,
+  stage: PreparationStage,
+  hasCv: boolean
+): ReadonlyArray<string> => {
+  if (scope === 'shared') {
+    const index = sharedPreparationStages.indexOf(
+      stage as SharedPreparationStage
+    )
+    return index <= 0
+      ? []
+      : [
+          activityNodeId(
+            'shared',
+            sharedPreparationStages[index - 1] as SharedPreparationStage
+          ),
+        ]
+  }
+
+  const artifactStages = artifactPreparationStagesForKind(scope)
+  const index = artifactStages.indexOf(stage as ArtifactPreparationStage)
+  if (index > 0) {
+    return [
+      activityNodeId(
+        scope,
+        artifactStages[index - 1] as ArtifactPreparationStage
+      ),
+    ]
+  }
+  if (scope === 'cover_letter' && hasCv) {
+    return [activityNodeId('cv', 'review')]
+  }
+  return [activityNodeId('shared', 'evidence')]
+}
+
+const projectNodes = <Stage extends PreparationStage>(
+  scope: PreparationActivityScope,
+  stages: ReadonlyArray<Stage>,
+  history: ReadonlyArray<PreparationHistoryEntry<Stage>>,
+  hasCv: boolean
+): ReadonlyArray<PreparationActivityNode> =>
+  preparationTrackTimeline(stages, history).map((summary) => ({
+    ...summary,
+    dependsOn: nodeDependencies(scope, summary.stage, hasCv),
+    id: activityNodeId(scope, summary.stage),
+    label: stageLabels[summary.stage],
+    scope,
+  }))
+
+const projectEvents = <Stage extends PreparationStage>(
+  scope: PreparationActivityScope,
+  history: ReadonlyArray<PreparationHistoryEntry<Stage>>
+): ReadonlyArray<PreparationActivityEvent> =>
+  history.map((entry, index) => ({
+    ...entry,
+    id: `${scope}:${entry.stage}:${entry.occurredAt}:${index}`,
+    scope,
+  }))
+
+/**
+ * Dependency-aware projection for the compact activity view: shared nodes are
+ * emitted once, followed by independent artifact branches. The event stream
+ * retains every state transition for diagnostics without duplicating shared
+ * work into both documents.
+ */
+export const preparationActivityProjection = (
+  job: PreparationJob
+): PreparationActivityProjection => {
+  const cv = job.artifacts.cv
+  const coverLetter = job.artifacts.coverLetter
+  const branches: ReadonlyArray<readonly [DocumentKind, PreparationArtifact]> =
+    [
+      ...(cv === null ? [] : ([['cv', cv]] as const)),
+      ...(coverLetter === null
+        ? []
+        : ([['cover_letter', coverLetter]] as const)),
+    ]
+  return {
+    events: [
+      ...projectEvents('shared', job.shared.history),
+      ...branches.flatMap(([scope, artifact]) =>
+        projectEvents(scope, artifact.history)
+      ),
+    ].toSorted(
+      (left, right) =>
+        left.occurredAt - right.occurredAt || left.id.localeCompare(right.id)
+    ),
+    nodes: [
+      ...projectNodes(
+        'shared',
+        sharedPreparationStages,
+        job.shared.history,
+        cv !== null
+      ),
+      ...branches.flatMap(([scope, artifact]) =>
+        projectNodes(
+          scope,
+          artifactPreparationStagesForKind(scope),
+          artifact.history,
+          cv !== null
+        )
+      ),
+    ],
+  }
+}
+
+const compareBatchJobs = (left: PreparationJob, right: PreparationJob) =>
   left.batchPosition - right.batchPosition ||
   left.createdAt - right.createdAt ||
-  left.runId.localeCompare(right.runId)
-
-const compareJobArtifacts = (left: PreparationRun, right: PreparationRun) =>
-  (left.kind === 'cv' ? 0 : 1) - (right.kind === 'cv' ? 0 : 1) ||
-  left.createdAt - right.createdAt ||
-  left.runId.localeCompare(right.runId)
-
-export const summarizePreparationJob = (
-  jobId: string,
-  runs: ReadonlyArray<PreparationRun>
-): PreparationJob | null => {
-  const artifacts = runs
-    .filter((run) => run.jobId === jobId)
-    .toSorted(compareJobArtifacts)
-  const first = artifacts[0]
-  if (first === undefined) return null
-  const latest = artifacts.reduce((current, run) =>
-    run.updatedAt > current.updatedAt ? run : current
-  )
-  const statuses = artifacts.map(({ status }) => status)
-  const hasActive = statuses.some(
-    (status) =>
-      status === 'running' ||
-      status === 'review_submitted' ||
-      status === 'cancelling'
-  )
-  const hasQueued = statuses.some((status) => status === 'queued')
-  const needsReview = statuses.some((status) => status === 'awaiting_review')
-  const terminal = statuses.every(
-    (status) =>
-      status === 'approved' ||
-      status === 'rejected' ||
-      status === 'failed' ||
-      status === 'cancelled'
-  )
-  const successful = statuses.some(
-    (status) => status === 'approved' || status === 'rejected'
-  )
-  const failed = statuses.some((status) => status === 'failed')
-  const cancelled = statuses.every((status) => status === 'cancelled')
-  const status: PreparationJobStatus = hasActive
-    ? 'running'
-    : needsReview
-      ? 'needs_review'
-      : hasQueued
-        ? 'queued'
-        : cancelled
-          ? 'cancelled'
-          : terminal && failed && successful
-            ? 'mixed'
-            : failed
-              ? 'failed'
-              : 'completed'
-
-  return {
-    applicationId:
-      artifacts.find(({ applicationId }) => applicationId !== null)
-        ?.applicationId ?? null,
-    artifacts,
-    batchId: first.batchId,
-    batchPosition: first.batchPosition,
-    company: artifacts.find(({ company }) => company !== null)?.company ?? null,
-    createdAt: Math.min(...artifacts.map(({ createdAt }) => createdAt)),
-    jobId,
-    locale: first.locale,
-    message: latest.message,
-    primaryRunId:
-      artifacts.find(({ kind }) => kind === 'cv')?.runId ?? first.runId,
-    role: artifacts.find(({ role }) => role !== null)?.role ?? null,
-    status,
-    updatedAt: Math.max(...artifacts.map(({ updatedAt }) => updatedAt)),
-    url: first.url,
-  }
-}
-
-export const groupPreparationRunsByJob = (
-  runs: ReadonlyArray<PreparationRun>
-): ReadonlyArray<PreparationJob> => {
-  const grouped = new Map<string, Array<PreparationRun>>()
-  for (const run of runs) {
-    const job = grouped.get(run.jobId)
-    if (job === undefined) grouped.set(run.jobId, [run])
-    else job.push(run)
-  }
-  return [...grouped].flatMap(([jobId, artifacts]) => {
-    const job = summarizePreparationJob(jobId, artifacts)
-    return job === null ? [] : [job]
-  })
-}
+  left.jobId.localeCompare(right.jobId)
 
 export const selectPreparationJob = (
-  runs: ReadonlyMap<string, PreparationRun>,
+  jobs: ReadonlyMap<string, PreparationJob>,
   jobId: string
-): PreparationJob | null => summarizePreparationJob(jobId, [...runs.values()])
+): PreparationJob | null => jobs.get(jobId) ?? null
 
-export const groupPreparationRunsByBatch = (
-  runs: ReadonlyMap<string, PreparationRun>
-): ReadonlyMap<string, ReadonlyArray<PreparationRun>> => {
-  const grouped = new Map<string, Array<PreparationRun>>()
-  for (const run of runs.values()) {
-    const batch = grouped.get(run.batchId)
-    if (batch === undefined) {
-      grouped.set(run.batchId, [run])
-    } else {
-      batch.push(run)
-    }
+export const groupPreparationJobsByBatch = (
+  jobs: ReadonlyMap<string, PreparationJob>
+): ReadonlyMap<string, ReadonlyArray<PreparationJob>> => {
+  const grouped = new Map<string, Array<PreparationJob>>()
+  for (const job of jobs.values()) {
+    const batch = grouped.get(job.batchId)
+    if (batch === undefined) grouped.set(job.batchId, [job])
+    else batch.push(job)
   }
   return new Map(
-    [...grouped].map(([batchId, batchRuns]) => [
+    [...grouped].map(([batchId, batchJobs]) => [
       batchId,
-      batchRuns.toSorted(compareBatchRuns),
+      batchJobs.toSorted(compareBatchJobs),
     ])
   )
 }
@@ -209,7 +255,12 @@ const preparationBatchStatus = (
   if (jobs.some(({ status }) => status === 'needs_review')) {
     return 'needs_review'
   }
-  if (jobs.some(({ status }) => status === 'queued' || status === 'running')) {
+  if (
+    jobs.some(
+      ({ status }) =>
+        status === 'queued' || status === 'running' || status === 'cancelling'
+    )
+  ) {
     return 'running'
   }
   if (jobs.some(({ status }) => status === 'failed' || status === 'mixed')) {
@@ -221,66 +272,56 @@ const preparationBatchStatus = (
 
 export const summarizePreparationBatch = (
   batchId: string,
-  runs: ReadonlyArray<PreparationRun>
+  jobs: ReadonlyArray<PreparationJob>
 ): PreparationBatch | null => {
-  const orderedRuns = runs
-    .filter((run) => run.batchId === batchId)
-    .toSorted(compareBatchRuns)
-  const first = orderedRuns[0]
+  const orderedJobs = jobs
+    .filter((job) => job.batchId === batchId)
+    .toSorted(compareBatchJobs)
+  const first = orderedJobs[0]
   if (first === undefined) return null
-  const jobs = groupPreparationRunsByJob(orderedRuns).toSorted(
-    (left, right) =>
-      left.batchPosition - right.batchPosition ||
-      left.createdAt - right.createdAt ||
-      left.jobId.localeCompare(right.jobId)
-  )
   const statusCounts = {
-    approved: orderedRuns.filter((run) => run.status === 'approved').length,
-    awaiting_review: orderedRuns.filter(
-      (run) => run.status === 'awaiting_review'
-    ).length,
-    cancelled: orderedRuns.filter((run) => run.status === 'cancelled').length,
-    cancelling: orderedRuns.filter((run) => run.status === 'cancelling').length,
-    failed: orderedRuns.filter((run) => run.status === 'failed').length,
-    queued: orderedRuns.filter((run) => run.status === 'queued').length,
-    rejected: orderedRuns.filter((run) => run.status === 'rejected').length,
-    review_submitted: orderedRuns.filter(
-      (run) => run.status === 'review_submitted'
-    ).length,
-    running: orderedRuns.filter((run) => run.status === 'running').length,
-  } satisfies PreparationBatchStatusCounts
-  const activeCount = jobs.filter(
-    ({ status }) => status === 'queued' || status === 'running'
-  ).length
-  const terminalCount = jobs.filter(({ status }) =>
-    ['completed', 'failed', 'cancelled', 'mixed'].includes(status)
-  ).length
-
-  return {
-    activeCount,
-    batchId,
-    createdAt: Math.min(...orderedRuns.map((run) => run.createdAt)),
-    jobs,
-    kind: first.kind,
-    kinds: [...new Set(orderedRuns.map((run) => run.kind))],
-    locale: first.locale,
-    needsReviewCount: jobs.filter(({ status }) => status === 'needs_review')
+    cancelled: orderedJobs.filter((job) => job.status === 'cancelled').length,
+    cancelling: orderedJobs.filter((job) => job.status === 'cancelling').length,
+    completed: orderedJobs.filter((job) => job.status === 'completed').length,
+    failed: orderedJobs.filter((job) => job.status === 'failed').length,
+    mixed: orderedJobs.filter((job) => job.status === 'mixed').length,
+    needs_review: orderedJobs.filter((job) => job.status === 'needs_review')
       .length,
-    runs: orderedRuns,
-    status: preparationBatchStatus(jobs),
+    queued: orderedJobs.filter((job) => job.status === 'queued').length,
+    running: orderedJobs.filter((job) => job.status === 'running').length,
+  } satisfies PreparationBatchStatusCounts
+  const kinds = new Set<DocumentKind>()
+  for (const job of orderedJobs) {
+    if (job.artifacts.cv !== null) kinds.add('cv')
+    if (job.artifacts.coverLetter !== null) kinds.add('cover_letter')
+  }
+  return {
+    activeCount: orderedJobs.filter(
+      ({ status }) =>
+        status === 'queued' || status === 'running' || status === 'cancelling'
+    ).length,
+    batchId,
+    createdAt: Math.min(...orderedJobs.map((job) => job.createdAt)),
+    jobs: orderedJobs,
+    kinds: [...kinds],
+    locale: first.locale,
+    needsReviewCount: statusCounts.needs_review,
+    status: preparationBatchStatus(orderedJobs),
     statusCounts,
-    terminalCount,
-    updatedAt: Math.max(...orderedRuns.map((run) => run.updatedAt)),
-    urlCount: jobs.length,
+    targetCount: orderedJobs.length,
+    terminalCount: orderedJobs.filter(({ status }) =>
+      ['completed', 'failed', 'cancelled', 'mixed'].includes(status)
+    ).length,
+    updatedAt: Math.max(...orderedJobs.map((job) => job.updatedAt)),
   }
 }
 
 export const selectPreparationBatches = (
-  runs: ReadonlyMap<string, PreparationRun>
+  jobs: ReadonlyMap<string, PreparationJob>
 ): ReadonlyArray<PreparationBatch> =>
-  [...groupPreparationRunsByBatch(runs)]
-    .flatMap(([batchId, batchRuns]) => {
-      const batch = summarizePreparationBatch(batchId, batchRuns)
+  [...groupPreparationJobsByBatch(jobs)]
+    .flatMap(([batchId, batchJobs]) => {
+      const batch = summarizePreparationBatch(batchId, batchJobs)
       return batch === null ? [] : [batch]
     })
     .toSorted(
@@ -289,60 +330,60 @@ export const selectPreparationBatches = (
         left.batchId.localeCompare(right.batchId)
     )
 
-export const latestApplicationRun = (
-  runs: ReadonlyMap<string, PreparationRun>,
+export const latestApplicationJob = (
+  jobs: ReadonlyMap<string, PreparationJob>,
   applicationId: string,
-  kind: PreparationRun['kind'],
   locale: string
-): PreparationRun | null => {
-  let latest: PreparationRun | null = null
-  for (const run of runs.values()) {
+): PreparationJob | null => {
+  let latest: PreparationJob | null = null
+  for (const job of jobs.values()) {
     if (
-      run.applicationId === applicationId &&
-      run.kind === kind &&
-      run.locale === locale
+      job.applicationId === applicationId &&
+      job.locale === locale &&
+      (latest === null || job.createdAt >= latest.createdAt)
     ) {
-      latest = run
+      latest = job
     }
   }
   return latest
 }
 
-export const latestOpenApplicationRun = (
-  runs: ReadonlyMap<string, PreparationRun>,
+export const latestOpenApplicationJob = (
+  jobs: ReadonlyMap<string, PreparationJob>,
   applicationId: string,
-  kind: PreparationRun['kind'],
   locale: string
-): PreparationRun | null => {
-  let latest: PreparationRun | null = null
-  for (const run of runs.values()) {
+): PreparationJob | null => {
+  let latest: PreparationJob | null = null
+  for (const job of jobs.values()) {
     if (
-      run.applicationId === applicationId &&
-      run.kind === kind &&
-      run.locale === locale &&
-      (run.status === 'queued' ||
-        run.status === 'running' ||
-        run.status === 'awaiting_review' ||
-        run.status === 'review_submitted' ||
-        run.status === 'cancelling')
+      job.applicationId === applicationId &&
+      job.locale === locale &&
+      (job.status === 'queued' ||
+        job.status === 'running' ||
+        job.status === 'needs_review' ||
+        job.status === 'cancelling') &&
+      (latest === null || job.createdAt >= latest.createdAt)
     ) {
-      latest = run
+      latest = job
     }
   }
   return latest
 }
 
-export const applicationRunById = (
-  runs: ReadonlyMap<string, PreparationRun>,
-  runId: string,
+export const applicationJobById = (
+  jobs: ReadonlyMap<string, PreparationJob>,
+  jobId: string,
   applicationId: string,
-  kind: PreparationRun['kind'],
   locale: string
-): PreparationRun | null => {
-  const run = runs.get(runId)
-  return run?.applicationId === applicationId &&
-    run.kind === kind &&
-    run.locale === locale
-    ? run
+): PreparationJob | null => {
+  const job = jobs.get(jobId)
+  return job?.applicationId === applicationId && job.locale === locale
+    ? job
     : null
 }
+
+export const selectPreparationArtifact = (
+  job: PreparationJob,
+  kind: DocumentKind
+): PreparationArtifact | null =>
+  kind === 'cv' ? job.artifacts.cv : job.artifacts.coverLetter

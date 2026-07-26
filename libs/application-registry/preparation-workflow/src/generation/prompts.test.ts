@@ -88,7 +88,6 @@ const visibilityFacts = {
       entries: [
         {
           company: 'Public Employer',
-          companyVisibility: 'public',
           highlights: [],
           id: 'experience.public',
           period: '2025-present',
@@ -98,7 +97,6 @@ const visibilityFacts = {
         },
         {
           company: 'Private Employer',
-          companyVisibility: 'private',
           highlights: [
             { id: 'fact.private-employer', text: 'Private employer fact.' },
           ],
@@ -154,34 +152,36 @@ const visibilityFacts = {
 } satisfies FactsCatalogueV1
 
 describe('preparation request construction', () => {
-  test('excludes private contacts, employers, projects, and links from every model stage', () => {
+  test('keeps every employer while filtering independently private content', () => {
     const projected = JSON.stringify(factsForGeneration(visibilityFacts))
 
     expect(projected).toContain('public@example.test')
     expect(projected).toContain('Public Employer')
+    expect(projected).toContain('Private Employer')
+    expect(projected).toContain('Private employer fact.')
     expect(projected).toContain('Public Project')
     expect(projected).toContain('https://public.example.test')
     expect(projected).not.toContain('private-phone-value')
-    expect(projected).not.toContain('Private Employer')
-    expect(projected).not.toContain('Private employer fact.')
     expect(projected).not.toContain('Private Project')
     expect(projected).not.toContain('Private project fact.')
     expect(projected).not.toContain('https://private-link.example.test')
   })
 
-  test('passes complete context and content-owned guidance to CV generation', () => {
-    const job = { requirements: ['something unusual'] }
+  test('passes role context and content-owned guidance without the complete facts catalogue', () => {
+    const job = {
+      keywords: ['Effect'],
+      location: null,
+      responsibilities: ['Build reliable systems.'],
+      role: 'Platform Engineer',
+    }
     const guidance = cvGenerationGuidanceTestFixture
     const request = buildCvDraftGenerationRequest({
-      factsCatalogue: facts,
       guidance,
-      jobContext: job,
+      job,
       locale: 'en',
     })
 
-    expect(request.prompt).toContain('Verified fact.')
-    expect(request.prompt).toContain('Preserve every metric.')
-    expect(request.prompt).not.toContain('Private audit locator')
+    expect(request.prompt).not.toContain('Verified fact.')
     expect(request.prompt).toContain(JSON.stringify(job, null, 2))
     expect(request.prompt).toContain(JSON.stringify(guidance, null, 2))
   })
@@ -210,15 +210,15 @@ describe('preparation request construction', () => {
     )
   })
 
-  test('keeps private catalogue entries out of selectable evidence', () => {
+  test('keeps all experience selectable while excluding private projects', () => {
     const ids = evidenceReferencesForGeneration(visibilityFacts).map(
       ({ id }) => id
     )
 
     expect(ids).toContain('experience.public')
+    expect(ids).toContain('experience.private')
+    expect(ids).toContain('fact.private-employer')
     expect(ids).toContain('project.public')
-    expect(ids).not.toContain('experience.private')
-    expect(ids).not.toContain('fact.private-employer')
     expect(ids).not.toContain('project.private')
     expect(ids).not.toContain('fact.private-project')
     expect(ids).not.toContain('contact.public')
@@ -229,8 +229,30 @@ describe('preparation request construction', () => {
 
   test('keeps the user-authored cover-letter prompt separate and complete', () => {
     const request = buildCoverLetterGenerationRequest({
-      factsCatalogue: facts,
-      jobContext: 'posting text',
+      approvedCv: {
+        $schema: 'cv.document.v1',
+        additionalSections: [],
+        direction: 'ltr',
+        education: [],
+        experience: [],
+        locale: 'en',
+        person: {
+          contacts: [],
+          headline: 'Platform Engineer',
+          name: 'Ada Example',
+          summary: 'Builds reliable systems.',
+        },
+        projects: [],
+        skills: [],
+      },
+      evidence: evidenceReferencesForGeneration(facts),
+      job: {
+        company: 'Example',
+        keywords: ['Effect'],
+        location: null,
+        responsibilities: ['Build reliable systems.'],
+        role: 'Platform Engineer',
+      },
       locale: 'en',
       prompt: 'Prefer a direct opening.',
     })

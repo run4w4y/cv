@@ -1,221 +1,199 @@
 import { describe, expect, test } from 'bun:test'
 
-import type { PreparationRun } from './domain'
+import type {
+  DocumentKind,
+  PreparationArtifact,
+  PreparationJob,
+} from './domain'
 import {
-  applicationRunById,
-  groupPreparationRunsByBatch,
-  latestApplicationRun,
-  latestOpenApplicationRun,
-  preparationStepTimeline,
+  latestApplicationJob,
+  preparationActivityProjection,
   selectPreparationBatches,
+  selectPreparationJob,
 } from './selectors'
 
-const run = (
-  runId: string,
-  locale: string,
-  kind: PreparationRun['kind'] = 'cv',
-  status: 'queued' | 'running' | 'failed' = 'queued'
-): PreparationRun => {
-  const common = {
-    applicationId: 'application-1',
-    batchId: `batch-${runId}`,
-    batchPosition: 0,
-    candidate: null,
-    company: 'Example',
-    createdAt: 1,
-    jobId: runId,
-    kind,
-    locale,
-    message: 'test',
-    role: 'Platform Engineer',
-    runId,
-    stepHistory: [],
-    updatedAt: 1,
-    url: 'https://jobs.example.test/role',
-  } as const
+const artifact = (
+  kind: DocumentKind,
+  updatedAt: number,
+  status: PreparationArtifact['status'] = 'running'
+): PreparationArtifact => ({
+  candidate: null,
+  error: null,
+  history: [
+    {
+      message: 'Preparing document.',
+      occurredAt: updatedAt,
+      stage: kind === 'cv' ? 'planning' : 'composition',
+      status: status === 'failed' ? 'failed' : 'running',
+    },
+  ],
+  kind,
+  message: 'Preparing document.',
+  stage: kind === 'cv' ? 'planning' : 'composition',
+  status,
+  updatedAt,
+})
 
-  switch (status) {
-    case 'queued':
-      return { ...common, error: null, stage: 'queued', status }
-    case 'running':
-      return { ...common, error: null, stage: 'analysis', status }
-    case 'failed':
-      return { ...common, error: 'failed', stage: 'analysis', status }
+const job = (
+  jobId: string,
+  options: {
+    readonly applicationId?: string
+    readonly batchId?: string
+    readonly batchPosition?: number
+    readonly createdAt?: number
+    readonly status?: PreparationJob['status']
+    readonly withCoverLetter?: boolean
+  } = {}
+): PreparationJob => {
+  const createdAt = options.createdAt ?? 10
+  return {
+    applicationId: options.applicationId ?? 'application-1',
+    artifacts: {
+      coverLetter:
+        options.withCoverLetter === true
+          ? artifact('cover_letter', createdAt + 5)
+          : null,
+      cv: artifact('cv', createdAt + 4),
+    },
+    batchId: options.batchId ?? 'batch-1',
+    batchPosition: options.batchPosition ?? 0,
+    company: 'Example',
+    createdAt,
+    error: null,
+    jobId,
+    locale: 'en',
+    message: 'Planning sections.',
+    retryOfJobId: null,
+    role: 'Platform Engineer',
+    shared: {
+      history: [
+        {
+          message: 'Waiting.',
+          occurredAt: createdAt,
+          stage: 'queued',
+          status: 'running',
+        },
+        {
+          message: 'Waiting complete.',
+          occurredAt: createdAt + 1,
+          stage: 'queued',
+          status: 'completed',
+        },
+        {
+          message: 'Application ready.',
+          occurredAt: createdAt + 2,
+          stage: 'application',
+          status: 'completed',
+        },
+        {
+          message: 'Context captured.',
+          occurredAt: createdAt + 3,
+          stage: 'capture',
+          status: 'completed',
+        },
+        {
+          message: 'Role analyzed.',
+          occurredAt: createdAt + 4,
+          stage: 'analysis',
+          status: 'completed',
+        },
+        {
+          message: 'Evidence planned.',
+          occurredAt: createdAt + 5,
+          stage: 'evidence',
+          status: 'completed',
+        },
+      ],
+      stage: 'evidence',
+      status: 'completed',
+    },
+    status: options.status ?? 'running',
+    target: {
+      _tag: 'ExistingApplication',
+      applicationId: options.applicationId ?? 'application-1',
+      factsReleaseId: 'facts-1',
+      jobSnapshotId: 'snapshot-1',
+      url: 'https://jobs.example.test/platform',
+    },
+    updatedAt: createdAt + 5,
+    url: 'https://jobs.example.test/platform',
   }
 }
 
-describe('preparation run selection', () => {
-  test('isolates application runs by document kind and locale', () => {
-    const runs = new Map([
-      ['run-en', run('run-en', 'en')],
-      ['run-ru', run('run-ru', 'ru')],
-      ['run-letter', run('run-letter', 'en', 'cover_letter')],
-    ])
+describe('job-first workflow selectors', () => {
+  test('selects authoritative jobs directly without reconstructing artifact runs', () => {
+    const first = job('job-1')
+    const jobs = new Map([[first.jobId, first]])
+    expect(selectPreparationJob(jobs, 'job-1')).toBe(first)
+    expect(selectPreparationJob(jobs, 'missing')).toBeNull()
+  })
 
-    expect(latestApplicationRun(runs, 'application-1', 'cv', 'en')?.runId).toBe(
-      'run-en'
+  test('projects shared activity once and branches artifacts after evidence', () => {
+    const projection = preparationActivityProjection(
+      job('job-1', { withCoverLetter: true })
     )
     expect(
-      applicationRunById(runs, 'run-ru', 'application-1', 'cv', 'en')
-    ).toBeNull()
+      projection.nodes.filter(({ scope }) => scope === 'shared')
+    ).toHaveLength(5)
     expect(
-      applicationRunById(runs, 'run-letter', 'application-1', 'cv', 'en')
-    ).toBeNull()
+      projection.nodes.find(({ id }) => id === 'cv:composition')?.dependsOn
+    ).toEqual(['cv:planning'])
+    expect(
+      projection.nodes.find(({ id }) => id === 'cv:planning')?.dependsOn
+    ).toEqual(['shared:evidence'])
+    expect(
+      projection.nodes.find(({ id }) => id === 'cover_letter:composition')
+        ?.dependsOn
+    ).toEqual(['cv:review'])
+    expect(
+      projection.events.filter(
+        ({ scope, stage }) => scope === 'shared' && stage === 'analysis'
+      )
+    ).toHaveLength(1)
   })
 
-  test('prefers the open review even when a stale run was requested', () => {
-    const runs = new Map([
-      ['run-old', run('run-old', 'en', 'cv', 'failed')],
-      ['run-review', run('run-review', 'en', 'cv', 'running')],
-    ])
-
-    expect(
-      latestOpenApplicationRun(runs, 'application-1', 'cv', 'en')?.runId
-    ).toBe('run-review')
-    expect(
-      applicationRunById(runs, 'missing', 'application-1', 'cv', 'en')
-    ).toBeNull()
-  })
-
-  test('groups batches in stable job order and summarizes mixed parallel work', () => {
-    const runs = new Map([
+  test('summarizes batches by jobs rather than duplicated artifact counts', () => {
+    const jobs = new Map([
       [
-        'run-failed',
-        {
-          ...run('run-failed', 'en', 'cv', 'failed'),
-          batchId: 'batch-mixed',
-          batchPosition: 2,
-          createdAt: 10,
-          updatedAt: 40,
-        },
-      ],
-      [
-        'run-active-first',
-        {
-          ...run('run-active-first', 'en', 'cv', 'running'),
-          batchId: 'batch-mixed',
+        'job-1',
+        job('job-1', {
           batchPosition: 0,
-          createdAt: 10,
-          updatedAt: 30,
-        },
+          status: 'needs_review',
+          withCoverLetter: true,
+        }),
       ],
       [
-        'run-active',
-        {
-          ...run('run-active', 'en', 'cv', 'running'),
-          batchId: 'batch-mixed',
+        'job-2',
+        job('job-2', {
+          applicationId: 'application-2',
           batchPosition: 1,
-          createdAt: 10,
-          updatedAt: 20,
-        },
+          createdAt: 20,
+          status: 'completed',
+        }),
       ],
-      ['run-other', run('run-other', 'ru')],
     ])
-
-    const grouped = groupPreparationRunsByBatch(runs)
-    expect(grouped.get('batch-mixed')?.map(({ runId }) => runId)).toEqual([
-      'run-active-first',
-      'run-active',
-      'run-failed',
-    ])
-
-    const batch = selectPreparationBatches(runs).find(
-      ({ batchId }) => batchId === 'batch-mixed'
-    )
+    const [batch] = selectPreparationBatches(jobs)
     expect(batch).toMatchObject({
-      activeCount: 2,
-      createdAt: 10,
-      needsReviewCount: 0,
-      status: 'running',
+      needsReviewCount: 1,
+      status: 'needs_review',
+      targetCount: 2,
       terminalCount: 1,
-      updatedAt: 40,
     })
-    expect(batch?.statusCounts).toMatchObject({
-      failed: 1,
-      running: 2,
-    })
+    expect(batch?.kinds).toEqual(['cv', 'cover_letter'])
   })
 
-  test('counts paired artifacts as one active URL job', () => {
-    const cv = {
-      ...run('run-cv', 'en', 'cv', 'running'),
-      batchId: 'batch-paired',
-      jobId: 'job-paired',
-    }
-    const letter = {
-      ...run('run-letter', 'en', 'cover_letter', 'queued'),
-      batchId: 'batch-paired',
-      jobId: 'job-paired',
-    }
-    const batch = selectPreparationBatches(
-      new Map([
-        [cv.runId, cv],
-        [letter.runId, letter],
-      ])
-    )[0]
-
-    expect(batch).toMatchObject({
-      activeCount: 1,
-      needsReviewCount: 0,
-      status: 'running',
-      terminalCount: 0,
-      urlCount: 1,
-    })
-    expect(batch?.jobs).toHaveLength(1)
-    expect(batch?.jobs[0]?.artifacts.map(({ kind }) => kind)).toEqual([
-      'cv',
-      'cover_letter',
-    ])
-  })
-
-  test('derives a complete CI-style timeline from append-only step history', () => {
-    const value = {
-      ...run('run-timeline', 'en', 'cv', 'failed'),
-      stepHistory: [
-        {
-          message: 'Queued',
-          occurredAt: 10,
-          stage: 'queued' as const,
-          status: 'running' as const,
-        },
-        {
-          message: 'Queued',
-          occurredAt: 20,
-          stage: 'queued' as const,
-          status: 'completed' as const,
-        },
-        {
-          message: 'Analyzing',
-          occurredAt: 20,
-          stage: 'analysis' as const,
-          status: 'running' as const,
-        },
-        {
-          message: 'Analysis failed',
-          occurredAt: 35,
-          stage: 'analysis' as const,
-          status: 'failed' as const,
-        },
-      ],
-    }
-
-    const timeline = preparationStepTimeline(value)
-    expect(timeline.find(({ stage }) => stage === 'queued')).toEqual({
-      completedAt: 20,
-      message: 'Queued',
-      stage: 'queued',
-      startedAt: 10,
-      status: 'completed',
-    })
-    expect(timeline.find(({ stage }) => stage === 'capture')?.status).toBe(
-      'pending'
-    )
-    expect(timeline.find(({ stage }) => stage === 'analysis')).toEqual({
-      completedAt: 35,
-      message: 'Analysis failed',
-      stage: 'analysis',
-      startedAt: 20,
-      status: 'failed',
-    })
+  test('finds the latest job for an existing application and locale', () => {
+    const older = job('job-old', { createdAt: 10 })
+    const newer = job('job-new', { createdAt: 20 })
+    expect(
+      latestApplicationJob(
+        new Map([
+          [older.jobId, older],
+          [newer.jobId, newer],
+        ]),
+        'application-1',
+        'en'
+      )
+    ).toBe(newer)
   })
 })

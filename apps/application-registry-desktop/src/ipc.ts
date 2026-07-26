@@ -9,6 +9,7 @@ export class DesktopIpcRequestError extends Schema.TaggedErrorClass<DesktopIpcRe
 ) {}
 
 export const desktopIpc = {
+  codexAssist: 'cv-desktop:codex:assist',
   codexCancel: 'cv-desktop:codex:cancel',
   codexGenerate: 'cv-desktop:codex:generate',
   codexStatus: 'cv-desktop:codex:status',

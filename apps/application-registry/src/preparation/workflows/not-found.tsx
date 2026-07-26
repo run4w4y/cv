@@ -29,7 +29,7 @@ export const WorkflowNotFound = ({
         <EmptyDescription>{description}</EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
-        <Button render={<Link to="/workflows" />}>All workflows</Button>
+        <Button render={<Link to="/ai-workflows" />}>All AI workflows</Button>
       </EmptyContent>
     </Empty>
   </WorkflowPage>

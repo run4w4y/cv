@@ -1,143 +1,127 @@
 import { describe, expect, test } from 'bun:test'
-import { Effect, Schema } from 'effect'
+import { Effect, Exit, Schema } from 'effect'
+
 import { cvGenerationGuidanceTestFixture } from '../test-support'
 import {
-  canonicalPreparationUrl,
-  maximumCoverLetterPromptLength,
-  maximumPreparationBatchSize,
-  PreparationBatchUrlsSchema,
-  PreparationWorkflowInputSchema,
+  AiWorkflowTargetSchema,
+  PreparationBatchTargetsSchema,
+  PreparationJobInputSchema,
+  preparationJobArtifactInputs,
 } from './input'
 
-describe('preparation workflow inputs', () => {
-  test('canonicalizes equivalent fragment URLs to one workflow identity', () => {
-    expect(
-      canonicalPreparationUrl(' https://JOBS.example.test/role#application ')
-    ).toBe('https://jobs.example.test/role')
-  })
+const postingTarget = {
+  _tag: 'PostingUrl' as const,
+  url: 'https://jobs.example.test/platform',
+}
 
-  test('accepts any HTTP host and rejects non-HTTP URLs', async () => {
+const existingTarget = {
+  _tag: 'ExistingApplication' as const,
+  applicationId: 'application-1',
+  factsReleaseId: 'facts-1',
+  jobSnapshotId: 'snapshot-1',
+  url: 'https://jobs.example.test/platform',
+}
+
+describe('AI workflow input', () => {
+  test('uses one target union for posting URLs and existing applications', async () => {
     await expect(
-      Effect.runPromise(
-        PreparationBatchUrlsSchema.makeEffect([
-          'https://user:secret@jobs.example.test/role',
-          'http://127.0.0.1/internal-listing',
-        ])
-      )
-    ).resolves.toEqual([
-      'https://user:secret@jobs.example.test/role',
-      'http://127.0.0.1/internal-listing',
-    ])
-
+      Effect.runPromise(AiWorkflowTargetSchema.makeEffect(postingTarget))
+    ).resolves.toEqual(postingTarget)
     await expect(
-      Effect.runPromise(
-        PreparationBatchUrlsSchema.makeEffect(['file:///private/job.html'])
-      )
-    ).rejects.toBeDefined()
-  })
+      Effect.runPromise(AiWorkflowTargetSchema.makeEffect(existingTarget))
+    ).resolves.toEqual(existingTarget)
 
-  test('rejects malformed locales', async () => {
-    await expect(
-      Effect.runPromise(
-        Schema.decodeUnknownEffect(PreparationWorkflowInputSchema)({
-          coverLetterPrompt: null,
-          cvGenerationGuidance: cvGenerationGuidanceTestFixture,
-          kind: 'cv',
-          locale: 'x',
-          runId: 'run-1',
-          source: {
-            _tag: 'CaptureUrl',
-            url: 'https://jobs.example.test/role',
-          },
-        })
-      )
-    ).rejects.toBeDefined()
-  })
-
-  test('enforces the in-memory batch admission bound', async () => {
-    const maximum = Array.from(
-      { length: maximumPreparationBatchSize },
-      (_, index) => `https://jobs.example.test/${index}`
+    const invalid = await Effect.runPromiseExit(
+      Schema.decodeUnknownEffect(AiWorkflowTargetSchema)({
+        _tag: 'PostingUrl',
+        url: 'file:///private/job.html',
+      })
     )
-    await expect(
-      Effect.runPromise(PreparationBatchUrlsSchema.makeEffect(maximum))
-    ).resolves.toHaveLength(maximumPreparationBatchSize)
-
-    await expect(
-      Effect.runPromise(
-        PreparationBatchUrlsSchema.makeEffect([
-          ...maximum,
-          'https://jobs.example.test/overflow',
-        ])
-      )
-    ).rejects.toBeDefined()
+    expect(Exit.isFailure(invalid)).toBe(true)
   })
 
-  test('bounds user-authored cover-letter instructions', async () => {
-    await expect(
-      Effect.runPromise(
-        Schema.decodeUnknownEffect(PreparationWorkflowInputSchema)({
-          coverLetterPrompt: 'x'.repeat(maximumCoverLetterPromptLength + 1),
-          cvGenerationGuidance: null,
-          kind: 'cover_letter',
-          locale: 'en',
-          runId: 'run-prompt-limit',
-          source: {
-            _tag: 'CaptureUrl',
-            url: 'https://jobs.example.test/role',
-          },
-        })
-      )
-    ).rejects.toBeDefined()
+  test('requires a CV for posting URL jobs', async () => {
+    const invalid = await Effect.runPromiseExit(
+      PreparationJobInputSchema.makeEffect({
+        artifacts: {
+          coverLetter: { prompt: 'Write a concise letter.' },
+          cv: null,
+        },
+        jobId: 'job-1',
+        locale: 'en',
+        target: postingTarget,
+      })
+    )
+    expect(Exit.isFailure(invalid)).toBe(true)
   })
 
-  test('requires immutable snapshot and facts pins for reviewed context', async () => {
-    await expect(
-      Effect.runPromise(
-        Schema.decodeUnknownEffect(PreparationWorkflowInputSchema)({
-          coverLetterPrompt: null,
-          cvGenerationGuidance: cvGenerationGuidanceTestFixture,
-          kind: 'cv',
-          locale: 'en',
-          runId: 'run-reviewed',
-          source: {
-            _tag: 'ReviewedContext',
-            applicationId: 'application-1',
-            url: 'https://jobs.example.test/role',
-          },
-        })
-      )
-    ).rejects.toBeDefined()
-  })
-
-  test('requires CV guidance only for CV runs', async () => {
-    const common = {
-      coverLetterPrompt: null,
-      locale: 'en',
-      runId: 'run-guidance',
-      source: {
-        _tag: 'CaptureUrl',
-        url: 'https://jobs.example.test/role',
+  test('allows an existing application to request only a cover letter', async () => {
+    const input = await Effect.runPromise(
+      PreparationJobInputSchema.makeEffect({
+        artifacts: {
+          coverLetter: { prompt: 'Write a concise letter.' },
+          cv: null,
+        },
+        jobId: 'job-1',
+        locale: 'en',
+        target: existingTarget,
+      })
+    )
+    expect(preparationJobArtifactInputs(input)).toMatchObject([
+      {
+        kind: 'cover_letter',
+        runId: 'job-1:cover-letter',
+        source: {
+          _tag: 'ReviewedContext',
+          applicationId: 'application-1',
+        },
       },
-    }
+    ])
+  })
 
+  test('derives deterministic artifact execution inputs from one job payload', async () => {
+    const input = await Effect.runPromise(
+      PreparationJobInputSchema.makeEffect({
+        artifacts: {
+          coverLetter: { prompt: 'Write a concise letter.' },
+          cv: { generationGuidance: cvGenerationGuidanceTestFixture },
+        },
+        jobId: 'job-1',
+        locale: 'en',
+        target: postingTarget,
+      })
+    )
+    expect(
+      preparationJobArtifactInputs(input).map(({ kind, runId }) => ({
+        kind,
+        runId,
+      }))
+    ).toEqual([
+      { kind: 'cv', runId: 'job-1:cv' },
+      { kind: 'cover_letter', runId: 'job-1:cover-letter' },
+    ])
+  })
+
+  test('bounds unified workflow batches', async () => {
+    const maximum = Array.from({ length: 25 }, (_, index) => ({
+      _tag: 'PostingUrl' as const,
+      url: `https://jobs.example.test/${index}`,
+    }))
     await expect(
-      Effect.runPromise(
-        Schema.decodeUnknownEffect(PreparationWorkflowInputSchema)({
-          ...common,
-          cvGenerationGuidance: null,
-          kind: 'cv',
-        })
+      Effect.runPromise(PreparationBatchTargetsSchema.makeEffect(maximum))
+    ).resolves.toHaveLength(25)
+    expect(
+      Exit.isFailure(
+        await Effect.runPromiseExit(
+          PreparationBatchTargetsSchema.makeEffect([
+            ...maximum,
+            {
+              _tag: 'PostingUrl',
+              url: 'https://jobs.example.test/overflow',
+            },
+          ])
+        )
       )
-    ).rejects.toBeDefined()
-    await expect(
-      Effect.runPromise(
-        Schema.decodeUnknownEffect(PreparationWorkflowInputSchema)({
-          ...common,
-          cvGenerationGuidance: cvGenerationGuidanceTestFixture,
-          kind: 'cover_letter',
-        })
-      )
-    ).rejects.toBeDefined()
+    ).toBe(true)
   })
 })

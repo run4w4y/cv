@@ -132,7 +132,6 @@ const catalogue = (locale: string): FactsCatalogueV1 => ({
         {
           id: 'experience-example',
           company: 'Example Company',
-          companyVisibility: 'public',
           period: '2024–present',
           roles: ['Staff Engineer'],
           highlights: [

@@ -1,17 +1,19 @@
 import {
+  type DocumentKind,
+  type PreparationArtifact,
   type PreparationJob,
-  type PreparationRun,
-  type PreparationStepSummary,
-  preparationStepTimeline,
+  preparationActivityProjection,
 } from '@cv/application-preparation-workflow/domain'
 import { useAtom, useAtomValue } from '@effect/atom-react'
+import { Exit } from 'effect'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
-import { useParams } from 'react-router'
+import { useNavigate, useParams } from 'react-router'
 
 import { asyncResultErrorMessage } from '@/lib/async-result'
 import {
-  cancelPreparationAtom,
+  cancelAiWorkflowJobFamily,
   preparationJobAtom,
+  retryAiWorkflowJobAtom,
 } from '@/preparation/workflow/atoms'
 import {
   type WorkflowArtifactScreenItem,
@@ -19,81 +21,80 @@ import {
   WorkflowJobScreen,
 } from '@/preparation/workflows/job-screen'
 import { WorkflowNotFound } from '@/preparation/workflows/not-found'
-import {
-  type WorkflowJobListItem,
-  type WorkflowStepListItem,
-  workflowStageLabel,
+import type {
+  WorkflowArtifactListItem,
+  WorkflowJobListItem,
 } from '@/preparation/workflows/presentation'
+
+const artifactItems = (
+  job: PreparationJob
+): ReadonlyArray<readonly [DocumentKind, PreparationArtifact]> => [
+  ...(job.artifacts.cv === null ? [] : ([['cv', job.artifacts.cv]] as const)),
+  ...(job.artifacts.coverLetter === null
+    ? []
+    : ([['cover_letter', job.artifacts.coverLetter]] as const)),
+]
+
+const toArtifactListItem = (
+  kind: DocumentKind,
+  artifact: PreparationArtifact
+): WorkflowArtifactListItem => ({
+  error: artifact.error,
+  kind,
+  message: artifact.message,
+  stage: artifact.stage,
+  status: artifact.status,
+})
 
 const toJobItem = (job: PreparationJob): WorkflowJobListItem => ({
   applicationId: job.applicationId,
-  artifacts: job.artifacts.map((run) => ({
-    error: run.error,
-    kind: run.kind,
-    message: run.message,
-    runId: run.runId,
-    stage: run.stage,
-    status: run.status,
-  })),
+  artifacts: artifactItems(job).map(([kind, artifact]) =>
+    toArtifactListItem(kind, artifact)
+  ),
   batchId: job.batchId,
   company: job.company,
   createdAt: job.createdAt,
   jobId: job.jobId,
-  kinds: job.artifacts.map(({ kind }) => kind),
+  kinds: artifactItems(job).map(([kind]) => kind),
   locale: job.locale,
   message: job.message,
   position: job.batchPosition,
-  primaryRunId: job.primaryRunId,
   role: job.role,
   status: job.status,
   updatedAt: job.updatedAt,
   url: job.url,
 })
 
-const toStepItem = (step: PreparationStepSummary): WorkflowStepListItem => ({
-  completedAt: step.completedAt,
-  description:
-    step.message ??
-    (step.status === 'pending'
-      ? 'Waiting for the preceding step.'
-      : workflowStageLabel(step.stage)),
-  stage: step.stage,
-  startedAt: step.startedAt,
-  status: step.status,
-  title: workflowStageLabel(step.stage),
-})
-
 const artifactSummary = (
-  run: PreparationRun
+  artifact: PreparationArtifact
 ): WorkflowArtifactSummary | null => {
-  if (run.candidate === null) return null
+  if (artifact.candidate === null) return null
   return {
-    codexCalls: run.candidate.candidate.metadata.length,
-    revisionNumber: run.candidate.result.revision.revisionNumber,
-    tokens: run.candidate.candidate.metadata.reduce(
+    codexCalls: artifact.candidate.candidate.metadata.length,
+    revisionNumber: artifact.candidate.result.revision.revisionNumber,
+    tokens: artifact.candidate.candidate.metadata.reduce(
       (total, item) => total + (item.usage.totalTokens ?? 0),
       0
     ),
   }
 }
 
-const toArtifactItem = (run: PreparationRun): WorkflowArtifactScreenItem => ({
-  artifact: {
-    error: run.error,
-    kind: run.kind,
-    message: run.message,
-    runId: run.runId,
-    stage: run.stage,
-    status: run.status,
-  },
-  steps: preparationStepTimeline(run).map(toStepItem),
-  summary: artifactSummary(run),
+const toArtifactItem = (
+  kind: DocumentKind,
+  artifact: PreparationArtifact
+): WorkflowArtifactScreenItem => ({
+  artifact: toArtifactListItem(kind, artifact),
+  summary: artifactSummary(artifact),
 })
 
 export const WorkflowJobPage = () => {
   const { batchId = '', jobId = '' } = useParams()
+  const navigate = useNavigate()
   const jobResult = useAtomValue(preparationJobAtom(jobId))
-  const [cancelResult, cancel] = useAtom(cancelPreparationAtom, {
+  const [cancelResult, cancel] = useAtom(cancelAiWorkflowJobFamily(jobId), {
+    mode: 'promiseExit',
+  })
+  const [retryResult, retry] = useAtom(retryAiWorkflowJobAtom, {
     mode: 'promiseExit',
   })
 
@@ -104,8 +105,8 @@ export const WorkflowJobPage = () => {
         description={
           asyncResultErrorMessage(
             jobResult,
-            'The workflow job could not be loaded.'
-          ) ?? 'The workflow job could not be loaded.'
+            'The AI workflow job could not be loaded.'
+          ) ?? 'The AI workflow job could not be loaded.'
         }
       />
     )
@@ -115,7 +116,7 @@ export const WorkflowJobPage = () => {
     return (
       <WorkflowNotFound
         title="Loading workflow job"
-        description="Waiting for the in-memory workflow runtime."
+        description="Waiting for the desktop workflow runtime."
       />
     )
   }
@@ -125,27 +126,46 @@ export const WorkflowJobPage = () => {
     return (
       <WorkflowNotFound
         title="Workflow job not found"
-        description="This job is not present in the requested batch for the current desktop session."
+        description="This job is not present in the requested AI workflow batch."
       />
     )
   }
 
   const cancelling = AsyncResult.isWaiting(cancelResult)
+  const retrying = AsyncResult.isWaiting(retryResult)
   const cancelError =
     asyncResultErrorMessage(
       cancelResult,
       'The workflow could not be cancelled.'
     ) ?? null
+  const retryError =
+    asyncResultErrorMessage(
+      retryResult,
+      'A new workflow job could not be started.'
+    ) ?? null
 
   return (
     <WorkflowJobScreen
-      artifacts={job.artifacts.map(toArtifactItem)}
+      activity={preparationActivityProjection(job)}
+      artifacts={artifactItems(job).map(([kind, artifact]) =>
+        toArtifactItem(kind, artifact)
+      )}
       cancelError={cancelError}
       cancelling={cancelling}
       job={toJobItem(job)}
       onCancel={() => {
-        void cancel({ runId: job.primaryRunId })
+        void cancel({ jobId })
       }}
+      onRetry={() => {
+        void retry(jobId).then((exit) => {
+          if (Exit.isFailure(exit)) return
+          navigate(
+            `/ai-workflows/${encodeURIComponent(exit.value.batchId)}/jobs/${encodeURIComponent(exit.value.jobId)}`
+          )
+        })
+      }}
+      retryError={retryError}
+      retrying={retrying}
     />
   )
 }

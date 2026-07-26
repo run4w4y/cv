@@ -30,6 +30,12 @@ Subsequent requests go directly to the configured canonical
 to `https://cv-api.4w4y.run`. There is intentionally no build-time token
 variable. The API must allow the web origin through CORS.
 
+`VITE_CV_WEB_ORIGIN` configures the single CV origin allowed by the Registry
+content security policy and used to validate staged capability-preview links.
+It defaults to `https://cv.4w4y.run`. Production builds require HTTPS and a bare
+origin without credentials, path, query, or fragment; development additionally
+permits loopback HTTP.
+
 Reviewed facts are loaded through the authenticated registry API and its
 private MinIO adapter. No permanent storage credential is embedded in the
 management application.

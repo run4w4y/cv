@@ -3,8 +3,9 @@ import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 
 const fixturePath = '/c/fixture'
 const previewPath = '/c/_preview/fixture?access=fixture-preview'
-const overflowPreviewPath =
-  '/c/_preview/fixture-overflow?access=fixture-overflow-preview'
+const pdfRenderPath = '/c/_render/fixture?access=fixture-preview'
+const overflowPdfRenderPath =
+  '/c/_render/fixture-overflow?access=fixture-overflow-preview'
 const colorSchemeStorageKey = 'cv:color-scheme:v1'
 const fixturePort = Number(process.env.CV_E2E_PORT ?? 4381)
 const fixturePublicUrl = `http://localhost:${fixturePort}/c/fixture`
@@ -103,12 +104,34 @@ test('behaves as a navigable website instead of an A4 sheet', async ({
   await expect(experience).toBeInViewport()
 })
 
-test('renders the single-column A4 capability preview without interactive controls', async ({
+test('renders the capability preview through the exact public web renderer', async ({
+  page,
+}) => {
+  const response = await page.goto(previewPath)
+
+  expect(response?.status()).toBe(200)
+  await expect(page).toHaveTitle('Ada Lovelace — CV')
+  await expect(page.locator('[data-cv-web-document]')).toBeVisible()
+  await expect(page.locator('[data-cv-pdf-document]')).toBeHidden()
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+    'Ada Lovelace'
+  )
+  await expect(page.getByRole('button', { name: 'Print' })).toBeVisible()
+
+  const csp = response?.headers()['content-security-policy'] ?? ''
+  expect(csp).toContain(
+    'frame-ancestors https://cv-registry.4w4y.run cv-registry://app'
+  )
+  expect(csp).not.toContain('frame-ancestors *')
+  expect(response?.headers()['x-frame-options']).toBeUndefined()
+})
+
+test('renders the single-column A4 capability surface without interactive controls', async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium-desktop')
 
-  const response = await page.goto(previewPath)
+  const response = await page.goto(pdfRenderPath)
 
   expect(response?.status()).toBe(200)
   await expect(page).toHaveTitle('Ada Lovelace — CV')
@@ -132,6 +155,10 @@ test('renders the single-column A4 capability preview without interactive contro
   await expect(page.locator('.cv2-entry-list').first()).toHaveCSS(
     'padding-inline-start',
     '0px'
+  )
+  expect(response?.headers()['x-frame-options']).toBe('DENY')
+  expect(response?.headers()['content-security-policy']).toContain(
+    "frame-ancestors 'none'"
   )
 
   const [documentBox, sectionBoxes] = await Promise.all([
@@ -199,7 +226,7 @@ test('generates an ordered two-page ATS PDF with safe metadata', async ({
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium-desktop')
 
-  await page.goto(previewPath)
+  await page.goto(pdfRenderPath)
   await page.emulateMedia({ media: 'print' })
   const bytes = await page.pdf({
     format: 'A4',
@@ -239,7 +266,7 @@ test('keeps a deliberate overflow fixture above the two-page guard', async ({
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium-desktop')
 
-  await page.goto(overflowPreviewPath)
+  await page.goto(overflowPdfRenderPath)
   await page.emulateMedia({ media: 'print' })
   const bytes = await page.pdf({
     format: 'A4',
@@ -311,4 +338,9 @@ test('returns not found for unknown fixture capabilities', async ({ page }) => {
     '/c/_preview/fixture?access=wrong-preview-capability'
   )
   expect(previewResponse?.status()).toBe(404)
+
+  const renderResponse = await page.goto(
+    '/c/_render/fixture?access=wrong-preview-capability'
+  )
+  expect(renderResponse?.status()).toBe(404)
 })

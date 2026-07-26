@@ -32,6 +32,12 @@ variable "traefik_subdomain" {
   default     = "cv"
 }
 
+variable "registry_web_origin" {
+  description = "Exact HTTPS origin permitted to frame private CV web previews"
+  type        = string
+  default     = "https://cv-registry.4w4y.run"
+}
+
 variable "resources" {
   description = "Next.js task resources"
   type = object({

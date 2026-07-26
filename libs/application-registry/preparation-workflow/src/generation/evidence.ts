@@ -67,13 +67,6 @@ export const factsForGeneration = (
                 }
           ),
         }
-      case 'experience':
-        return {
-          ...section,
-          entries: section.entries.filter(
-            ({ companyVisibility }) => companyVisibility === 'public'
-          ),
-        }
       case 'projects':
         return {
           ...section,
@@ -87,6 +80,7 @@ export const factsForGeneration = (
             })),
         }
       case 'identity':
+      case 'experience':
       case 'skills':
         return section
       default:
@@ -135,8 +129,8 @@ const reviewedFactReference = (
 /**
  * Canonical generation-visible evidence projection.
  *
- * Prompt construction, semantic validation, briefs, and composition all use
- * this projection so they cannot disagree about which IDs are selectable.
+ * Planning, semantic validation, and composition all use this projection so
+ * they cannot disagree about which IDs are selectable.
  */
 export const evidenceReferencesForGeneration = (
   catalogue: FactsCatalogueV1

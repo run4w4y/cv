@@ -1,6 +1,6 @@
 import type {
   BatchPreparationForm,
-  BatchPreparationUrlRow,
+  BatchPreparationPostingUrlRow,
 } from '@/preparation/batch/atoms'
 
 import type {
@@ -21,7 +21,6 @@ export const parallelWorkflowJobs = [
         error: null,
         kind: 'cv',
         message: 'Composing the tailored CV candidate.',
-        runId: 'run-northstar-cv',
         stage: 'composition',
         status: 'running',
       },
@@ -29,8 +28,7 @@ export const parallelWorkflowJobs = [
         error: null,
         kind: 'cover_letter',
         message: 'Waiting for the tailored CV.',
-        runId: 'run-northstar-letter',
-        stage: 'queued',
+        stage: null,
         status: 'queued',
       },
     ],
@@ -42,7 +40,6 @@ export const parallelWorkflowJobs = [
     locale: 'en',
     message: 'Composing the tailored CV candidate.',
     position: 0,
-    primaryRunId: 'run-northstar-cv',
     role: 'Staff Platform Engineer',
     status: 'running',
     updatedAt: Date.parse('2026-07-21T11:24:00.000Z'),
@@ -54,16 +51,14 @@ export const parallelWorkflowJobs = [
       {
         error: null,
         kind: 'cv',
-        message: 'Candidate saved and ready for a human decision.',
-        runId: 'run-polaris-cv',
-        stage: 'review',
-        status: 'awaiting_review',
+        message: 'Candidate approved.',
+        stage: 'complete',
+        status: 'approved',
       },
       {
         error: null,
         kind: 'cover_letter',
-        message: 'Candidate saved and ready for a human decision.',
-        runId: 'run-polaris-letter',
+        message: 'Candidate saved and ready for human approval.',
         stage: 'review',
         status: 'awaiting_review',
       },
@@ -74,9 +69,8 @@ export const parallelWorkflowJobs = [
     jobId: 'job-polaris',
     kinds: ['cv', 'cover_letter'],
     locale: 'en',
-    message: 'Both candidates are ready for a human decision.',
+    message: 'The cover-letter candidate is ready for human approval.',
     position: 1,
-    primaryRunId: 'run-polaris-cv',
     role: 'Principal Frontend Engineer',
     status: 'needs_review',
     updatedAt: Date.parse('2026-07-21T11:19:30.000Z'),
@@ -90,7 +84,6 @@ export const parallelWorkflowJobs = [
           'Generated candidate did not satisfy the CV schema after the repair attempt.',
         kind: 'cv',
         message: 'Candidate validation failed.',
-        runId: 'run-cedar-cv',
         stage: 'validation',
         status: 'failed',
       },
@@ -103,7 +96,6 @@ export const parallelWorkflowJobs = [
     locale: 'en',
     message: 'Candidate validation failed.',
     position: 2,
-    primaryRunId: 'run-cedar-cv',
     role: 'Product Engineer',
     status: 'failed',
     updatedAt: Date.parse('2026-07-21T11:16:45.000Z'),
@@ -116,17 +108,15 @@ export const parallelWorkflowJobs = [
         error: null,
         kind: 'cv',
         message: 'Candidate approved.',
-        runId: 'run-orbit-cv',
         stage: 'complete',
         status: 'approved',
       },
       {
         error: null,
         kind: 'cover_letter',
-        message: 'Candidate rejected after review.',
-        runId: 'run-orbit-letter',
+        message: 'Candidate approved.',
         stage: 'complete',
-        status: 'rejected',
+        status: 'approved',
       },
     ],
     batchId: parallelBatchId,
@@ -135,9 +125,8 @@ export const parallelWorkflowJobs = [
     jobId: 'job-orbit',
     kinds: ['cv', 'cover_letter'],
     locale: 'en',
-    message: 'Document reviews completed.',
+    message: 'Document approvals completed.',
     position: 3,
-    primaryRunId: 'run-orbit-cv',
     role: 'Engineering Lead',
     status: 'completed',
     updatedAt: Date.parse('2026-07-21T11:21:10.000Z'),
@@ -150,8 +139,7 @@ export const parallelWorkflowJobs = [
         error: null,
         kind: 'cv',
         message: 'Waiting for an available workflow slot.',
-        runId: 'run-river-cv',
-        stage: 'queued',
+        stage: null,
         status: 'queued',
       },
     ],
@@ -163,7 +151,6 @@ export const parallelWorkflowJobs = [
     locale: 'en',
     message: 'Waiting for an available workflow slot.',
     position: 4,
-    primaryRunId: 'run-river-cv',
     role: null,
     status: 'queued',
     updatedAt: Date.parse('2026-07-21T11:00:04.000Z'),
@@ -176,8 +163,7 @@ export const parallelWorkflowJobs = [
         error: null,
         kind: 'cv',
         message: 'Cancelled before job analysis began.',
-        runId: 'run-aperture-cv',
-        stage: 'capture',
+        stage: null,
         status: 'cancelled',
       },
     ],
@@ -189,7 +175,6 @@ export const parallelWorkflowJobs = [
     locale: 'en',
     message: 'Cancelled before job analysis began.',
     position: 5,
-    primaryRunId: 'run-aperture-cv',
     role: 'UI Platform Engineer',
     status: 'cancelled',
     updatedAt: Date.parse('2026-07-21T11:05:20.000Z'),
@@ -210,7 +195,7 @@ export const parallelWorkflowBatch = {
   status: 'mixed',
   total: parallelWorkflowJobs.length,
   updatedAt: workflowStoryNow,
-  urlCount: parallelWorkflowJobs.length,
+  targetCount: parallelWorkflowJobs.length,
 } satisfies WorkflowBatchListItem
 
 export const workflowDashboardBatches = [
@@ -228,7 +213,7 @@ export const workflowDashboardBatches = [
     status: 'active',
     total: 5,
     updatedAt: Date.parse('2026-07-21T11:28:00.000Z'),
-    urlCount: 5,
+    targetCount: 5,
   },
   {
     active: 0,
@@ -243,7 +228,7 @@ export const workflowDashboardBatches = [
     status: 'completed',
     total: 4,
     updatedAt: Date.parse('2026-07-20T14:42:00.000Z'),
-    urlCount: 4,
+    targetCount: 4,
   },
 ] satisfies ReadonlyArray<WorkflowBatchListItem>
 
@@ -307,19 +292,19 @@ export const runningWorkflowSteps = [
     started + 420_000
   ),
   step(
-    'briefs',
-    'Plan document',
-    'Built the section-by-section composition brief.',
+    'planning',
+    'Plan composition',
+    'Selected a balanced set of CV experience and project evidence.',
     'completed',
     started + 420_000,
-    started + 660_000
+    started + 540_000
   ),
   step(
     'composition',
     'Compose candidate',
-    'Generating the tailored candidate with two bounded Codex calls.',
+    'Generating the tailored candidate.',
     'running',
-    started + 660_000,
+    started + 540_000,
     null
   ),
   step(
@@ -341,7 +326,7 @@ export const runningWorkflowSteps = [
   step(
     'review',
     'Human review',
-    'Wait for an approval or rejection decision.',
+    'Wait for human approval.',
     'pending',
     null,
     null
@@ -349,7 +334,7 @@ export const runningWorkflowSteps = [
   step(
     'complete',
     'Complete workflow',
-    'Record the final decision and artifact.',
+    'Record the approved revision and artifact.',
     'pending',
     null,
     null
@@ -383,7 +368,7 @@ export const reviewWorkflowSteps = runningWorkflowSteps.map((item) => {
   if (item.stage === 'review') {
     return {
       ...item,
-      description: 'Candidate is stored and waiting for your decision.',
+      description: 'Candidate is stored and waiting for your approval.',
       startedAt: started + 990_000,
       status: 'waiting' as const,
     }
@@ -415,17 +400,17 @@ export const failedWorkflowSteps = runningWorkflowSteps.map((item) => {
 export const validWorkflowForm = {
   includeCoverLetter: true,
   locale: 'en',
-  prompt: 'Write a concise, specific, professional cover letter.',
-  urls: [
+  postingUrls: [
     'https://careers.northstar.example/jobs/staff-platform-engineer',
     'https://jobs.polaris.example/principal-frontend-engineer',
     'https://work.cedar.example/openings/product-engineer',
   ].join('\n'),
+  prompt: 'Write a concise, specific, professional cover letter.',
 } satisfies BatchPreparationForm
 
 export const invalidWorkflowForm = {
   ...validWorkflowForm,
-  urls: [
+  postingUrls: [
     'https://careers.northstar.example/jobs/staff-platform-engineer',
     'not a job URL',
     'ftp://legacy.example/openings/platform-engineer',
@@ -433,11 +418,11 @@ export const invalidWorkflowForm = {
   ].join('\n'),
 } satisfies BatchPreparationForm
 
-export const storyWorkflowUrlRows = (
+export const storyWorkflowPostingUrlRows = (
   input: string
-): ReadonlyArray<BatchPreparationUrlRow> => {
+): ReadonlyArray<BatchPreparationPostingUrlRow> => {
   const firstLineByUrl = new Map<string, number>()
-  const rows: Array<BatchPreparationUrlRow> = []
+  const rows: Array<BatchPreparationPostingUrlRow> = []
 
   for (const [index, rawValue] of input.split(/\r?\n/u).entries()) {
     const value = rawValue.trim()

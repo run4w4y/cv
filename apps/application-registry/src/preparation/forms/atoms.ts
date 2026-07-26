@@ -1,12 +1,23 @@
+import { CoverLetterArtifactRequestSchema } from '@cv/application-preparation-workflow/domain'
+import * as BrowserKeyValueStore from '@effect/platform-browser/BrowserKeyValueStore'
 import * as Atom from 'effect/unstable/reactivity/Atom'
 
-export const initialCoverLetterPrompt =
-  'Write a direct, concise letter that explains why my verified experience is relevant. Avoid generic enthusiasm, clichés, and claims not present in the facts catalogue.'
+export const coverLetterPromptStorageKey =
+  'cv.application-registry.cover-letter-prompt.v1'
 
-/** Keeps per-application writing instructions stable across route navigation. */
-export const coverLetterPromptAtom = Atom.family((_identity: string) =>
-  Atom.make(initialCoverLetterPrompt)
+export const initialCoverLetterPrompt =
+  'Write a concise, specific, professional cover letter.'
+
+const coverLetterPromptRuntime = Atom.runtime(
+  BrowserKeyValueStore.layerLocalStorage
 )
+
+export const coverLetterPromptAtom = Atom.kvs({
+  defaultValue: () => initialCoverLetterPrompt,
+  key: coverLetterPromptStorageKey,
+  runtime: coverLetterPromptRuntime,
+  schema: CoverLetterArtifactRequestSchema.fields.prompt,
+})
 
 /**
  * A null value means the editor follows the latest query result. A string is

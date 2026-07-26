@@ -2,6 +2,8 @@ import type {
   DesktopCodexGenerationRequest,
   DesktopCodexGenerationResult,
   DesktopCodexStatus,
+  DesktopDocumentAssistantRequest,
+  DesktopDocumentAssistantResult,
 } from '@cv/application-registry-desktop-contract'
 import { Context, Effect, Layer, Schedule } from 'effect'
 import type { Input as DurationInput } from 'effect/Duration'
@@ -15,6 +17,9 @@ import {
 import { CodexSdk, CodexSdkError, normalizeCodexSdkError } from './sdk'
 
 export interface DesktopCodexShape {
+  readonly assist: (
+    request: DesktopDocumentAssistantRequest
+  ) => Effect.Effect<DesktopDocumentAssistantResult, CodexSdkError>
   readonly cancel: (operationId: string) => Effect.Effect<void>
   readonly generate: (
     request: DesktopCodexGenerationRequest
@@ -84,44 +89,63 @@ export const desktopCodexLayer = (options: {
         } satisfies DesktopCodexStatus
       })
 
+      const runInWorkingDirectory = Effect.fn(
+        'DesktopCodex.runInWorkingDirectory'
+      )(function* <Value>(
+        operationId: string,
+        execute: (workingDirectory: string) => Promise<Value>
+      ) {
+        const workingDirectory = yield* Effect.acquireRelease(
+          fs
+            .makeTempDirectory({
+              directory: options.temporaryPath,
+              prefix: 'cv-registry-codex-',
+            })
+            .pipe(
+              Effect.mapError(
+                (cause) =>
+                  new CodexSdkError(
+                    'codex_state_initialization_failed',
+                    'Codex could not create an isolated working directory.',
+                    String(cause)
+                  )
+              )
+            ),
+          (directory) =>
+            cleanupCodexWorkingDirectory(fs, diagnostics, directory)
+        )
+        return yield* Effect.tryPromise({
+          try: (signal) => {
+            const cancel = () => sdk.cancel(operationId)
+            signal.addEventListener('abort', cancel, { once: true })
+            return execute(workingDirectory).finally(() =>
+              signal.removeEventListener('abort', cancel)
+            )
+          },
+          catch: normalizeCodexSdkError,
+        })
+      })
+
+      const assist = Effect.fn('DesktopCodex.assist')(
+        (request: DesktopDocumentAssistantRequest) =>
+          Effect.scoped(
+            runInWorkingDirectory(request.operationId, (workingDirectory) =>
+              sdk.assist(request, workingDirectory)
+            )
+          )
+      )
+
       const generate = Effect.fn('DesktopCodex.generate')(
         (request: DesktopCodexGenerationRequest) =>
           Effect.scoped(
-            Effect.gen(function* () {
-              const workingDirectory = yield* Effect.acquireRelease(
-                fs
-                  .makeTempDirectory({
-                    directory: options.temporaryPath,
-                    prefix: 'cv-registry-codex-',
-                  })
-                  .pipe(
-                    Effect.mapError(
-                      (cause) =>
-                        new CodexSdkError(
-                          'codex_state_initialization_failed',
-                          'Codex could not create an isolated working directory.',
-                          String(cause)
-                        )
-                    )
-                  ),
-                (directory) =>
-                  cleanupCodexWorkingDirectory(fs, diagnostics, directory)
-              )
-              return yield* Effect.tryPromise({
-                try: (signal) => {
-                  const cancel = () => sdk.cancel(request.operationId)
-                  signal.addEventListener('abort', cancel, { once: true })
-                  return sdk
-                    .generate(request, workingDirectory)
-                    .finally(() => signal.removeEventListener('abort', cancel))
-                },
-                catch: normalizeCodexSdkError,
-              })
-            })
+            runInWorkingDirectory(request.operationId, (workingDirectory) =>
+              sdk.generate(request, workingDirectory)
+            )
           )
       )
 
       return DesktopCodex.of({
+        assist,
         cancel: (operationId) => Effect.sync(() => sdk.cancel(operationId)),
         generate,
         status,

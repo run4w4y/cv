@@ -1,5 +1,6 @@
 import type {
   DesktopCodexGenerationRequest,
+  DesktopDocumentAssistantRequest,
   DesktopFetchRequest,
   DesktopHostBridge,
 } from '@cv/application-registry-desktop-contract'
@@ -9,6 +10,8 @@ import { desktopIpc } from './ipc'
 
 const bridge: DesktopHostBridge = {
   codex: {
+    assist: (request: DesktopDocumentAssistantRequest) =>
+      ipcRenderer.invoke(desktopIpc.codexAssist, request),
     cancel: (operationId) =>
       ipcRenderer.invoke(desktopIpc.codexCancel, operationId),
     generate: (request: DesktopCodexGenerationRequest) =>

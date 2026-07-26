@@ -6,42 +6,21 @@ import type {
   JobPostingSnapshot,
 } from '@cv/application-registry-entity'
 import type { FactsCatalogueV1 } from '@cv/contracts/facts'
-import {
-  Deferred,
-  Effect,
-  Exit,
-  Fiber,
-  Layer,
-  Option,
-  Queue,
-  Ref,
-  Stream,
-  SubscriptionRef,
-} from 'effect'
+import { Effect, Fiber, Layer, Option, Stream, SubscriptionRef } from 'effect'
 import * as DurableDeferred from 'effect/unstable/workflow/DurableDeferred'
 import * as WorkflowEngine from 'effect/unstable/workflow/WorkflowEngine'
 
 import {
-  cancelPreparation,
-  makeSubmitPreparationReview,
-  submitPreparationReview,
-} from '../commands/review'
-import {
   type PreparationBootstrap,
   type PreparationJobInput,
-  PreparationWorkflowError,
-  type PreparationWorkflowInput,
   PrepareApplicationWorkflow,
-  preparationJobArtifactInputs,
-  preparationReviewDeferred,
-  ReviewDecisionSchema,
+  preparationApprovalDeferred,
   type SavedCandidate,
 } from '../domain'
 import { PreparationGateway, type PreparationGatewayService } from '../gateway'
 import { PreparationProgress, preparationProgressLayer } from '../progress'
 import { cvGenerationGuidanceTestFixture } from '../test-support'
 import {
-  PreparationConcurrency,
   preparationConcurrencyLayer,
   preparationWorkflowLayer,
 } from './handler'
@@ -49,7 +28,7 @@ import {
 const application: Application = {
   applicationStatus: 'preparing',
   appliedAt: null,
-  postingUrl: 'https://jobs.example.test/role',
+  postingUrl: 'https://jobs.example.test/platform',
   company: 'Example',
   createdAt: '2026-07-18T00:00:00.000Z',
   followUpAt: null,
@@ -69,36 +48,60 @@ const application: Application = {
   version: 1,
 }
 
-const entry: ContentEntry = {
+const entry = (kind: ContentEntry['kind'], id: string): ContentEntry => ({
   applicationId: application.id,
   approvedRevisionId: null,
   createdAt: '2026-07-18T00:00:00.000Z',
   headRevisionId: null,
-  id: 'entry-1',
-  kind: 'cover_letter',
+  id,
+  kind,
   locale: 'en',
   state: 'draft',
   updatedAt: '2026-07-18T00:00:00.000Z',
   version: 1,
-}
+})
 
-const revision: ContentRevision = {
+const cvEntry = entry('cv', 'entry-cv')
+const letterEntry = entry('cover_letter', 'entry-letter')
+
+const revision = (
+  contentEntry: ContentEntry,
+  id: string,
+  operationId: string,
+  source: ContentRevision['source'] = 'ai'
+): ContentRevision => ({
   byteLength: 42,
-  contentEntryId: entry.id,
-  contractId: 'cover-letter.v1',
+  contentEntryId: contentEntry.id,
+  contractId: contentEntry.kind === 'cv' ? 'cv.document.v1' : 'cover-letter.v1',
   contractVersion: '1',
   createdAt: '2026-07-18T00:01:00.000Z',
   factsReleaseId: 'facts-release-1',
-  id: 'revision-1',
+  id,
   jobSnapshotId: 'snapshot-1',
   mediaType: 'application/json',
-  objectKey: 'objects/revision-1',
-  operationId: 'run-1:candidate',
+  objectKey: `objects/${id}`,
+  operationId,
   parentRevisionId: null,
   revisionNumber: 1,
-  sha256: 'abc',
-  source: 'ai',
+  sha256: id,
+  source,
+})
+
+const cvRevision = revision(cvEntry, 'revision-cv', 'job-1:cv:candidate')
+const acceptedCvRevision = {
+  ...cvRevision,
+  id: 'revision-cv-accepted',
+  objectKey: 'objects/revision-cv-accepted',
+  operationId: 'job-1:cv:refinement:accepted',
+  parentRevisionId: cvRevision.id,
+  revisionNumber: 2,
+  source: 'ai_adjustment' as const,
 }
+const letterRevision = revision(
+  letterEntry,
+  'revision-letter',
+  'job-1:cover-letter:candidate'
+)
 
 const jobSnapshot: JobPostingSnapshot = {
   applicationId: application.id,
@@ -135,16 +138,39 @@ const factsCatalogue: FactsCatalogueV1 = {
   ],
 }
 
-const bootstrap: PreparationBootstrap = {
-  application,
-  cvGenerationGuidance: cvGenerationGuidanceTestFixture,
-  entry,
-  factsCatalogue,
-  factsReleaseId: 'facts-release-1',
-  jobContext: 'Platform role',
-  jobSnapshot,
-  referenceCv: null,
-  referenceCvRevisionId: null,
+const generatedCv: Extract<
+  SavedCandidate['candidate'],
+  { readonly _tag: 'Cv' }
+>['document'] = {
+  $schema: 'cv.document.v1',
+  additionalSections: [],
+  direction: 'ltr',
+  education: [],
+  experience: [],
+  locale: 'en',
+  person: {
+    contacts: [
+      {
+        href: 'mailto:ada@example.test',
+        kind: 'email',
+        label: 'Email',
+        value: 'ada@example.test',
+      },
+    ],
+    headline: 'Platform engineer',
+    name: 'Ada Example',
+    summary: 'Builds reliable platforms.',
+  },
+  projects: [],
+  skills: [],
+}
+
+const acceptedCv = {
+  ...generatedCv,
+  person: {
+    ...generatedCv.person,
+    headline: 'Principal platform engineer',
+  },
 }
 
 const generationMetadata = {
@@ -153,997 +179,279 @@ const generationMetadata = {
   usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
 }
 
-const savedCandidate: SavedCandidate = {
+const bootstrap = (
+  contentEntry: ContentEntry,
+  referenceCvRevisionId: string | null = null
+): PreparationBootstrap => ({
   application,
-  candidate: {
-    _tag: 'CoverLetter',
-    document: {
-      $schema: 'cover-letter.v1',
-      body: 'I build reliable platforms.',
-      locale: 'en',
-    },
-    metadata: [generationMetadata],
+  cvGenerationGuidance: cvGenerationGuidanceTestFixture,
+  entry: contentEntry,
+  factsCatalogue,
+  factsReleaseId: 'facts-release-1',
+  jobContext: 'Platform role',
+  jobSnapshot,
+  referenceCv: referenceCvRevisionId === null ? null : acceptedCv,
+  referenceCvRevisionId,
+})
+
+const input: PreparationJobInput = {
+  artifacts: {
+    coverLetter: { prompt: 'Keep it concise.' },
+    cv: { generationGuidance: cvGenerationGuidanceTestFixture },
   },
-  result: {
-    entry: { ...entry, headRevisionId: revision.id, version: 2 },
-    revision,
-  },
-}
-
-const cvEntry: ContentEntry = {
-  ...entry,
-  id: 'entry-cv',
-  kind: 'cv',
-}
-
-const cvRevision: ContentRevision = {
-  ...revision,
-  contentEntryId: cvEntry.id,
-  contractId: 'cv.document.v1',
-  id: 'revision-cv',
-  objectKey: 'objects/revision-cv',
-  operationId: 'run-paired-cv:candidate',
-}
-
-const cvCandidate: SavedCandidate['candidate'] = {
-  _tag: 'Cv',
-  document: {
-    $schema: 'cv.document.v1',
-    additionalSections: [],
-    direction: 'ltr',
-    education: [],
-    experience: [],
-    locale: 'en',
-    person: {
-      contacts: [
-        {
-          href: 'mailto:ada@example.test',
-          kind: 'email',
-          label: 'Email',
-          value: 'ada@example.test',
-        },
-      ],
-      headline: 'Platform engineer',
-      name: 'Ada Example',
-      summary: 'Builds reliable platforms.',
-    },
-    projects: [],
-    skills: [],
-  },
-  metadata: [generationMetadata],
-}
-
-const input: PreparationWorkflowInput = {
-  coverLetterPrompt: null,
-  cvGenerationGuidance: null,
-  kind: 'cover_letter',
+  jobId: 'job-1',
   locale: 'en',
-  runId: 'run-1',
-  source: {
-    _tag: 'ReviewedContext',
-    applicationId: application.id,
-    factsReleaseId: 'facts-release-1',
-    jobSnapshotId: 'snapshot-1',
+  target: {
+    _tag: 'PostingUrl',
     url: application.postingUrl,
   },
 }
 
-const reservation = (value: PreparationWorkflowInput) => ({
-  batchId: `batch-${value.runId}`,
-  batchPosition: 0,
-  input: value,
-})
-
-const fakeGateway: PreparationGatewayService = {
-  analyze: () =>
-    Effect.succeed({
-      analysis: {
-        company: application.company,
-        keywords: ['platform'],
-        location: null,
-        requirements: [
-          { id: 'requirement-1', priority: 'required', text: 'Platforms' },
-        ],
-        responsibilities: ['Build platforms'],
-        role: application.role,
-        summary: 'Platform role',
-      },
-      metadata: { ...generationMetadata, stage: 'analysis' },
-    }),
-  bootstrap: () => Effect.succeed(bootstrap),
-  brief: (_input, _context, _analysis, _plan, sectionId) =>
-    Effect.succeed({
-      brief: {
-        evidenceIds: ['fact-1'],
-        notes: ['Use the reviewed platform fact.'],
-        objective: 'Show platform experience.',
-        sectionId,
-      },
-      metadata: { ...generationMetadata, stage: `brief:${sectionId}` },
-    }),
-  compose: () => Effect.succeed(savedCandidate.candidate),
-  enrichApplication: () => Effect.succeed(application),
-  ensureApplication: () => Effect.succeed(application),
-  planEvidence: () =>
-    Effect.succeed({
-      metadata: { ...generationMetadata, stage: 'evidence' },
-      plan: {
-        matches: [
-          {
-            evidenceIds: ['fact-1'],
-            rationale: 'Direct platform evidence.',
-            requirementId: 'requirement-1',
-          },
-        ],
-        strategy: 'Lead with platform experience.',
-        uncoveredRequirementIds: [],
-      },
-    }),
-  saveCandidate: (_input, _context, candidate) =>
-    Effect.succeed({ ...savedCandidate, candidate }),
-  sectionIds: () => ['profile', 'experience'],
-  approveBoundRevision: (_candidate, approvedRevisionId) =>
-    Effect.succeed({
-      entry: {
-        ...savedCandidate.result.entry,
-        approvedRevisionId,
-        headRevisionId: approvedRevisionId,
-        state: 'approved',
-      },
-      revision,
-    }),
-  verifyBoundRevision: () => Effect.succeed(savedCandidate.result),
-}
-
-const makeTestLayer = (
-  gateway: PreparationGatewayService = fakeGateway,
-  concurrencyLayer = preparationConcurrencyLayer
-) =>
+const makeLayer = (gateway: PreparationGatewayService) =>
   preparationWorkflowLayer.pipe(
     Layer.provideMerge(
       Layer.mergeAll(
         Layer.succeed(PreparationGateway, gateway),
         preparationProgressLayer,
-        concurrencyLayer
+        preparationConcurrencyLayer
       )
     ),
     Layer.provideMerge(WorkflowEngine.layerMemory)
   )
 
-describe('in-memory application preparation workflow', () => {
-  test('shares role analysis and passes the generated CV directly to the paired cover letter', async () => {
-    const pairedInput: PreparationJobInput = {
-      coverLetterPrompt: 'Keep the letter concise.',
-      cvGenerationGuidance: cvGenerationGuidanceTestFixture,
-      jobId: 'job-paired',
-      locale: 'en',
-      runIds: {
-        coverLetter: 'run-paired-letter',
-        cv: 'run-paired-cv',
-      },
-      source: {
-        _tag: 'CaptureUrl',
-        url: application.postingUrl,
-      },
-    }
+describe('job-first preparation workflow', () => {
+  test('waits for the accepted CV and binds the cover letter to that exact revision', async () => {
     const calls = {
-      analyze: 0,
-      bootstrap: 0,
-      compose: 0,
-      ensure: 0,
-      evidence: 0,
-      save: 0,
+      analysis: 0,
+      coverCompositions: 0,
+      cvCompositions: 0,
     }
-    const observedReferenceCvRevisionId: { current: string | null } = {
-      current: null,
+    const observedReference = {
+      document: null as typeof acceptedCv | null,
+      revisionId: null as string | null,
     }
-    const pairedGateway: PreparationGatewayService = {
-      ...fakeGateway,
-      analyze: (...args) =>
+    const gateway: PreparationGatewayService = {
+      analyze: () =>
         Effect.sync(() => {
-          calls.analyze += 1
-          return fakeGateway.analyze(...args)
-        }).pipe(Effect.flatten),
-      bootstrap: (artifactInput) =>
-        Effect.sync(() => {
-          calls.bootstrap += 1
+          calls.analysis += 1
           return {
-            ...bootstrap,
-            entry: artifactInput.kind === 'cv' ? cvEntry : entry,
+            analysis: {
+              company: application.company,
+              educationDatesRequired: false,
+              keywords: ['platform'],
+              location: null,
+              requirements: [
+                {
+                  id: 'requirement-1',
+                  priority: 'required' as const,
+                  text: 'Platforms',
+                },
+              ],
+              responsibilities: ['Build platforms'],
+              role: application.role,
+              summary: 'Platform role',
+            },
+            metadata: { ...generationMetadata, stage: 'analysis' },
           }
         }),
-      compose: (artifactInput, context) =>
+      bootstrap: (artifactInput) =>
+        Effect.succeed(
+          artifactInput.kind === 'cv'
+            ? bootstrap(cvEntry)
+            : bootstrap(letterEntry, acceptedCvRevision.id)
+        ),
+      composeCoverLetter: (_artifactInput, context) =>
         Effect.sync(() => {
-          calls.compose += 1
-          if (artifactInput.kind === 'cover_letter') {
-            observedReferenceCvRevisionId.current =
-              context.referenceCvRevisionId
-            expect(context.referenceCv).toEqual(cvCandidate.document)
-            return savedCandidate.candidate
+          calls.coverCompositions += 1
+          observedReference.document = context.referenceCv
+          observedReference.revisionId = context.referenceCvRevisionId
+          return {
+            _tag: 'CoverLetter' as const,
+            document: {
+              $schema: 'cover-letter.v1' as const,
+              body: 'I build reliable platforms.',
+              locale: 'en',
+              referenceCvRevisionId: context.referenceCvRevisionId ?? 'missing',
+            },
+            metadata: [generationMetadata],
           }
-          return cvCandidate
         }),
-      ensureApplication: () =>
+      composeCv: () =>
         Effect.sync(() => {
-          calls.ensure += 1
-          return application
+          calls.cvCompositions += 1
+          return {
+            _tag: 'Cv' as const,
+            document: generatedCv,
+            metadata: [generationMetadata],
+          }
         }),
-      planEvidence: (...args) =>
-        Effect.sync(() => {
-          calls.evidence += 1
-          return fakeGateway.planEvidence(...args)
-        }).pipe(Effect.flatten),
+      enrichApplication: () => Effect.succeed(application),
+      ensureApplication: () => Effect.succeed(application),
+      planEvidence: () =>
+        Effect.succeed({
+          metadata: { ...generationMetadata, stage: 'evidence' },
+          plan: {
+            requirements: [
+              {
+                evidenceIds: ['fact-1'],
+                requirementId: 'requirement-1',
+              },
+            ],
+          },
+        }),
+      planCv: () =>
+        Effect.succeed({
+          metadata: { ...generationMetadata, stage: 'planning' },
+          plan: {
+            additionalEvidenceIds: [],
+            education: [],
+            experience: [],
+            profileEvidenceIds: [],
+            projects: [],
+            skillGroups: [],
+          },
+        }),
       saveCandidate: (artifactInput, _context, candidate) =>
-        Effect.sync(() => {
-          calls.save += 1
-          return artifactInput.kind === 'cv'
-            ? {
-                application,
-                candidate,
-                result: {
+        Effect.succeed({
+          application,
+          candidate,
+          result:
+            artifactInput.kind === 'cv'
+              ? {
                   entry: {
                     ...cvEntry,
                     headRevisionId: cvRevision.id,
                     version: 2,
                   },
                   revision: cvRevision,
+                }
+              : {
+                  entry: {
+                    ...letterEntry,
+                    headRevisionId: letterRevision.id,
+                    version: 2,
+                  },
+                  revision: letterRevision,
                 },
+        }),
+      approveBoundRevision: (candidate, selectedRevisionId) =>
+        Effect.succeed(
+          candidate.candidate._tag === 'Cv'
+            ? {
+                entry: {
+                  ...candidate.result.entry,
+                  approvedRevisionId: selectedRevisionId,
+                  headRevisionId: selectedRevisionId,
+                  state: 'approved',
+                },
+                revision: acceptedCvRevision,
               }
-            : { ...savedCandidate, candidate }
-        }),
-      approveBoundRevision: (candidate, approvedRevisionId) =>
-        Effect.succeed({
-          entry: {
-            ...candidate.result.entry,
-            approvedRevisionId,
-            headRevisionId: approvedRevisionId,
-            state: 'approved',
-          },
-          revision: candidate.result.revision,
-        }),
+            : {
+                entry: {
+                  ...candidate.result.entry,
+                  approvedRevisionId: selectedRevisionId,
+                  headRevisionId: selectedRevisionId,
+                  state: 'approved',
+                },
+                revision: letterRevision,
+              }
+        ),
+      verifyBoundRevision: (candidate) => Effect.succeed(candidate.result),
     }
 
     const observed = await Effect.runPromise(
       Effect.gen(function* () {
         const progress = yield* PreparationProgress
-        yield* progress.reserve(
-          preparationJobArtifactInputs(pairedInput).map((artifactInput) => ({
-            batchId: 'batch-paired',
+        yield* progress.reserve([
+          {
+            batchId: 'batch-1',
             batchPosition: 0,
-            input: artifactInput,
-            jobId: pairedInput.jobId,
-          }))
-        )
-        const executionId =
-          yield* PrepareApplicationWorkflow.executionId(pairedInput)
-        yield* progress.setExecution(pairedInput.jobId, executionId)
+            input,
+            retryOfJobId: null,
+          },
+        ])
+        const executionId = yield* PrepareApplicationWorkflow.executionId(input)
+        yield* progress.setExecution(input.jobId, executionId)
 
-        const bothReady = yield* SubscriptionRef.changes(progress.runs).pipe(
+        const cvReady = yield* SubscriptionRef.changes(progress.jobs).pipe(
           Stream.filter(
-            (runs) =>
-              runs.get('run-paired-cv')?.status === 'awaiting_review' &&
-              runs.get('run-paired-letter')?.status === 'awaiting_review'
+            (jobs) =>
+              jobs.get(input.jobId)?.artifacts.cv?.status === 'awaiting_review'
           ),
           Stream.runHead,
           Effect.forkChild
         )
-
-        yield* PrepareApplicationWorkflow.execute(pairedInput, {
-          discard: true,
-        })
-        const ready = yield* Fiber.join(bothReady).pipe(
+        yield* PrepareApplicationWorkflow.execute(input, { discard: true })
+        const cvProjection = yield* Fiber.join(cvReady).pipe(
           Effect.timeoutOption('1 second')
         )
-        if (Option.isNone(ready)) {
-          const runs = yield* SubscriptionRef.get(progress.runs)
-          return yield* Effect.die(
-            JSON.stringify(
-              [...runs].map(([runId, run]) => ({
-                error: run.error,
-                runId,
-                stage: run.stage,
-                status: run.status,
-              }))
-            )
-          )
-        }
+        expect(Option.isSome(cvProjection)).toBe(true)
+        expect(calls.coverCompositions).toBe(0)
 
-        const letterReview = preparationReviewDeferred('cover_letter')
+        const letterReady = yield* SubscriptionRef.changes(progress.jobs).pipe(
+          Stream.filter(
+            (jobs) =>
+              jobs.get(input.jobId)?.artifacts.coverLetter?.status ===
+              'awaiting_review'
+          ),
+          Stream.runHead,
+          Effect.forkChild
+        )
+        const cvApproval = preparationApprovalDeferred('cv')
+        const cvToken = yield* DurableDeferred.tokenFromPayload(cvApproval, {
+          payload: input,
+          workflow: PrepareApplicationWorkflow,
+        })
+        yield* DurableDeferred.succeed(cvApproval, {
+          token: cvToken,
+          value: { revisionId: acceptedCvRevision.id },
+        })
+        const letterProjection = yield* Fiber.join(letterReady).pipe(
+          Effect.timeoutOption('1 second')
+        )
+        expect(Option.isSome(letterProjection)).toBe(true)
+
+        const letterApproval = preparationApprovalDeferred('cover_letter')
         const letterToken = yield* DurableDeferred.tokenFromPayload(
-          letterReview,
+          letterApproval,
           {
-            payload: pairedInput,
+            payload: input,
             workflow: PrepareApplicationWorkflow,
           }
         )
-        const letterCompleted = yield* SubscriptionRef.changes(
-          progress.runs
-        ).pipe(
-          Stream.filter(
-            (runs) =>
-              runs.get('run-paired-letter')?.status === 'review_submitted' &&
-              runs.get('run-paired-cv')?.status === 'awaiting_review'
-          ),
-          Stream.runHead,
-          Effect.forkChild
-        )
-        yield* submitPreparationReview({
-          decision: ReviewDecisionSchema.cases.Rejected.make({
-            reason: 'Prefer a shorter letter.',
-          }),
-          runId: 'run-paired-letter',
+        yield* DurableDeferred.succeed(letterApproval, {
           token: letterToken,
+          value: { revisionId: letterRevision.id },
         })
-        yield* Fiber.join(letterCompleted)
-
-        const cvReview = preparationReviewDeferred('cv')
-        const cvToken = yield* DurableDeferred.tokenFromPayload(cvReview, {
-          payload: pairedInput,
-          workflow: PrepareApplicationWorkflow,
-        })
-        yield* DurableDeferred.succeed(cvReview, {
-          token: cvToken,
-          value: ReviewDecisionSchema.cases.Approved.make({
-            revisionId: cvRevision.id,
-          }),
-        })
-
-        const result = yield* PrepareApplicationWorkflow.execute(pairedInput)
-        return {
-          result,
-          runs: yield* SubscriptionRef.get(progress.runs),
-        }
-      }).pipe(Effect.provide(makeTestLayer(pairedGateway)))
+        return yield* PrepareApplicationWorkflow.execute(input)
+      }).pipe(Effect.provide(makeLayer(gateway)))
     )
 
     expect(calls).toEqual({
-      analyze: 1,
-      bootstrap: 2,
-      compose: 2,
-      ensure: 1,
-      evidence: 1,
-      save: 2,
+      analysis: 1,
+      coverCompositions: 1,
+      cvCompositions: 1,
     })
-    expect(observedReferenceCvRevisionId.current).toBe(cvRevision.id)
-    expect(observed.result).toMatchObject({
+    expect(observedReference).toEqual({
+      document: acceptedCv,
+      revisionId: acceptedCvRevision.id,
+    })
+    expect(observed).toMatchObject({
       applicationId: application.id,
       artifacts: [
         {
           kind: 'cv',
-          revisionId: cvRevision.id,
-          runId: 'run-paired-cv',
+          revisionId: acceptedCvRevision.id,
           status: 'approved',
         },
         {
           kind: 'cover_letter',
-          revisionId: null,
-          runId: 'run-paired-letter',
-          status: 'rejected',
+          revisionId: letterRevision.id,
+          status: 'approved',
         },
       ],
-      jobId: pairedInput.jobId,
+      jobId: input.jobId,
+      status: 'completed',
     })
-    expect(observed.runs.get('run-paired-cv')?.status).toBe('approved')
-    expect(observed.runs.get('run-paired-letter')?.status).toBe('rejected')
-  })
-
-  test('keeps a generated CV reviewable when its paired cover letter fails', async () => {
-    const pairedInput: PreparationJobInput = {
-      coverLetterPrompt: 'Keep the letter concise.',
-      cvGenerationGuidance: cvGenerationGuidanceTestFixture,
-      jobId: 'job-partial',
-      locale: 'en',
-      runIds: {
-        coverLetter: 'run-partial-letter',
-        cv: 'run-partial-cv',
-      },
-      source: {
-        _tag: 'CaptureUrl',
-        url: application.postingUrl,
-      },
-    }
-    const partialGateway: PreparationGatewayService = {
-      ...fakeGateway,
-      bootstrap: (artifactInput) =>
-        Effect.succeed({
-          ...bootstrap,
-          entry: artifactInput.kind === 'cv' ? cvEntry : entry,
-        }),
-      compose: (artifactInput) =>
-        artifactInput.kind === 'cv'
-          ? Effect.succeed(cvCandidate)
-          : Effect.fail(
-              new PreparationWorkflowError({
-                message: 'Cover-letter generation failed.',
-                stage: 'composition',
-              })
-            ),
-      saveCandidate: (_artifactInput, _context, candidate) =>
-        Effect.succeed({
-          application,
-          candidate,
-          result: {
-            entry: {
-              ...cvEntry,
-              headRevisionId: cvRevision.id,
-              version: 2,
-            },
-            revision: cvRevision,
-          },
-        }),
-      approveBoundRevision: (candidate, approvedRevisionId) =>
-        Effect.succeed({
-          entry: {
-            ...candidate.result.entry,
-            approvedRevisionId,
-            headRevisionId: approvedRevisionId,
-            state: 'approved',
-          },
-          revision: candidate.result.revision,
-        }),
-    }
-
-    const observed = await Effect.runPromise(
-      Effect.gen(function* () {
-        const progress = yield* PreparationProgress
-        yield* progress.reserve(
-          preparationJobArtifactInputs(pairedInput).map((artifactInput) => ({
-            batchId: 'batch-partial',
-            batchPosition: 0,
-            input: artifactInput,
-            jobId: pairedInput.jobId,
-          }))
-        )
-        yield* progress.setExecution(
-          pairedInput.jobId,
-          yield* PrepareApplicationWorkflow.executionId(pairedInput)
-        )
-
-        const partialResult = yield* SubscriptionRef.changes(
-          progress.runs
-        ).pipe(
-          Stream.filter(
-            (runs) =>
-              runs.get('run-partial-cv')?.status === 'awaiting_review' &&
-              runs.get('run-partial-letter')?.status === 'failed'
-          ),
-          Stream.runHead,
-          Effect.forkChild
-        )
-        yield* PrepareApplicationWorkflow.execute(pairedInput, {
-          discard: true,
-        })
-        yield* Fiber.join(partialResult)
-
-        const review = preparationReviewDeferred('cv')
-        const token = yield* DurableDeferred.tokenFromPayload(review, {
-          payload: pairedInput,
-          workflow: PrepareApplicationWorkflow,
-        })
-        yield* DurableDeferred.succeed(review, {
-          token,
-          value: ReviewDecisionSchema.cases.Approved.make({
-            revisionId: cvRevision.id,
-          }),
-        })
-        const result = yield* PrepareApplicationWorkflow.execute(pairedInput)
-        return {
-          result,
-          runs: yield* SubscriptionRef.get(progress.runs),
-        }
-      }).pipe(Effect.provide(makeTestLayer(partialGateway)))
-    )
-
-    expect(observed.result.artifacts).toEqual([
-      {
-        kind: 'cv',
-        revisionId: cvRevision.id,
-        runId: 'run-partial-cv',
-        status: 'approved',
-      },
-      {
-        kind: 'cover_letter',
-        revisionId: null,
-        runId: 'run-partial-letter',
-        status: 'failed',
-      },
-    ])
-    expect(observed.runs.get('run-partial-cv')?.status).toBe('approved')
-    expect(observed.runs.get('run-partial-letter')?.status).toBe('failed')
-  })
-
-  test('persists a candidate, suspends for review, and resumes on approval', async () => {
-    const calls = {
-      approve: 0,
-      compose: 0,
-      ensure: 0,
-      save: 0,
-    }
-    const countedGateway: PreparationGatewayService = {
-      ...fakeGateway,
-      approveBoundRevision: (candidate, revisionId) =>
-        Effect.sync(() => {
-          calls.approve += 1
-          return fakeGateway.approveBoundRevision(candidate, revisionId)
-        }).pipe(Effect.flatten),
-      compose: (...args) =>
-        Effect.sync(() => {
-          calls.compose += 1
-          return fakeGateway.compose(...args)
-        }).pipe(Effect.flatten),
-      ensureApplication: (...args) =>
-        Effect.sync(() => {
-          calls.ensure += 1
-          return fakeGateway.ensureApplication(...args)
-        }).pipe(Effect.flatten),
-      saveCandidate: (...args) =>
-        Effect.sync(() => {
-          calls.save += 1
-          return fakeGateway.saveCandidate(...args)
-        }).pipe(Effect.flatten),
-    }
-    const result = await Effect.runPromise(
-      Effect.gen(function* () {
-        const progress = yield* PreparationProgress
-        yield* progress.register(reservation(input))
-        const expectedExecutionId =
-          yield* PrepareApplicationWorkflow.executionId(input)
-        yield* progress.setExecution(input.runId, expectedExecutionId)
-
-        const awaitingReview = yield* SubscriptionRef.changes(
-          progress.runs
-        ).pipe(
-          Stream.filter(
-            (runs) => runs.get(input.runId)?.status === 'awaiting_review'
-          ),
-          Stream.runHead,
-          Effect.forkChild
-        )
-
-        const executionId = yield* PrepareApplicationWorkflow.execute(input, {
-          discard: true,
-        })
-        expect(executionId).toBe(expectedExecutionId)
-        const observed = yield* Fiber.join(awaitingReview)
-        expect(Option.isSome(observed)).toBe(true)
-        expect(
-          observed.pipe(Option.getOrThrow).get(input.runId)?.candidate
-        ).not.toBeNull()
-
-        const review = preparationReviewDeferred(input.kind)
-        const token = yield* DurableDeferred.tokenFromPayload(review, {
-          payload: input,
-          workflow: PrepareApplicationWorkflow,
-        })
-        yield* DurableDeferred.succeed(review, {
-          token,
-          value: ReviewDecisionSchema.cases.Approved.make({
-            revisionId: revision.id,
-          }),
-        })
-
-        const workflowResult = yield* PrepareApplicationWorkflow.execute(input)
-        return {
-          run: (yield* SubscriptionRef.get(progress.runs)).get(input.runId),
-          workflowResult,
-        }
-      }).pipe(Effect.provide(makeTestLayer(countedGateway)))
-    )
-
-    expect(result.workflowResult).toMatchObject({
-      applicationId: application.id,
-      revisionId: revision.id,
-      runId: input.runId,
-      status: 'approved',
-    })
-    if (result.run?.status !== 'approved') {
-      throw new Error('Expected an approved progress projection.')
-    }
-    expect(result.run.candidate.result.entry.state).toBe('approved')
-    expect(result.run.candidate.result.entry.approvedRevisionId).toBe(
-      revision.id
-    )
-    const validation = result.run.stepHistory.find(
-      ({ stage, status }) => stage === 'validation' && status === 'running'
-    )
-    const saving = result.run.stepHistory.find(
-      ({ stage, status }) => stage === 'saving' && status === 'running'
-    )
-    expect(validation).toBeDefined()
-    expect(saving).toBeDefined()
-    expect(validation?.occurredAt).toBeLessThanOrEqual(
-      saving?.occurredAt ?? Number.NEGATIVE_INFINITY
-    )
-    expect(calls).toEqual({ approve: 1, compose: 1, ensure: 1, save: 1 })
-  })
-
-  test('resumes with a rejected result after human review', async () => {
-    const rejectedInput = { ...input, runId: 'run-rejected' }
-    const result = await Effect.runPromise(
-      Effect.gen(function* () {
-        const progress = yield* PreparationProgress
-        yield* progress.register(reservation(rejectedInput))
-        yield* progress.setExecution(
-          rejectedInput.runId,
-          yield* PrepareApplicationWorkflow.executionId(rejectedInput)
-        )
-
-        const awaitingReview = yield* SubscriptionRef.changes(
-          progress.runs
-        ).pipe(
-          Stream.filter(
-            (runs) =>
-              runs.get(rejectedInput.runId)?.status === 'awaiting_review'
-          ),
-          Stream.runHead,
-          Effect.forkChild
-        )
-
-        yield* PrepareApplicationWorkflow.execute(rejectedInput, {
-          discard: true,
-        })
-        yield* Fiber.join(awaitingReview)
-
-        const review = preparationReviewDeferred(rejectedInput.kind)
-        const token = yield* DurableDeferred.tokenFromPayload(review, {
-          payload: rejectedInput,
-          workflow: PrepareApplicationWorkflow,
-        })
-        yield* DurableDeferred.succeed(review, {
-          token,
-          value: ReviewDecisionSchema.cases.Rejected.make({
-            reason: 'Needs stronger evidence.',
-          }),
-        })
-
-        return yield* PrepareApplicationWorkflow.execute(rejectedInput)
-      }).pipe(Effect.provide(makeTestLayer()))
-    )
-
-    expect(result).toMatchObject({
-      applicationId: application.id,
-      revisionId: null,
-      runId: rejectedInput.runId,
-      status: 'rejected',
-    })
-  })
-
-  test('unsafe local cancellation stops a queued run before gateway work', async () => {
-    const queuedInput = { ...input, runId: 'run-cancelled' }
-    const gate = Effect.runSync(Deferred.make<void>())
-    let ensureCalls = 0
-    const queuedGateway: PreparationGatewayService = {
-      ...fakeGateway,
-      ensureApplication: () =>
-        Effect.sync(() => {
-          ensureCalls += 1
-          return application
-        }),
-    }
-    const queuedConcurrencyLayer = Layer.succeed(PreparationConcurrency, {
-      withJobSlot: (effect) =>
-        Effect.gen(function* () {
-          yield* Deferred.await(gate)
-          return yield* effect
-        }),
-    })
-
-    const status = await Effect.runPromise(
-      Effect.gen(function* () {
-        const engine = yield* WorkflowEngine.WorkflowEngine
-        const progress = yield* PreparationProgress
-        yield* progress.register(reservation(queuedInput))
-        const expectedExecutionId =
-          yield* PrepareApplicationWorkflow.executionId(queuedInput)
-        yield* progress.setExecution(queuedInput.runId, expectedExecutionId)
-        const executionId = yield* PrepareApplicationWorkflow.execute(
-          queuedInput,
-          { discard: true }
-        )
-        expect(executionId).toBe(expectedExecutionId)
-
-        yield* engine.interruptUnsafe(PrepareApplicationWorkflow, executionId)
-        yield* progress.cancel(queuedInput.runId)
-        yield* Deferred.succeed(gate, undefined)
-        yield* Effect.sleep('20 millis')
-
-        return (yield* SubscriptionRef.get(progress.runs)).get(
-          queuedInput.runId
-        )?.status
-      }).pipe(
-        Effect.provide(makeTestLayer(queuedGateway, queuedConcurrencyLayer))
-      )
-    )
-
-    expect(ensureCalls).toBe(0)
-    expect(status).toBe('cancelled')
-  })
-
-  test('active cancellation interrupts one in-flight activity without retrying it', async () => {
-    const activeInput = { ...input, runId: 'run-active-cancel' }
-    const entered = Effect.runSync(Deferred.make<void>())
-    let ensureCalls = 0
-    const activeGateway: PreparationGatewayService = {
-      ...fakeGateway,
-      ensureApplication: () =>
-        Effect.gen(function* () {
-          ensureCalls += 1
-          yield* Deferred.succeed(entered, undefined)
-          return yield* Effect.never
-        }),
-    }
-
-    const run = await Effect.runPromise(
-      Effect.gen(function* () {
-        const progress = yield* PreparationProgress
-        yield* progress.register(reservation(activeInput))
-        const executionId =
-          yield* PrepareApplicationWorkflow.executionId(activeInput)
-        yield* progress.setExecution(activeInput.runId, executionId)
-        yield* PrepareApplicationWorkflow.execute(activeInput, {
-          discard: true,
-        })
-        yield* Deferred.await(entered)
-        yield* cancelPreparation({ executionId, runId: activeInput.runId })
-        return (yield* SubscriptionRef.get(progress.runs)).get(
-          activeInput.runId
-        )
-      }).pipe(Effect.provide(makeTestLayer(activeGateway)))
-    )
-
-    expect(ensureCalls).toBe(1)
-    expect(run?.status).toBe('cancelled')
-  })
-
-  test('cancels a workflow suspended at review without unsafe interruption', async () => {
-    const suspendedInput = { ...input, runId: 'run-suspended-cancel' }
-    const observed = await Effect.runPromise(
-      Effect.gen(function* () {
-        const progress = yield* PreparationProgress
-        yield* progress.register(reservation(suspendedInput))
-        const executionId =
-          yield* PrepareApplicationWorkflow.executionId(suspendedInput)
-        yield* progress.setExecution(suspendedInput.runId, executionId)
-        const awaiting = yield* SubscriptionRef.changes(progress.runs).pipe(
-          Stream.filter(
-            (runs) =>
-              runs.get(suspendedInput.runId)?.status === 'awaiting_review'
-          ),
-          Stream.runHead,
-          Effect.forkChild
-        )
-        yield* PrepareApplicationWorkflow.execute(suspendedInput, {
-          discard: true,
-        })
-        yield* Fiber.join(awaiting)
-        const beforeCancel = (yield* SubscriptionRef.get(progress.runs)).get(
-          suspendedInput.runId
-        )
-        expect(beforeCancel?.status).toBe('awaiting_review')
-        expect(beforeCancel?.executionId).toBe(executionId)
-
-        yield* cancelPreparation({
-          executionId,
-          runId: suspendedInput.runId,
-        })
-        return {
-          run: (yield* SubscriptionRef.get(progress.runs)).get(
-            suspendedInput.runId
-          ),
-        }
-      }).pipe(Effect.provide(makeTestLayer()))
-    )
-
-    expect(observed.run?.status).toBe('cancelled')
-  })
-
-  test('restores review projection when deferred completion defects', async () => {
-    const reviewInput = { ...input, runId: 'run-review-defect' }
-    const submitWithDefect = makeSubmitPreparationReview(() =>
-      Effect.die('deferred store unavailable')
-    )
-    const observed = await Effect.runPromise(
-      Effect.gen(function* () {
-        const progress = yield* PreparationProgress
-        yield* progress.register(reservation(reviewInput))
-        const executionId =
-          yield* PrepareApplicationWorkflow.executionId(reviewInput)
-        yield* progress.setExecution(reviewInput.runId, executionId)
-        yield* progress.stage(reviewInput.runId, 'review', 'Reviewing')
-        const token = DurableDeferred.tokenFromExecutionId(
-          preparationReviewDeferred(reviewInput.kind),
-          {
-            executionId,
-            workflow: PrepareApplicationWorkflow,
-          }
-        )
-        yield* progress.reviewReady(
-          reviewInput.runId,
-          application.id,
-          savedCandidate,
-          token
-        )
-        const before = (yield* SubscriptionRef.get(progress.runs)).get(
-          reviewInput.runId
-        )
-        if (before?.status !== 'awaiting_review') {
-          return yield* Effect.die('Expected a review-ready workflow run.')
-        }
-
-        const exit = yield* Effect.exit(
-          submitWithDefect({
-            decision: ReviewDecisionSchema.cases.Rejected.make({
-              reason: 'Not ready.',
-            }),
-            runId: reviewInput.runId,
-            token: before.reviewToken,
-          })
-        )
-        return {
-          before,
-          exit,
-          run: (yield* SubscriptionRef.get(progress.runs)).get(
-            reviewInput.runId
-          ),
-        }
-      }).pipe(Effect.provide(preparationProgressLayer))
-    )
-
-    expect(Exit.isFailure(observed.exit)).toBe(true)
-    expect(observed.run?.status).toBe('awaiting_review')
-    expect(observed.run?.reviewToken).toBe(observed.before.reviewToken)
-  })
-
-  test('keeps review unclaimed when authoritative ancestry preflight fails', async () => {
-    const reviewInput = { ...input, runId: 'run-review-preflight' }
-    let verifyCalls = 0
-    const rejectingGateway: PreparationGatewayService = {
-      ...fakeGateway,
-      verifyBoundRevision: () =>
-        Effect.sync(() => {
-          verifyCalls += 1
-        }).pipe(
-          Effect.andThen(
-            Effect.fail(
-              new PreparationWorkflowError({
-                message:
-                  'Revision revision-other-ai is not a human edit of the workflow candidate.',
-                stage: 'review',
-              })
-            )
-          )
-        ),
-    }
-
-    const observed = await Effect.runPromise(
-      Effect.gen(function* () {
-        const progress = yield* PreparationProgress
-        yield* progress.register(reservation(reviewInput))
-        const executionId =
-          yield* PrepareApplicationWorkflow.executionId(reviewInput)
-        yield* progress.setExecution(reviewInput.runId, executionId)
-        yield* progress.stage(reviewInput.runId, 'review', 'Reviewing')
-        const token = DurableDeferred.tokenFromExecutionId(
-          preparationReviewDeferred(reviewInput.kind),
-          {
-            executionId,
-            workflow: PrepareApplicationWorkflow,
-          }
-        )
-        yield* progress.reviewReady(
-          reviewInput.runId,
-          application.id,
-          savedCandidate,
-          token
-        )
-
-        const exit = yield* Effect.exit(
-          submitPreparationReview({
-            decision: ReviewDecisionSchema.cases.Approved.make({
-              revisionId: 'revision-human-after-ai',
-            }),
-            runId: reviewInput.runId,
-            token,
-          })
-        )
-        return {
-          exit,
-          run: (yield* SubscriptionRef.get(progress.runs)).get(
-            reviewInput.runId
-          ),
-          token,
-        }
-      }).pipe(Effect.provide(makeTestLayer(rejectingGateway)))
-    )
-
-    expect(Exit.isFailure(observed.exit)).toBe(true)
-    expect(verifyCalls).toBe(1)
-    expect(observed.run?.status).toBe('awaiting_review')
-    expect(observed.run?.reviewToken).toBe(observed.token)
-  })
-
-  test('projects unexpected defects into a failed progress run', async () => {
-    const defectiveInput = { ...input, runId: 'run-defect' }
-    const defectiveGateway: PreparationGatewayService = {
-      ...fakeGateway,
-      ensureApplication: () => Effect.die('gateway exploded'),
-    }
-
-    const failedRun = await Effect.runPromise(
-      Effect.gen(function* () {
-        const progress = yield* PreparationProgress
-        yield* progress.register(reservation(defectiveInput))
-        yield* progress.setExecution(
-          defectiveInput.runId,
-          yield* PrepareApplicationWorkflow.executionId(defectiveInput)
-        )
-        const failed = yield* SubscriptionRef.changes(progress.runs).pipe(
-          Stream.filter(
-            (runs) => runs.get(defectiveInput.runId)?.status === 'failed'
-          ),
-          Stream.runHead,
-          Effect.forkChild
-        )
-
-        yield* PrepareApplicationWorkflow.execute(defectiveInput, {
-          discard: true,
-        })
-        return (yield* Fiber.join(failed))
-          .pipe(Option.getOrThrow)
-          .get(defectiveInput.runId)
-      }).pipe(Effect.provide(makeTestLayer(defectiveGateway)))
-    )
-
-    expect(failedRun?.status).toBe('failed')
-    expect(failedRun?.error).toContain('gateway exploded')
-  })
-
-  test('limits active preparation jobs, rather than individual activities, to three', async () => {
-    const maximum = await Effect.runPromise(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const concurrency = yield* PreparationConcurrency
-          const active = yield* Ref.make(0)
-          const maximum = yield* Ref.make(0)
-          const entered = yield* Queue.unbounded<void>()
-          const release = yield* Deferred.make<void>()
-
-          const fibers = yield* Effect.forEach(
-            [0, 1, 2, 3],
-            () =>
-              concurrency
-                .withJobSlot(
-                  Effect.gen(function* () {
-                    const count = yield* Ref.updateAndGet(
-                      active,
-                      (value) => value + 1
-                    )
-                    yield* Ref.update(maximum, (value) =>
-                      Math.max(value, count)
-                    )
-                    yield* Queue.offer(entered, undefined)
-                    yield* Deferred.await(release)
-                  }).pipe(
-                    Effect.ensuring(Ref.update(active, (value) => value - 1))
-                  )
-                )
-                .pipe(Effect.forkScoped),
-            { concurrency: 'unbounded' }
-          )
-
-          yield* Queue.take(entered)
-          yield* Queue.take(entered)
-          yield* Queue.take(entered)
-          expect(yield* Ref.get(active)).toBe(3)
-          expect(yield* Queue.size(entered)).toBe(0)
-
-          yield* Deferred.succeed(release, undefined)
-          yield* Effect.forEach(fibers, Fiber.join, { discard: true })
-          return yield* Ref.get(maximum)
-        })
-      ).pipe(Effect.provide(preparationConcurrencyLayer))
-    )
-
-    expect(maximum).toBe(3)
   })
 })

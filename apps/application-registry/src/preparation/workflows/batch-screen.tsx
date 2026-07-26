@@ -70,7 +70,7 @@ import {
 
 type JobFilter = 'all' | 'active' | 'review' | 'failed' | 'finished'
 
-const activeStatuses = new Set(['queued', 'running'])
+const activeStatuses = new Set(['queued', 'running', 'cancelling'])
 
 const filterJob = (job: WorkflowJobListItem, filter: JobFilter): boolean => {
   if (filter === 'all') return true
@@ -86,6 +86,12 @@ const canCancel = (job: WorkflowJobListItem): boolean =>
   job.status === 'running' ||
   job.status === 'needs_review'
 
+export const newAiWorkflowPostingTargetHref = (
+  postingUrl: string,
+  locale: string
+): string =>
+  `/ai-workflows/new?postingUrl=${encodeURIComponent(postingUrl)}&locale=${encodeURIComponent(locale)}`
+
 const JobRow = ({
   batchId,
   cancelling,
@@ -95,7 +101,7 @@ const JobRow = ({
   readonly batchId: string
   readonly cancelling: boolean
   readonly job: WorkflowJobListItem
-  readonly onCancel: (runId: string) => void
+  readonly onCancel: (jobId: string) => void
 }) => (
   <TableRow>
     <TableCell>
@@ -145,7 +151,7 @@ const JobRow = ({
           variant={job.status === 'needs_review' ? 'default' : 'outline'}
           render={
             <Link
-              to={`/workflows/${encodeURIComponent(batchId)}/jobs/${encodeURIComponent(job.jobId)}`}
+              to={`/ai-workflows/${encodeURIComponent(batchId)}/jobs/${encodeURIComponent(job.jobId)}`}
             />
           }
         >
@@ -158,7 +164,7 @@ const JobRow = ({
             size="icon-sm"
             variant="ghost"
             disabled={cancelling}
-            onClick={() => onCancel(job.primaryRunId)}
+            onClick={() => onCancel(job.jobId)}
           >
             {cancelling ? <Spinner aria-hidden /> : <Ban />}
           </Button>
@@ -169,9 +175,7 @@ const JobRow = ({
             size="icon-sm"
             variant="ghost"
             render={
-              <Link
-                to={`/workflows/new?url=${encodeURIComponent(job.url)}&locale=${encodeURIComponent(job.locale)}`}
-              />
+              <Link to={newAiWorkflowPostingTargetHref(job.url, job.locale)} />
             }
           >
             <RotateCcw />
@@ -185,16 +189,16 @@ const JobRow = ({
 export type WorkflowBatchScreenProps = {
   readonly batch: WorkflowBatchListItem
   readonly cancelError: string | null
-  readonly cancellingRunIds: ReadonlySet<string>
+  readonly cancellingJobIds: ReadonlySet<string>
   readonly jobs: ReadonlyArray<WorkflowJobListItem>
   readonly onCancelAll: () => void
-  readonly onCancelJob: (runId: string) => void
+  readonly onCancelJob: (jobId: string) => void
 }
 
 export const WorkflowBatchScreen = ({
   batch,
   cancelError,
-  cancellingRunIds,
+  cancellingJobIds,
   jobs,
   onCancelAll,
   onCancelJob,
@@ -215,10 +219,10 @@ export const WorkflowBatchScreen = ({
   return (
     <WorkflowPage>
       <WorkflowPageHeader
-        backTo="/workflows"
-        backLabel="All workflows"
+        backTo="/ai-workflows"
+        backLabel="All AI workflows"
         title={`Batch ${shortWorkflowId(batch.batchId)}`}
-        description="Monitor every URL independently. A slow or failed job does not block the rest of this batch."
+        description="Monitor every target independently. A slow or failed job does not block the rest of this batch."
         metadata={
           <>
             <WorkflowStatusBadge status={batch.status} />
@@ -319,7 +323,8 @@ export const WorkflowBatchScreen = ({
           <div>
             <CardTitle>Jobs</CardTitle>
             <CardDescription>
-              {batch.urlCount} URL job{batch.urlCount === 1 ? '' : 's'} ·{' '}
+              {batch.targetCount} target
+              {batch.targetCount === 1 ? '' : 's'} ·{' '}
               {jobs.reduce((count, job) => count + job.artifacts.length, 0)}{' '}
               document workflow
               {jobs.reduce((count, job) => count + job.artifacts.length, 0) ===
@@ -388,7 +393,7 @@ export const WorkflowBatchScreen = ({
                     <JobRow
                       key={job.jobId}
                       batchId={batch.batchId}
-                      cancelling={cancellingRunIds.has(job.primaryRunId)}
+                      cancelling={cancellingJobIds.has(job.jobId)}
                       job={job}
                       onCancel={onCancelJob}
                     />

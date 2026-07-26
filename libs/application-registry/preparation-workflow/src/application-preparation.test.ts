@@ -6,7 +6,7 @@ import {
   ApplicationPreparation,
   applicationPreparationLayer,
 } from './application-preparation'
-import { PreparationWorkflowError, ReviewDecisionSchema } from './domain'
+import { PreparationWorkflowError } from './domain'
 import { makeStructuredGenerationTestLayer } from './test-support/generation'
 import { makePreparationStoreTestLayer } from './test-support/store'
 
@@ -30,32 +30,31 @@ const testLayer = applicationPreparationLayer().pipe(
 )
 
 describe('ApplicationPreparation', () => {
-  test('hides engine handles and owns review and cancellation lookup', async () => {
+  test('hides engine handles and owns job review and cancellation lookup', async () => {
     const observed = await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
           const preparation = yield* ApplicationPreparation
-          yield* preparation.cancel('missing-run')
-          const review = yield* Effect.exit(
-            preparation.submitReview({
-              decision: ReviewDecisionSchema.cases.Rejected.make({
-                reason: 'Not suitable.',
-              }),
-              runId: 'missing-run',
+          yield* preparation.cancelJob('missing-job')
+          const approval = yield* Effect.exit(
+            preparation.approveArtifact({
+              artifact: 'cv',
+              jobId: 'missing-job',
+              revisionId: 'missing-revision',
             })
           )
           return {
-            review,
-            runs: yield* SubscriptionRef.get(preparation.runs),
+            approval,
+            jobs: yield* SubscriptionRef.get(preparation.jobs),
           }
         })
       ).pipe(Effect.provide(testLayer))
     )
 
-    expect(observed.runs.size).toBe(0)
-    expect(Exit.isFailure(observed.review)).toBe(true)
-    if (Exit.isFailure(observed.review)) {
-      expect(Exit.findErrorOption(observed.review)).toMatchObject({
+    expect(observed.jobs.size).toBe(0)
+    expect(Exit.isFailure(observed.approval)).toBe(true)
+    if (Exit.isFailure(observed.approval)) {
+      expect(Exit.findErrorOption(observed.approval)).toMatchObject({
         value: expect.any(PreparationWorkflowError),
       })
     }

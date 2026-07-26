@@ -26,6 +26,7 @@ const uniqueRequirementIds = Schema.makeFilter(
 
 export const JobAnalysisSchema = Schema.Struct({
   company: Schema.NullOr(Schema.NonEmptyString),
+  educationDatesRequired: Schema.Boolean,
   keywords: Schema.Array(Schema.NonEmptyString).pipe(
     Schema.check(Schema.isMaxLength(40))
   ),
@@ -44,38 +45,54 @@ export const JobAnalysisSchema = Schema.Struct({
 export interface JobAnalysis
   extends Schema.Schema.Type<typeof JobAnalysisSchema> {}
 
-export const EvidenceMatchSchema = Schema.Struct({
+export const RequirementEvidenceSchema = Schema.Struct({
   evidenceIds: Schema.UniqueArray(Schema.NonEmptyString).pipe(
     Schema.check(Schema.isMaxLength(24))
   ),
-  rationale: Schema.NonEmptyString,
   requirementId: Schema.NonEmptyString,
 })
 
 export const EvidencePlanSchema = Schema.Struct({
-  matches: Schema.Array(EvidenceMatchSchema).pipe(
-    Schema.check(Schema.isMaxLength(30))
-  ),
-  strategy: Schema.NonEmptyString,
-  uncoveredRequirementIds: Schema.UniqueArray(Schema.NonEmptyString).pipe(
+  requirements: Schema.Array(RequirementEvidenceSchema).pipe(
+    Schema.check(Schema.isMinLength(1)),
     Schema.check(Schema.isMaxLength(30))
   ),
 })
 export interface EvidencePlan
   extends Schema.Schema.Type<typeof EvidencePlanSchema> {}
 
-export const SectionBriefSchema = Schema.Struct({
+export const CvAuthoringItemSchema = Schema.Struct({
   evidenceIds: Schema.UniqueArray(Schema.NonEmptyString).pipe(
+    Schema.check(Schema.isMinLength(1)),
     Schema.check(Schema.isMaxLength(32))
   ),
-  notes: Schema.Array(Schema.NonEmptyString).pipe(
+  id: Schema.NonEmptyString,
+})
+export interface CvAuthoringItem
+  extends Schema.Schema.Type<typeof CvAuthoringItemSchema> {}
+
+export const CvAuthoringPlanSchema = Schema.Struct({
+  additionalEvidenceIds: Schema.UniqueArray(Schema.NonEmptyString).pipe(
     Schema.check(Schema.isMaxLength(16))
   ),
-  objective: Schema.NonEmptyString,
-  sectionId: Schema.NonEmptyString,
+  education: Schema.Array(CvAuthoringItemSchema).pipe(
+    Schema.check(Schema.isMaxLength(4))
+  ),
+  experience: Schema.Array(CvAuthoringItemSchema).pipe(
+    Schema.check(Schema.isMaxLength(5))
+  ),
+  profileEvidenceIds: Schema.UniqueArray(Schema.NonEmptyString).pipe(
+    Schema.check(Schema.isMaxLength(16))
+  ),
+  projects: Schema.Array(CvAuthoringItemSchema).pipe(
+    Schema.check(Schema.isMaxLength(3))
+  ),
+  skillGroups: Schema.Array(CvAuthoringItemSchema).pipe(
+    Schema.check(Schema.isMaxLength(8))
+  ),
 })
-export interface SectionBrief
-  extends Schema.Schema.Type<typeof SectionBriefSchema> {}
+export interface CvAuthoringPlan
+  extends Schema.Schema.Type<typeof CvAuthoringPlanSchema> {}
 
 export const GenerationUsageSchema = Schema.Struct({
   inputTokens: Schema.NullOr(Schema.Number),
@@ -105,9 +122,9 @@ export const EvidencePlanResultSchema = Schema.Struct({
 export interface EvidencePlanResult
   extends Schema.Schema.Type<typeof EvidencePlanResultSchema> {}
 
-export const SectionBriefResultSchema = Schema.Struct({
-  brief: SectionBriefSchema,
+export const CvAuthoringPlanResultSchema = Schema.Struct({
   metadata: GenerationStageMetadataSchema,
+  plan: CvAuthoringPlanSchema,
 })
-export interface SectionBriefResult
-  extends Schema.Schema.Type<typeof SectionBriefResultSchema> {}
+export interface CvAuthoringPlanResult
+  extends Schema.Schema.Type<typeof CvAuthoringPlanResultSchema> {}

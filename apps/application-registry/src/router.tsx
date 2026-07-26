@@ -49,28 +49,24 @@ export const registryRoutes: RouteObject[] = [
         lazy: () => import('./facts/pages/facts'),
       },
       {
-        path: 'workflows',
+        path: 'ai-workflows',
         lazy: () => import('./preparation/pages/workflows-dashboard'),
       },
       {
-        path: 'workflows/new',
+        path: 'ai-workflows/new',
         lazy: () => import('./preparation/pages/new-workflow'),
       },
       {
-        path: 'workflows/:batchId',
+        path: 'ai-workflows/:batchId',
         lazy: () => import('./preparation/pages/workflow-batch'),
       },
       {
-        path: 'workflows/:batchId/jobs/:jobId',
+        path: 'ai-workflows/:batchId/jobs/:jobId',
         lazy: () => import('./preparation/pages/workflow-job'),
       },
       {
-        path: 'workflows/:batchId/jobs/:jobId/review',
-        lazy: () => import('./preparation/pages/workflow-review'),
-      },
-      {
-        path: 'workflows/:batchId/jobs/:jobId/artifacts/:kind/review',
-        lazy: () => import('./preparation/pages/workflow-review'),
+        path: 'ai-workflows/:batchId/jobs/:jobId/artifacts/:kind',
+        lazy: () => import('./preparation/pages/workflow-artifact'),
       },
       {
         path: 'applications/:applicationId',
@@ -79,18 +75,6 @@ export const registryRoutes: RouteObject[] = [
       {
         path: 'applications/:applicationId/artifacts/:artifactId',
         lazy: () => import('./applications/pages/application-artifact'),
-      },
-      {
-        path: 'applications/:applicationId/prepare',
-        lazy: () => import('./preparation/pages/cv-preparation'),
-      },
-      {
-        path: 'applications/:applicationId/cover-letter',
-        lazy: () => import('./preparation/pages/cover-letter'),
-      },
-      {
-        path: 'applications/:applicationId/publish',
-        lazy: () => import('./preparation/pages/cv-publication'),
       },
       {
         path: 'preparation/cv-guidance',

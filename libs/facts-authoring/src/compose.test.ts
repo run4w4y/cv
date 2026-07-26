@@ -209,7 +209,6 @@ describe('facts repository composition', () => {
       entries: [
         {
           company: locale === 'en' ? 'Company' : 'Компания',
-          companyVisibility: 'public',
           period: '2024',
           roles: [],
           highlights: [],

@@ -1,16 +1,28 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 
-import { contentSecurityPolicy } from '@/server/content-security-policy'
+import {
+  contentSecurityPolicy,
+  cvPreviewFrameAncestors,
+} from '@/server/content-security-policy'
 
 const previewPathPattern = /(?:^|\/)_preview(?:\/|$)/u
 
 export const proxy = (request: NextRequest) => {
   const nonce = btoa(crypto.randomUUID())
+  const development = process.env.NODE_ENV === 'development'
+  const webPreview = previewPathPattern.test(request.nextUrl.pathname)
   const policy = contentSecurityPolicy({
-    development: process.env.NODE_ENV === 'development',
+    development,
+    ...(webPreview
+      ? {
+          frameAncestors: cvPreviewFrameAncestors({
+            development,
+            registryOrigin: process.env.CV_REGISTRY_ORIGIN,
+          }),
+        }
+      : {}),
     nonce,
-    preview: previewPathPattern.test(request.nextUrl.pathname),
   })
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set('Content-Security-Policy', policy)

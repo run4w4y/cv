@@ -4,7 +4,7 @@ import { WorkflowDashboardScreen } from './dashboard-screen'
 import { workflowDashboardBatches } from './story-fixtures'
 
 const meta = {
-  title: 'Application Registry/URL workflows/Dashboard',
+  title: 'Application Registry/AI workflows/Dashboard',
   component: WorkflowDashboardScreen,
   tags: ['autodocs'],
   parameters: { layout: 'fullscreen' },

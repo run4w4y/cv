@@ -141,6 +141,7 @@ const input = (contentEntry: ContentEntry): RefinePreparationRevisionInput => ({
           $schema: 'cover-letter.v1',
           body: 'Original letter.',
           locale: 'en',
+          referenceCvRevisionId: 'cv-revision-1',
         },
   entry: contentEntry,
   factsCatalogue,
@@ -197,6 +198,7 @@ describe('preparation Codex refinement', () => {
       $schema: 'cover-letter.v1',
       body: 'A more direct letter.',
       locale: 'en',
+      referenceCvRevisionId: 'cv-revision-1',
     } as const
     const exit = await execute(
       input(contentEntry),
@@ -270,6 +272,7 @@ describe('preparation Codex refinement', () => {
         $schema: 'cover-letter.v1',
         body: 'Lettre révisée.',
         locale: 'fr',
+        referenceCvRevisionId: 'cv-revision-1',
       },
       makeRepository({
         appendRevision: () =>

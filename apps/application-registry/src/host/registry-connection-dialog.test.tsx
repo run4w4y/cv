@@ -33,6 +33,7 @@ const unavailable = {
 const installBridge = (registry: DesktopHostBridge['registry']) => {
   const bridge: DesktopHostBridge = {
     codex: {
+      assist: async () => unavailable,
       cancel: async () => ({ ok: true, value: undefined }),
       generate: async () => unavailable,
       status: async () => unavailable,

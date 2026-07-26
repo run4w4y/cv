@@ -37,6 +37,7 @@ jobs:
       - name: Register CV web service
         env:
           CV_IMAGE_DIGEST: ${{ inputs.image_digest }}
+          CV_REGISTRY_ORIGIN: ${{ vars.CV_REGISTRY_WEB_ORIGIN || 'https://cv-registry.4w4y.run' }}
           NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
           NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
         run: |
@@ -45,4 +46,5 @@ jobs:
             --parser-v1 \
             --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${CV_IMAGE_DIGEST}" \
             --var "deployment_id=${GITHUB_SHA}" \
-            --var "enabled=true"
+            --var "enabled=true" \
+            --var "registry_web_origin=${CV_REGISTRY_ORIGIN}"

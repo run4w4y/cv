@@ -33,6 +33,11 @@ import {
   applicationArtifactContentAtom,
 } from '../../data'
 
+const applicationArtifactIdentity = (
+  applicationId: string,
+  artifactId: string
+) => ({ applicationId, artifactId })
+
 const PdfArtifactPreview = ({
   bytes,
   filename,
@@ -63,10 +68,7 @@ const PdfArtifactPreview = ({
 
 export const ApplicationArtifactPage = () => {
   const { applicationId = '', artifactId = '' } = useParams()
-  const identity = React.useMemo(
-    () => ({ applicationId, artifactId }),
-    [applicationId, artifactId]
-  )
+  const identity = applicationArtifactIdentity(applicationId, artifactId)
   const artifactResult = useAtomValue(applicationArtifactAtom(identity))
   const contentResult = useAtomValue(applicationArtifactContentAtom(identity))
   const artifact = AsyncResult.getOrElse(artifactResult, () => undefined)

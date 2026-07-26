@@ -1,4 +1,4 @@
-import { cvPreviewUrl } from '@cv/application-registry-api-contract'
+import { cvPdfRenderUrl } from '@cv/application-registry-api-contract'
 import type { PdfGenerationTriggerEvent } from '@cv/application-registry-events'
 import type { PdfGenerationAttempt } from '@cv/application-registry-service'
 import { Effect } from 'effect'
@@ -60,7 +60,7 @@ export const processPdfEvent = Effect.fn('PdfGeneration.processEvent')(
     if (attempt.artifact.status === 'failed') return
 
     yield* validatePendingAttempt(request, attempt)
-    const rendered = yield* renderer.render(cvPreviewUrl(attempt.link))
+    const rendered = yield* renderer.render(cvPdfRenderUrl(attempt.link))
     const ready = yield* persistence.complete(
       request.applicationId,
       attempt.artifact.id,

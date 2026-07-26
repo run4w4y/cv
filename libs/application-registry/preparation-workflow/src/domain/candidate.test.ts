@@ -13,6 +13,7 @@ describe('generated candidates', () => {
             $schema: 'cover-letter.v1',
             body: 'I build reliable platforms.',
             locale: 'en',
+            referenceCvRevisionId: 'revision-cv-1',
           },
           metadata: [],
         })

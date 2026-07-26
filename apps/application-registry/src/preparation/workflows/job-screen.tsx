@@ -1,29 +1,34 @@
+import type {
+  PreparationActivityProjection,
+  PreparationActivityScope,
+  PreparationNodeStatus,
+} from '@cv/application-preparation-workflow/domain'
 import {
   Alert,
   AlertDescription,
   AlertTitle,
   Badge,
   Button,
+  buttonVariants,
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
   Separator,
   Timeline,
   TimelineConnector,
   TimelineContent,
-  TimelineDescription,
   TimelineIndicator,
   TimelineItem,
-  TimelineTime,
   TimelineTitle,
 } from '@cv/internal-ui'
 import {
   Ban,
   CircleAlert,
+  CornerDownRight,
   ExternalLink,
   FileCheck2,
+  GitBranch,
   RotateCcw,
   Sparkles,
 } from 'lucide-react'
@@ -42,8 +47,8 @@ import {
   shortWorkflowId,
   type WorkflowArtifactListItem,
   type WorkflowJobListItem,
-  type WorkflowStepListItem,
   workflowJobTitle,
+  workflowStageLabel,
 } from './presentation'
 
 export type WorkflowArtifactSummary = {
@@ -54,41 +59,210 @@ export type WorkflowArtifactSummary = {
 
 export type WorkflowArtifactScreenItem = {
   readonly artifact: WorkflowArtifactListItem
-  readonly steps: ReadonlyArray<WorkflowStepListItem>
   readonly summary: WorkflowArtifactSummary | null
 }
 
 const timelineStatus = (
-  status: WorkflowStepListItem['status']
+  status: PreparationNodeStatus
 ): 'pending' | 'active' | 'complete' | 'error' | 'skipped' => {
   if (status === 'completed') return 'complete'
   if (status === 'failed') return 'error'
-  if (status === 'cancelled') return 'skipped'
+  if (status === 'blocked' || status === 'cancelled') return 'skipped'
   if (status === 'running' || status === 'waiting') return 'active'
   return 'pending'
 }
 
+const scopeLabel = (scope: PreparationActivityScope): string => {
+  if (scope === 'shared') return 'Shared context'
+  return scope === 'cv' ? 'CV' : 'Cover letter'
+}
+
+const artifactRouteKind = (kind: WorkflowArtifactListItem['kind']): string =>
+  kind === 'cv' ? 'cv' : 'cover-letter'
+
 const canCancel = (status: WorkflowJobListItem['status']): boolean =>
   status === 'queued' || status === 'running' || status === 'needs_review'
 
+type ActivityNode = PreparationActivityProjection['nodes'][number]
+
+const trackFocusNode = (
+  nodes: ReadonlyArray<ActivityNode>
+): ActivityNode | null =>
+  nodes.find(
+    ({ status }) =>
+      status === 'running' ||
+      status === 'waiting' ||
+      status === 'failed' ||
+      status === 'blocked'
+  ) ??
+  nodes.findLast(({ status }) => status !== 'pending') ??
+  nodes[0] ??
+  null
+
+const ActivityTrack = ({
+  dependency,
+  label,
+  nodes,
+}: {
+  readonly dependency: ActivityNode | null
+  readonly label: string
+  readonly nodes: ReadonlyArray<ActivityNode>
+}) => {
+  const focus = trackFocusNode(nodes)
+  return (
+    <section
+      aria-label={`${label} activity`}
+      className="min-w-0 rounded-lg border border-border bg-muted/15 p-4"
+    >
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold">{label}</h3>
+        {dependency === null ? null : (
+          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+            <CornerDownRight className="size-3.5" aria-hidden="true" />
+            After {scopeLabel(dependency.scope)} · {dependency.label}
+          </span>
+        )}
+      </div>
+
+      <div className="-mx-1 mt-4 overflow-x-auto px-1 pb-1">
+        <Timeline
+          orientation="horizontal"
+          aria-label={`${label} stages`}
+          className="min-w-[38rem]"
+        >
+          {nodes.map((node) => (
+            <TimelineItem
+              key={node.id}
+              status={timelineStatus(node.status)}
+              data-node-id={node.id}
+              data-depends-on={node.dependsOn.join(' ')}
+            >
+              <TimelineIndicator />
+              <TimelineConnector />
+              <TimelineContent>
+                <TimelineTitle className="text-xs">{node.label}</TimelineTitle>
+              </TimelineContent>
+            </TimelineItem>
+          ))}
+        </Timeline>
+      </div>
+
+      {focus === null ? null : (
+        <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 border-t border-border pt-3">
+          <WorkflowStatusBadge status={focus.status} />
+          <p className="min-w-0 flex-1 text-xs/5 text-muted-foreground">
+            {focus.message ??
+              (focus.status === 'pending'
+                ? 'Waiting for its dependencies.'
+                : workflowStageLabel(focus.stage))}
+          </p>
+          {focus.startedAt === null ? null : (
+            <time
+              dateTime={new Date(focus.startedAt).toISOString()}
+              className="text-xs text-muted-foreground tabular-nums"
+            >
+              {formatWorkflowTime(focus.startedAt)}
+              {focus.completedAt === null
+                ? ''
+                : ` · ${formatWorkflowDuration(focus.startedAt, focus.completedAt)}`}
+            </time>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
+const ActivityTimeline = ({
+  activity,
+}: {
+  readonly activity: PreparationActivityProjection
+}) => {
+  const byId = new Map(activity.nodes.map((node) => [node.id, node]))
+  const sharedNodes = activity.nodes.filter(({ scope }) => scope === 'shared')
+  const branchScopes: ReadonlyArray<
+    Exclude<PreparationActivityScope, 'shared'>
+  > = ['cv', 'cover_letter']
+  const branches = branchScopes.flatMap((scope) => {
+    const nodes = activity.nodes.filter((node) => node.scope === scope)
+    if (nodes.length === 0) return []
+    const dependencyId = nodes[0]?.dependsOn[0]
+    return [
+      {
+        dependency:
+          dependencyId === undefined ? null : (byId.get(dependencyId) ?? null),
+        label: scopeLabel(scope),
+        nodes,
+        scope,
+      },
+    ]
+  })
+
+  return (
+    <Card>
+      <CardHeader className="border-b border-border">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <GitBranch className="size-4" />
+          Activity
+        </CardTitle>
+        <p className="text-sm/6 text-muted-foreground">
+          Shared work runs once. Each document then follows its own lane, with
+          cross-document gates shown explicitly.
+        </p>
+      </CardHeader>
+      <CardContent className="pt-5">
+        <ActivityTrack
+          dependency={null}
+          label="Shared context"
+          nodes={sharedNodes}
+        />
+
+        {branches.length === 0 ? null : (
+          <>
+            <div className="ml-5 h-5 w-px bg-border" aria-hidden="true" />
+            <div className="grid gap-3">
+              {branches.map((branch) => (
+                <ActivityTrack
+                  key={branch.scope}
+                  dependency={branch.dependency}
+                  label={branch.label}
+                  nodes={branch.nodes}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 export type WorkflowJobScreenProps = {
+  readonly activity: PreparationActivityProjection
   readonly artifacts: ReadonlyArray<WorkflowArtifactScreenItem>
   readonly cancelError: string | null
   readonly cancelling: boolean
   readonly job: WorkflowJobListItem
   readonly onCancel: () => void
+  readonly onRetry: () => void
+  readonly retryError: string | null
+  readonly retrying: boolean
 }
 
 export const WorkflowJobScreen = ({
+  activity,
   artifacts,
   cancelError,
   cancelling,
   job,
   onCancel,
+  onRetry,
+  retryError,
+  retrying,
 }: WorkflowJobScreenProps) => (
   <WorkflowPage>
     <WorkflowPageHeader
-      backTo={`/workflows/${encodeURIComponent(job.batchId)}`}
+      backTo={`/ai-workflows/${encodeURIComponent(job.batchId)}`}
       backLabel="Batch overview"
       eyebrow={`Job ${job.position + 1} of batch ${shortWorkflowId(job.batchId)}`}
       title={workflowJobTitle(job)}
@@ -108,17 +282,14 @@ export const WorkflowJobScreen = ({
           {artifacts
             .filter(({ artifact }) => artifact.status === 'awaiting_review')
             .map(({ artifact }) => (
-              <Button
-                key={artifact.runId}
-                render={
-                  <Link
-                    to={`/workflows/${encodeURIComponent(job.batchId)}/jobs/${encodeURIComponent(job.jobId)}/artifacts/${artifact.kind}/review`}
-                  />
-                }
+              <Link
+                key={artifact.kind}
+                className={buttonVariants()}
+                to={`/ai-workflows/${encodeURIComponent(job.batchId)}/jobs/${encodeURIComponent(job.jobId)}/artifacts/${artifactRouteKind(artifact.kind)}`}
               >
                 <FileCheck2 />
                 Review {artifact.kind === 'cv' ? 'CV' : 'letter'}
-              </Button>
+              </Link>
             ))}
           {!canCancel(job.status) ? null : (
             <Button variant="outline" disabled={cancelling} onClick={onCancel}>
@@ -129,16 +300,9 @@ export const WorkflowJobScreen = ({
           {job.status !== 'failed' &&
           job.status !== 'cancelled' &&
           job.status !== 'mixed' ? null : (
-            <Button
-              variant="outline"
-              render={
-                <Link
-                  to={`/workflows/new?url=${encodeURIComponent(job.url)}&locale=${encodeURIComponent(job.locale)}`}
-                />
-              }
-            >
+            <Button variant="outline" disabled={retrying} onClick={onRetry}>
               <RotateCcw />
-              Run again
+              {retrying ? 'Starting…' : 'Run again'}
             </Button>
           )}
         </>
@@ -149,7 +313,7 @@ export const WorkflowJobScreen = ({
       artifact.error === null
         ? []
         : [
-            <Alert key={artifact.runId} variant="destructive">
+            <Alert key={artifact.kind} variant="destructive">
               <CircleAlert />
               <AlertTitle>{documentKindLabel(artifact.kind)} failed</AlertTitle>
               <AlertDescription>{artifact.error}</AlertDescription>
@@ -165,60 +329,18 @@ export const WorkflowJobScreen = ({
       </Alert>
     )}
 
-    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
-      <div className="grid gap-5">
-        {artifacts.map(({ artifact, steps }) => (
-          <Card key={artifact.runId}>
-            <CardHeader>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <CardTitle>{documentKindLabel(artifact.kind)}</CardTitle>
-                  <CardDescription>{artifact.message}</CardDescription>
-                </div>
-                <WorkflowStatusBadge status={artifact.status} />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Timeline
-                aria-label={`${documentKindLabel(artifact.kind)} workflow step history`}
-              >
-                {steps.map((step) => (
-                  <TimelineItem
-                    key={step.stage}
-                    status={timelineStatus(step.status)}
-                  >
-                    <TimelineIndicator />
-                    <TimelineConnector />
-                    <TimelineContent>
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <TimelineTitle>{step.title}</TimelineTitle>
-                        <Badge variant="outline">
-                          {step.status.replaceAll('_', ' ')}
-                        </Badge>
-                      </div>
-                      <TimelineDescription>
-                        {step.description}
-                      </TimelineDescription>
-                      {step.startedAt === null ? null : (
-                        <TimelineTime
-                          dateTime={new Date(step.startedAt).toISOString()}
-                        >
-                          {formatWorkflowTime(step.startedAt)}
-                          {step.completedAt === null
-                            ? ''
-                            : ` · ${formatWorkflowDuration(step.startedAt, step.completedAt)}`}
-                        </TimelineTime>
-                      )}
-                    </TimelineContent>
-                  </TimelineItem>
-                ))}
-              </Timeline>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+    {retryError === null ? null : (
+      <Alert variant="destructive">
+        <CircleAlert />
+        <AlertTitle>Retry failed</AlertTitle>
+        <AlertDescription>{retryError}</AlertDescription>
+      </Alert>
+    )}
 
-      <div className="grid gap-5">
+    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <ActivityTimeline activity={activity} />
+
+      <aside className="grid gap-5">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Job details</CardTitle>
@@ -245,7 +367,7 @@ export const WorkflowJobScreen = ({
               </div>
               <Separator />
               <div>
-                <dt className="text-xs text-muted-foreground">Source URL</dt>
+                <dt className="text-xs text-muted-foreground">Source</dt>
                 <dd className="mt-1 break-all">
                   <a
                     href={job.url}
@@ -266,12 +388,12 @@ export const WorkflowJobScreen = ({
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Sparkles className="size-4" />
-              Generated artifacts
+              Documents
             </CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4">
             {artifacts.map(({ artifact, summary }, index) => (
-              <div key={artifact.runId} className="grid gap-3">
+              <div key={artifact.kind} className="grid gap-3">
                 {index === 0 ? null : <Separator />}
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-medium">
@@ -279,51 +401,64 @@ export const WorkflowJobScreen = ({
                   </span>
                   <WorkflowStatusBadge status={artifact.status} />
                 </div>
-                {summary === null ? (
-                  <p className="text-sm text-muted-foreground">
-                    No candidate has been persisted yet.
-                  </p>
-                ) : (
-                  <dl className="grid gap-2 text-sm">
-                    <div className="flex justify-between gap-4">
-                      <dt className="text-muted-foreground">Revision</dt>
-                      <dd className="font-medium tabular-nums">
-                        {summary.revisionNumber}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                      <dt className="text-muted-foreground">Codex calls</dt>
-                      <dd className="font-medium tabular-nums">
-                        {summary.codexCalls}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                      <dt className="text-muted-foreground">Tokens</dt>
-                      <dd className="font-medium tabular-nums">
-                        {summary.tokens.toLocaleString()}
-                      </dd>
-                    </div>
-                  </dl>
+                <p className="text-sm/6 text-muted-foreground">
+                  {artifact.message}
+                </p>
+                {summary === null ? null : (
+                  <>
+                    <dl className="grid grid-cols-3 gap-2 text-center text-xs">
+                      <div>
+                        <dt className="text-muted-foreground">Revision</dt>
+                        <dd className="mt-1 font-medium tabular-nums">
+                          {summary.revisionNumber}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">Calls</dt>
+                        <dd className="mt-1 font-medium tabular-nums">
+                          {summary.codexCalls}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">Tokens</dt>
+                        <dd className="mt-1 font-medium tabular-nums">
+                          {summary.tokens.toLocaleString()}
+                        </dd>
+                      </div>
+                    </dl>
+                    <Link
+                      className={buttonVariants({
+                        className: 'w-fit',
+                        size: 'sm',
+                        variant: 'outline',
+                      })}
+                      to={`/ai-workflows/${encodeURIComponent(job.batchId)}/jobs/${encodeURIComponent(job.jobId)}/artifacts/${artifactRouteKind(artifact.kind)}`}
+                    >
+                      <FileCheck2 />
+                      {artifact.status === 'awaiting_review'
+                        ? 'Review document'
+                        : 'Open document'}
+                    </Link>
+                  </>
                 )}
               </div>
             ))}
             {job.applicationId === null ? null : (
-              <Button
-                className="w-full"
-                variant="outline"
-                render={
-                  <Link
-                    to={`/applications/${encodeURIComponent(job.applicationId)}`}
-                  />
-                }
+              <Link
+                className={buttonVariants({
+                  className: 'w-fit',
+                  size: 'sm',
+                  variant: 'outline',
+                })}
+                to={`/applications/${encodeURIComponent(job.applicationId)}`}
               >
                 Open application
                 <ExternalLink />
-              </Button>
+              </Link>
             )}
           </CardContent>
         </Card>
-      </div>
+      </aside>
     </div>
   </WorkflowPage>
 )

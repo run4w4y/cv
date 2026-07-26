@@ -225,7 +225,6 @@ export interface ExperienceWorkstreamV1
 export const ExperienceEntryV1Schema = Schema.Struct({
   id: StableIdentifierSchema,
   company: ShortTextSchema,
-  companyVisibility: Schema.Literals(['public', 'private']),
   location: Schema.optionalKey(ShortTextSchema),
   period: ShortTextSchema,
   roles: FactListSchema(ShortTextSchema, 16),

@@ -1,3 +1,4 @@
+import { entity } from '@effect-state-tree/core'
 import { Option, Schema } from 'effect'
 import {
   CvLocaleSchema,
@@ -99,7 +100,8 @@ export type CvPersonV1 = Schema.Schema.Type<typeof CvPersonV1Schema>
 export const CvExperienceItemV1Schema = Schema.Struct({
   id: StableIdentifierSchema.annotate({
     title: 'Experience ID',
-    description: 'Stable item identifier used by the editor and renderer.',
+    description:
+      'Exact source experience ID copied from the supplied provenance bindings; never author or slugify this value.',
   }),
   company: ShortTextSchema.annotate({
     title: 'Company',
@@ -127,18 +129,24 @@ export const CvExperienceItemV1Schema = Schema.Struct({
   technologies: Schema.Array(TechnologySchema).pipe(
     Schema.check(Schema.isMaxLength(16))
   ),
-}).annotate({
-  identifier: 'CvExperienceItemV1',
-  title: 'Experience item',
-  description: 'One selected employment entry.',
 })
+  .annotate({
+    identifier: 'CvExperienceItemV1',
+    title: 'Experience item',
+    description: 'One selected employment entry.',
+  })
+  .pipe(entity({ type: 'CvExperienceItem', id: 'id' }))
 
 export type CvExperienceItemV1 = Schema.Schema.Type<
   typeof CvExperienceItemV1Schema
 >
 
 export const CvProjectItemV1Schema = Schema.Struct({
-  id: StableIdentifierSchema.annotate({ title: 'Project ID' }),
+  id: StableIdentifierSchema.annotate({
+    title: 'Project ID',
+    description:
+      'Exact source project ID copied from the supplied provenance bindings; never author or slugify this value.',
+  }),
   name: ShortTextSchema.annotate({
     title: 'Project name',
   }),
@@ -156,16 +164,22 @@ export const CvProjectItemV1Schema = Schema.Struct({
   links: Schema.Array(CvContactLinkV1Schema).pipe(
     Schema.check(Schema.isMaxLength(4))
   ),
-}).annotate({
-  identifier: 'CvProjectItemV1',
-  title: 'Project item',
-  description: 'One selected project.',
 })
+  .annotate({
+    identifier: 'CvProjectItemV1',
+    title: 'Project item',
+    description: 'One selected project.',
+  })
+  .pipe(entity({ type: 'CvProjectItem', id: 'id' }))
 
 export type CvProjectItemV1 = Schema.Schema.Type<typeof CvProjectItemV1Schema>
 
 export const CvSkillGroupV1Schema = Schema.Struct({
-  id: StableIdentifierSchema.annotate({ title: 'Skill group ID' }),
+  id: StableIdentifierSchema.annotate({
+    title: 'Skill group ID',
+    description:
+      'Exact source skill-group ID copied from the supplied provenance bindings; never author or slugify this value.',
+  }),
   label: ShortTextSchema.annotate({
     title: 'Skill group label',
   }),
@@ -173,16 +187,22 @@ export const CvSkillGroupV1Schema = Schema.Struct({
     Schema.check(Schema.isMinLength(1)),
     Schema.check(Schema.isMaxLength(24))
   ),
-}).annotate({
-  identifier: 'CvSkillGroupV1',
-  title: 'Skill group',
-  description: 'A compact category of verified skills.',
 })
+  .annotate({
+    identifier: 'CvSkillGroupV1',
+    title: 'Skill group',
+    description: 'A compact category of verified skills.',
+  })
+  .pipe(entity({ type: 'CvSkillGroup', id: 'id' }))
 
 export type CvSkillGroupV1 = Schema.Schema.Type<typeof CvSkillGroupV1Schema>
 
 export const CvEducationItemV1Schema = Schema.Struct({
-  id: StableIdentifierSchema.annotate({ title: 'Education ID' }),
+  id: StableIdentifierSchema.annotate({
+    title: 'Education ID',
+    description:
+      'Exact source education ID copied from the supplied provenance bindings; never author or slugify this value.',
+  }),
   institution: ShortTextSchema.annotate({
     title: 'Institution',
   }),
@@ -204,28 +224,36 @@ export const CvEducationItemV1Schema = Schema.Struct({
   details: Schema.Array(HighlightSchema).pipe(
     Schema.check(Schema.isMaxLength(4))
   ),
-}).annotate({
-  identifier: 'CvEducationItemV1',
-  title: 'Education item',
-  description: 'One selected education or qualification entry.',
 })
+  .annotate({
+    identifier: 'CvEducationItemV1',
+    title: 'Education item',
+    description: 'One selected education or qualification entry.',
+  })
+  .pipe(entity({ type: 'CvEducationItem', id: 'id' }))
 
 export type CvEducationItemV1 = Schema.Schema.Type<
   typeof CvEducationItemV1Schema
 >
 
 export const CvAdditionalItemV1Schema = Schema.Struct({
-  id: StableIdentifierSchema.annotate({ title: 'Additional item ID' }),
+  id: StableIdentifierSchema.annotate({
+    title: 'Additional item ID',
+    description:
+      'Exact reviewed-fact or language ID copied from the supplied additional-section provenance bindings; never author or slugify this value.',
+  }),
   title: Schema.optionalKey(ShortTextSchema.annotate({ title: 'Item title' })),
   text: NonEmptyTextSchema.pipe(Schema.check(Schema.isMaxLength(500))).annotate(
     {
       title: 'Item text',
     }
   ),
-}).annotate({
-  identifier: 'CvAdditionalItemV1',
-  title: 'Additional item',
 })
+  .annotate({
+    identifier: 'CvAdditionalItemV1',
+    title: 'Additional item',
+  })
+  .pipe(entity({ type: 'CvAdditionalItem', id: 'id' }))
 
 export const CvAdditionalSectionV1Schema = Schema.Struct({
   id: StableIdentifierSchema.annotate({ title: 'Section ID' }),
@@ -234,12 +262,14 @@ export const CvAdditionalSectionV1Schema = Schema.Struct({
     Schema.check(Schema.isMinLength(1)),
     Schema.check(Schema.isMaxLength(8))
   ),
-}).annotate({
-  identifier: 'CvAdditionalSectionV1',
-  title: 'Additional section',
-  description:
-    'A compact optional section for verified languages, certifications, awards, or similar material.',
 })
+  .annotate({
+    identifier: 'CvAdditionalSectionV1',
+    title: 'Additional section',
+    description:
+      'A compact optional section for verified languages, certifications, awards, or similar material.',
+  })
+  .pipe(entity({ type: 'CvAdditionalSection', id: 'id' }))
 
 export type CvAdditionalSectionV1 = Schema.Schema.Type<
   typeof CvAdditionalSectionV1Schema

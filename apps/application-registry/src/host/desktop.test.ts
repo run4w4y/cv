@@ -21,6 +21,7 @@ const unavailable = {
 const installBridge = (networkFetch: DesktopHostBridge['network']['fetch']) => {
   const bridge: DesktopHostBridge = {
     codex: {
+      assist: async () => unavailable,
       cancel: async () => ({ ok: true, value: undefined }),
       generate: async () => unavailable,
       status: async () => unavailable,

@@ -2,82 +2,141 @@ import { Clock, Effect, Layer, SubscriptionRef } from 'effect'
 import type * as DurableDeferred from 'effect/unstable/workflow/DurableDeferred'
 
 import type {
+  ArtifactPreparationStage,
   ContentRevisionResult,
-  PreparationRunState,
-  PreparationStage,
+  DocumentKind,
+  PreparationArtifactState,
+  PreparationJobState,
   SavedCandidate,
+  SharedPreparationStage,
 } from '../domain'
 import { PreparationWorkflowError } from '../domain'
 import type {
   CancellationClaim,
-  PreparationRunReservation,
-  PreparationRunStates,
+  PreparationJobReservation,
+  PreparationJobStates,
 } from './model'
 import { PreparationProgress } from './model'
 import {
   releasePreparationReservations,
-  reservePreparationRuns,
+  reservePreparationJobs,
 } from './reservations'
 import {
   advancePreparationStep,
-  completePreparationHistory,
+  artifactForKind,
+  cancelArtifact,
+  completeArtifactHistory,
+  completeCurrentStep,
   finishPreparationStep,
+  updateJobArtifact,
   updatePreparationJob,
-  updatePreparationRun,
+  withDerivedJobStatus,
 } from './state'
+
+const artifactIsTerminal = (artifact: PreparationArtifactState): boolean =>
+  artifact.status === 'approved' ||
+  artifact.status === 'failed' ||
+  artifact.status === 'blocked' ||
+  artifact.status === 'cancelled'
+
+const failArtifactState = (
+  artifact: PreparationArtifactState,
+  message: string,
+  updatedAt: number
+): PreparationArtifactState => {
+  if (artifactIsTerminal(artifact)) return artifact
+  const stage =
+    artifact.stage ?? (artifact.kind === 'cv' ? 'planning' : 'composition')
+  return {
+    ...artifact,
+    error: message,
+    history: finishPreparationStep(
+      artifact.history,
+      stage,
+      message,
+      updatedAt,
+      'failed'
+    ),
+    message,
+    reviewToken: null,
+    stage,
+    status: 'failed',
+    updatedAt,
+  }
+}
+
+const blockArtifactState = (
+  artifact: PreparationArtifactState,
+  message: string,
+  updatedAt: number
+): PreparationArtifactState => {
+  if (artifactIsTerminal(artifact)) return artifact
+  const stage =
+    artifact.stage ?? (artifact.kind === 'cv' ? 'planning' : 'composition')
+  return {
+    ...artifact,
+    error: null,
+    history: finishPreparationStep(
+      artifact.history,
+      stage,
+      message,
+      updatedAt,
+      'blocked'
+    ),
+    message,
+    reviewToken: null,
+    stage,
+    status: 'blocked',
+    updatedAt,
+  }
+}
+
+const activeJob = (job: PreparationJobState): boolean =>
+  job.executionId !== null &&
+  (job.status === 'queued' ||
+    job.status === 'running' ||
+    job.status === 'needs_review')
 
 export const preparationProgressLayer = Layer.effect(
   PreparationProgress,
   Effect.gen(function* () {
-    const runs = yield* SubscriptionRef.make<PreparationRunStates>(new Map())
+    const jobs = yield* SubscriptionRef.make<PreparationJobStates>(new Map())
 
-    const reserveEntries = Effect.fn('PreparationProgress.reserveEntries')(
-      function* (reservations: ReadonlyArray<PreparationRunReservation>) {
-        const createdAt = yield* Clock.currentTimeMillis
-        const conflictMessage = yield* SubscriptionRef.modify(
-          runs,
-          (current) => {
-            const reserved = reservePreparationRuns(
-              current,
-              reservations,
-              createdAt
-            )
-            return [reserved.conflict, reserved.runs] as const
-          }
+    const reserve = Effect.fn('PreparationProgress.reserve')(function* (
+      reservations: ReadonlyArray<PreparationJobReservation>
+    ) {
+      const createdAt = yield* Clock.currentTimeMillis
+      const conflictMessage = yield* SubscriptionRef.modify(jobs, (current) => {
+        const reserved = reservePreparationJobs(
+          current,
+          reservations,
+          createdAt
         )
-        if (conflictMessage === null) return
-        return yield* Effect.fail(
-          new PreparationWorkflowError({
-            message: conflictMessage,
-            stage: 'queued',
-          })
-        )
-      }
-    )
-
-    const register = Effect.fn('PreparationProgress.register')(
-      (reservation: PreparationRunReservation) => reserveEntries([reservation])
-    )
-
-    const reserve = Effect.fn('PreparationProgress.reserve')(
-      (reservations: ReadonlyArray<PreparationRunReservation>) =>
-        reserveEntries(reservations)
-    )
+        return [reserved.conflict, reserved.jobs] as const
+      })
+      if (conflictMessage === null) return
+      return yield* Effect.fail(
+        new PreparationWorkflowError({
+          message: conflictMessage,
+          stage: 'queued',
+        })
+      )
+    })
 
     const releaseReservations = Effect.fn(
       'PreparationProgress.releaseReservations'
-    )(function* (runIds: ReadonlyArray<string>) {
-      yield* SubscriptionRef.update(runs, (current) =>
-        releasePreparationReservations(current, runIds)
+    )(function* (jobIds: ReadonlyArray<string>) {
+      yield* SubscriptionRef.update(jobs, (current) =>
+        releasePreparationReservations(current, jobIds)
       )
     })
 
     const setExecution = Effect.fn('PreparationProgress.setExecution')(
       function* (jobId: string, executionId: string) {
         const updatedAt = yield* Clock.currentTimeMillis
-        yield* SubscriptionRef.update(runs, (current) =>
-          updatePreparationJob(current, jobId, (run) => ({
-            ...run,
+        yield* SubscriptionRef.update(jobs, (current) =>
+          updatePreparationJob(current, jobId, (job) => ({
+            ...job,
             executionId,
             updatedAt,
           }))
@@ -94,335 +153,452 @@ export const preparationProgressLayer = Layer.effect(
       }
     ) {
       const updatedAt = yield* Clock.currentTimeMillis
-      yield* SubscriptionRef.update(runs, (current) =>
-        updatePreparationJob(current, jobId, (run) => ({
-          ...run,
+      yield* SubscriptionRef.update(jobs, (current) =>
+        updatePreparationJob(current, jobId, (job) => ({
+          ...job,
           ...identity,
           updatedAt,
         }))
       )
     })
 
-    const stage = Effect.fn('PreparationProgress.stage')(function* (
-      runId: string,
-      nextStage: PreparationStage,
+    const stageShared = Effect.fn('PreparationProgress.stageShared')(function* (
+      jobId: string,
+      nextStage: SharedPreparationStage,
       message: string,
       applicationId?: string
     ) {
       const updatedAt = yield* Clock.currentTimeMillis
-      yield* SubscriptionRef.update(runs, (current) =>
-        updatePreparationRun(current, runId, (run) => {
-          if (
-            (run.status !== 'queued' && run.status !== 'running') ||
-            run.executionId === null
-          ) {
-            return run
-          }
+      yield* SubscriptionRef.update(jobs, (current) =>
+        updatePreparationJob(current, jobId, (job) => {
+          if (!activeJob(job) || job.shared.status !== 'running') return job
           return {
-            ...run,
+            ...job,
             ...(applicationId === undefined ? {} : { applicationId }),
-            candidate: null,
             error: null,
-            executionId: run.executionId,
             message,
-            reviewToken: null,
-            stage: nextStage,
-            status: 'running',
-            stepHistory: advancePreparationStep(
-              run.stepHistory,
-              nextStage,
-              message,
-              updatedAt
-            ),
+            shared: {
+              history: advancePreparationStep(
+                job.shared.history,
+                nextStage,
+                message,
+                updatedAt
+              ),
+              stage: nextStage,
+              status: 'running',
+            },
+            status: nextStage === 'queued' ? 'queued' : 'running',
             updatedAt,
           }
         })
       )
     })
 
+    const stageArtifact = Effect.fn('PreparationProgress.stageArtifact')(
+      function* (
+        jobId: string,
+        kind: DocumentKind,
+        nextStage: ArtifactPreparationStage,
+        message: string
+      ) {
+        const updatedAt = yield* Clock.currentTimeMillis
+        yield* SubscriptionRef.update(jobs, (current) =>
+          updatePreparationJob(current, jobId, (job) => {
+            if (!activeJob(job)) return job
+            const artifact = artifactForKind(job, kind)
+            if (
+              artifact === null ||
+              (artifact.status !== 'queued' && artifact.status !== 'running')
+            ) {
+              return job
+            }
+            const updated = updateJobArtifact(job, kind, (currentArtifact) => ({
+              ...currentArtifact,
+              candidate: null,
+              error: null,
+              history: advancePreparationStep(
+                currentArtifact.history,
+                nextStage,
+                message,
+                updatedAt
+              ),
+              message,
+              reviewToken: null,
+              stage: nextStage,
+              status: 'running',
+              updatedAt,
+            }))
+            return withDerivedJobStatus({
+              ...updated,
+              error: null,
+              message,
+              shared:
+                updated.shared.status === 'running'
+                  ? {
+                      ...updated.shared,
+                      history: completeCurrentStep(
+                        updated.shared.history,
+                        updatedAt
+                      ),
+                      status: 'completed',
+                    }
+                  : updated.shared,
+              updatedAt,
+            })
+          })
+        )
+      }
+    )
+
     const reviewReady = Effect.fn('PreparationProgress.reviewReady')(function* (
-      runId: string,
+      jobId: string,
+      kind: DocumentKind,
       applicationId: string,
       candidate: SavedCandidate,
       reviewToken: DurableDeferred.Token
     ) {
       const updatedAt = yield* Clock.currentTimeMillis
       const message = 'Candidate saved. Human review is required.'
-      yield* SubscriptionRef.update(runs, (current) =>
-        updatePreparationRun(current, runId, (run) => {
-          if (
-            (run.status !== 'queued' && run.status !== 'running') ||
-            run.executionId === null
-          ) {
-            return run
-          }
-          return {
-            ...run,
-            applicationId,
-            candidate,
-            error: null,
-            executionId: run.executionId,
-            message,
-            reviewToken,
-            stage: 'review',
-            status: 'awaiting_review',
-            stepHistory: advancePreparationStep(
-              run.stepHistory,
-              'review',
+      yield* SubscriptionRef.update(jobs, (current) =>
+        updatePreparationJob(current, jobId, (job) => {
+          if (!activeJob(job)) return job
+          const updated = updateJobArtifact(job, kind, (artifact) => {
+            if (artifact.status !== 'queued' && artifact.status !== 'running') {
+              return artifact
+            }
+            return {
+              ...artifact,
+              candidate,
+              error: null,
+              history: advancePreparationStep(
+                artifact.history,
+                'review',
+                message,
+                updatedAt,
+                'waiting'
+              ),
               message,
+              reviewToken,
+              stage: 'review',
+              status: 'awaiting_review',
               updatedAt,
-              'waiting'
-            ),
+            }
+          })
+          return withDerivedJobStatus({
+            ...updated,
+            applicationId,
+            message,
             updatedAt,
-          }
+          })
         })
       )
     })
 
-    const complete = Effect.fn('PreparationProgress.complete')(function* (
-      runId: string,
-      completion:
-        | {
-            readonly message: string
-            readonly result: ContentRevisionResult
-            readonly status: 'approved'
-          }
-        | {
-            readonly message: string
-            readonly status: 'rejected'
-          }
-    ) {
-      const updatedAt = yield* Clock.currentTimeMillis
-      yield* SubscriptionRef.update(runs, (current) =>
-        updatePreparationRun(current, runId, (run) =>
-          run.status !== 'awaiting_review' && run.status !== 'review_submitted'
-            ? run
-            : {
-                ...run,
-                candidate:
-                  completion.status === 'approved'
-                    ? { ...run.candidate, result: completion.result }
-                    : run.candidate,
-                message: completion.message,
-                reviewToken: null,
-                stage: 'complete',
-                status: completion.status,
-                stepHistory: completePreparationHistory(
-                  run.stepHistory,
+    const approveArtifact = Effect.fn('PreparationProgress.approveArtifact')(
+      function* (
+        jobId: string,
+        kind: DocumentKind,
+        completion: {
+          readonly message: string
+          readonly result: ContentRevisionResult
+        }
+      ) {
+        const updatedAt = yield* Clock.currentTimeMillis
+        yield* SubscriptionRef.update(jobs, (current) =>
+          updatePreparationJob(current, jobId, (job) => {
+            const updated = updateJobArtifact(job, kind, (artifact) => {
+              if (
+                (artifact.status !== 'awaiting_review' &&
+                  artifact.status !== 'review_submitted') ||
+                artifact.candidate === null
+              ) {
+                return artifact
+              }
+              return {
+                ...artifact,
+                candidate: {
+                  ...artifact.candidate,
+                  result: completion.result,
+                },
+                history: completeArtifactHistory(
+                  artifact.history,
                   completion.message,
                   updatedAt
                 ),
+                message: completion.message,
+                reviewToken: null,
+                stage: 'complete',
+                status: 'approved',
                 updatedAt,
               }
-        )
-      )
-    })
-
-    const reviewSubmitted = Effect.fn('PreparationProgress.reviewSubmitted')(
-      function* (runId: string, token: DurableDeferred.Token) {
-        const updatedAt = yield* Clock.currentTimeMillis
-        const message = 'Human review decision submitted.'
-        return yield* SubscriptionRef.modify(runs, (current) => {
-          const run = current.get(runId)
-          if (
-            run === undefined ||
-            run.status !== 'awaiting_review' ||
-            run.reviewToken !== token
-          ) {
-            return [false, current] as const
-          }
-          const next = new Map(current)
-          next.set(runId, {
-            ...run,
-            message,
-            reviewToken: null,
-            status: 'review_submitted',
-            stepHistory: advancePreparationStep(
-              run.stepHistory,
-              'review',
-              message,
-              updatedAt
-            ),
-            updatedAt,
+            })
+            return withDerivedJobStatus({
+              ...updated,
+              message: completion.message,
+              updatedAt,
+            })
           })
-          return [true, next] as const
-        })
-      }
-    )
-
-    const restoreReview = Effect.fn('PreparationProgress.restoreReview')(
-      function* (runId: string, reviewToken: DurableDeferred.Token) {
-        const updatedAt = yield* Clock.currentTimeMillis
-        const message = 'Candidate saved. Human review is required.'
-        yield* SubscriptionRef.update(runs, (current) =>
-          updatePreparationRun(current, runId, (run) =>
-            run.status !== 'review_submitted'
-              ? run
-              : {
-                  ...run,
-                  message,
-                  reviewToken,
-                  status: 'awaiting_review',
-                  stepHistory: advancePreparationStep(
-                    run.stepHistory,
-                    'review',
-                    message,
-                    updatedAt,
-                    'waiting'
-                  ),
-                  updatedAt,
-                }
-          )
         )
       }
     )
 
-    const failRunState = (
-      run: PreparationRunState,
-      message: string,
-      updatedAt: number
-    ): PreparationRunState =>
-      run.status === 'approved' ||
-      run.status === 'rejected' ||
-      run.status === 'failed' ||
-      run.status === 'cancelled'
-        ? run
-        : run.status === 'cancelling'
-          ? {
-              ...run,
-              error: null,
-              message: 'Preparation cancelled for this browser session.',
-              reviewToken: null,
-              status: 'cancelled',
-              stepHistory: finishPreparationStep(
-                run.stepHistory,
-                run.stage,
-                'Preparation cancelled for this browser session.',
-                updatedAt,
-                'cancelled'
-              ),
-              updatedAt,
-            }
-          : {
-              ...run,
-              error: message,
-              message: 'Preparation failed.',
-              reviewToken: null,
-              status: 'failed',
-              stepHistory: finishPreparationStep(
-                run.stepHistory,
-                run.stage,
-                message,
-                updatedAt,
-                'failed'
-              ),
-              updatedAt,
-            }
-
-    const fail = Effect.fn('PreparationProgress.fail')(function* (
-      runId: string,
-      message: string
+    const approvalSubmitted = Effect.fn(
+      'PreparationProgress.approvalSubmitted'
+    )(function* (
+      jobId: string,
+      kind: DocumentKind,
+      token: DurableDeferred.Token
     ) {
       const updatedAt = yield* Clock.currentTimeMillis
-      yield* SubscriptionRef.update(runs, (current) =>
-        updatePreparationRun(current, runId, (run) =>
-          failRunState(run, message, updatedAt)
+      const message = 'Human approval submitted.'
+      return yield* SubscriptionRef.modify(jobs, (current) => {
+        const job = current.get(jobId)
+        const artifact = job === undefined ? null : artifactForKind(job, kind)
+        if (
+          job === undefined ||
+          artifact === null ||
+          artifact.status !== 'awaiting_review' ||
+          artifact.reviewToken !== token
+        ) {
+          return [false, current] as const
+        }
+        const updated = updateJobArtifact(job, kind, (currentArtifact) => ({
+          ...currentArtifact,
+          history: advancePreparationStep(
+            currentArtifact.history,
+            'review',
+            message,
+            updatedAt
+          ),
+          message,
+          reviewToken: null,
+          status: 'review_submitted',
+          updatedAt,
+        }))
+        const next = new Map(current)
+        next.set(
+          jobId,
+          withDerivedJobStatus({ ...updated, message, updatedAt })
         )
-      )
+        return [true, next] as const
+      })
     })
+
+    const restoreApproval = Effect.fn('PreparationProgress.restoreApproval')(
+      function* (
+        jobId: string,
+        kind: DocumentKind,
+        reviewToken: DurableDeferred.Token
+      ) {
+        const updatedAt = yield* Clock.currentTimeMillis
+        const message = 'Candidate saved. Human review is required.'
+        yield* SubscriptionRef.update(jobs, (current) =>
+          updatePreparationJob(current, jobId, (job) => {
+            const updated = updateJobArtifact(job, kind, (artifact) =>
+              artifact.status !== 'review_submitted'
+                ? artifact
+                : {
+                    ...artifact,
+                    history: advancePreparationStep(
+                      artifact.history,
+                      'review',
+                      message,
+                      updatedAt,
+                      'waiting'
+                    ),
+                    message,
+                    reviewToken,
+                    status: 'awaiting_review',
+                    updatedAt,
+                  }
+            )
+            return withDerivedJobStatus({
+              ...updated,
+              message,
+              updatedAt,
+            })
+          })
+        )
+      }
+    )
+
+    const failArtifact = Effect.fn('PreparationProgress.failArtifact')(
+      function* (jobId: string, kind: DocumentKind, message: string) {
+        const updatedAt = yield* Clock.currentTimeMillis
+        yield* SubscriptionRef.update(jobs, (current) =>
+          updatePreparationJob(current, jobId, (job) => {
+            const updated = updateJobArtifact(job, kind, (artifact) =>
+              failArtifactState(artifact, message, updatedAt)
+            )
+            return withDerivedJobStatus({
+              ...updated,
+              message,
+              updatedAt,
+            })
+          })
+        )
+      }
+    )
+
+    const blockArtifact = Effect.fn('PreparationProgress.blockArtifact')(
+      function* (jobId: string, kind: DocumentKind, message: string) {
+        const updatedAt = yield* Clock.currentTimeMillis
+        yield* SubscriptionRef.update(jobs, (current) =>
+          updatePreparationJob(current, jobId, (job) => {
+            const updated = updateJobArtifact(job, kind, (artifact) =>
+              blockArtifactState(artifact, message, updatedAt)
+            )
+            return withDerivedJobStatus({
+              ...updated,
+              message,
+              updatedAt,
+            })
+          })
+        )
+      }
+    )
 
     const failJob = Effect.fn('PreparationProgress.failJob')(function* (
       jobId: string,
       message: string
     ) {
       const updatedAt = yield* Clock.currentTimeMillis
-      yield* SubscriptionRef.update(runs, (current) =>
-        updatePreparationJob(current, jobId, (run) =>
-          failRunState(run, message, updatedAt)
-        )
+      yield* SubscriptionRef.update(jobs, (current) =>
+        updatePreparationJob(current, jobId, (job) => {
+          if (
+            job.status === 'completed' ||
+            job.status === 'failed' ||
+            job.status === 'cancelled' ||
+            job.status === 'mixed'
+          ) {
+            return job
+          }
+          const fail = (artifact: PreparationArtifactState | null) =>
+            artifact === null
+              ? null
+              : failArtifactState(artifact, message, updatedAt)
+          return {
+            ...job,
+            artifacts: {
+              coverLetter: fail(job.artifacts.coverLetter),
+              cv: fail(job.artifacts.cv),
+            },
+            error: message,
+            message,
+            shared:
+              job.shared.status === 'running'
+                ? {
+                    ...job.shared,
+                    history: finishPreparationStep(
+                      job.shared.history,
+                      job.shared.stage,
+                      message,
+                      updatedAt,
+                      'failed'
+                    ),
+                    status: 'failed',
+                  }
+                : job.shared,
+            status: 'failed',
+            updatedAt,
+          }
+        })
       )
     })
 
-    const cancel = Effect.fn('PreparationProgress.cancel')(function* (
-      runId: string
+    const cancelJob = Effect.fn('PreparationProgress.cancelJob')(function* (
+      jobId: string
     ) {
       const updatedAt = yield* Clock.currentTimeMillis
-      const message = 'Preparation cancelled for this browser session.'
-      yield* SubscriptionRef.update(runs, (current) => {
-        const target = current.get(runId)
-        if (target === undefined) return current
-        return updatePreparationJob(current, target.jobId, (run) =>
-          run.status !== 'queued' &&
-          run.status !== 'running' &&
-          run.status !== 'awaiting_review' &&
-          run.status !== 'review_submitted' &&
-          run.status !== 'cancelling'
-            ? run
-            : {
-                ...run,
-                error: null,
-                message,
-                reviewToken: null,
-                status: 'cancelled',
-                stepHistory: finishPreparationStep(
-                  run.stepHistory,
-                  run.stage,
-                  message,
-                  updatedAt,
-                  'cancelled'
-                ),
-                updatedAt,
-              }
-        )
-      })
+      const message = 'AI workflow cancelled for this browser session.'
+      yield* SubscriptionRef.update(jobs, (current) =>
+        updatePreparationJob(current, jobId, (job) => {
+          if (
+            job.status === 'completed' ||
+            job.status === 'failed' ||
+            job.status === 'cancelled' ||
+            job.status === 'mixed'
+          ) {
+            return job
+          }
+          const cancel = (artifact: PreparationArtifactState | null) =>
+            artifact === null
+              ? null
+              : cancelArtifact(artifact, message, updatedAt)
+          return {
+            ...job,
+            artifacts: {
+              coverLetter: cancel(job.artifacts.coverLetter),
+              cv: cancel(job.artifacts.cv),
+            },
+            error: null,
+            message,
+            shared:
+              job.shared.status === 'running'
+                ? {
+                    ...job.shared,
+                    history: finishPreparationStep(
+                      job.shared.history,
+                      job.shared.stage,
+                      message,
+                      updatedAt,
+                      'cancelled'
+                    ),
+                    status: 'cancelled',
+                  }
+                : job.shared,
+            status: 'cancelled',
+            updatedAt,
+          }
+        })
+      )
     })
 
     const requestCancel = Effect.fn('PreparationProgress.requestCancel')(
-      function* (runId: string, executionId: string) {
+      function* (jobId: string, executionId: string) {
         const updatedAt = yield* Clock.currentTimeMillis
-        return yield* SubscriptionRef.modify(runs, (current) => {
-          const run = current.get(runId)
+        return yield* SubscriptionRef.modify(jobs, (current) => {
+          const job = current.get(jobId)
           if (
-            run === undefined ||
-            run.executionId !== executionId ||
-            (run.status !== 'queued' &&
-              run.status !== 'running' &&
-              run.status !== 'awaiting_review' &&
-              run.status !== 'review_submitted')
+            job === undefined ||
+            job.executionId !== executionId ||
+            (job.status !== 'queued' &&
+              job.status !== 'running' &&
+              job.status !== 'needs_review')
           ) {
             return [null, current] as const
           }
-          const previous = new Map(
-            [...current].filter(
-              ([, candidate]) =>
-                candidate.jobId === run.jobId &&
-                candidate.executionId === executionId &&
-                (candidate.status === 'queued' ||
-                  candidate.status === 'running' ||
-                  candidate.status === 'awaiting_review' ||
-                  candidate.status === 'review_submitted')
+          const artifacts = [
+            job.artifacts.cv,
+            job.artifacts.coverLetter,
+          ].filter(
+            (artifact): artifact is PreparationArtifactState =>
+              artifact !== null
+          )
+          const suspended =
+            artifacts.some(
+              (artifact) =>
+                artifact.status === 'awaiting_review' ||
+                artifact.status === 'review_submitted'
+            ) &&
+            artifacts.every(
+              (artifact) =>
+                artifactIsTerminal(artifact) ||
+                artifact.status === 'awaiting_review' ||
+                artifact.status === 'review_submitted'
             )
-          )
-          const next = updatePreparationJob(current, run.jobId, (candidate) =>
-            !previous.has(candidate.runId)
-              ? candidate
-              : {
-                  ...candidate,
-                  error: null,
-                  executionId,
-                  message: 'Cancelling preparation for this browser session.',
-                  status: 'cancelling',
-                  updatedAt,
-                }
-          )
+          const next = new Map(current)
+          next.set(jobId, {
+            ...job,
+            error: null,
+            message: 'Cancelling AI workflow for this browser session.',
+            status: 'cancelling',
+            updatedAt,
+          })
           return [
             {
-              mode: [...previous.values()].every(
-                (candidate) => candidate.status === 'awaiting_review'
-              )
-                ? ('suspended' as const)
-                : ('active' as const),
-              previous,
+              mode: suspended ? ('suspended' as const) : ('active' as const),
+              previous: job,
             },
             next,
           ] as const
@@ -432,39 +608,35 @@ export const preparationProgressLayer = Layer.effect(
 
     const restoreCancellation = Effect.fn(
       'PreparationProgress.restoreCancellation'
-    )(function* (runId: string, executionId: string, claim: CancellationClaim) {
+    )(function* (jobId: string, executionId: string, claim: CancellationClaim) {
       const updatedAt = yield* Clock.currentTimeMillis
-      yield* SubscriptionRef.update(runs, (current) => {
-        const target = current.get(runId)
-        if (target === undefined) return current
-        return updatePreparationJob(current, target.jobId, (run) => {
-          const previous = claim.previous.get(run.runId)
-          return run.status === 'cancelling' &&
-            run.executionId === executionId &&
-            previous !== undefined
-            ? { ...previous, updatedAt }
-            : run
-        })
-      })
+      yield* SubscriptionRef.update(jobs, (current) =>
+        updatePreparationJob(current, jobId, (job) =>
+          job.status === 'cancelling' && job.executionId === executionId
+            ? { ...claim.previous, updatedAt }
+            : job
+        )
+      )
     })
 
     return PreparationProgress.of({
-      cancel,
-      complete,
-      fail,
+      approvalSubmitted,
+      approveArtifact,
+      blockArtifact,
+      cancelJob,
+      failArtifact,
       failJob,
       identify,
-      register,
+      jobs,
       releaseReservations,
       requestCancel,
       reserve,
       restoreCancellation,
-      restoreReview,
-      reviewSubmitted,
+      restoreApproval,
       reviewReady,
-      runs,
       setExecution,
-      stage,
+      stageArtifact,
+      stageShared,
     })
   })
 )

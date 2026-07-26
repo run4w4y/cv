@@ -37,6 +37,6 @@ export const preparationRuntimeLayer = applicationPreparationLayer().pipe(
 
 export const preparationRuntime = Atom.runtime(preparationRuntimeLayer)
 
-export const preparationRunsAtom = preparationRuntime.subscriptionRef(
-  Effect.map(ApplicationPreparation, ({ runs }) => runs)
+export const preparationJobsAtom = preparationRuntime.subscriptionRef(
+  Effect.map(ApplicationPreparation, ({ jobs }) => jobs)
 )

@@ -37,7 +37,7 @@ import { HeaderActionsProvider } from './header-actions'
 
 const navItems = [
   { to: '/applications', label: 'Applications', icon: BriefcaseBusiness },
-  { to: '/workflows', label: 'URL workflows', icon: GitBranch },
+  { to: '/ai-workflows', label: 'AI workflows', icon: GitBranch },
   { to: '/activities', label: 'Activities', icon: Activity },
   { to: '/analytics', label: 'CV analytics', icon: ChartNoAxesCombined },
   { to: '/facts', label: 'Reviewed facts', icon: Database },
@@ -64,7 +64,9 @@ const ShellNavigation = () => {
             <SidebarGroupLabel>Manage</SidebarGroupLabel>
             <SidebarMenu>
               {navItems
-                .filter((item) => item.to !== '/workflows' || isDesktopHost())
+                .filter(
+                  (item) => item.to !== '/ai-workflows' || isDesktopHost()
+                )
                 .map((item) => (
                   <SidebarMenuItem key={item.to}>
                     <NavLink

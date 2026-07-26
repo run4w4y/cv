@@ -659,10 +659,6 @@
 }
 
 @media (max-width: 34rem) {
-  .cv-web-print-button {
-    display: none;
-  }
-
   .cv-web-contact {
     grid-template-columns: 5.5rem minmax(0, 1fr);
   }

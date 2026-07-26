@@ -4,19 +4,19 @@ import { WorkflowBatchScreen } from './batch-screen'
 import { parallelWorkflowBatch, parallelWorkflowJobs } from './story-fixtures'
 
 const meta = {
-  title: 'Application Registry/URL workflows/Batch overview',
+  title: 'Application Registry/AI workflows/Batch overview',
   component: WorkflowBatchScreen,
   tags: ['autodocs'],
   parameters: {
     controls: {
-      exclude: ['cancellingRunIds', 'onCancelAll', 'onCancelJob'],
+      exclude: ['cancellingJobIds', 'onCancelAll', 'onCancelJob'],
     },
     layout: 'fullscreen',
   },
   args: {
     batch: parallelWorkflowBatch,
     cancelError: null,
-    cancellingRunIds: new Set<string>(),
+    cancellingJobIds: new Set<string>(),
     jobs: parallelWorkflowJobs,
     onCancelAll: () => undefined,
     onCancelJob: () => undefined,
@@ -31,7 +31,7 @@ export const ParallelJobs: Story = {}
 
 export const CancellingOneJob: Story = {
   args: {
-    cancellingRunIds: new Set(['run-northstar-cv']),
+    cancellingJobIds: new Set(['job-northstar']),
   },
 }
 
@@ -61,15 +61,14 @@ export const CompletedBatch: Story = {
         applicationId: 'application-polaris-principal-frontend',
         artifacts: parallelWorkflowJobs[1].artifacts.map((artifact) => ({
           ...artifact,
-          message: 'Candidate rejected after review.',
+          message: 'Candidate approved.',
           stage: 'complete' as const,
-          status: 'rejected' as const,
+          status: 'approved' as const,
         })),
         company: 'Polaris',
         jobId: 'job-polaris-completed',
         kinds: ['cv', 'cover_letter'],
-        message: 'Both candidates were rejected after review.',
-        primaryRunId: 'run-polaris-completed-cv',
+        message: 'Both candidates were approved.',
         role: 'Principal Frontend Engineer',
         status: 'completed',
       },

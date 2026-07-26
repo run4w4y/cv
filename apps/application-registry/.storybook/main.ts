@@ -11,10 +11,24 @@ const config: StorybookConfig = {
     name: '@storybook/react-vite',
     options: {},
   },
-  viteFinal: async (config) =>
-    mergeConfig(config, {
-      plugins: [babel({ presets: [reactCompilerPreset()] }), tailwindcss()],
-    }),
+  viteFinal: async (viteConfig) => {
+    const plugins = viteConfig.plugins?.filter(
+      (plugin) =>
+        plugin === null ||
+        plugin === false ||
+        Array.isArray(plugin) ||
+        plugin.name !== 'application-registry-content-security-policy'
+    )
+    return mergeConfig(
+      {
+        ...viteConfig,
+        plugins,
+      },
+      {
+        plugins: [babel({ presets: [reactCompilerPreset()] }), tailwindcss()],
+      }
+    )
+  },
 }
 
 export default config

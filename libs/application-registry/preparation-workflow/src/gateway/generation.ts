@@ -3,19 +3,22 @@ import { Effect, Schema, Semaphore } from 'effect'
 import { coverLetterGenerationContract } from '../cover-letter/ai-schema'
 import { cvDocumentV1GenerationContract } from '../cv/ai-schema'
 import type {
+  CoverLetterPreparationInput,
+  CvAuthoringItem,
+  CvAuthoringPlan,
+  CvPreparationInput,
   EvidencePlan,
   GenerationStageMetadata,
   JobAnalysis,
   PreparationBootstrap,
   PreparationWorkflowInput,
-  SectionBrief,
 } from '../domain'
 import {
+  CvAuthoringPlanSchema,
   EvidencePlanSchema,
   JobAnalysisSchema,
   PreparationWorkflowError,
   preparationSourceUrl,
-  SectionBriefSchema,
 } from '../domain'
 import {
   type GenerationContract,
@@ -24,6 +27,8 @@ import {
 import {
   buildCoverLetterGenerationRequest,
   buildCvDraftGenerationRequest,
+  type CvAuthoringSource,
+  cvAuthoringSourceForGeneration,
   evidenceReferencesForGeneration,
   resolveEvidenceReferences,
 } from '../generation/prompts'
@@ -33,14 +38,19 @@ import type {
 } from '../generation/service'
 import { formatted, generationStageMetadata, stageError } from './shared'
 import {
+  cvAuthoringPolicyForGeneration,
+  validateCvAuthoringPlan,
+  validateCvDocumentAuthoring,
   validateCvProvenance,
+  validateCvWriting,
   validateEvidencePlan,
-  validateSectionBrief,
 } from './validation'
 
 const jobAnalysisGenerationContract = toGenerationContract(JobAnalysisSchema)
 const evidencePlanGenerationContract = toGenerationContract(EvidencePlanSchema)
-const sectionBriefGenerationContract = toGenerationContract(SectionBriefSchema)
+const cvAuthoringPlanGenerationContract = toGenerationContract(
+  CvAuthoringPlanSchema
+)
 
 const sumUsage = (values: ReadonlyArray<number | null>): number | null => {
   let total = 0
@@ -64,12 +74,103 @@ const combineGenerationMetadata = (
   },
 })
 
-export const preparationSectionIds = (
-  kind: PreparationWorkflowInput['kind']
-): ReadonlyArray<string> =>
-  kind === 'cv'
-    ? ['profile', 'experience', 'projects', 'skills']
-    : ['opening', 'evidence', 'closing']
+const selectedEvidenceIds = (plan: EvidencePlan): ReadonlyArray<string> => [
+  ...new Set(plan.requirements.flatMap(({ evidenceIds }) => evidenceIds)),
+]
+
+const missingPlanBinding = (
+  section: string,
+  id: string
+): PreparationWorkflowError =>
+  new PreparationWorkflowError({
+    message: `Validated CV authoring plan references missing ${section} binding ${id}.`,
+    stage: 'validation',
+  })
+
+const resolvePlannedItems = <
+  Binding extends { readonly id: string },
+  Item extends CvAuthoringItem,
+>(
+  section: string,
+  bindings: ReadonlyArray<Binding>,
+  items: ReadonlyArray<Item>,
+  references: CvAuthoringSource['references'],
+  metadata: (binding: Binding) => unknown = (binding) => binding
+) => {
+  const byId = new Map(bindings.map((binding) => [binding.id, binding]))
+  return Effect.forEach(items, (item) => {
+    const binding = byId.get(item.id)
+    return binding === undefined
+      ? Effect.fail(missingPlanBinding(section, item.id))
+      : Effect.succeed({
+          evidence: resolveEvidenceReferences(references, item.evidenceIds),
+          id: item.id,
+          metadata: metadata(binding),
+        })
+  })
+}
+
+const cvAuthoringPacket = Effect.fn('PreparationGateway.cvAuthoringPacket')(
+  function* (
+    source: CvAuthoringSource,
+    plan: CvAuthoringPlan,
+    educationDatesRequired: boolean
+  ) {
+    const additionalById = new Map(
+      source.additionalSectionItems.map((item) => [item.id, item])
+    )
+    const additionalItems = yield* Effect.forEach(
+      plan.additionalEvidenceIds,
+      (id) => {
+        const binding = additionalById.get(id)
+        return binding === undefined
+          ? Effect.fail(missingPlanBinding('additional-section', id))
+          : Effect.succeed(binding)
+      }
+    )
+    const education = yield* resolvePlannedItems(
+      'education',
+      source.education,
+      plan.education,
+      source.references,
+      ({ evidenceIds: _evidenceIds, period, ...binding }) =>
+        educationDatesRequired ? { ...binding, period } : binding
+    )
+    const experience = yield* resolvePlannedItems(
+      'experience',
+      source.experience,
+      plan.experience,
+      source.references,
+      ({ evidenceIds: _evidenceIds, ...binding }) => binding
+    )
+    const projects = yield* resolvePlannedItems(
+      'project',
+      source.projects,
+      plan.projects,
+      source.references,
+      ({ evidenceIds: _evidenceIds, ...binding }) => binding
+    )
+    const skillGroups = yield* resolvePlannedItems(
+      'skill-group',
+      source.skillGroups,
+      plan.skillGroups,
+      source.references,
+      ({ evidenceIds: _evidenceIds, ...binding }) => binding
+    )
+    return {
+      additionalItems,
+      education,
+      experience,
+      person: source.person,
+      profileEvidence: resolveEvidenceReferences(
+        source.references,
+        plan.profileEvidenceIds
+      ),
+      projects,
+      skillGroups,
+    }
+  }
+)
 
 export const makePreparationGenerationGateway = Effect.fn(
   'PreparationGateway.makeGenerationGateway'
@@ -109,7 +210,7 @@ export const makePreparationGenerationGateway = Effect.fn(
       jobAnalysisGenerationContract,
       {
         instructions:
-          'Analyze one job posting. Extract only information supported by the posting; do not evaluate the candidate yet. Give every requirement a short stable ID unique within this response.',
+          'Analyze one job posting. Extract only information supported by the posting; do not evaluate the candidate yet. Give every requirement a short stable ID unique within this response. Set educationDatesRequired to true only when the posting explicitly requires an education, degree, or graduation date.',
         prompt: [
           `Source URL: ${preparationSourceUrl(input.source)}`,
           `Requested locale: ${input.locale}`,
@@ -130,7 +231,7 @@ export const makePreparationGenerationGateway = Effect.fn(
     analysis: JobAnalysis
   ) {
     const references = evidenceReferencesForGeneration(context.factsCatalogue)
-    const evidencePlanningPrompt = [
+    const planningPrompt = [
       'Structured job analysis:',
       formatted(analysis),
       'Selectable reviewed evidence catalogue:',
@@ -141,8 +242,8 @@ export const makePreparationGenerationGateway = Effect.fn(
       evidencePlanGenerationContract,
       {
         instructions:
-          'Map job requirements to reviewed evidence citations. Use only the exact evidence IDs supplied in the selectable catalogue. Evidence IDs are source citations, not text fragments. An empty evidenceIds list is preferable to an invented or weak match. Every requirement must appear either in matches or uncoveredRequirementIds.',
-        prompt: evidencePlanningPrompt,
+          'Map every job requirement to reviewed evidence citations. Return each exact requirement ID once and in the supplied order. Use only exact evidence IDs from the catalogue. Use an empty evidenceIds list when the requirement is unsupported; never invent or weaken a citation. Return identifiers only, without strategy or rationale.',
+        prompt: planningPrompt,
       }
     )
     const validation = yield* validateEvidencePlan(
@@ -164,9 +265,9 @@ export const makePreparationGenerationGateway = Effect.fn(
       evidencePlanGenerationContract,
       {
         instructions:
-          'Correct the previous evidence plan. Use only exact requirement IDs and evidence IDs printed below. Preserve truthful coverage; move a requirement to uncoveredRequirementIds rather than inventing a citation.',
+          'Correct the evidence plan using only the supplied exact requirement and evidence IDs. Return every requirement exactly once in order. Preserve empty evidenceIds for unsupported requirements. Return identifiers only.',
         prompt: [
-          evidencePlanningPrompt,
+          planningPrompt,
           'Previous invalid evidence plan:',
           formatted(generated.value),
           'Deterministic validation failure:',
@@ -189,156 +290,252 @@ export const makePreparationGenerationGateway = Effect.fn(
     }
   })
 
-  const brief = Effect.fn('PreparationGateway.brief')(function* (
-    input: PreparationWorkflowInput,
+  const planCv = Effect.fn('PreparationGateway.planCv')(function* (
+    _input: CvPreparationInput,
     context: PreparationBootstrap,
     analysis: JobAnalysis,
-    plan: EvidencePlan,
-    sectionId: string
+    evidencePlan: EvidencePlan
   ) {
-    const references = evidenceReferencesForGeneration(context.factsCatalogue)
-    const selectedReferences = resolveEvidenceReferences(
-      references,
-      plan.matches.flatMap(({ evidenceIds }) => evidenceIds)
-    )
+    const source = cvAuthoringSourceForGeneration(context.factsCatalogue)
+    const policy = cvAuthoringPolicyForGeneration(source)
+    const planningPrompt = [
+      'Target role terminology and responsibilities:',
+      formatted({
+        keywords: analysis.keywords,
+        location: analysis.location,
+        requirements: analysis.requirements,
+        responsibilities: analysis.responsibilities,
+        role: analysis.role,
+      }),
+      'Validated requirement evidence:',
+      formatted(evidencePlan),
+      'Deterministic experience-first selection policy. The budgets are validator inputs, not output fields:',
+      formatted(policy),
+      'Reviewed authoring source with exact provenance bindings and evidence ownership:',
+      formatted(source),
+    ].join('\n\n')
     const generated = yield* generate(
-      `brief:${sectionId}`,
-      sectionBriefGenerationContract,
+      'planning',
+      cvAuthoringPlanGenerationContract,
       {
         instructions:
-          'Create a concise document-section brief. Cite only evidence IDs selected by the validated evidence plan and return the requested sectionId exactly. Evidence IDs ground the writing; notes are planning instructions, not finished claims.',
+          'Create one identifier-only CV authoring plan. Select experience and projects within the supplied deterministic budgets, prioritize employment, and order by role relevance then recency. Allocate only role-selected evidence owned by each item. Select only relevant skill groups, education, profile evidence, and additional evidence. Education periods are omitted by default and are not part of this plan. Return IDs only, without budgets, strategy, rationale, objectives, notes, or prose.',
+        prompt: planningPrompt,
+      }
+    )
+    const validation = yield* validateCvAuthoringPlan(
+      context.factsCatalogue,
+      evidencePlan,
+      generated.value
+    ).pipe(
+      Effect.map((plan) => ({ _tag: 'Valid' as const, plan })),
+      Effect.catch((error) =>
+        Effect.succeed({ _tag: 'Invalid' as const, error })
+      )
+    )
+    if (validation._tag === 'Valid') {
+      return { metadata: generated.metadata, plan: validation.plan }
+    }
+
+    const repaired = yield* generate(
+      'planning:repair',
+      cvAuthoringPlanGenerationContract,
+      {
+        instructions:
+          'Repair the CV authoring plan using only supplied exact IDs. Satisfy deterministic selection budgets, keep projects subordinate to experience, and allocate only role-selected evidence owned by each item. Return IDs only.',
         prompt: [
-          `Document kind: ${input.kind}`,
-          `Requested section: ${sectionId}`,
-          'Job analysis:',
-          formatted(analysis),
-          'Evidence plan:',
-          formatted(plan),
-          'Resolved selected evidence:',
-          formatted(selectedReferences),
+          planningPrompt,
+          'Previous invalid authoring plan:',
+          formatted(generated.value),
+          'Deterministic validation failure:',
+          validation.error.message,
+          'Return one corrected complete authoring plan.',
         ].join('\n\n'),
       }
     )
-    const value = yield* validateSectionBrief(
-      references,
-      plan,
-      sectionId,
-      generated.value
+    const plan = yield* validateCvAuthoringPlan(
+      context.factsCatalogue,
+      evidencePlan,
+      repaired.value
     )
-    return { brief: value, metadata: generated.metadata }
+    return {
+      metadata: combineGenerationMetadata('planning', [
+        generated.metadata,
+        repaired.metadata,
+      ]),
+      plan,
+    }
   })
 
-  const compose = Effect.fn('PreparationGateway.compose')(function* (
-    input: PreparationWorkflowInput,
+  const composeCv = Effect.fn('PreparationGateway.composeCv')(function* (
+    input: CvPreparationInput,
     context: PreparationBootstrap,
     analysis: JobAnalysis,
-    plan: EvidencePlan,
-    briefs: ReadonlyArray<SectionBrief>
+    plan: CvAuthoringPlan
   ) {
-    const references = evidenceReferencesForGeneration(context.factsCatalogue)
-    const resolvedPlan = {
-      ...plan,
-      matches: plan.matches.map((match) => ({
-        ...match,
-        evidence: resolveEvidenceReferences(references, match.evidenceIds),
-      })),
-    }
-    const resolvedBriefs = briefs.map((brief) => ({
-      ...brief,
-      evidence: resolveEvidenceReferences(references, brief.evidenceIds),
-    }))
-    const baseRequest = yield* input.kind === 'cv'
-      ? Effect.gen(function* () {
-          const guidance = input.cvGenerationGuidance
-          if (guidance === null) {
-            return yield* Effect.die(
-              'Decoded CV workflow input did not contain generation guidance.'
-            )
-          }
-          return buildCvDraftGenerationRequest({
-            factsCatalogue: context.factsCatalogue,
-            guidance,
-            jobContext: context.jobContext,
-            locale: input.locale,
-          })
-        })
-      : Effect.succeed(
-          buildCoverLetterGenerationRequest({
-            factsCatalogue: context.factsCatalogue,
-            jobContext: context.jobContext,
-            locale: input.locale,
-            prompt:
-              input.coverLetterPrompt ??
-              'Write a concise, specific, professional cover letter.',
-          })
-        )
+    const source = cvAuthoringSourceForGeneration(context.factsCatalogue)
+    const packet = yield* cvAuthoringPacket(
+      source,
+      plan,
+      analysis.educationDatesRequired
+    )
+    const baseRequest = buildCvDraftGenerationRequest({
+      guidance: input.generationGuidance,
+      job: {
+        keywords: analysis.keywords,
+        location: analysis.location,
+        responsibilities: analysis.responsibilities,
+        role: analysis.role,
+      },
+      locale: input.locale,
+    })
     const request: StructuredGenerationPrompt = {
       ...baseRequest,
       prompt: [
         baseRequest.prompt,
-        'Use the following verified workflow analysis and planning artifacts. Evidence IDs are citations that ground factual claims, not text fragments to concatenate. Author one coherent, role-specific document in original prose. The trusted facts catalogue remains authoritative and provides surrounding context:',
-        'Job analysis:',
-        formatted(analysis),
-        'Evidence plan with resolved reviewed sources:',
-        formatted(resolvedPlan),
-        'Parallel section briefs with resolved reviewed sources:',
-        formatted(resolvedBriefs),
-        ...(input.kind === 'cover_letter' && context.referenceCv !== null
-          ? [
-              `Generated alignment input: the following tailored CV revision (${context.referenceCvRevisionId ?? 'unknown revision'}) was generated for this same URL. Keep role positioning, selected experience, and terminology consistent with it. It is not an additional source of facts; the trusted facts catalogue remains authoritative:`,
-              formatted(context.referenceCv),
-            ]
-          : []),
+        'Final CV authoring packet. This is the complete allowed composition. Include every listed item exactly once and in order. Copy IDs and metadata exactly. Education periods are present only when the posting explicitly requires them; never add an omitted period. Use only resolved reviewed evidence for personal claims.',
+        'For each skill group, include exactly the names represented by its resolved evidence entries of kind "skill".',
+        formatted(packet),
       ].join('\n\n'),
     }
+    const validateDocument = Effect.fn(
+      'PreparationGateway.validateGeneratedCv'
+    )(function* (document: typeof cvDocumentV1GenerationContract.codec.Type) {
+      if (document.locale !== input.locale) {
+        return yield* Effect.fail(
+          new PreparationWorkflowError({
+            message: `Generated CV locale ${document.locale} did not match ${input.locale}.`,
+            stage: 'validation',
+          })
+        )
+      }
+      yield* validateCvProvenance(context.factsCatalogue, document)
+      yield* validateCvDocumentAuthoring(
+        context.factsCatalogue,
+        plan,
+        document,
+        analysis.educationDatesRequired
+      )
+      yield* validateCvWriting(
+        input.generationGuidance,
+        analysis.company,
+        document
+      )
+      return document
+    })
+    const generated = yield* generate(
+      'composition',
+      cvDocumentV1GenerationContract,
+      request
+    )
+    const validation = yield* validateDocument(generated.value).pipe(
+      Effect.map((document) => ({ _tag: 'Valid' as const, document })),
+      Effect.catch((error) =>
+        Effect.succeed({ _tag: 'Invalid' as const, error })
+      )
+    )
+    if (validation._tag === 'Valid') {
+      return {
+        _tag: 'Cv' as const,
+        document: validation.document,
+        metadata: [generated.metadata],
+      }
+    }
 
-    if (input.kind === 'cv') {
+    const repaired = yield* generate(
+      'composition:repair',
+      cvDocumentV1GenerationContract,
+      {
+        instructions:
+          'Repair the CV so it satisfies provenance, the authoring plan, and pinned writing guidance. Preserve supported content, exact IDs, metadata, and order. Write natural finished CV copy, obey word limits, keep the target company and application-analysis language out of the summary, and include education periods only when they appear in the authoring packet.',
+        prompt: [
+          request.prompt,
+          'Previous invalid CV:',
+          formatted(generated.value),
+          'Deterministic validation failure:',
+          validation.error.message,
+          'Return one complete corrected CV document.',
+        ].join('\n\n'),
+      }
+    )
+    const document = yield* validateDocument(repaired.value)
+    return {
+      _tag: 'Cv' as const,
+      document,
+      metadata: [
+        combineGenerationMetadata('composition', [
+          generated.metadata,
+          repaired.metadata,
+        ]),
+      ],
+    }
+  })
+
+  const composeCoverLetter = Effect.fn('PreparationGateway.composeCoverLetter')(
+    function* (
+      input: CoverLetterPreparationInput,
+      context: PreparationBootstrap,
+      analysis: JobAnalysis,
+      evidencePlan: EvidencePlan
+    ) {
+      if (
+        context.referenceCv === null ||
+        context.referenceCvRevisionId === null
+      ) {
+        return yield* Effect.fail(
+          new PreparationWorkflowError({
+            message:
+              'Cover-letter generation requires an approved CV revision.',
+            stage: 'composition',
+          })
+        )
+      }
+      const references = evidenceReferencesForGeneration(context.factsCatalogue)
+      const request = buildCoverLetterGenerationRequest({
+        approvedCv: context.referenceCv,
+        evidence: resolveEvidenceReferences(
+          references,
+          selectedEvidenceIds(evidencePlan)
+        ),
+        job: {
+          company: analysis.company,
+          keywords: analysis.keywords,
+          location: analysis.location,
+          responsibilities: analysis.responsibilities,
+          role: analysis.role,
+        },
+        locale: input.locale,
+        prompt: input.prompt,
+      })
       const generated = yield* generate(
         'composition',
-        cvDocumentV1GenerationContract,
+        coverLetterGenerationContract,
         request
       )
       if (generated.value.locale !== input.locale) {
         return yield* Effect.fail(
           new PreparationWorkflowError({
-            message: `Generated CV locale ${generated.value.locale} did not match ${input.locale}.`,
+            message: `Generated cover-letter locale ${generated.value.locale} did not match ${input.locale}.`,
             stage: 'validation',
           })
         )
       }
-      yield* validateCvProvenance(context.factsCatalogue, generated.value)
       return {
-        _tag: 'Cv' as const,
-        document: generated.value,
+        _tag: 'CoverLetter' as const,
+        document: {
+          ...generated.value,
+          referenceCvRevisionId: context.referenceCvRevisionId,
+        },
         metadata: [generated.metadata],
       }
     }
-
-    const generated = yield* generate(
-      'composition',
-      coverLetterGenerationContract,
-      request
-    )
-    if (generated.value.locale !== input.locale) {
-      return yield* Effect.fail(
-        new PreparationWorkflowError({
-          message: `Generated cover-letter locale ${generated.value.locale} did not match ${input.locale}.`,
-          stage: 'validation',
-        })
-      )
-    }
-    return {
-      _tag: 'CoverLetter' as const,
-      document: generated.value,
-      metadata: [generated.metadata],
-    }
-  })
+  )
 
   return {
     analyze,
-    brief,
-    compose,
+    composeCoverLetter,
+    composeCv,
+    planCv,
     planEvidence,
-    sectionIds: preparationSectionIds,
   }
 })

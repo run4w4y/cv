@@ -1,4 +1,4 @@
-import type { ContentRevisionResult, PreparationRun } from './domain'
+import type { ContentRevisionResult, PreparationArtifact } from './domain'
 
 /**
  * Prevents a newer, unrelated head revision from being approved while this
@@ -9,11 +9,11 @@ import type { ContentRevisionResult, PreparationRun } from './domain'
  * before claiming the review token, and the Workflow verifies it again before
  * approval.
  */
-export const isRevisionBoundToPreparationRun = (
-  run: PreparationRun,
+export const isRevisionBoundToPreparationArtifact = (
+  artifact: PreparationArtifact,
   result: ContentRevisionResult
 ): boolean => {
-  const candidate = run.candidate?.result
+  const candidate = artifact.candidate?.result
   if (candidate === undefined) return false
 
   const expected = candidate.revision
@@ -30,11 +30,18 @@ export const isRevisionBoundToPreparationRun = (
   }
 
   if (selected.id === expected.id || selected.source === 'human') return true
-  const refinementPrefix = `${run.runId}:refinement:`
+  const candidateOperationId = expected.operationId
+  if (
+    candidateOperationId === null ||
+    !candidateOperationId.endsWith(':candidate')
+  ) {
+    return false
+  }
+  const artifactId = candidateOperationId.slice(0, -':candidate'.length)
+  const refinementPrefix = `${artifactId}:refinement:`
   const operationId = selected.operationId
   return (
     selected.source === 'ai_adjustment' &&
-    expected.operationId === `${run.runId}:candidate` &&
     operationId?.startsWith(refinementPrefix) === true &&
     operationId.length > refinementPrefix.length
   )

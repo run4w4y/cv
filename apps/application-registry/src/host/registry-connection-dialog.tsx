@@ -29,12 +29,50 @@ import { RegistryConnectionForm } from './registry-connection-form'
 
 const defaultReload = () => globalThis.location.reload()
 
+const loadRegistryConfiguration = ({
+  connection,
+  requestId,
+  setConfiguration,
+  setError,
+  setLoading,
+}: {
+  readonly connection: ReturnType<typeof registryConnection>
+  readonly requestId: React.RefObject<number>
+  readonly setConfiguration: React.Dispatch<
+    React.SetStateAction<RegistryConnectionConfiguration | null>
+  >
+  readonly setError: React.Dispatch<React.SetStateAction<string | null>>
+  readonly setLoading: React.Dispatch<React.SetStateAction<boolean>>
+}) => {
+  const activeRequest = requestId.current + 1
+  requestId.current = activeRequest
+  setLoading(true)
+  setError(null)
+  void connection
+    .status()
+    .then((nextConfiguration) => {
+      if (requestId.current !== activeRequest) return
+      setConfiguration(nextConfiguration)
+    })
+    .catch((cause: unknown) => {
+      if (requestId.current !== activeRequest) return
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'The Registry connection could not be loaded.'
+      )
+    })
+    .finally(() => {
+      if (requestId.current === activeRequest) setLoading(false)
+    })
+}
+
 export const RegistryConnectionControl = ({
   reload = defaultReload,
 }: {
   readonly reload?: () => void
 } = {}) => {
-  const connection = React.useMemo(registryConnection, [])
+  const [connection] = React.useState(registryConnection)
   const requestId = React.useRef(0)
   const [open, setOpen] = React.useState(false)
   const [configuration, setConfiguration] =
@@ -44,36 +82,18 @@ export const RegistryConnectionControl = ({
   const [loading, setLoading] = React.useState(configuration === null)
   const [error, setError] = React.useState<string | null>(null)
 
-  const refresh = React.useCallback(() => {
-    const activeRequest = requestId.current + 1
-    requestId.current = activeRequest
-    setLoading(true)
-    setError(null)
-    void connection
-      .status()
-      .then((nextConfiguration) => {
-        if (requestId.current !== activeRequest) return
-        setConfiguration(nextConfiguration)
-      })
-      .catch((cause: unknown) => {
-        if (requestId.current !== activeRequest) return
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : 'The Registry connection could not be loaded.'
-        )
-      })
-      .finally(() => {
-        if (requestId.current === activeRequest) setLoading(false)
-      })
-  }, [connection])
-
   React.useEffect(() => {
-    refresh()
+    loadRegistryConfiguration({
+      connection,
+      requestId,
+      setConfiguration,
+      setError,
+      setLoading,
+    })
     return () => {
       requestId.current += 1
     }
-  }, [refresh])
+  }, [connection])
 
   const secondaryLabel =
     error !== null && configuration === null
@@ -87,7 +107,15 @@ export const RegistryConnectionControl = ({
       open={open}
       onOpenChange={(nextOpen) => {
         setOpen(nextOpen)
-        if (nextOpen) refresh()
+        if (nextOpen) {
+          loadRegistryConfiguration({
+            connection,
+            requestId,
+            setConfiguration,
+            setError,
+            setLoading,
+          })
+        }
       }}
     >
       <DialogTrigger
@@ -139,7 +167,19 @@ export const RegistryConnectionControl = ({
               <AlertDescription>{error}</AlertDescription>
             </Alert>
             <DialogFooter>
-              <Button onClick={refresh} type="button" variant="outline">
+              <Button
+                onClick={() =>
+                  loadRegistryConfiguration({
+                    connection,
+                    requestId,
+                    setConfiguration,
+                    setError,
+                    setLoading,
+                  })
+                }
+                type="button"
+                variant="outline"
+              >
                 Retry
               </Button>
             </DialogFooter>

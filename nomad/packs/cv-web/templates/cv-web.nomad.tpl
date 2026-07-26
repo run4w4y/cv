@@ -71,6 +71,7 @@ job [[ .my.job_name | quote ]] {
       env {
         CV_DEPLOYMENT_ID        = [[ .my.deployment_id | quote ]]
         CV_PUBLIC_RESOLVER_URL  = "http://127.0.0.1:3001"
+        CV_REGISTRY_ORIGIN      = [[ .my.registry_web_origin | quote ]]
         HOSTNAME                = "0.0.0.0"
         NODE_ENV                = "production"
         PORT                    = "3000"

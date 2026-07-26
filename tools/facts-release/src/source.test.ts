@@ -63,7 +63,6 @@ const entrySource = (
 
 export default {
   company: 'Analytical Engines',
-  companyVisibility: 'private',
   period: '2023 - Present',
   roles: ['Software Engineer'],
   overview: {

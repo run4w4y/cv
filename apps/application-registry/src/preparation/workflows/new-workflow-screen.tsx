@@ -47,7 +47,7 @@ import type React from 'react'
 
 import type {
   BatchPreparationForm,
-  BatchPreparationUrlRow,
+  BatchPreparationPostingUrlRow,
 } from '@/preparation/batch/atoms'
 import { WorkflowPage, WorkflowPageHeader } from './components'
 
@@ -107,7 +107,7 @@ const DocumentChoice = ({
 const UrlFeedback = ({
   rows,
 }: {
-  readonly rows: ReadonlyArray<BatchPreparationUrlRow>
+  readonly rows: ReadonlyArray<BatchPreparationPostingUrlRow>
 }) => {
   const feedbackRows = rows.filter((row) => row.message !== null)
   if (feedbackRows.length === 0) return null
@@ -171,6 +171,14 @@ const PreflightRow = ({
 
 export type NewWorkflowScreenProps = {
   readonly canStart: boolean
+  readonly existingApplication: {
+    readonly applicationId: string
+    readonly company: string
+    readonly contextMessage: string
+    readonly contextStatus: 'waiting-for-locale' | 'loading' | 'ready' | 'error'
+    readonly postingUrl: string
+    readonly role: string
+  } | null
   readonly executionEnvironment: React.ReactNode
   readonly form: BatchPreparationForm
   readonly guidancePanel: React.ReactNode
@@ -181,17 +189,19 @@ export type NewWorkflowScreenProps = {
   readonly onStart: () => void
   readonly onStepChange: (step: 1 | 2 | 3) => void
   readonly promptCharactersRemaining: number
-  readonly rows: ReadonlyArray<BatchPreparationUrlRow>
+  readonly rows: ReadonlyArray<BatchPreparationPostingUrlRow>
   readonly startError: string | null
   readonly starting: boolean
   readonly step: 1 | 2 | 3
+  readonly targetContextReady: boolean
+  readonly targetUrls: ReadonlyArray<string>
+  readonly targetsValid: boolean
   readonly tooLarge: boolean
-  readonly uniqueUrls: ReadonlyArray<string>
-  readonly urlsValid: boolean
 }
 
 export const NewWorkflowScreen = ({
   canStart,
+  existingApplication,
   executionEnvironment,
   form,
   guidancePanel,
@@ -206,31 +216,43 @@ export const NewWorkflowScreen = ({
   startError,
   starting,
   step,
+  targetContextReady,
+  targetUrls,
+  targetsValid,
   tooLarge,
-  uniqueUrls,
-  urlsValid,
 }: NewWorkflowScreenProps) => {
   const settingsValid =
     form.locale.length > 0 &&
+    localeError === null &&
     (!form.includeCoverLetter || form.prompt.trim().length > 0) &&
     promptCharactersRemaining >= 0
-  const reviewReady = urlsValid && settingsValid && guidanceReady
-  const artifactsPerUrl = form.includeCoverLetter ? 2 : 1
+  const reviewReady =
+    targetsValid && targetContextReady && settingsValid && guidanceReady
+  const artifactsPerTarget = form.includeCoverLetter ? 2 : 1
+  const targetCount = targetUrls.length
   const goTo = (nextStep: number) => {
     if (starting) return
     if (nextStep === 1) onStepChange(1)
-    if (nextStep === 2 && urlsValid) onStepChange(2)
+    if (nextStep === 2 && targetsValid) onStepChange(2)
     if (nextStep === 3 && reviewReady) onStepChange(3)
   }
 
   return (
     <WorkflowPage className="max-w-5xl">
       <WorkflowPageHeader
-        backTo="/workflows"
-        backLabel="All workflows"
-        eyebrow="New URL workflow"
-        title="Prepare documents from job URLs"
-        description="Set up one batch in three deliberate steps. Every URL becomes an independent job after the final confirmation."
+        backTo="/ai-workflows"
+        backLabel="All AI workflows"
+        eyebrow="New AI workflow"
+        title={
+          existingApplication === null
+            ? 'Prepare documents for job postings'
+            : `Prepare documents for ${existingApplication.company}`
+        }
+        description={
+          existingApplication === null
+            ? 'Set up one batch in three deliberate steps. Every posting becomes an independent job after the final confirmation.'
+            : 'The same workflow uses the application’s reviewed job snapshot and active facts release as pinned source context.'
+        }
       />
 
       <Stepper
@@ -247,14 +269,14 @@ export const NewWorkflowScreen = ({
           >
             <StepperTrigger>
               <StepperIndicator />
-              <StepperTitle>Job URLs</StepperTitle>
+              <StepperTitle>Targets</StepperTitle>
               <StepperDescription className="hidden sm:inline">
                 Choose the work
               </StepperDescription>
             </StepperTrigger>
             <StepperSeparator />
           </StepperItem>
-          <StepperItem step={2} disabled={starting || !urlsValid}>
+          <StepperItem step={2} disabled={starting || !targetsValid}>
             <StepperTrigger>
               <StepperIndicator />
               <StepperTitle>Document</StepperTitle>
@@ -278,57 +300,111 @@ export const NewWorkflowScreen = ({
         <StepperContent step={1}>
           <Card className="border-0 shadow-none">
             <CardHeader className="px-0">
-              <CardTitle>Which job postings should we prepare?</CardTitle>
+              <CardTitle>
+                {existingApplication === null
+                  ? 'Which job postings should we prepare?'
+                  : 'Use this existing application'}
+              </CardTitle>
               <CardDescription>
-                Enter one absolute HTTP(S) URL per line. Duplicates are shown
-                and only launched once; a batch can contain up to{' '}
-                {maximumPreparationBatchSize} jobs.
+                {existingApplication === null
+                  ? `Enter one absolute HTTP(S) URL per line. Duplicates are shown and only launched once; a batch can contain up to ${maximumPreparationBatchSize} jobs.`
+                  : 'The workflow will reuse this application and pin its current reviewed context before launch.'}
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 px-0">
-              <Field>
-                <div className="flex items-center justify-between gap-3">
-                  <FieldLabel htmlFor="workflow-urls">Job URLs</FieldLabel>
-                  <span className="text-xs tabular-nums text-muted-foreground">
-                    {uniqueUrls.length} unique URL
-                    {uniqueUrls.length === 1 ? '' : 's'}
-                  </span>
+              {existingApplication === null ? (
+                <>
+                  <Field>
+                    <div className="flex items-center justify-between gap-3">
+                      <FieldLabel htmlFor="workflow-posting-urls">
+                        Job posting URLs
+                      </FieldLabel>
+                      <span className="text-xs tabular-nums text-muted-foreground">
+                        {targetCount} unique target
+                        {targetCount === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                    <Textarea
+                      id="workflow-posting-urls"
+                      autoFocus
+                      aria-invalid={rows.some(
+                        (row) => row.canonicalUrl === null
+                      )}
+                      className="min-h-64 resize-y font-mono text-sm leading-6"
+                      placeholder={
+                        'https://company.example/jobs/123\nhttps://another.example/careers/staff-engineer'
+                      }
+                      value={form.postingUrls}
+                      onChange={(event) =>
+                        onFormChange({
+                          ...form,
+                          postingUrls: event.currentTarget.value,
+                        })
+                      }
+                    />
+                    <FieldDescription>
+                      Fragments are removed during canonicalization. URLs with
+                      credentials or non-HTTP protocols are not allowed.
+                    </FieldDescription>
+                  </Field>
+                  <UrlFeedback rows={rows} />
+                </>
+              ) : (
+                <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium uppercase tracking-wide text-primary">
+                        Existing application
+                      </p>
+                      <h2 className="mt-1 text-lg font-semibold">
+                        {existingApplication.company}
+                      </h2>
+                      <p className="text-sm text-muted-foreground">
+                        {existingApplication.role}
+                      </p>
+                    </div>
+                    <a
+                      href={existingApplication.postingUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="max-w-full break-all text-xs text-primary underline-offset-4 hover:underline"
+                    >
+                      Open posting
+                    </a>
+                  </div>
+                  <p
+                    className={cn(
+                      'mt-4 flex items-center gap-2 border-t border-primary/15 pt-3 text-xs',
+                      existingApplication.contextStatus === 'error'
+                        ? 'text-destructive'
+                        : 'text-muted-foreground'
+                    )}
+                  >
+                    {existingApplication.contextStatus === 'loading' ? (
+                      <Spinner aria-hidden />
+                    ) : existingApplication.contextStatus === 'error' ? (
+                      <CircleAlert className="size-3.5 shrink-0" />
+                    ) : (
+                      <Check className="size-3.5 shrink-0" />
+                    )}
+                    {existingApplication.contextMessage}
+                  </p>
                 </div>
-                <Textarea
-                  id="workflow-urls"
-                  autoFocus
-                  aria-invalid={rows.some((row) => row.canonicalUrl === null)}
-                  className="min-h-64 resize-y font-mono text-sm leading-6"
-                  placeholder={
-                    'https://company.example/jobs/123\nhttps://another.example/careers/staff-engineer'
-                  }
-                  value={form.urls}
-                  onChange={(event) =>
-                    onFormChange({ ...form, urls: event.currentTarget.value })
-                  }
-                />
-                <FieldDescription>
-                  Fragments are removed during canonicalization. URLs with
-                  credentials or non-HTTP protocols are rejected.
-                </FieldDescription>
-              </Field>
-              <UrlFeedback rows={rows} />
+              )}
               {!tooLarge ? null : (
                 <Alert variant="destructive">
                   <CircleAlert />
                   <AlertTitle>Batch limit exceeded</AlertTitle>
                   <AlertDescription>
-                    Remove {uniqueUrls.length - maximumPreparationBatchSize} URL
-                    {uniqueUrls.length - maximumPreparationBatchSize === 1
-                      ? ''
-                      : 's'}{' '}
+                    Remove {targetCount - maximumPreparationBatchSize} URL
+                    {targetCount - maximumPreparationBatchSize === 1 ? '' : 's'}{' '}
                     to continue.
                   </AlertDescription>
                 </Alert>
               )}
             </CardContent>
             <CardFooter className="justify-end px-0 pt-6">
-              <Button disabled={!urlsValid} onClick={() => onStepChange(2)}>
+              <Button disabled={!targetsValid} onClick={() => onStepChange(2)}>
                 Continue
                 <ArrowRight />
               </Button>
@@ -342,8 +418,9 @@ export const NewWorkflowScreen = ({
               <CardHeader className="px-0">
                 <CardTitle>What should each job produce?</CardTitle>
                 <CardDescription>
-                  These settings apply to all {uniqueUrls.length} jobs in the
-                  batch. They do not change the document schemas.
+                  These settings apply to {targetCount}{' '}
+                  {targetCount === 1 ? 'job' : 'jobs'}. They do not change the
+                  document schemas.
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-6 px-0">
@@ -397,6 +474,33 @@ export const NewWorkflowScreen = ({
                     <p className="text-xs text-destructive">{localeError}</p>
                   )}
                 </Field>
+
+                {existingApplication === null ||
+                existingApplication.contextStatus === 'ready' ||
+                existingApplication.contextStatus ===
+                  'waiting-for-locale' ? null : (
+                  <Alert
+                    variant={
+                      existingApplication.contextStatus === 'error'
+                        ? 'destructive'
+                        : 'default'
+                    }
+                  >
+                    {existingApplication.contextStatus === 'loading' ? (
+                      <Spinner aria-hidden />
+                    ) : (
+                      <CircleAlert />
+                    )}
+                    <AlertTitle>
+                      {existingApplication.contextStatus === 'loading'
+                        ? 'Loading pinned application context'
+                        : 'Application context unavailable'}
+                    </AlertTitle>
+                    <AlertDescription>
+                      {existingApplication.contextMessage}
+                    </AlertDescription>
+                  </Alert>
+                )}
 
                 {!form.includeCoverLetter ? null : (
                   <Field>
@@ -476,8 +580,8 @@ export const NewWorkflowScreen = ({
               <h2 className="text-xl font-semibold">Confirm and launch</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 Nothing has started yet. Review the shared settings and
-                preflight checks before creating {uniqueUrls.length} parallel
-                job{uniqueUrls.length === 1 ? '' : 's'}.
+                preflight checks before creating {targetCount} parallel job
+                {targetCount === 1 ? '' : 's'}.
               </p>
             </div>
 
@@ -491,8 +595,8 @@ export const NewWorkflowScreen = ({
                     <div>
                       <dt className="text-xs text-muted-foreground">Jobs</dt>
                       <dd className="mt-1 font-medium">
-                        {uniqueUrls.length} unique URL
-                        {uniqueUrls.length === 1 ? '' : 's'}
+                        {targetCount} workflow target
+                        {targetCount === 1 ? '' : 's'}
                       </dd>
                     </div>
                     <div>
@@ -516,14 +620,14 @@ export const NewWorkflowScreen = ({
                         Execution
                       </dt>
                       <dd className="mt-1 font-medium">
-                        {uniqueUrls.length * artifactsPerUrl} artifacts · up to
-                        2 Codex calls concurrently
+                        {targetCount * artifactsPerTarget} artifacts · up to 2
+                        Codex calls concurrently
                       </dd>
                     </div>
                   </dl>
                   <div className="max-h-56 overflow-y-auto rounded-md border border-border">
                     <ol className="divide-y divide-border">
-                      {uniqueUrls.map((url, index) => (
+                      {targetUrls.map((url, index) => (
                         <li
                           key={url}
                           className="flex items-start gap-3 px-3 py-2.5 text-xs"
@@ -551,9 +655,13 @@ export const NewWorkflowScreen = ({
                 </CardHeader>
                 <CardContent className="grid gap-2">
                   <PreflightRow
-                    ready={urlsValid}
-                    label="Job URLs"
-                    description={`${uniqueUrls.length} unique, schema-valid URL${uniqueUrls.length === 1 ? '' : 's'}`}
+                    ready={targetsValid && targetContextReady}
+                    label="Workflow targets"
+                    description={
+                      existingApplication === null
+                        ? `${targetCount} unique, schema-valid posting URL${targetCount === 1 ? '' : 's'}`
+                        : existingApplication.contextMessage
+                    }
                   />
                   <PreflightRow
                     ready={form.locale.length > 0}
@@ -603,7 +711,7 @@ export const NewWorkflowScreen = ({
                 {starting ? <Spinner aria-hidden /> : <Sparkles />}
                 {starting
                   ? 'Starting batch…'
-                  : `Start ${uniqueUrls.length} URL job${uniqueUrls.length === 1 ? '' : 's'}`}
+                  : `Start ${targetCount} AI workflow job${targetCount === 1 ? '' : 's'}`}
               </Button>
             </div>
           </div>

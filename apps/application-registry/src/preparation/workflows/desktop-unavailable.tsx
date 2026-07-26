@@ -7,7 +7,7 @@ import { WorkflowPage, WorkflowPageHeader } from './components'
 export const WorkflowDesktopUnavailable = () => (
   <WorkflowPage>
     <WorkflowPageHeader
-      title="URL workflows"
+      title="AI workflows"
       description="Parallel preparation uses the native Codex installation available to the desktop registry."
     />
     <Alert>

@@ -53,7 +53,7 @@ const refreshJobSnapshot = (applicationId: string) =>
     ])
   )
 
-export const makeRefreshJobSnapshotAtom = () =>
+export const refreshJobSnapshotAtom =
   preparationDataRuntime.fn<string>()(refreshJobSnapshot)
 
 const persistManualJobContext = (input: ManualJobContextInput) =>
@@ -66,7 +66,7 @@ const persistManualJobContext = (input: ManualJobContextInput) =>
     ])
   )
 
-export const makePersistManualJobContextAtom = () =>
+export const persistManualJobContextAtom =
   preparationDataRuntime.fn<ManualJobContextInput>()(persistManualJobContext)
 
 const appendPreparationRevision = (input: AppendRevisionInput) => {
@@ -93,7 +93,7 @@ const appendPreparationRevision = (input: AppendRevisionInput) => {
   )
 }
 
-export const makeAppendPreparationRevisionAtom = () =>
+export const appendPreparationRevisionAtom =
   preparationDataRuntime.fn<AppendRevisionInput>()(appendPreparationRevision)
 
 const approvePreparationRevision = (input: ApproveRevisionInput) => {
@@ -120,7 +120,7 @@ const approvePreparationRevision = (input: ApproveRevisionInput) => {
   )
 }
 
-export const makeApprovePreparationRevisionAtom = () =>
+export const approvePreparationRevisionAtom =
   preparationDataRuntime.fn<ApproveRevisionInput>()(approvePreparationRevision)
 
 const setPublicationAvailability = (input: SetPublicationAvailabilityInput) =>
@@ -132,7 +132,7 @@ const setPublicationAvailability = (input: SetPublicationAvailabilityInput) =>
     )
   )
 
-export const makeSetPublicationAvailabilityAtom = () =>
+export const setPublicationAvailabilityAtom =
   preparationDataRuntime.fn<SetPublicationAvailabilityInput>()(
     setPublicationAvailability
   )
@@ -146,7 +146,7 @@ const requestPdfGeneration = (input: RequestPdfGenerationInput) =>
     )
   )
 
-export const makeRequestPdfGenerationAtom = () =>
+export const requestPdfGenerationAtom =
   preparationDataRuntime.fn<RequestPdfGenerationInput>()(requestPdfGeneration)
 
 const refreshCvPage = (input: PublicationIdentity) =>
@@ -154,11 +154,11 @@ const refreshCvPage = (input: PublicationIdentity) =>
     publicationMutationReactivityKeys(input.applicationId, input.entryId)
   )
 
-export const makeRefreshCvPageAtom = () =>
+export const refreshCvPageAtom =
   preparationDataRuntime.fn<PublicationIdentity>()(refreshCvPage)
 
 const readCurrentPdf = (input: ReadCurrentPdfInput) =>
   PreparationRepository.use((repository) => repository.readCurrentPdf(input))
 
-export const makeReadCurrentPdfAtom = () =>
+export const readCurrentPdfAtom =
   preparationDataRuntime.fn<ReadCurrentPdfInput>()(readCurrentPdf)

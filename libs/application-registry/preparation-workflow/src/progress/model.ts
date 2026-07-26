@@ -1,44 +1,50 @@
 import { Context, type Effect, type SubscriptionRef } from 'effect'
 import type * as DurableDeferred from 'effect/unstable/workflow/DurableDeferred'
 import type {
+  ArtifactPreparationStage,
   ContentRevisionResult,
-  PreparationRunState,
-  PreparationStage,
+  DocumentKind,
+  PreparationJobInput,
+  PreparationJobState,
   PreparationWorkflowError,
-  PreparationWorkflowInput,
   SavedCandidate,
+  SharedPreparationStage,
 } from '../domain'
 
-export type PreparationRunStates = ReadonlyMap<string, PreparationRunState>
+export type PreparationJobStates = ReadonlyMap<string, PreparationJobState>
 
-export type PreparationRunReservation = {
+export type PreparationJobReservation = {
   readonly batchId: string
   readonly batchPosition: number
-  readonly input: PreparationWorkflowInput
-  readonly jobId?: string
+  readonly input: PreparationJobInput
+  readonly retryOfJobId: string | null
 }
 
 export type CancellationClaim = {
   readonly mode: 'active' | 'suspended'
-  readonly previous: ReadonlyMap<string, PreparationRunState>
+  readonly previous: PreparationJobState
 }
 
 export type ProgressService = {
-  readonly cancel: (runId: string) => Effect.Effect<void>
-  readonly complete: (
-    runId: string,
-    completion:
-      | {
-          readonly message: string
-          readonly result: ContentRevisionResult
-          readonly status: 'approved'
-        }
-      | {
-          readonly message: string
-          readonly status: 'rejected'
-        }
+  readonly blockArtifact: (
+    jobId: string,
+    kind: DocumentKind,
+    message: string
   ) => Effect.Effect<void>
-  readonly fail: (runId: string, message: string) => Effect.Effect<void>
+  readonly cancelJob: (jobId: string) => Effect.Effect<void>
+  readonly approveArtifact: (
+    jobId: string,
+    kind: DocumentKind,
+    completion: {
+      readonly message: string
+      readonly result: ContentRevisionResult
+    }
+  ) => Effect.Effect<void>
+  readonly failArtifact: (
+    jobId: string,
+    kind: DocumentKind,
+    message: string
+  ) => Effect.Effect<void>
   readonly failJob: (jobId: string, message: string) => Effect.Effect<void>
   readonly identify: (
     jobId: string,
@@ -48,46 +54,52 @@ export type ProgressService = {
       readonly role: string
     }
   ) => Effect.Effect<void>
-  readonly register: (
-    reservation: PreparationRunReservation
-  ) => Effect.Effect<void, PreparationWorkflowError>
+  readonly jobs: SubscriptionRef.SubscriptionRef<PreparationJobStates>
   readonly releaseReservations: (
-    runIds: ReadonlyArray<string>
+    jobIds: ReadonlyArray<string>
   ) => Effect.Effect<void>
   readonly reserve: (
-    reservations: ReadonlyArray<PreparationRunReservation>
+    reservations: ReadonlyArray<PreparationJobReservation>
   ) => Effect.Effect<void, PreparationWorkflowError>
   readonly requestCancel: (
-    runId: string,
+    jobId: string,
     executionId: string
   ) => Effect.Effect<CancellationClaim | null>
   readonly restoreCancellation: (
-    runId: string,
+    jobId: string,
     executionId: string,
     claim: CancellationClaim
   ) => Effect.Effect<void>
-  readonly restoreReview: (
-    runId: string,
+  readonly restoreApproval: (
+    jobId: string,
+    kind: DocumentKind,
     token: DurableDeferred.Token
   ) => Effect.Effect<void>
-  readonly reviewSubmitted: (
-    runId: string,
+  readonly approvalSubmitted: (
+    jobId: string,
+    kind: DocumentKind,
     token: DurableDeferred.Token
   ) => Effect.Effect<boolean>
   readonly reviewReady: (
-    runId: string,
+    jobId: string,
+    kind: DocumentKind,
     applicationId: string,
     candidate: SavedCandidate,
     token: DurableDeferred.Token
   ) => Effect.Effect<void>
-  readonly runs: SubscriptionRef.SubscriptionRef<PreparationRunStates>
   readonly setExecution: (
     jobId: string,
     executionId: string
   ) => Effect.Effect<void>
-  readonly stage: (
-    runId: string,
-    stage: PreparationStage,
+  readonly stageArtifact: (
+    jobId: string,
+    kind: DocumentKind,
+    stage: ArtifactPreparationStage,
+    message: string
+  ) => Effect.Effect<void>
+  readonly stageShared: (
+    jobId: string,
+    stage: SharedPreparationStage,
     message: string,
     applicationId?: string
   ) => Effect.Effect<void>

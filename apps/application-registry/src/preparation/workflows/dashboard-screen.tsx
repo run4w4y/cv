@@ -63,10 +63,10 @@ export const WorkflowDashboardScreen = ({
   return (
     <WorkflowPage>
       <WorkflowPageHeader
-        title="URL workflows"
-        description="Launch preparation as a batch, follow every URL independently, and move generated documents through review and publication."
+        title="AI workflows"
+        description="Launch preparation for job postings or saved applications, then follow shared context and document work through review."
         actions={
-          <Button render={<Link to="/workflows/new" />}>
+          <Button render={<Link to="/ai-workflows/new" />}>
             <Plus />
             New workflow
           </Button>
@@ -97,7 +97,7 @@ export const WorkflowDashboardScreen = ({
         <WorkflowMetricCard
           label="Needs review"
           value={metrics.needsReview}
-          description="Waiting on a decision"
+          description="Waiting on approval"
           icon={Clock3}
           tone="warning"
         />
@@ -111,7 +111,7 @@ export const WorkflowDashboardScreen = ({
         <WorkflowMetricCard
           label="Completed"
           value={metrics.completed}
-          description="Decisions submitted"
+          description="Approvals completed"
           icon={CheckCircle2}
           tone="success"
         />
@@ -153,7 +153,7 @@ export const WorkflowDashboardScreen = ({
                   </EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent>
-                  <Button render={<Link to="/workflows/new" />}>
+                  <Button render={<Link to="/ai-workflows/new" />}>
                     <Plus />
                     Create first workflow
                   </Button>
@@ -184,9 +184,10 @@ export const WorkflowDashboardScreen = ({
                               {shortWorkflowId(batch.batchId)}
                             </span>
                             <span className="text-xs text-muted-foreground">
-                              {batch.urlCount} URL
-                              {batch.urlCount === 1 ? '' : 's'} · {batch.total}{' '}
-                              job{batch.total === 1 ? '' : 's'} · {batch.locale}
+                              {batch.targetCount} target
+                              {batch.targetCount === 1 ? '' : 's'} ·{' '}
+                              {batch.total} job
+                              {batch.total === 1 ? '' : 's'} · {batch.locale}
                             </span>
                           </div>
                         </TableCell>
@@ -223,7 +224,7 @@ export const WorkflowDashboardScreen = ({
                             variant="outline"
                             render={
                               <Link
-                                to={`/workflows/${encodeURIComponent(batch.batchId)}`}
+                                to={`/ai-workflows/${encodeURIComponent(batch.batchId)}`}
                               />
                             }
                           >

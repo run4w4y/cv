@@ -4,43 +4,36 @@ import * as Workflow from 'effect/unstable/workflow/Workflow'
 
 import { DocumentKindSchema, PreparationWorkflowPayloadSchema } from './input'
 
-export const ReviewDecisionSchema = Schema.TaggedUnion({
-  Approved: {
-    revisionId: Schema.NonEmptyString,
-  },
-  Rejected: {
-    reason: Schema.NonEmptyString,
-  },
+export const ArtifactApprovalSchema = Schema.Struct({
+  revisionId: Schema.NonEmptyString,
 })
-export type ReviewDecision = typeof ReviewDecisionSchema.Type
+export interface ArtifactApproval
+  extends Schema.Schema.Type<typeof ArtifactApprovalSchema> {}
 
-export type SubmitPreparationReviewInput = {
-  readonly decision: ReviewDecision
-  readonly runId: string
+export type ApproveArtifactInput = {
+  readonly artifact: typeof DocumentKindSchema.Type
+  readonly jobId: string
+  readonly revisionId: string
 }
 
-export const CvReview = DurableDeferred.make(
-  'ApplicationPreparation/Review/cv',
-  { success: ReviewDecisionSchema }
+export const CvApproval = DurableDeferred.make(
+  'ApplicationPreparation/Approval/cv',
+  { success: ArtifactApprovalSchema }
 )
 
-export const CoverLetterReview = DurableDeferred.make(
-  'ApplicationPreparation/Review/cover-letter',
-  { success: ReviewDecisionSchema }
+export const CoverLetterApproval = DurableDeferred.make(
+  'ApplicationPreparation/Approval/cover-letter',
+  { success: ArtifactApprovalSchema }
 )
 
-/** @deprecated Use the artifact-specific review deferred. */
-export const HumanReview = CvReview
-
-export const preparationReviewDeferred = (
+export const preparationApprovalDeferred = (
   kind: typeof DocumentKindSchema.Type
-) => (kind === 'cv' ? CvReview : CoverLetterReview)
+) => (kind === 'cv' ? CvApproval : CoverLetterApproval)
 
 export const PreparationArtifactWorkflowResultSchema = Schema.Struct({
   kind: DocumentKindSchema,
   revisionId: Schema.NullOr(Schema.NonEmptyString),
-  runId: Schema.NonEmptyString,
-  status: Schema.Literals(['approved', 'rejected', 'failed']),
+  status: Schema.Literals(['approved', 'failed']),
 })
 export interface PreparationArtifactWorkflowResult
   extends Schema.Schema.Type<typeof PreparationArtifactWorkflowResultSchema> {}
@@ -49,9 +42,7 @@ export const PreparationWorkflowResultSchema = Schema.Struct({
   applicationId: Schema.NonEmptyString,
   artifacts: Schema.Array(PreparationArtifactWorkflowResultSchema),
   jobId: Schema.NonEmptyString,
-  revisionId: Schema.optionalKey(Schema.NullOr(Schema.NonEmptyString)),
-  runId: Schema.optionalKey(Schema.NonEmptyString),
-  status: Schema.optionalKey(Schema.Literals(['approved', 'rejected'])),
+  status: Schema.Literals(['completed', 'failed', 'mixed']),
 })
 export interface PreparationWorkflowResult
   extends Schema.Schema.Type<typeof PreparationWorkflowResultSchema> {}
@@ -65,12 +56,11 @@ export class PreparationWorkflowError extends Schema.TaggedErrorClass<Preparatio
 ) {}
 
 export const PrepareApplicationWorkflow = Workflow.make(
-  'PrepareApplicationJob/v3',
+  'PrepareApplicationJob/v6',
   {
     payload: PreparationWorkflowPayloadSchema,
     success: PreparationWorkflowResultSchema,
     error: PreparationWorkflowError,
-    idempotencyKey: (input) =>
-      input.jobId ?? input.runId ?? 'invalid-preparation-payload',
+    idempotencyKey: (input) => input.jobId,
   }
 )

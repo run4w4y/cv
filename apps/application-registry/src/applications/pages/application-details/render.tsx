@@ -7,7 +7,7 @@ import {
 } from '@cv/internal-ui'
 import { useAtomValue } from '@effect/atom-react'
 import * as AsyncResult from 'effect/unstable/reactivity/AsyncResult'
-import { ArrowLeft, FilePenLine, FileText, WandSparkles } from 'lucide-react'
+import { ArrowLeft, FileText, WandSparkles } from 'lucide-react'
 import * as React from 'react'
 import { Link, useParams } from 'react-router'
 import { asyncResultErrorMessage } from '@/lib/async-result'
@@ -28,6 +28,9 @@ import {
   ApplicationMetadata,
   ApplicationSummary,
 } from './sections'
+
+export const applicationAiWorkflowHref = (applicationId: string): string =>
+  `/ai-workflows/new?applicationId=${encodeURIComponent(applicationId)}`
 
 export const ApplicationDetailsPage = () => {
   const { applicationId = '' } = useParams()
@@ -76,18 +79,11 @@ export const ApplicationDetailsPage = () => {
       {application === undefined ? null : (
         <HeaderActions>
           <Link
-            to={`/applications/${application.id}/prepare`}
+            to={applicationAiWorkflowHref(application.id)}
             className={cn(buttonVariants())}
           >
             <WandSparkles />
-            Prepare CV
-          </Link>
-          <Link
-            to={`/applications/${application.id}/cover-letter`}
-            className={cn(buttonVariants({ variant: 'outline' }))}
-          >
-            <FilePenLine />
-            Cover letter
+            Start AI workflow
           </Link>
           <ApplicationEditDialog application={application} />
         </HeaderActions>

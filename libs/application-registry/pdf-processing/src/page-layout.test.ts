@@ -19,7 +19,7 @@ const measurement = (
   ...overrides,
 })
 
-describe('PDF public-page layout assessment', () => {
+describe('PDF render-surface layout assessment', () => {
   test('accepts normal A4 sub-pixel rounding', () => {
     expect(assessCvPageLayout(measurement())).toMatchObject({ status: 'fits' })
   })
@@ -51,7 +51,7 @@ describe('PDF public-page layout assessment', () => {
     ).toBe('overflow')
   })
 
-  test('rejects missing and invalid public renderer measurements', () => {
+  test('rejects missing and invalid render-surface measurements', () => {
     expect(assessCvPageLayout(measurement({ documentCount: 0 }))).toEqual({
       documentCount: 0,
       reason: 'document-count',

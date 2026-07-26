@@ -4,6 +4,7 @@ import {
   type DesktopBridgeErrorCode,
   type DesktopBridgeResult,
   DesktopCodexGenerationRequestSchema,
+  DesktopDocumentAssistantRequestSchema,
   DesktopFetchRequestSchema,
   DesktopOperationIdSchema,
   DesktopRegistryConfigureSchema,
@@ -269,7 +270,9 @@ const run = <Value, Error extends DesktopExpectedError>(
   )
 
 const decode = <S extends Schema.Top>(schema: S, input: unknown) =>
-  Schema.decodeUnknownEffect(schema)(input).pipe(
+  Schema.decodeUnknownEffect(schema)(input, {
+    onExcessProperty: 'error',
+  }).pipe(
     Effect.mapError(
       (cause) =>
         new DesktopIpcRequestError({
@@ -341,6 +344,17 @@ const installIpc = (runtime: DesktopRuntime) => {
       decode(DesktopCodexGenerationRequestSchema, input).pipe(
         Effect.flatMap((request) =>
           Effect.flatMap(DesktopCodex, (codex) => codex.generate(request))
+        )
+      )
+    )
+  )
+  ipcMain.handle(desktopIpc.codexAssist, (event, input: unknown) =>
+    invoke(
+      event,
+      'codex_generation_failed',
+      decode(DesktopDocumentAssistantRequestSchema, input).pipe(
+        Effect.flatMap((request) =>
+          Effect.flatMap(DesktopCodex, (codex) => codex.assist(request))
         )
       )
     )

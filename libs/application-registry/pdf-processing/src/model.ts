@@ -5,7 +5,7 @@ export const PdfPermanentFailureCodeSchema = Schema.Literals([
   'cv_page_overflow',
   'pdf_generation_invalid',
   'pdf_publication_changed',
-  'pdf_public_page_unavailable',
+  'pdf_render_page_unavailable',
   'pdf_retry_exhausted',
 ])
 export type PdfPermanentFailureCode = typeof PdfPermanentFailureCodeSchema.Type
