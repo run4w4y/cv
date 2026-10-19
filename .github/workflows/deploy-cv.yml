@@ -34,11 +34,15 @@ jobs:
       - name: Set up Nomad Pack
         uses: ./.github/actions/setup-infrastructure-tools
 
+      - name: Open private Nomad connection
+        uses: run4w4y/infrastructure/.github/actions/nomad-access@e9528691fed6c36e5a3e4fb11621b32083ecbf38
+        with:
+          ssh-private-key: ${{ secrets.NOMAD_CI_SSH_KEY }}
+
       - name: Register CV web service
         env:
           CV_IMAGE_DIGEST: ${{ inputs.image_digest }}
           CV_REGISTRY_ORIGIN: ${{ vars.CV_REGISTRY_WEB_ORIGIN || 'https://cv-registry.4w4y.run' }}
-          NOMAD_ADDR: ${{ secrets.NOMAD_ADDR }}
           NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
         run: |
           nomad-pack run nomad/packs/cv-web \
@@ -48,3 +52,13 @@ jobs:
             --var "deployment_id=${GITHUB_SHA}" \
             --var "enabled=true" \
             --var "registry_web_origin=${CV_REGISTRY_ORIGIN}"
+
+      - name: Close private Nomad connection
+        if: always()
+        run: |
+          if [[ -n "${CLUSTER_NOMAD_ACTION:-}" ]]; then
+            python3 "$CLUSTER_NOMAD_ACTION/close.py"
+            test ! -e "$CLUSTER_NOMAD_CONTROL"
+            test ! -e "$CLUSTER_NOMAD_DIRECTORY"
+            echo "Private Nomad connection cleanup verified"
+          fi

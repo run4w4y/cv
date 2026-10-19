@@ -1,0 +1,45 @@
+name: Verify private Nomad deployment access
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - name: Checkout the workflow commit
+        uses: actions/checkout@v4
+
+      - name: Set up the deployment Nomad Pack version
+        uses: ./.github/actions/setup-infrastructure-tools
+
+      - name: Open private Nomad connection
+        uses: run4w4y/infrastructure/.github/actions/nomad-access@e9528691fed6c36e5a3e4fb11621b32083ecbf38
+        with:
+          ssh-private-key: ${{ secrets.NOMAD_CI_SSH_KEY }}
+
+      - name: Verify native ACL, TLS and restricted SSH access
+        env:
+          NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
+          CLUSTER_PROBE_JOB: cv-registry
+        run: python3 "$CLUSTER_NOMAD_ACTION/verify.py"
+
+      - name: Exercise the deployment CLI without registering a job
+        env:
+          NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
+        run: python3 "$CLUSTER_NOMAD_ACTION/probe-pack.py"
+
+      - name: Close private Nomad connection
+        if: always()
+        run: |
+          if [[ -n "${CLUSTER_NOMAD_ACTION:-}" ]]; then
+            python3 "$CLUSTER_NOMAD_ACTION/close.py"
+            test ! -e "$CLUSTER_NOMAD_CONTROL"
+            test ! -e "$CLUSTER_NOMAD_DIRECTORY"
+            echo "Private Nomad connection cleanup verified"
+          fi
