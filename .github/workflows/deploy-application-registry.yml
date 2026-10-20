@@ -2,8 +2,19 @@ name: Deploy Application Registry
 
 permissions:
   contents: read
+  id-token: write
 
 on:
+  workflow_dispatch:
+    inputs:
+      api_image_digest:
+        description: Current immutable registry API image digest.
+        required: true
+        type: string
+      web_image_digest:
+        description: Current immutable registry web image digest.
+        required: true
+        type: string
   workflow_call:
     inputs:
       api_image_digest:
@@ -41,6 +52,7 @@ jobs:
     environment: production
     permissions:
       contents: read
+      id-token: write
     env:
       IMAGE_NAME: ${{ github.repository_owner }}/cv-application-registry-api
     steps:
@@ -50,10 +62,18 @@ jobs:
       - name: Set up Nomad Pack
         uses: ./.github/actions/setup-infrastructure-tools
 
-      - name: Open private Nomad connection
-        uses: run4w4y/infrastructure/.github/actions/nomad-access@e9528691fed6c36e5a3e4fb11621b32083ecbf38
+      - name: Fetch Nomad deployment credentials
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
-          ssh-private-key: ${{ secrets.NOMAD_CI_SSH_KEY }}
+          method: oidc
+          identity-id: ${{ vars.INFISICAL_IDENTITY_ID }}
+          project-id: ${{ vars.INFISICAL_PROJECT_ID }}
+          env-slug: ${{ vars.INFISICAL_ENV }}
+          domain: ${{ vars.INFISICAL_HOST || 'https://app.infisical.com' }}
+          oidc-audience: https://github.com/run4w4y
+          secret-path: /
+          recursive: false
+          include-imports: false
 
       - name: Register registry API service
         env:
@@ -61,27 +81,82 @@ jobs:
           API_ENABLED: "true"
           API_IMAGE_DIGEST: ${{ inputs.api_image_digest }}
           API_SUBDOMAIN: ${{ vars.CV_API_SUBDOMAIN || 'cv-api' }}
-          NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
         run: |
-          nomad-pack run nomad/packs/application-registry-api \
-            --detach \
+          set -euo pipefail
+          umask 077
+          : "${CF_ACCESS_CLIENT_ID:?}" "${CF_ACCESS_CLIENT_SECRET:?}" "${NOMAD_TOKEN:?}"
+          nomad_tmp=$(mktemp -d "${RUNNER_TEMP}/nomad-submit.XXXXXX")
+          trap 'rm -rf "$nomad_tmp"' EXIT
+          pack=application-registry-api
+          job_id=cv-registry
+          http=(--silent --show-error --connect-timeout 10 --max-time 60
+            --header "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}"
+            --header "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}"
+            --header "X-Nomad-Token: ${NOMAD_TOKEN}"
+            --header 'Content-Type: application/json')
+          status=$(curl "${http[@]}" --output "$nomad_tmp/current.json" --write-out '%{http_code}' \
+            "https://nomad.4w4y.run/v1/job/${job_id}?namespace=default")
+          case "$status" in
+            200) ;;
+            404) printf 'Required job cv-registry is absent.\n' >&2; exit 1 ;;
+            *) printf 'Nomad job lookup failed (HTTP %s).\n' "$status" >&2; exit 1 ;;
+          esac
+          jq -e --arg id "$job_id" '.ID == $id and .Namespace == "default" and .Type == "service" and
+            (.JobModifyIndex | type == "number" and . > 0 and floor == .) and
+            (.TaskGroups | type == "array" and length > 0)' \
+            "$nomad_tmp/current.json" > /dev/null
+          jq -e '.Stop != true and any(.TaskGroups[]; .Count > 0)' \
+            "$nomad_tmp/current.json" > /dev/null
+          jq -e --arg id "$job_id" --arg pack "$pack" '
+            (.Meta // {}) as $meta |
+            $meta["pack.deployment_name"] == $pack and
+            ({"pack.deployment_name": $pack, "pack.name": $pack,
+              "pack.job": $id, "pack.registry": "<<local folder>>"} | to_entries |
+              all(. as $entry | ($meta | has($entry.key) | not) or $meta[$entry.key] == $entry.value))
+          ' "$nomad_tmp/current.json" > /dev/null
+          nomad-pack render nomad/packs/application-registry-api \
+            --to-dir "$nomad_tmp/render" --skip-aux-files \
             --parser-v1 \
             --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${API_IMAGE_DIGEST}" \
             --var "enabled=${API_ENABLED}" \
             --var "cors_allowed_origins=${API_CORS_ALLOWED_ORIGINS}" \
-            --var "traefik_subdomain=${API_SUBDOMAIN}"
+            --var "traefik_subdomain=${API_SUBDOMAIN}" > /dev/null
+          shopt -s nullglob globstar
+          all_jobs=("$nomad_tmp/render"/**/*.nomad)
+          files=("$nomad_tmp/render/$pack"/**/*.nomad)
+          [[ ${#all_jobs[@]} -eq 1 && ${#files[@]} -eq 1 ]]
+          jq -n --rawfile hcl "${files[0]}" '{JobHCL: $hcl, Canonicalize: true}' > "$nomad_tmp/parse.json"
+          status=$(curl "${http[@]}" --fail --output "$nomad_tmp/job.json" --write-out '%{http_code}' \
+            --data-binary "@$nomad_tmp/parse.json" https://nomad.4w4y.run/v1/jobs/parse)
+          [[ "$status" == 200 ]]
+          jq -e --arg id "$job_id" '.ID == $id and .Name == $id and .Namespace == "default" and .Type == "service"' \
+            "$nomad_tmp/job.json" > /dev/null
+          jq --slurpfile current "$nomad_tmp/current.json" --rawfile hcl "${files[0]}" '
+            .Meta = ((.Meta // {}) + ($current[0].Meta // {})) |
+            {Job: ., EnforceIndex: true, JobModifyIndex: $current[0].JobModifyIndex,
+              Submission: {Source: $hcl, Format: "hcl2"}}
+          ' "$nomad_tmp/job.json" > "$nomad_tmp/register.json"
+          status=$(curl "${http[@]}" --fail --output "$nomad_tmp/registered.json" --write-out '%{http_code}' \
+            --data-binary "@$nomad_tmp/register.json" https://nomad.4w4y.run/v1/jobs)
+          [[ "$status" == 200 ]]
+          jq -e 'select((.EvalID | type) == "string" and (.EvalID | length) > 0 and
+            (.JobModifyIndex | type == "number" and . > 0)) | {EvalID, JobModifyIndex}' "$nomad_tmp/registered.json"
 
       - name: Wait for registry migration and API rollout
-        env:
-          NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
         run: |
+          set -euo pipefail
+          : "${CF_ACCESS_CLIENT_ID:?}" "${CF_ACCESS_CLIENT_SECRET:?}" "${NOMAD_TOKEN:?}"
           nomad_api() {
             curl \
               --fail \
               --silent \
               --show-error \
+              --connect-timeout 10 \
+              --max-time 60 \
+              --header "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}" \
+              --header "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}" \
               --header "X-Nomad-Token: ${NOMAD_TOKEN}" \
-              "${NOMAD_ADDR%/}$1"
+              "https://nomad.4w4y.run$1"
           }
 
           deployment="$(
@@ -124,16 +199,6 @@ jobs:
             "$deployment_id" >&2
           exit 1
 
-      - name: Close private Nomad connection
-        if: always()
-        run: |
-          if [[ -n "${CLUSTER_NOMAD_ACTION:-}" ]]; then
-            python3 "$CLUSTER_NOMAD_ACTION/close.py"
-            test ! -e "$CLUSTER_NOMAD_CONTROL"
-            test ! -e "$CLUSTER_NOMAD_DIRECTORY"
-            echo "Private Nomad connection cleanup verified"
-          fi
-
   deploy-registry-web:
     name: Register registry management web
     needs: deploy-registry-api-server
@@ -141,6 +206,7 @@ jobs:
     environment: production
     permissions:
       contents: read
+      id-token: write
     env:
       IMAGE_NAME: ${{ github.repository_owner }}/cv-application-registry-web
     steps:
@@ -150,41 +216,92 @@ jobs:
       - name: Set up Nomad Pack
         uses: ./.github/actions/setup-infrastructure-tools
 
-      - name: Open private Nomad connection
-        uses: run4w4y/infrastructure/.github/actions/nomad-access@e9528691fed6c36e5a3e4fb11621b32083ecbf38
+      - name: Fetch Nomad deployment credentials
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
-          ssh-private-key: ${{ secrets.NOMAD_CI_SSH_KEY }}
+          method: oidc
+          identity-id: ${{ vars.INFISICAL_IDENTITY_ID }}
+          project-id: ${{ vars.INFISICAL_PROJECT_ID }}
+          env-slug: ${{ vars.INFISICAL_ENV }}
+          domain: ${{ vars.INFISICAL_HOST || 'https://app.infisical.com' }}
+          oidc-audience: https://github.com/run4w4y
+          secret-path: /
+          recursive: false
+          include-imports: false
 
       - name: Register registry management web service
         env:
-          NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
           WEB_ENABLED: "true"
           WEB_IMAGE_DIGEST: ${{ inputs.web_image_digest }}
           WEB_SUBDOMAIN: ${{ vars.CV_REGISTRY_WEB_SUBDOMAIN || 'cv-registry' }}
         run: |
-          nomad-pack run nomad/packs/application-registry-web \
-            --detach \
+          set -euo pipefail
+          umask 077
+          : "${CF_ACCESS_CLIENT_ID:?}" "${CF_ACCESS_CLIENT_SECRET:?}" "${NOMAD_TOKEN:?}"
+          nomad_tmp=$(mktemp -d "${RUNNER_TEMP}/nomad-submit.XXXXXX")
+          trap 'rm -rf "$nomad_tmp"' EXIT
+          pack=application-registry-web
+          job_id=cv-registry-web
+          http=(--silent --show-error --connect-timeout 10 --max-time 60
+            --header "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}"
+            --header "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}"
+            --header "X-Nomad-Token: ${NOMAD_TOKEN}"
+            --header 'Content-Type: application/json')
+          status=$(curl "${http[@]}" --output "$nomad_tmp/current.json" --write-out '%{http_code}' \
+            "https://nomad.4w4y.run/v1/job/${job_id}?namespace=default")
+          case "$status" in
+            200) ;;
+            404) printf 'Required job cv-registry-web is absent.\n' >&2; exit 1 ;;
+            *) printf 'Nomad job lookup failed (HTTP %s).\n' "$status" >&2; exit 1 ;;
+          esac
+          jq -e --arg id "$job_id" '.ID == $id and .Namespace == "default" and .Type == "service" and
+            (.JobModifyIndex | type == "number" and . > 0 and floor == .) and
+            (.TaskGroups | type == "array" and length > 0)' \
+            "$nomad_tmp/current.json" > /dev/null
+          jq -e '.Stop != true and any(.TaskGroups[]; .Count > 0)' \
+            "$nomad_tmp/current.json" > /dev/null
+          jq -e --arg id "$job_id" --arg pack "$pack" '
+            (.Meta // {}) as $meta |
+            $meta["pack.deployment_name"] == $pack and
+            ({"pack.deployment_name": $pack, "pack.name": $pack,
+              "pack.job": $id, "pack.registry": "<<local folder>>"} | to_entries |
+              all(. as $entry | ($meta | has($entry.key) | not) or $meta[$entry.key] == $entry.value))
+          ' "$nomad_tmp/current.json" > /dev/null
+          nomad-pack render nomad/packs/application-registry-web \
+            --to-dir "$nomad_tmp/render" --skip-aux-files \
             --parser-v1 \
             --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${WEB_IMAGE_DIGEST}" \
             --var "enabled=${WEB_ENABLED}" \
-            --var "traefik_subdomain=${WEB_SUBDOMAIN}"
-
-      - name: Close private Nomad connection
-        if: always()
-        run: |
-          if [[ -n "${CLUSTER_NOMAD_ACTION:-}" ]]; then
-            python3 "$CLUSTER_NOMAD_ACTION/close.py"
-            test ! -e "$CLUSTER_NOMAD_CONTROL"
-            test ! -e "$CLUSTER_NOMAD_DIRECTORY"
-            echo "Private Nomad connection cleanup verified"
-          fi
+            --var "traefik_subdomain=${WEB_SUBDOMAIN}" > /dev/null
+          shopt -s nullglob globstar
+          all_jobs=("$nomad_tmp/render"/**/*.nomad)
+          files=("$nomad_tmp/render/$pack"/**/*.nomad)
+          [[ ${#all_jobs[@]} -eq 1 && ${#files[@]} -eq 1 ]]
+          jq -n --rawfile hcl "${files[0]}" '{JobHCL: $hcl, Canonicalize: true}' > "$nomad_tmp/parse.json"
+          status=$(curl "${http[@]}" --fail --output "$nomad_tmp/job.json" --write-out '%{http_code}' \
+            --data-binary "@$nomad_tmp/parse.json" https://nomad.4w4y.run/v1/jobs/parse)
+          [[ "$status" == 200 ]]
+          jq -e --arg id "$job_id" '.ID == $id and .Name == $id and .Namespace == "default" and .Type == "service"' \
+            "$nomad_tmp/job.json" > /dev/null
+          jq --slurpfile current "$nomad_tmp/current.json" --rawfile hcl "${files[0]}" '
+            .Meta = ((.Meta // {}) + ($current[0].Meta // {})) |
+            {Job: ., EnforceIndex: true, JobModifyIndex: $current[0].JobModifyIndex,
+              Submission: {Source: $hcl, Format: "hcl2"}}
+          ' "$nomad_tmp/job.json" > "$nomad_tmp/register.json"
+          status=$(curl "${http[@]}" --fail --output "$nomad_tmp/registered.json" --write-out '%{http_code}' \
+            --data-binary "@$nomad_tmp/register.json" https://nomad.4w4y.run/v1/jobs)
+          [[ "$status" == 200 ]]
+          jq -e 'select((.EvalID | type) == "string" and (.EvalID | length) > 0 and
+            (.JobModifyIndex | type == "number" and . > 0)) | {EvalID, JobModifyIndex}' "$nomad_tmp/registered.json"
 
   deploy-listing-check-runner:
+    if: github.event_name != 'workflow_dispatch'
     name: Register listing-check runner
     runs-on: ubuntu-latest
     environment: production
     permissions:
       contents: read
+      id-token: write
     env:
       IMAGE_NAME: ${{ github.repository_owner }}/cv-listing-check-runner
     steps:
@@ -194,39 +311,93 @@ jobs:
       - name: Set up Nomad Pack
         uses: ./.github/actions/setup-infrastructure-tools
 
-      - name: Open private Nomad connection
-        uses: run4w4y/infrastructure/.github/actions/nomad-access@e9528691fed6c36e5a3e4fb11621b32083ecbf38
+      - name: Fetch Nomad deployment credentials
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
-          ssh-private-key: ${{ secrets.NOMAD_CI_SSH_KEY }}
+          method: oidc
+          identity-id: ${{ vars.INFISICAL_IDENTITY_ID }}
+          project-id: ${{ vars.INFISICAL_PROJECT_ID }}
+          env-slug: ${{ vars.INFISICAL_ENV }}
+          domain: ${{ vars.INFISICAL_HOST || 'https://app.infisical.com' }}
+          oidc-audience: https://github.com/run4w4y
+          secret-path: /
+          recursive: false
+          include-imports: false
 
       - name: Register periodic listing-check job
         env:
-          NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
           RUNNER_ENABLED: "true"
           RUNNER_IMAGE_DIGEST: ${{ inputs.listing_check_runner_image_digest }}
         run: |
-          nomad-pack run nomad/packs/application-registry-listing-check-runner \
-            --detach \
+          set -euo pipefail
+          umask 077
+          : "${CF_ACCESS_CLIENT_ID:?}" "${CF_ACCESS_CLIENT_SECRET:?}" "${NOMAD_TOKEN:?}"
+          nomad_tmp=$(mktemp -d "${RUNNER_TEMP}/nomad-submit.XXXXXX")
+          trap 'rm -rf "$nomad_tmp"' EXIT
+          pack=application-registry-listing-check-runner
+          job_id=cv-listing-checker
+          http=(--silent --show-error --connect-timeout 10 --max-time 60
+            --header "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}"
+            --header "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}"
+            --header "X-Nomad-Token: ${NOMAD_TOKEN}"
+            --header 'Content-Type: application/json')
+          status=$(curl "${http[@]}" --output "$nomad_tmp/current.json" --write-out '%{http_code}' \
+            "https://nomad.4w4y.run/v1/job/${job_id}?namespace=default")
+          case "$status" in
+            200) ;;
+            404) printf 'Retired job cv-listing-checker is absent; keeping it retired.\n'; exit 0 ;;
+            *) printf 'Nomad job lookup failed (HTTP %s).\n' "$status" >&2; exit 1 ;;
+          esac
+          jq -e --arg id "$job_id" '.ID == $id and .Namespace == "default" and .Type == "batch" and
+            (.JobModifyIndex | type == "number" and . > 0 and floor == .) and
+            (.TaskGroups | type == "array" and length > 0)' \
+            "$nomad_tmp/current.json" > /dev/null
+          if jq -e '.Stop == true or ([.TaskGroups[].Count] | all(. == 0)) or
+            (.Periodic != null and .Periodic.Enabled == false)' "$nomad_tmp/current.json" > /dev/null; then
+            printf 'Retired job %s remains stopped or disabled.\n' "$job_id"
+            exit 0
+          fi
+          jq -e --arg id "$job_id" --arg pack "$pack" '
+            (.Meta // {}) as $meta |
+            $meta["pack.deployment_name"] == $pack and
+            ({"pack.deployment_name": $pack, "pack.name": $pack,
+              "pack.job": $id, "pack.registry": "<<local folder>>"} | to_entries |
+              all(. as $entry | ($meta | has($entry.key) | not) or $meta[$entry.key] == $entry.value))
+          ' "$nomad_tmp/current.json" > /dev/null
+          nomad-pack render nomad/packs/application-registry-listing-check-runner \
+            --to-dir "$nomad_tmp/render" --skip-aux-files \
             --parser-v1 \
             --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${RUNNER_IMAGE_DIGEST}" \
-            --var "enabled=${RUNNER_ENABLED}"
-
-      - name: Close private Nomad connection
-        if: always()
-        run: |
-          if [[ -n "${CLUSTER_NOMAD_ACTION:-}" ]]; then
-            python3 "$CLUSTER_NOMAD_ACTION/close.py"
-            test ! -e "$CLUSTER_NOMAD_CONTROL"
-            test ! -e "$CLUSTER_NOMAD_DIRECTORY"
-            echo "Private Nomad connection cleanup verified"
-          fi
+            --var "enabled=${RUNNER_ENABLED}" > /dev/null
+          shopt -s nullglob globstar
+          all_jobs=("$nomad_tmp/render"/**/*.nomad)
+          files=("$nomad_tmp/render/$pack"/**/*.nomad)
+          [[ ${#all_jobs[@]} -eq 1 && ${#files[@]} -eq 1 ]]
+          jq -n --rawfile hcl "${files[0]}" '{JobHCL: $hcl, Canonicalize: true}' > "$nomad_tmp/parse.json"
+          status=$(curl "${http[@]}" --fail --output "$nomad_tmp/job.json" --write-out '%{http_code}' \
+            --data-binary "@$nomad_tmp/parse.json" https://nomad.4w4y.run/v1/jobs/parse)
+          [[ "$status" == 200 ]]
+          jq -e --arg id "$job_id" '.ID == $id and .Name == $id and .Namespace == "default" and .Type == "batch"' \
+            "$nomad_tmp/job.json" > /dev/null
+          jq --slurpfile current "$nomad_tmp/current.json" --rawfile hcl "${files[0]}" '
+            .Meta = ((.Meta // {}) + ($current[0].Meta // {})) |
+            {Job: ., EnforceIndex: true, JobModifyIndex: $current[0].JobModifyIndex,
+              Submission: {Source: $hcl, Format: "hcl2"}}
+          ' "$nomad_tmp/job.json" > "$nomad_tmp/register.json"
+          status=$(curl "${http[@]}" --fail --output "$nomad_tmp/registered.json" --write-out '%{http_code}' \
+            --data-binary "@$nomad_tmp/register.json" https://nomad.4w4y.run/v1/jobs)
+          [[ "$status" == 200 ]]
+          jq -e 'select((.EvalID | type) == "string" and (.EvalID | length) > 0 and
+            (.JobModifyIndex | type == "number" and . > 0)) | {EvalID, JobModifyIndex}' "$nomad_tmp/registered.json"
 
   deploy-self-hosted-pdf:
+    if: github.event_name != 'workflow_dispatch'
     name: Register PDF event worker
     runs-on: ubuntu-latest
     environment: production
     permissions:
       contents: read
+      id-token: write
     env:
       IMAGE_NAME: ${{ github.repository_owner }}/application-registry-pdf-worker
     steps:
@@ -236,39 +407,93 @@ jobs:
       - name: Set up Nomad Pack
         uses: ./.github/actions/setup-infrastructure-tools
 
-      - name: Open private Nomad connection
-        uses: run4w4y/infrastructure/.github/actions/nomad-access@e9528691fed6c36e5a3e4fb11621b32083ecbf38
+      - name: Fetch Nomad deployment credentials
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
-          ssh-private-key: ${{ secrets.NOMAD_CI_SSH_KEY }}
+          method: oidc
+          identity-id: ${{ vars.INFISICAL_IDENTITY_ID }}
+          project-id: ${{ vars.INFISICAL_PROJECT_ID }}
+          env-slug: ${{ vars.INFISICAL_ENV }}
+          domain: ${{ vars.INFISICAL_HOST || 'https://app.infisical.com' }}
+          oidc-audience: https://github.com/run4w4y
+          secret-path: /
+          recursive: false
+          include-imports: false
 
       - name: Register PDF worker service
         env:
-          NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
           WORKER_ENABLED: "true"
           WORKER_IMAGE_DIGEST: ${{ inputs.pdf_worker_image_digest }}
         run: |
-          nomad-pack run nomad/packs/application-registry-pdf-worker \
-            --detach \
+          set -euo pipefail
+          umask 077
+          : "${CF_ACCESS_CLIENT_ID:?}" "${CF_ACCESS_CLIENT_SECRET:?}" "${NOMAD_TOKEN:?}"
+          nomad_tmp=$(mktemp -d "${RUNNER_TEMP}/nomad-submit.XXXXXX")
+          trap 'rm -rf "$nomad_tmp"' EXIT
+          pack=application-registry-pdf-worker
+          job_id=cv-pdf-worker
+          http=(--silent --show-error --connect-timeout 10 --max-time 60
+            --header "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}"
+            --header "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}"
+            --header "X-Nomad-Token: ${NOMAD_TOKEN}"
+            --header 'Content-Type: application/json')
+          status=$(curl "${http[@]}" --output "$nomad_tmp/current.json" --write-out '%{http_code}' \
+            "https://nomad.4w4y.run/v1/job/${job_id}?namespace=default")
+          case "$status" in
+            200) ;;
+            404) printf 'Retired job cv-pdf-worker is absent; keeping it retired.\n'; exit 0 ;;
+            *) printf 'Nomad job lookup failed (HTTP %s).\n' "$status" >&2; exit 1 ;;
+          esac
+          jq -e --arg id "$job_id" '.ID == $id and .Namespace == "default" and .Type == "service" and
+            (.JobModifyIndex | type == "number" and . > 0 and floor == .) and
+            (.TaskGroups | type == "array" and length > 0)' \
+            "$nomad_tmp/current.json" > /dev/null
+          if jq -e '.Stop == true or ([.TaskGroups[].Count] | all(. == 0)) or
+            (.Periodic != null and .Periodic.Enabled == false)' "$nomad_tmp/current.json" > /dev/null; then
+            printf 'Retired job %s remains stopped or disabled.\n' "$job_id"
+            exit 0
+          fi
+          jq -e --arg id "$job_id" --arg pack "$pack" '
+            (.Meta // {}) as $meta |
+            $meta["pack.deployment_name"] == $pack and
+            ({"pack.deployment_name": $pack, "pack.name": $pack,
+              "pack.job": $id, "pack.registry": "<<local folder>>"} | to_entries |
+              all(. as $entry | ($meta | has($entry.key) | not) or $meta[$entry.key] == $entry.value))
+          ' "$nomad_tmp/current.json" > /dev/null
+          nomad-pack render nomad/packs/application-registry-pdf-worker \
+            --to-dir "$nomad_tmp/render" --skip-aux-files \
             --parser-v1 \
             --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${WORKER_IMAGE_DIGEST}" \
-            --var "enabled=${WORKER_ENABLED}"
-
-      - name: Close private Nomad connection
-        if: always()
-        run: |
-          if [[ -n "${CLUSTER_NOMAD_ACTION:-}" ]]; then
-            python3 "$CLUSTER_NOMAD_ACTION/close.py"
-            test ! -e "$CLUSTER_NOMAD_CONTROL"
-            test ! -e "$CLUSTER_NOMAD_DIRECTORY"
-            echo "Private Nomad connection cleanup verified"
-          fi
+            --var "enabled=${WORKER_ENABLED}" > /dev/null
+          shopt -s nullglob globstar
+          all_jobs=("$nomad_tmp/render"/**/*.nomad)
+          files=("$nomad_tmp/render/$pack"/**/*.nomad)
+          [[ ${#all_jobs[@]} -eq 1 && ${#files[@]} -eq 1 ]]
+          jq -n --rawfile hcl "${files[0]}" '{JobHCL: $hcl, Canonicalize: true}' > "$nomad_tmp/parse.json"
+          status=$(curl "${http[@]}" --fail --output "$nomad_tmp/job.json" --write-out '%{http_code}' \
+            --data-binary "@$nomad_tmp/parse.json" https://nomad.4w4y.run/v1/jobs/parse)
+          [[ "$status" == 200 ]]
+          jq -e --arg id "$job_id" '.ID == $id and .Name == $id and .Namespace == "default" and .Type == "service"' \
+            "$nomad_tmp/job.json" > /dev/null
+          jq --slurpfile current "$nomad_tmp/current.json" --rawfile hcl "${files[0]}" '
+            .Meta = ((.Meta // {}) + ($current[0].Meta // {})) |
+            {Job: ., EnforceIndex: true, JobModifyIndex: $current[0].JobModifyIndex,
+              Submission: {Source: $hcl, Format: "hcl2"}}
+          ' "$nomad_tmp/job.json" > "$nomad_tmp/register.json"
+          status=$(curl "${http[@]}" --fail --output "$nomad_tmp/registered.json" --write-out '%{http_code}' \
+            --data-binary "@$nomad_tmp/register.json" https://nomad.4w4y.run/v1/jobs)
+          [[ "$status" == 200 ]]
+          jq -e 'select((.EvalID | type) == "string" and (.EvalID | length) > 0 and
+            (.JobModifyIndex | type == "number" and . > 0)) | {EvalID, JobModifyIndex}' "$nomad_tmp/registered.json"
 
   deploy-cache-invalidator:
+    if: github.event_name != 'workflow_dispatch'
     name: Register cache invalidator
     runs-on: ubuntu-latest
     environment: production
     permissions:
       contents: read
+      id-token: write
     env:
       IMAGE_NAME: ${{ github.repository_owner }}/application-registry-cache-invalidator
     steps:
@@ -278,27 +503,79 @@ jobs:
       - name: Set up Nomad Pack
         uses: ./.github/actions/setup-infrastructure-tools
 
-      - name: Open private Nomad connection
-        uses: run4w4y/infrastructure/.github/actions/nomad-access@e9528691fed6c36e5a3e4fb11621b32083ecbf38
+      - name: Fetch Nomad deployment credentials
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
-          ssh-private-key: ${{ secrets.NOMAD_CI_SSH_KEY }}
+          method: oidc
+          identity-id: ${{ vars.INFISICAL_IDENTITY_ID }}
+          project-id: ${{ vars.INFISICAL_PROJECT_ID }}
+          env-slug: ${{ vars.INFISICAL_ENV }}
+          domain: ${{ vars.INFISICAL_HOST || 'https://app.infisical.com' }}
+          oidc-audience: https://github.com/run4w4y
+          secret-path: /
+          recursive: false
+          include-imports: false
 
       - name: Register cache invalidator service
         env:
-          NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
           WORKER_IMAGE_DIGEST: ${{ inputs.cache_invalidator_image_digest }}
         run: |
-          nomad-pack run nomad/packs/application-registry-cache-invalidator \
-            --detach \
-            --parser-v1 \
-            --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${WORKER_IMAGE_DIGEST}"
-
-      - name: Close private Nomad connection
-        if: always()
-        run: |
-          if [[ -n "${CLUSTER_NOMAD_ACTION:-}" ]]; then
-            python3 "$CLUSTER_NOMAD_ACTION/close.py"
-            test ! -e "$CLUSTER_NOMAD_CONTROL"
-            test ! -e "$CLUSTER_NOMAD_DIRECTORY"
-            echo "Private Nomad connection cleanup verified"
+          set -euo pipefail
+          umask 077
+          : "${CF_ACCESS_CLIENT_ID:?}" "${CF_ACCESS_CLIENT_SECRET:?}" "${NOMAD_TOKEN:?}"
+          nomad_tmp=$(mktemp -d "${RUNNER_TEMP}/nomad-submit.XXXXXX")
+          trap 'rm -rf "$nomad_tmp"' EXIT
+          pack=application-registry-cache-invalidator
+          job_id=cv-cache-invalidator
+          http=(--silent --show-error --connect-timeout 10 --max-time 60
+            --header "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}"
+            --header "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}"
+            --header "X-Nomad-Token: ${NOMAD_TOKEN}"
+            --header 'Content-Type: application/json')
+          status=$(curl "${http[@]}" --output "$nomad_tmp/current.json" --write-out '%{http_code}' \
+            "https://nomad.4w4y.run/v1/job/${job_id}?namespace=default")
+          case "$status" in
+            200) ;;
+            404) printf 'Retired job cv-cache-invalidator is absent; keeping it retired.\n'; exit 0 ;;
+            *) printf 'Nomad job lookup failed (HTTP %s).\n' "$status" >&2; exit 1 ;;
+          esac
+          jq -e --arg id "$job_id" '.ID == $id and .Namespace == "default" and .Type == "service" and
+            (.JobModifyIndex | type == "number" and . > 0 and floor == .) and
+            (.TaskGroups | type == "array" and length > 0)' \
+            "$nomad_tmp/current.json" > /dev/null
+          if jq -e '.Stop == true or ([.TaskGroups[].Count] | all(. == 0)) or
+            (.Periodic != null and .Periodic.Enabled == false)' "$nomad_tmp/current.json" > /dev/null; then
+            printf 'Retired job %s remains stopped or disabled.\n' "$job_id"
+            exit 0
           fi
+          jq -e --arg id "$job_id" --arg pack "$pack" '
+            (.Meta // {}) as $meta |
+            $meta["pack.deployment_name"] == $pack and
+            ({"pack.deployment_name": $pack, "pack.name": $pack,
+              "pack.job": $id, "pack.registry": "<<local folder>>"} | to_entries |
+              all(. as $entry | ($meta | has($entry.key) | not) or $meta[$entry.key] == $entry.value))
+          ' "$nomad_tmp/current.json" > /dev/null
+          nomad-pack render nomad/packs/application-registry-cache-invalidator \
+            --to-dir "$nomad_tmp/render" --skip-aux-files \
+            --parser-v1 \
+            --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${WORKER_IMAGE_DIGEST}" > /dev/null
+          shopt -s nullglob globstar
+          all_jobs=("$nomad_tmp/render"/**/*.nomad)
+          files=("$nomad_tmp/render/$pack"/**/*.nomad)
+          [[ ${#all_jobs[@]} -eq 1 && ${#files[@]} -eq 1 ]]
+          jq -n --rawfile hcl "${files[0]}" '{JobHCL: $hcl, Canonicalize: true}' > "$nomad_tmp/parse.json"
+          status=$(curl "${http[@]}" --fail --output "$nomad_tmp/job.json" --write-out '%{http_code}' \
+            --data-binary "@$nomad_tmp/parse.json" https://nomad.4w4y.run/v1/jobs/parse)
+          [[ "$status" == 200 ]]
+          jq -e --arg id "$job_id" '.ID == $id and .Name == $id and .Namespace == "default" and .Type == "service"' \
+            "$nomad_tmp/job.json" > /dev/null
+          jq --slurpfile current "$nomad_tmp/current.json" --rawfile hcl "${files[0]}" '
+            .Meta = ((.Meta // {}) + ($current[0].Meta // {})) |
+            {Job: ., EnforceIndex: true, JobModifyIndex: $current[0].JobModifyIndex,
+              Submission: {Source: $hcl, Format: "hcl2"}}
+          ' "$nomad_tmp/job.json" > "$nomad_tmp/register.json"
+          status=$(curl "${http[@]}" --fail --output "$nomad_tmp/registered.json" --write-out '%{http_code}' \
+            --data-binary "@$nomad_tmp/register.json" https://nomad.4w4y.run/v1/jobs)
+          [[ "$status" == 200 ]]
+          jq -e 'select((.EvalID | type) == "string" and (.EvalID | length) > 0 and
+            (.JobModifyIndex | type == "number" and . > 0)) | {EvalID, JobModifyIndex}' "$nomad_tmp/registered.json"

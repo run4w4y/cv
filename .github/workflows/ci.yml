@@ -254,6 +254,9 @@ jobs:
           github.ref == 'refs/heads/main' &&
           (inputs.deploy_target == 'all' || inputs.deploy_target == 'cv'))
       }}
+    permissions:
+      contents: read
+      id-token: write
     secrets: inherit
     with:
       image_digest: ${{ needs.publish-cv-image.outputs.image_digest }}
@@ -274,6 +277,7 @@ jobs:
       }}
     permissions:
       contents: read
+      id-token: write
     secrets: inherit
     with:
       api_image_digest: ${{ needs.publish-application-registry-images.outputs.api_image_digest }}

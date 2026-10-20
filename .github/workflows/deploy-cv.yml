@@ -2,6 +2,7 @@ name: Deploy CV
 
 permissions:
   contents: read
+  id-token: write
 
 on:
   workflow_call:
@@ -25,6 +26,7 @@ jobs:
     environment: production
     permissions:
       contents: read
+      id-token: write
     env:
       IMAGE_NAME: ${{ github.repository_owner }}/cv-web
     steps:
@@ -34,31 +36,83 @@ jobs:
       - name: Set up Nomad Pack
         uses: ./.github/actions/setup-infrastructure-tools
 
-      - name: Open private Nomad connection
-        uses: run4w4y/infrastructure/.github/actions/nomad-access@e9528691fed6c36e5a3e4fb11621b32083ecbf38
+      - name: Fetch Nomad deployment credentials
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
-          ssh-private-key: ${{ secrets.NOMAD_CI_SSH_KEY }}
+          method: oidc
+          identity-id: ${{ vars.INFISICAL_IDENTITY_ID }}
+          project-id: ${{ vars.INFISICAL_PROJECT_ID }}
+          env-slug: ${{ vars.INFISICAL_ENV }}
+          domain: ${{ vars.INFISICAL_HOST || 'https://app.infisical.com' }}
+          oidc-audience: https://github.com/run4w4y
+          secret-path: /
+          recursive: false
+          include-imports: false
 
       - name: Register CV web service
         env:
           CV_IMAGE_DIGEST: ${{ inputs.image_digest }}
           CV_REGISTRY_ORIGIN: ${{ vars.CV_REGISTRY_WEB_ORIGIN || 'https://cv-registry.4w4y.run' }}
-          NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
         run: |
-          nomad-pack run nomad/packs/cv-web \
-            --detach \
+          set -euo pipefail
+          umask 077
+          : "${CF_ACCESS_CLIENT_ID:?}" "${CF_ACCESS_CLIENT_SECRET:?}" "${NOMAD_TOKEN:?}"
+          nomad_tmp=$(mktemp -d "${RUNNER_TEMP}/nomad-submit.XXXXXX")
+          trap 'rm -rf "$nomad_tmp"' EXIT
+          pack=cv-web
+          job_id=cv-web
+          http=(--silent --show-error --connect-timeout 10 --max-time 60
+            --header "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}"
+            --header "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}"
+            --header "X-Nomad-Token: ${NOMAD_TOKEN}"
+            --header 'Content-Type: application/json')
+          status=$(curl "${http[@]}" --output "$nomad_tmp/current.json" --write-out '%{http_code}' \
+            "https://nomad.4w4y.run/v1/job/${job_id}?namespace=default")
+          case "$status" in
+            200) ;;
+            404) printf 'Retired job cv-web is absent; keeping it retired.\n'; exit 0 ;;
+            *) printf 'Nomad job lookup failed (HTTP %s).\n' "$status" >&2; exit 1 ;;
+          esac
+          jq -e --arg id "$job_id" '.ID == $id and .Namespace == "default" and .Type == "service" and
+            (.JobModifyIndex | type == "number" and . > 0 and floor == .) and
+            (.TaskGroups | type == "array" and length > 0)' \
+            "$nomad_tmp/current.json" > /dev/null
+          if jq -e '.Stop == true or ([.TaskGroups[].Count] | all(. == 0)) or
+            (.Periodic != null and .Periodic.Enabled == false)' "$nomad_tmp/current.json" > /dev/null; then
+            printf 'Retired job %s remains stopped or disabled.\n' "$job_id"
+            exit 0
+          fi
+          jq -e --arg id "$job_id" --arg pack "$pack" '
+            (.Meta // {}) as $meta |
+            $meta["pack.deployment_name"] == $pack and
+            ({"pack.deployment_name": $pack, "pack.name": $pack,
+              "pack.job": $id, "pack.registry": "<<local folder>>"} | to_entries |
+              all(. as $entry | ($meta | has($entry.key) | not) or $meta[$entry.key] == $entry.value))
+          ' "$nomad_tmp/current.json" > /dev/null
+          nomad-pack render nomad/packs/cv-web \
+            --to-dir "$nomad_tmp/render" --skip-aux-files \
             --parser-v1 \
             --var "docker_image=${REGISTRY}/${IMAGE_NAME}@${CV_IMAGE_DIGEST}" \
             --var "deployment_id=${GITHUB_SHA}" \
             --var "enabled=true" \
-            --var "registry_web_origin=${CV_REGISTRY_ORIGIN}"
-
-      - name: Close private Nomad connection
-        if: always()
-        run: |
-          if [[ -n "${CLUSTER_NOMAD_ACTION:-}" ]]; then
-            python3 "$CLUSTER_NOMAD_ACTION/close.py"
-            test ! -e "$CLUSTER_NOMAD_CONTROL"
-            test ! -e "$CLUSTER_NOMAD_DIRECTORY"
-            echo "Private Nomad connection cleanup verified"
-          fi
+            --var "registry_web_origin=${CV_REGISTRY_ORIGIN}" > /dev/null
+          shopt -s nullglob globstar
+          all_jobs=("$nomad_tmp/render"/**/*.nomad)
+          files=("$nomad_tmp/render/$pack"/**/*.nomad)
+          [[ ${#all_jobs[@]} -eq 1 && ${#files[@]} -eq 1 ]]
+          jq -n --rawfile hcl "${files[0]}" '{JobHCL: $hcl, Canonicalize: true}' > "$nomad_tmp/parse.json"
+          status=$(curl "${http[@]}" --fail --output "$nomad_tmp/job.json" --write-out '%{http_code}' \
+            --data-binary "@$nomad_tmp/parse.json" https://nomad.4w4y.run/v1/jobs/parse)
+          [[ "$status" == 200 ]]
+          jq -e --arg id "$job_id" '.ID == $id and .Name == $id and .Namespace == "default" and .Type == "service"' \
+            "$nomad_tmp/job.json" > /dev/null
+          jq --slurpfile current "$nomad_tmp/current.json" --rawfile hcl "${files[0]}" '
+            .Meta = ((.Meta // {}) + ($current[0].Meta // {})) |
+            {Job: ., EnforceIndex: true, JobModifyIndex: $current[0].JobModifyIndex,
+              Submission: {Source: $hcl, Format: "hcl2"}}
+          ' "$nomad_tmp/job.json" > "$nomad_tmp/register.json"
+          status=$(curl "${http[@]}" --fail --output "$nomad_tmp/registered.json" --write-out '%{http_code}' \
+            --data-binary "@$nomad_tmp/register.json" https://nomad.4w4y.run/v1/jobs)
+          [[ "$status" == 200 ]]
+          jq -e 'select((.EvalID | type) == "string" and (.EvalID | length) > 0 and
+            (.JobModifyIndex | type == "number" and . > 0)) | {EvalID, JobModifyIndex}' "$nomad_tmp/registered.json"
